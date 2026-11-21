@@ -24,6 +24,7 @@ internal class DeckPlugin(id: String, title: String, capability: PluginCapabilit
         state = states.value
         host.scope.launch { states.collect { state = it; host.invalidate() } }
     }
+    override fun onDeactivate() { state = DeckState() }
     private fun slot(command: C, component: String? = null) =
         Slot(state.tile(command, component), PluginAction.Deck(command, component))
     private fun launcher(): List<Slot> {
@@ -43,7 +44,8 @@ internal class DeckPlugin(id: String, title: String, capability: PluginCapabilit
             listOf(slot(C.QUIETER), slot(C.PLAY), slot(C.LOUDER), slot(C.PREVIOUS),
                 access.copy(tile = access.tile.copy(label = media.title.ifBlank { media.status },
                     footer = if (media.access) media.status else "Media access")),
-                slot(C.NEXT), slot(C.MUTE), Slot(KeyTile("${media.volume} / ${media.maximum}", "Volume", 0xff274740.toInt())),
+                slot(C.NEXT), slot(C.MUTE), Slot(KeyTile("${media.volume} / ${media.maximum}", "Volume",
+                    tel.misa.mxpocket.decks.AUDIO_BACKGROUND.toInt())),
                 slot(C.UNMUTE))
         }
         "studio" -> listOf(C.PHOTO,

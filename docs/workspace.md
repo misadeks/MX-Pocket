@@ -44,7 +44,9 @@ have their own steps. If Android restricts access, leave that option off.
    is visible or hosting a real session, a stable match selects Audio after
    debounce. Supported players expose Play/Pause and title with consent;
    without it the app sends ordinary media keys and does not invent a title
-   or playback state.
+   or playback state. On Audio, an unlocked phone and the keypad show one inset
+   cover across the nine keys. The cover stays on Audio, even during playback;
+   a pinned non-music profile keeps its own background.
 5. Inspect the selection reason, matched rules and observed values in Keypad.
    Create or change weighted rules for an observed app-owned activity, device,
    local hour/range, media, plugin or workflow state. Pin Desk, change playback
@@ -89,6 +91,11 @@ keypad model and outcomes without identifiers or media metadata.
 - Start playback and confirm the selected media profile, physical Play/Pause,
   corresponding playback-state redraw, then open a nested page. Run the saved
   workflow with a physical key. Compare progress and result on phone and LCD.
+- Lock the phone, then turn the screen off. Use the physical media keys without
+  waking the screen. On authorized hardware, change tracks and check that
+  the Audio title and cover follow the player. Switch profiles, then revoke
+  access: private titles and covers should not linger. See the
+  [media access and privacy checks](android-decks.md#physical-acceptance-gates-not-established-by-jvm-tests).
 - Detach during upload, reconnect and verify saved location and full repaint.
   Background, rotate and lock/unlock the phone. Recheck direct Phone shortcuts,
   notification handoff and revoked permissions. Verify CameraX capture/markers,

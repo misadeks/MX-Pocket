@@ -17,33 +17,50 @@ class MxKeypad private constructor(
     private val log: (String) -> Unit,
 ) : KeypadSink {
     override suspend fun setKeyImage(index: Int, bitmap: Bitmap) {
+        setKeyJpeg(index, encodeKeyJpeg(index, bitmap))
+    }
+
+    /** Prepare a key-sized JPEG without uploading or retaining the caller's bitmap. */
+    suspend fun encodeKeyJpeg(index: Int, bitmap: Bitmap): ByteArray =
+        encodeKeyJpeg(index, bitmap, preferFewerReports = false)
+
+    /** For photo tiles, keep the higher quality unless lowering it saves an acknowledged report. */
+    suspend fun encodeKeyJpeg(index: Int, bitmap: Bitmap, preferFewerReports: Boolean): ByteArray {
         val region = KeypadProtocol.keyRegion(index)
-        val jpeg = withContext(Dispatchers.Default) {
+        return withContext(Dispatchers.Default) {
+            val start = System.nanoTime()
             val scaled = Bitmap.createScaledBitmap(bitmap, region.width, region.height, true)
             try {
                 var encoded: ByteArray? = null
-                for (quality in listOf(90, 75, 60, 40)) {
+                val qualities = if (preferFewerReports) listOf(90, 50, 40) else listOf(90, 75, 60, 40)
+                for (quality in qualities) {
                     val stream = ByteArrayOutputStream()
                     if (!scaled.compress(Bitmap.CompressFormat.JPEG, quality, stream)) {
                         throw IOException("Android JPEG encoding failed")
                     }
                     val bytes = stream.toByteArray()
-                    if (bytes.size <= KeypadProtocol.MAX_JPEG_BYTES) {
+                    if (bytes.size > KeypadProtocol.MAX_JPEG_BYTES) continue
+                    val reports = KeypadProtocol.imageReportCount(bytes.size)
+                    if (encoded == null || reports < KeypadProtocol.imageReportCount(encoded.size)) {
                         encoded = bytes
-                        break
                     }
+                    // Try 50 once for a multi-report photo. 40 is only a size-limit fallback.
+                    if (!preferFewerReports || reports == 1 || quality <= 50) break
                 }
-                encoded ?: throw IOException("JPEG exceeds supported image limit after quality reduction")
+                val jpeg = encoded ?: throw IOException("JPEG exceeds supported image limit after quality reduction")
+                log("LCD ${index + 1}: JPEG prepared in ${(System.nanoTime() - start) / 1_000} us")
+                jpeg
             } finally {
                 if (scaled !== bitmap) scaled.recycle()
             }
         }
-        setKeyJpeg(index, jpeg)
     }
 
     suspend fun setKeyJpeg(index: Int, jpeg: ByteArray) {
+        val start = System.nanoTime()
         session.upload(KeypadProtocol.keyRegion(index), jpeg)
-        log("LCD ${index + 1}: ${jpeg.size} JPEG bytes acknowledged (visibility not verified)")
+        log("LCD ${index + 1}: ${jpeg.size} JPEG bytes acknowledged in ${(System.nanoTime() - start) / 1_000} us " +
+            "(upload including ACKs; visibility not verified)")
     }
 
     override fun close() = session.close()

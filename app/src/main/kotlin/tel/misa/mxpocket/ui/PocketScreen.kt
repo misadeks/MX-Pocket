@@ -1,11 +1,14 @@
 package tel.misa.mxpocket.ui
 
 import android.content.Context
+import android.content.res.ColorStateList
+import android.graphics.Color
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.Typeface
 import android.util.TypedValue
 import android.view.View
+import android.view.ViewGroup
 import android.widget.CheckBox
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
@@ -34,6 +37,7 @@ data class PocketScreenState(
     val canRunKeys: Boolean = true,
     val simulating: Boolean = false,
     val rendered: List<Bitmap> = emptyList(),
+    val panelArt: Bitmap? = null,
 )
 
 sealed interface PocketScreenEvent {
@@ -86,6 +90,10 @@ class PocketScreen(
     private var profileOptions = emptyList<Pair<String,String>>()
     private val simulated: MaterialButton
     private val lastImages = arrayOfNulls<Bitmap>(9)
+    private val panel = if (live) KeypadPanel(context) else null
+    private var hasArt = false
+    private val normalText = mutableListOf<ColorStateList>()
+    private val buttonColors = mutableListOf<ColorStateList?>()
     private var simulatorActive = false
 
     init {
@@ -128,8 +136,9 @@ class PocketScreen(
         val keyIds = listOf(R.id.pocket_key_1, R.id.pocket_key_2, R.id.pocket_key_3,
             R.id.pocket_key_4, R.id.pocket_key_5, R.id.pocket_key_6,
             R.id.pocket_key_7, R.id.pocket_key_8, R.id.pocket_key_9)
+        panel?.let { content.addView(it, LinearLayout.LayoutParams(-1, -2)) }
         repeat(3) { r ->
-            val line = row()
+            val line = panel ?: row()
             repeat(3) { c ->
                 val index = r * 3 + c
                 keys += button("", parent = line, outlined = true, event = PocketScreenEvent.TapKey(index)).apply {
@@ -137,6 +146,8 @@ class PocketScreen(
                     minHeight = dimension(R.dimen.screen_key_min_height)
                     maxLines = 3
                     if (live) {
+                        normalText += textColors
+                        buttonColors += backgroundTintList
                         iconGravity = MaterialButton.ICON_GRAVITY_TEXT_TOP
                         iconSize = (58 * context.resources.displayMetrics.density).toInt()
                         iconTint = null
@@ -204,20 +215,27 @@ class PocketScreen(
                 tabs.getChildAt(i).isSelected = profileOptions[i].first == state.activeId
             }
         }
+        val showArt = live && state.panelArt != null
+        panel?.show(state.panelArt, state.rendered)
         keys.forEachIndexed { index, button ->
             val tile = state.frame.keys[index]
             button.updateText(tile.label)
             if (live) {
+                if (showArt != hasArt) {
+                    button.setTextColor(if (showArt) ColorStateList.valueOf(Color.TRANSPARENT) else normalText[index])
+                    button.backgroundTintList = if (showArt) ColorStateList.valueOf(Color.TRANSPARENT) else buttonColors[index]
+                }
                 button.isEnabled = tile.enabled && state.canRunKeys
                 button.contentDescription = listOf("Key ${index+1}",tile.label,tile.footer).filter { it.isNotBlank() }.joinToString(", ")
                 state.rendered.getOrNull(index)?.let { image ->
-                    if (image !== lastImages[index]) {
+                    if (image !== lastImages[index] || showArt != hasArt) {
                         lastImages[index] = image
-                        button.icon = BitmapDrawable(context.resources,image)
+                        button.icon = if (showArt) null else BitmapDrawable(context.resources,image)
                     }
                 }
             }
         }
+        hasArt = showArt
         diagnostics.updateText(state.diagnostics)
         log.updateText(state.log)
     }
@@ -241,7 +259,7 @@ class PocketScreen(
 
     private fun button(
         label: String,
-        parent: LinearLayout = content,
+        parent: ViewGroup = content,
         outlined: Boolean = false,
         event: PocketScreenEvent,
     ) = MaterialButton(context, null, if (outlined)
@@ -252,9 +270,10 @@ class PocketScreen(
         isAllCaps = false
         setTextSize(TypedValue.COMPLEX_UNIT_PX, context.resources.getDimension(R.dimen.screen_note_size))
         setOnClickListener { onEvent(event) }
-        val params = if (parent === content) LinearLayout.LayoutParams(-1, -2)
-            else LinearLayout.LayoutParams(0, -2, 1f)
-        parent.addView(this, margins(params))
+        if (parent is LinearLayout) {
+            val params = if (parent === content) LinearLayout.LayoutParams(-1, -2) else LinearLayout.LayoutParams(0, -2, 1f)
+            parent.addView(this, margins(params))
+        } else parent.addView(this)
     }
 
     private fun margins(params: LinearLayout.LayoutParams) = params.apply {

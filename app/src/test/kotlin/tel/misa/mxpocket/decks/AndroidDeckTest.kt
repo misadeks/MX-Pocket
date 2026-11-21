@@ -80,6 +80,9 @@ class AndroidDeckTest {
         assertEquals(setOf(DeckCommand.PLAY), MediaDeck.supported(state(P.STATE_PAUSED, P.ACTION_PLAY)))
         assertEquals(setOf(DeckCommand.NEXT), MediaDeck.supported(state(P.STATE_PLAYING, P.ACTION_PLAY or P.ACTION_SKIP_TO_NEXT)))
         assertEquals(setOf(DeckCommand.PLAY), MediaDeck.supported(state(P.STATE_PLAYING, P.ACTION_PLAY_PAUSE)))
-        assertEquals(null, MediaDeck(app).snapshot().playing)
+        Robolectric.buildActivity(MainActivity::class.java).setup().use {
+            assertFalse(app.session.deckState.value.media.access)
+            assertNull(app.session.deckState.value.media.playing)
+        }
     }
 }

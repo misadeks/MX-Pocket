@@ -12,6 +12,12 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.ResolveInfo
 import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
+import android.media.AudioManager
+import android.media.MediaMetadata
+import android.media.session.MediaSession
+import android.media.session.MediaSessionManager
+import android.media.session.PlaybackState as P
+import android.os.PowerManager
 import android.hardware.usb.UsbConfiguration
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
@@ -44,6 +50,11 @@ import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.DeckJson
 import tel.misa.mxpocket.deck.DeckKey
 import tel.misa.mxpocket.decks.Favorite
+import tel.misa.mxpocket.decks.MediaSessionAccess
+import tel.misa.mxpocket.workflow.StepKind
+import tel.misa.mxpocket.workflow.WorkflowDefinition
+import tel.misa.mxpocket.workflow.WorkflowPhase
+import tel.misa.mxpocket.workflow.WorkflowStep
 
 @RunWith(org.robolectric.RobolectricTestRunner::class)
 @Config(sdk = [28, 35], application = KeypadSessionTest.FakeApp::class, shadows = [KeypadSessionTest.ConsentUsb::class])
@@ -92,6 +103,92 @@ class KeypadSessionTest {
         .putExtra(UsbManager.EXTRA_DEVICE, device)
     private fun deliver(intent: Intent) {
         Robolectric.buildActivity(MainActivity::class.java, intent).setup().use { /* no button press */ }
+    }
+
+    @Test fun authorizedAudioDisplaysAndControlsThePlayerWithScreenOffOrKeyguardLocked() {
+        val media = MediaSession(app,"external player")
+        val player = media.controller
+        val controller = shadowOf(player)
+        controller.setPackageName("example.music")
+        controller.setMetadata(MediaMetadata.Builder().putString(MediaMetadata.METADATA_KEY_TITLE,"Private track").build())
+        fun state(playing: Boolean) = controller.executeOnPlaybackStateChanged(P.Builder().setState(
+            if (playing) P.STATE_PLAYING else P.STATE_PAUSED, 0, 1f)
+            .setActions(P.ACTION_PLAY or P.ACTION_PAUSE or P.ACTION_SKIP_TO_NEXT).build())
+        state(true)
+        shadowOf(app.getSystemService(MediaSessionManager::class.java)).addController(player)
+        shadowOf(app.getSystemService(NotificationManager::class.java)).setNotificationListenerAccessGranted(
+            ComponentName(app,MediaSessionAccess::class.java),true)
+        val real = device("test-keypad")
+        shadowOf(usb).addOrUpdateUsbDevice(real,true)
+        val session = app.session
+        session.selectProfile("audio")
+        val flow = WorkflowDefinition(name = "Skip", steps = listOf(WorkflowStep(StepKind.ACTION, target = "media.next")))
+        assertNull(kotlinx.coroutines.runBlocking { session.workflows.save(flow) })
+        session.deck.setKey("audio","root",7,DeckKey(action = ActionCall("workflow.run",mapOf("workflowId" to flow.id)))).getOrThrow()
+        val service = Robolectric.buildService(KeypadService::class.java).create()
+        service.get().onStartCommand(KeypadService.command(app,session.reserve(real)!!),0,1)
+        main.idle()
+        val power = shadowOf(app.getSystemService(PowerManager::class.java))
+        val lock = shadowOf(app.getSystemService(KeyguardManager::class.java))
+        val audio = app.getSystemService(AudioManager::class.java)
+        fun press(id: Int) { app.emit(KeyEvent(id,true)); app.emit(KeyEvent(id,false)); main.idle() }
+        fun tick() = main.idle()
+        assertEquals("Private track",session.deckState.value.media.title)
+        for (screenOn in listOf(false,true)) {
+            power.setIsInteractive(screenOn)
+            lock.setKeyguardLocked(screenOn)
+            app.sendBroadcast(Intent(if (screenOn) Intent.ACTION_SCREEN_ON else Intent.ACTION_SCREEN_OFF))
+            state(true); tick()
+            assertEquals("Pause",session.frame().keys[1].label)
+            assertEquals("Private track",session.deckState.value.media.title)
+            assertFalse(session.runDeckAction("media.play-pause").success)
+            assertFalse(session.runDeckAction("studio.open").success)
+            assertFalse(session.actions.let { kotlinx.coroutines.runBlocking { it.dispatch(ActionCall("media.next")) } }.success)
+            val controls = shadowOf(player.transportControls)
+            press(2); assertEquals(P.ACTION_PAUSE,controls.lastPerformedAction)
+            press(8); assertEquals(WorkflowPhase.FAILED,session.workflows.status.value?.phase)
+            assertEquals(P.ACTION_PAUSE,controls.lastPerformedAction)
+            state(false); tick()
+            press(2); assertEquals(P.ACTION_PLAY,controls.lastPerformedAction)
+            press(6); assertEquals(P.ACTION_SKIP_TO_NEXT,controls.lastPerformedAction)
+            press(4); assertEquals(P.ACTION_SKIP_TO_NEXT,controls.lastPerformedAction)
+            audio.setStreamVolume(AudioManager.STREAM_MUSIC,3,0)
+            repeat(2) {
+                press(3)
+                val actual = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
+                assertTrue(actual > 3)
+                assertEquals(actual,session.deckState.value.media.volume)
+                assertEquals("$actual / ${audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)}",session.frame().keys[2].footer)
+            }
+            press(5); assertNull(shadowOf(app).nextStartedActivity)
+        }
+        shadowOf(app.getSystemService(NotificationManager::class.java)).setNotificationListenerAccessGranted(
+            ComponentName(app,MediaSessionAccess::class.java),false)
+        app.sendBroadcast(Intent(Intent.ACTION_SCREEN_OFF)); main.idle()
+        assertNull(session.deckState.value.media.playing)
+        press(2)
+        val fallback = shadowOf(audio).dispatchedMediaKeyEvents
+        assertEquals(listOf(android.view.KeyEvent.ACTION_DOWN,android.view.KeyEvent.ACTION_UP),fallback.map { it.action })
+        assertTrue(fallback.all { it.keyCode == android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE })
+        shadowOf(usb).revokePermission(real,app.packageName)
+        state(true); tick(); press(2)
+        assertEquals(2,shadowOf(audio).dispatchedMediaKeyEvents.size)
+        assertEquals(P.ACTION_SKIP_TO_NEXT,shadowOf(player.transportControls).lastPerformedAction)
+        session.disconnect(); service.destroy(); media.release()
+    }
+
+    @Test fun simulatedMediaKeyCannotUseTheScreenOffException() {
+        val session = app.session
+        val audio = app.getSystemService(AudioManager::class.java)
+        Robolectric.buildActivity(MainActivity::class.java).setup().use {
+            session.startPreview(); session.selectProfile("audio")
+            audio.setStreamVolume(AudioManager.STREAM_MUSIC,3,0)
+            val before = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
+            shadowOf(app.getSystemService(PowerManager::class.java)).setIsInteractive(false)
+            assertTrue(session.phoneKey(2))
+            assertEquals(before,audio.getStreamVolume(AudioManager.STREAM_MUSIC))
+        }
+        session.disconnect()
     }
 
     @Test fun manualPermissionCanBeDeniedRetriedAndCompletedAfterRecreationWithOptInOff() {

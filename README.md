@@ -97,9 +97,18 @@ The host waits for a protocol answer after **every** fragment. The answer flags
 are not required to echo the outbound data-frame flags. Busy 0xfb resends the
 whole image within a bounded retry window; other errors and missing
 acknowledgements fail explicitly. Timeouts/cancellation close the transport to
-avoid misattributing a late answer. Each completed tile is tracked separately;
-identical tiles can be reused across pages. Explicit repaint and reconnect send
-the full layout. Input from a superseded or not-yet-acknowledged page is dropped.
+avoid misattributing a late answer. Images upload one key at a time, so a transition
+can briefly show both frames. After each ACK the app checks the latest desired
+pixels and continues around the panel, skipping keys already up to date. When a physical key needs rewriting,
+the app reuses the JPEG if the same rendered bitmap is still cached. The cache
+is per connection and capped at 2 MiB including retained bitmap pixels. It never
+skips an upload or its ACKs. For music-cover tiles, the encoder keeps the
+ordinary JPEG when it already fits one report. Otherwise it tries a lower
+quality and uses it only if that saves at least one report, without resizing
+the key or its labels. Explicit repaint and reconnect send the full layout.
+The log records JPEG preparation on misses and upload time through the last ACK
+on each completed key; neither measures when the pixels became visible. Input
+from a superseded or not-yet-acknowledged page is dropped.
 
 No speculative keepalive, firmware commands, captured startup replay, display
 ownership guesses, or undocumented reset are sent. Protocol acceptance in the
@@ -310,7 +319,8 @@ hardware-confirmed behavior throughout the diagnostic UI and logs.
 | Interface claim fails | Inspect unforced/forced claim results; OEM/kernel HID conflicts may prevent userspace access |
 | Unsupported descriptor | Provide a small redacted interface/report table; do not guess interface numbers or replay packets |
 | Missing ACK or rejected image | Save the first relevant redacted error; connection closes rather than claiming success |
-| Media command has no effect | An active Android media session is required; validate audio stream state separately |
+| Media key says Unavailable or has no effect | Start a player. With optional media access, only the transport actions offered by its Android session are enabled. Without access, Android routes standard media keys; the app cannot confirm playback. Volume controls the phone's music stream, not a cast device. |
+| Title or cover missing on the locked keypad | Select Audio, check optional media-session access and that the USB keypad is connected and authorized. The keypad can follow the selected player while the phone stays locked or off; without authorized hardware, locked playback details are hidden. Not every player supplies local artwork. See the [media checks](docs/android-decks.md#physical-acceptance-gates-not-established-by-jvm-tests). |
 | Plugin error | Error is attributed to its ID; its tasks stop. Reconnect/re-enter preview or reselect the plugin to retry |
 | Windows ARM64 Robolectric failure | Run local app tests with an x64 JDK, not ARM64 Java |
 

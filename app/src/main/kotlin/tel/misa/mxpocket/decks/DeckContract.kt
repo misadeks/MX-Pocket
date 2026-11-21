@@ -2,6 +2,8 @@ package tel.misa.mxpocket.decks
 
 import tel.misa.mxpocket.plugins.KeyTile
 
+internal const val AUDIO_BACKGROUND = 0xff303438
+
 /** Persist IDs, never enum ordinals. A favorite is an Android flattened ComponentName, not an intent URI. */
 enum class DeckCommand(val id: String, val label: String, val deck: String) {
     OPEN("launcher.open", "Open favorite", "launcher"), EDIT("launcher.edit", "Edit favorites", "launcher"),
@@ -37,6 +39,8 @@ data class MediaDeckState(
     val access: Boolean = false, val status: String = "Media keys", val title: String = "",
     val playing: Boolean? = null, val supported: Set<DeckCommand> = emptySet(),
     val volume: Int = 0, val maximum: Int = 0,
+    val artwork: android.graphics.Bitmap? = null, val fixedVolume: Boolean = false,
+    val awaitingCover: Boolean = false,
 )
 data class StudioState(
     val ready: Boolean = false, val recording: Boolean = false, val elapsedSeconds: Long = 0,
@@ -64,7 +68,7 @@ data class DeckState(
         }
         val footer = when (command) {
             DeckCommand.LOUDER, DeckCommand.QUIETER, DeckCommand.MUTE, DeckCommand.UNMUTE -> "${media.volume} / ${media.maximum}"
-            DeckCommand.PLAY -> media.title.ifBlank { media.status }
+            DeckCommand.PLAY -> if (media.access && command !in media.supported) media.status else media.title.ifBlank { media.status }
             DeckCommand.PREVIOUS, DeckCommand.NEXT -> if (media.access && command !in media.supported) "Unavailable" else media.status
             DeckCommand.MEDIA_ACCESS -> if (media.access) "Manage access" else "Optional access"
             DeckCommand.RECORD, DeckCommand.STOP -> if (studio.recording) "REC ${studio.elapsed}" else studio.status
@@ -82,9 +86,14 @@ data class DeckState(
         val color = when (command.deck) {
             "launcher" -> 0xff384674
             "studio" -> if (studio.recording) 0xff952d3f else 0xff49345f
-            "audio" -> if (media.playing == true) 0xff12634e else 0xff274740
+            "audio" -> AUDIO_BACKGROUND
             else -> 0xff254c69
         }.toInt()
-        return KeyTile(label, footer, color, favorite?.component, command.id + (component ?: ""))
+        val available = when (command) {
+            DeckCommand.PLAY, DeckCommand.PREVIOUS, DeckCommand.NEXT -> !media.access || command in media.supported
+            DeckCommand.LOUDER, DeckCommand.QUIETER, DeckCommand.MUTE, DeckCommand.UNMUTE -> !media.fixedVolume
+            else -> true
+        }
+        return KeyTile(label, footer, color, favorite?.component, command.id + (component ?: ""), enabled = available)
     }
 }

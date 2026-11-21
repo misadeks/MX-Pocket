@@ -8,6 +8,8 @@ object KeypadProtocol {
     const val PRODUCT_ID = 0xc354
     const val REPORT_BYTES = 4095
     const val MAX_JPEG_BYTES = 65535
+    private const val FIRST_IMAGE_HEADER = 20
+    private const val NEXT_IMAGE_HEADER = 5
     const val LCD_FEATURE = 0x02
     const val SOFTWARE_ID = 0x0b
     internal val reportSizes = mapOf(0x11 to 20, 0x13 to 32, 0x14 to REPORT_BYTES)
@@ -31,6 +33,12 @@ object KeypadProtocol {
         }
     }
 
+    internal fun imageReportCount(bytes: Int): Int {
+        val remaining = (bytes - (REPORT_BYTES - FIRST_IMAGE_HEADER)).coerceAtLeast(0)
+        val continuation = REPORT_BYTES - NEXT_IMAGE_HEADER
+        return 1 + (remaining + continuation - 1) / continuation
+    }
+
     /** Full HID reports, including report ID. A fragment must be acknowledged before the next. */
     fun imageReports(region: Region, jpeg: ByteArray): List<ByteArray> {
         require(jpeg.size in 4..MAX_JPEG_BYTES) { "JPEG must be 4..65535 bytes" }
@@ -47,7 +55,7 @@ object KeypadProtocol {
         var part = 1
         while (offset < jpeg.size) {
             val first = part == 1
-            val header = if (first) 20 else 5
+            val header = if (first) FIRST_IMAGE_HEADER else NEXT_IMAGE_HEADER
             val count = minOf(jpeg.size - offset, REPORT_BYTES - header)
             val last = offset + count == jpeg.size
             val report = ByteArray(REPORT_BYTES)

@@ -27,8 +27,36 @@ After a direct request the notification is a quiet retry, not proof of launch.
 Android requires a notification-listener grant to inspect active media
 sessions. It is broad at the OS level. This app uses the component solely as
 authorization for `MediaSessionManager`; it does not retrieve, log, or act
-on notifications. Track titles are display-only; they are not exported to
-diagnostic logs. The navigation service does not subscribe to screen events,
+on notifications. Spotify and other players use the same Android interface:
+there is no Spotify sign-in, SDK, playlist browser or downloaded artwork.
+While unlocked on **Audio**, the local cover spans Home's keypad and all nine
+LCD regions, paused or playing. A three-pixel black margin around the whole
+cover provides bezel clearance. Each label uses black or white against its own part of the picture.
+Other profiles keep their normal keys even during playback. Without usable
+art, the keys keep a neutral background (or the user's selected backdrop).
+A temporary read failure is retried with increasing delays, without changing tracks.
+If one player announces the next track before providing its cover, the new title
+updates immediately. The last authorized cover can remain for up to 650 ms; if
+no replacement arrives, the normal background returns. A new Audio page can
+wait that same brief interval before its first physical upload. Losing access
+or switching players does not extend the old cover's lifetime.
+Keypad volume changes read back Android's music-stream level right away.
+Phone-side volume notifications refresh the same readout; devices that omit
+them fall back to a two-second check.
+
+Only embedded bitmaps and bounded, read-granted `content://` images are used.
+Titles and cover images are display-only, never written to files or diagnostic
+logs. With Audio selected and media access granted, a connected, USB-authorized
+keypad keeps showing new titles and covers while the handset is locked or off.
+The app doesn't wake the handset or draw over its lock screen. Without that
+keypad, lock hides playback details. Leaving Audio, losing the session or
+revoking access clears them. One fresh press on the authorized keypad can change music
+volume, mute or request an advertised transport action without unlocking.
+Phone/simulator taps, workflow steps, settings and app launches do not get
+this exception. Player sessions can end or drop an action; MX Pocket does not
+wake the phone or start a player to compensate.
+
+The navigation service does not subscribe to screen events,
 read element text, inject gestures, or record keys. Both grants are optional
 and revocable in Android settings.
 
@@ -56,8 +84,20 @@ independent of the selected page.
    revocation, expiry and lock rejection, including with direct shortcuts on.
 2. Start a player, test volume and media keys without listener access; then
    grant access, change tracks and pause from the player. Confirm title and
-   playback state follow on the LCD. Test a second player without skip, no
-   session, lock and revocation. No title should appear in the diagnostic log.
+   playback state follow on the LCD. Try Spotify and a second player without
+   skip. Change the cover without changing the title if possible. Check Audio
+   paused/playing, including several Play presses: the cover should not flash
+   green. Skip tracks on the handset, including a track without a cover,
+   then leave and reopen Audio: check for a temporary full gray panel before a
+   ready cover and for a definite neutral fallback when art stays missing.
+   Pin a different profile: its keys should have no album art. Compare
+   rapid physical and handset volume changes against the on-key readout.
+   Test locked and screen-off physical Play/Pause, skip, mute and volume;
+   change tracks and verify the new title and cover appear on the keypad.
+   Switch away from Audio or revoke access and check the private details clear.
+   Settings/launch keys must not open anything while locked.
+   Unlock, end the session, remove media access and test missing art. Check all
+   nine regions redraw on each change. No title or URI should appear in logs.
 3. In Studio deny, then grant camera. Capture immediate and timed photos, zoom
    both ways, test center focus and torch where supported. Record a silent
    video, mark twice, confirm elapsed/recording LCDs, stop and open the video
