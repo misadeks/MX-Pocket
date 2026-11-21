@@ -18,9 +18,16 @@ data class PluginDescriptor(
     }
 }
 
+sealed interface KeyGlyph
+enum class PlayerGlyph : KeyGlyph {
+    VOLUME_DOWN, MUTE, UNMUTE, VOLUME_UP, PREVIOUS, PLAY, PAUSE, PLAY_PAUSE, NEXT, BACK_10, TRACK, FORWARD_10
+}
+
 data class KeyTile(val label: String, val footer: String, val background: Int,
     val iconComponent: String? = null, val inputToken: String? = null,
-    val icon: String = "", val enabled: Boolean = true)
+    val icon: String = "", val enabled: Boolean = true, val glyph: KeyGlyph? = null,
+    val readOnly: Boolean = false, val showLabel: Boolean = true, val showFooter: Boolean = true,
+    val primary: Boolean = false)
 
 data class PluginFrame(val keys: List<KeyTile>) {
     init { require(keys.size == 9) { "A plugin frame must contain exactly nine keys" } }

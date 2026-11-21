@@ -4,11 +4,11 @@ import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Bitmap
-import android.graphics.drawable.BitmapDrawable
 import android.graphics.Typeface
 import android.util.TypedValue
 import android.view.View
 import android.view.ViewGroup
+import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.CheckBox
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
@@ -21,6 +21,7 @@ import com.google.android.material.button.MaterialButton
 import tel.misa.mxpocket.R
 import tel.misa.mxpocket.plugins.PluginDescriptor
 import tel.misa.mxpocket.plugins.PluginFrame
+import tel.misa.mxpocket.plugins.PlayerGlyph
 
 data class PocketScreenState(
     val status: String,
@@ -89,11 +90,7 @@ class PocketScreen(
     private val why: TextView
     private var profileOptions = emptyList<Pair<String,String>>()
     private val simulated: MaterialButton
-    private val lastImages = arrayOfNulls<Bitmap>(9)
     private val panel = if (live) KeypadPanel(context) else null
-    private var hasArt = false
-    private val normalText = mutableListOf<ColorStateList>()
-    private val buttonColors = mutableListOf<ColorStateList?>()
     private var simulatorActive = false
 
     init {
@@ -146,13 +143,8 @@ class PocketScreen(
                     minHeight = dimension(R.dimen.screen_key_min_height)
                     maxLines = 3
                     if (live) {
-                        normalText += textColors
-                        buttonColors += backgroundTintList
-                        iconGravity = MaterialButton.ICON_GRAVITY_TEXT_TOP
-                        iconSize = (58 * context.resources.displayMetrics.density).toInt()
-                        iconTint = null
-                        val inset = dimension(R.dimen.screen_control_margin)
-                        setPadding(inset, inset, inset, inset)
+                        backgroundTintList = ColorStateList.valueOf(Color.TRANSPARENT)
+                        strokeWidth = 0
                     }
                 }
             }
@@ -215,27 +207,26 @@ class PocketScreen(
                 tabs.getChildAt(i).isSelected = profileOptions[i].first == state.activeId
             }
         }
-        val showArt = live && state.panelArt != null
         panel?.show(state.panelArt, state.rendered)
         keys.forEachIndexed { index, button ->
             val tile = state.frame.keys[index]
-            button.updateText(tile.label)
+            button.updateText(if (live) "" else tile.label)
             if (live) {
-                if (showArt != hasArt) {
-                    button.setTextColor(if (showArt) ColorStateList.valueOf(Color.TRANSPARENT) else normalText[index])
-                    button.backgroundTintList = if (showArt) ColorStateList.valueOf(Color.TRANSPARENT) else buttonColors[index]
+                (button as KeyControl).readOnly = tile.readOnly
+                val actionable = !tile.readOnly && tile.enabled && state.canRunKeys
+                button.isEnabled = actionable || tile.readOnly
+                if (button.isClickable != actionable) {
+                    button.setOnClickListener(if (actionable) View.OnClickListener { onEvent(PocketScreenEvent.TapKey(index)) } else null)
+                    button.isClickable = actionable
                 }
-                button.isEnabled = tile.enabled && state.canRunKeys
-                button.contentDescription = listOf("Key ${index+1}",tile.label,tile.footer).filter { it.isNotBlank() }.joinToString(", ")
-                state.rendered.getOrNull(index)?.let { image ->
-                    if (image !== lastImages[index] || showArt != hasArt) {
-                        lastImages[index] = image
-                        button.icon = if (showArt) null else BitmapDrawable(context.resources,image)
-                    }
+                val name = when {
+                    tile.glyph == PlayerGlyph.TRACK -> listOf("Now playing", tile.label, tile.footer)
+                    tile.glyph != null -> listOf(tile.label, tile.footer)
+                    else -> listOf("Key ${index + 1}", tile.label, tile.footer)
                 }
+                button.contentDescription = name.filter(String::isNotBlank).distinct().joinToString(", ")
             }
         }
-        hasArt = showArt
         diagnostics.updateText(state.diagnostics)
         log.updateText(state.log)
     }
@@ -262,9 +253,9 @@ class PocketScreen(
         parent: ViewGroup = content,
         outlined: Boolean = false,
         event: PocketScreenEvent,
-    ) = MaterialButton(context, null, if (outlined)
+    ) = (if (parent is KeypadPanel) KeyControl(context) else MaterialButton(context, null, if (outlined)
         com.google.android.material.R.attr.materialButtonOutlinedStyle
-        else com.google.android.material.R.attr.materialButtonStyle).apply {
+        else com.google.android.material.R.attr.materialButtonStyle)).apply {
         text = label
         minHeight = dimension(R.dimen.screen_control_min_height)
         isAllCaps = false
@@ -282,4 +273,15 @@ class PocketScreen(
     }
 
     private fun dimension(@DimenRes id: Int) = context.resources.getDimension(id).toInt()
+}
+
+/** Same native hit target across profile switches; a track readout is text, never a button. */
+private class KeyControl(context: Context) : MaterialButton(context) {
+    var readOnly = false
+    override fun getAccessibilityClassName(): CharSequence =
+        if (readOnly) TextView::class.java.name else android.widget.Button::class.java.name
+    override fun onInitializeAccessibilityNodeInfo(info: AccessibilityNodeInfo) {
+        super.onInitializeAccessibilityNodeInfo(info)
+        info.className = accessibilityClassName
+    }
 }
