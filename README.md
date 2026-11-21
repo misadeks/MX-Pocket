@@ -30,7 +30,8 @@ enabled key to try it. Compose Multiplatform draws the keypad from `:shared-ui`
 on both supported targets. The preview uses the app's factory
 profiles, nine-key bindings and Focus timer. Other tile labels and media state
 are preview fixtures: they do not access USB, change Windows volume, launch
-apps, operate a camera or invoke accessibility actions. Nothing is saved.
+apps, operate a camera or invoke accessibility actions. X-O uses the same solo
+and local two-player game as Android. Nothing is saved.
 
 ## What is implemented
 
