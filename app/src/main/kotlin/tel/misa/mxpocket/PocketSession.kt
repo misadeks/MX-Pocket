@@ -1,6 +1,7 @@
 package tel.misa.mxpocket
 
 import android.app.Application
+import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.BroadcastReceiver
 import android.content.Intent
@@ -16,6 +17,7 @@ import android.os.SystemClock
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -26,6 +28,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
@@ -57,6 +60,7 @@ internal class PocketSession(
     private val app: Context,
     registeredPlugins: List<PocketPlugin> = BuiltInPlugins.create(app.getString(R.string.focus),
         app.getString(R.string.audio), app.getString(R.string.phone), app.getString(R.string.xo)),
+    private val usageDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val open: OpenKeypad = { manager, device, event, log, error ->
         RenderedKeypad(MxKeypad.connect(manager, device, event, log, error))
     },
@@ -95,6 +99,12 @@ internal class PocketSession(
     private val sessionScope = CoroutineScope(Dispatchers.Main.immediate + SupervisorJob())
     val deck = DeckRepository(app)
     private val switches = app.getSharedPreferences("plugins", Context.MODE_PRIVATE)
+    private val detectApps = MutableStateFlow(switches.getBoolean("detectForegroundApps", false))
+    val detectForegroundApps = detectApps.asStateFlow()
+    fun setDetectForegroundApps(enabled: Boolean) {
+        switches.edit().putBoolean("detectForegroundApps", enabled).apply()
+        detectApps.value = enabled
+    }
     private val disabled = MutableStateFlow(switches.getStringSet("disabled", emptySet()).orEmpty().toSet())
     val disabledPlugins = disabled.asStateFlow()
     private val _signals = MutableStateFlow(emptyMap<String,String>())
@@ -287,18 +297,72 @@ internal class PocketSession(
     val panelArt get() = images.artwork
 
     private fun workflowContext() = WorkflowContext(request != null && output != null,
-        signals.value["activity"].orEmpty(), signals.value)
+        signals.value["activity"].orEmpty(), signals.value - FOREGROUND_APP)
+
+    private fun configuredApps(state: tel.misa.mxpocket.deck.DeckState, enabled: Boolean): Set<String> =
+        if (!enabled || !state.automatic || !state.activeProfile.automatic || state.pinnedProfileId != null) emptySet()
+        else state.profiles.asSequence().filter { it.automatic }.flatMap { it.rules }
+            .filter { it.signal == FOREGROUND_APP }.map { it.value }.toSet()
 
     private fun updateObservation() {
-        signalClock?.cancel()
-        signalClock = null
-        sampleContext()
-        if (screen != null || request != null) signalClock = sessionScope.launch {
-            while (true) { delay(1000); sampleContext() }
-        } else deck.clearObservation()
+        if (screen == null && (request == null || output == null)) {
+            signalClock?.cancel()
+            signalClock = null
+            sampleContext(null)
+            deck.clearObservation()
+            return
+        }
+        if (signalClock?.isActive == true) {
+            sampleContext()
+            return
+        }
+        signalClock = sessionScope.launch {
+            combine(deck.state, detectApps, ::configuredApps).distinctUntilChanged().collectLatest { configured ->
+                sampleWhileEligible(configured)
+            }
+        }
     }
 
-    private fun sampleContext() {
+    private suspend fun sampleWhileEligible(configured: Set<String>) {
+        var reader: ForegroundApps? = null
+        var lastLockedPoll: Long? = null
+        var unlockedSince: Long? = null
+        var generation = 0L
+        val watcher = if (configured.isEmpty()) null else app.watchForegroundBoundaries { boundary ->
+            generation++
+            reader = null
+            val now = System.currentTimeMillis()
+            val granted = app.hasUsageAccess()
+            unlockedSince = now.takeIf { granted && boundary == ForegroundBoundary.UNLOCK }
+            if (boundary == ForegroundBoundary.ACCESS || !granted) lastLockedPoll = null
+            else if (boundary == ForegroundBoundary.SCREEN) lastLockedPoll = now
+            sampleContext(null)
+        }
+        try {
+            while (true) {
+                var match: String? = null
+                val granted = configured.isNotEmpty() && app.hasUsageAccess()
+                if (granted && app.isUnlockedAndInteractive()) {
+                    val source = reader ?: ForegroundApps(app.getSystemService(UsageStatsManager::class.java),
+                        unlockedSince ?: System.currentTimeMillis(), lastLockedPoll).also { reader = it }
+                    val started = generation
+                    val result = withContext(usageDispatcher) { source.match(configured, System.currentTimeMillis()) }
+                    if (started == generation) {
+                        if (app.isUnlockedAndInteractive() && app.hasUsageAccess()) match = result
+                        else { reader = null; lastLockedPoll = null; unlockedSince = null }
+                    }
+                } else {
+                    reader = null
+                    unlockedSince = null
+                    lastLockedPoll = if (granted) System.currentTimeMillis() else null
+                }
+                sampleContext(match)
+                delay(1000)
+            }
+        } finally { watcher?.close() }
+    }
+
+    private fun sampleContext(foregroundApp: String? = _signals.value[FOREGROUND_APP]) {
         val time = LocalDateTime.now()
         val connected = output != null && request != null
         val state = deck.state.value
@@ -310,7 +374,10 @@ internal class PocketSession(
             "weekday" to time.dayOfWeek.name, "profile" to state.activeProfileId,
             "plugin" to (selectedPlugin(state.activePage) ?: "custom"),
             "workflow" to (workflows.status.value?.phase?.name ?: "IDLE")) +
-            attachedUsb.associate { "usb.$it" to "true" } + platformSignals()
+            attachedUsb.associate { "usb.$it" to "true" } + platformSignals() +
+            if (foregroundApp != null && foregroundApp in configuredApps(state, detectApps.value) &&
+                app.isUnlockedAndInteractive() && app.hasUsageAccess())
+                mapOf(FOREGROUND_APP to foregroundApp) else emptyMap()
         _signals.value = snapshot
         deck.observe(snapshot, SystemClock.elapsedRealtime()).onFailure { fail("Cannot select layout", it) }
         workflows.onContextChanged(workflowContext())
@@ -782,6 +849,7 @@ internal class PocketSession(
 
     private fun acknowledged(index: Int, epoch: Long, latest: PluginFrame = frame(), layout: Layout = layout()): Boolean {
         if (epoch == 0L || epoch != receipts[index]) return false
+        if (!latest.keys[index].enabled || latest.keys[index].readOnly) return false
         return paintedLayout == layout && paintedTarget == target(latest) &&
             lcd[index]?.matches(desiredKey(layout, latest, index)) == true
     }

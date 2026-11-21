@@ -1,6 +1,9 @@
 package tel.misa.mxpocket.ui
 
+import android.content.ComponentName
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -10,15 +13,64 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import tel.misa.mxpocket.APP_RULE_WEIGHT
+import tel.misa.mxpocket.FOREGROUND_APP
 import tel.misa.mxpocket.deck.*
+import tel.misa.mxpocket.decks.Favorite
 
 @Composable
-internal fun RuleSection(profile: DeckProfile, signals: Map<String, String>, writable: Boolean,
+internal fun RuleSection(profile: DeckProfile, profiles: List<DeckProfile>, signals: Map<String, String>, writable: Boolean,
+                         discoverApps: () -> List<Favorite>, detectionControls: @Composable () -> Unit,
                          save: (List<DeckRule>, () -> Unit) -> Unit) {
     var editing by rememberSaveable { mutableStateOf<Int?>(null) }
     var removing by rememberSaveable { mutableStateOf<Int?>(null) }
     var showSignals by rememberSaveable { mutableStateOf(false) }
+    var chooseApp by rememberSaveable { mutableStateOf(false) }
+    var advanced by rememberSaveable { mutableStateOf(false) }
     EditorHeading("Context rules")
+    EditorNote("Choose an app to show ${profile.name} when that app is open. Its keys stay the same; none are pressed.")
+    OutlinedButton(onClick = { chooseApp = !chooseApp }, enabled = writable && profile.rules.size < DeckLimits.RULES) {
+        Text(if (chooseApp) "Cancel app selection" else "Choose app")
+    }
+    if (chooseApp) {
+        AppRulePicker(profile.name, profiles, discoverApps, writable) { pkg ->
+            save(profile.rules + DeckRule(FOREGROUND_APP, pkg, APP_RULE_WEIGHT)) { chooseApp = false }
+        }
+    }
+    for ((index, rule) in profile.rules.withIndex()) {
+        if (rule.signal == FOREGROUND_APP) {
+            EditorNote("${rule.value} → ${profile.name}")
+            TextButton(onClick = { removing = index }, enabled = writable) { Text("Remove mapping") }
+        }
+    }
+    EditorNote("Optional: Usage Access lets MX Pocket read app activity on this device. It checks for your mappings only while switching is available and the phone is unlocked. No usage history is saved or sent.")
+    detectionControls()
+    TextButton(onClick = { advanced = !advanced }) { Text(if (advanced) "Hide advanced rules" else "Advanced rules (${profile.rules.size})") }
+    if (advanced) AdvancedRules(profile, signals, writable, showSignals, { showSignals = !showSignals },
+        edit = { editing = it }, remove = { removing = it })
+    editing?.let { index ->
+        val original = profile.rules.getOrNull(index)
+        if (index == -1 || original != null) RuleDialog(original, signals, writable, close = { editing = null }) { rule ->
+            val next = profile.rules.toMutableList()
+            if (index == -1) next.add(rule) else next[index] = rule
+            save(next) { editing = null }
+        }
+    }
+    removing?.let { index ->
+        profile.rules.getOrNull(index)?.let { rule ->
+            EditorConfirm("Remove rule?", "${rule.signal} = ${rule.value} will no longer contribute to ${profile.name}’s score.",
+                "Remove", writable, { removing = null }) {
+                save(profile.rules.filterIndexed { i, _ -> i != index }) { removing = null }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AdvancedRules(profile: DeckProfile, signals: Map<String, String>, writable: Boolean,
+                          showSignals: Boolean, toggleSignals: () -> Unit, edit: (Int) -> Unit, remove: (Int) -> Unit) {
     EditorNote("Matching rules add their weight to ${profile.name}’s score. A signal that isn’t observed adds nothing.")
     if (profile.rules.isEmpty()) {
         EditorNote("No rules for this profile.")
@@ -37,33 +89,54 @@ internal fun RuleSection(profile: DeckProfile, signals: Map<String, String>, wri
                     }
                 })
                 EditorActions {
-                    TextButton(onClick = { editing = index }, enabled = writable) { Text("Edit rule") }
-                    TextButton(onClick = { removing = index }, enabled = writable) { Text("Remove rule") }
+                    TextButton(onClick = { edit(index) }, enabled = writable) { Text("Edit rule") }
+                    TextButton(onClick = { remove(index) }, enabled = writable) { Text("Remove rule") }
                 }
             }
         }
     }
     EditorActions {
-        OutlinedButton(onClick = { editing = -1 }, enabled = writable && profile.rules.size < DeckLimits.RULES) { Text("Add rule") }
-        TextButton(onClick = { showSignals = !showSignals }) { Text(if (showSignals) "Hide signals" else "Observed signals (${signals.size})") }
+        OutlinedButton(onClick = { edit(-1) }, enabled = writable && profile.rules.size < DeckLimits.RULES) { Text("Add rule") }
+        TextButton(onClick = toggleSignals) { Text(if (showSignals) "Hide signals" else "Observed signals (${signals.size})") }
     }
     if (showSignals) {
         if (signals.isEmpty()) EditorNote("No signals observed yet.")
         else for ((signal, value) in signals.toSortedMap()) EditorNote("$signal: $value")
     }
-    editing?.let { index ->
-        val original = profile.rules.getOrNull(index)
-        if (index == -1 || original != null) RuleDialog(original, signals, writable, close = { editing = null }) { rule ->
-            val next = profile.rules.toMutableList()
-            if (index == -1) next.add(rule) else next[index] = rule
-            save(next) { editing = null }
-        }
+}
+
+@Composable
+private fun AppRulePicker(profileName: String, profiles: List<DeckProfile>, discover: () -> List<Favorite>,
+                          writable: Boolean, choose: (String) -> Unit) {
+    var apps by remember { mutableStateOf<List<Pair<String, String>>?>(null) }
+    var restricted by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        try {
+            apps = withContext(Dispatchers.IO) {
+                discover().mapNotNull { app -> ComponentName.unflattenFromString(app.component)?.packageName?.let { it to app.label } }
+                    .distinctBy { it.first }
+            }
+        } catch (_: SecurityException) { restricted = true }
     }
-    removing?.let { index ->
-        profile.rules.getOrNull(index)?.let { rule ->
-            EditorConfirm("Remove rule?", "${rule.signal} = ${rule.value} will no longer contribute to ${profile.name}’s score.",
-                "Remove", writable, { removing = null }) {
-                save(profile.rules.filterIndexed { i, _ -> i != index }) { removing = null }
+    var search by rememberSaveable { mutableStateOf("") }
+    Text("When this app is open, show $profileName", style = MaterialTheme.typography.titleMedium)
+    OutlinedTextField(search, { search = it }, Modifier.fillMaxWidth(), label = { Text("Find an app") }, singleLine = true)
+    val results = apps?.filter { (pkg, label) -> label.contains(search, true) || pkg.contains(search, true) }
+    when {
+        restricted -> EditorError("Android restricted the list of launchable apps.")
+        results == null -> EditorNote("Loading apps…")
+        results.isEmpty() -> EditorNote("No matching launchable apps in this Android profile.")
+        else -> LazyColumn(Modifier.heightIn(max = 320.dp)) {
+            items(results, key = { it.first }) { (pkg, label) ->
+                val mapped = profiles.filter { p -> p.rules.any { it.signal == FOREGROUND_APP && it.value == pkg } }
+                TextButton(onClick = { choose(pkg) }, modifier = Modifier.fillMaxWidth(),
+                    enabled = writable && mapped.isEmpty() && pkg.length <= DeckLimits.RULE_VALUE) {
+                    Column(Modifier.fillMaxWidth()) {
+                        Text(label)
+                        Text(if (mapped.isEmpty()) pkg else "Mapped to ${mapped.joinToString { it.name }}",
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                }
             }
         }
     }

@@ -57,6 +57,7 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
     private lateinit var workspace: ComposeView
     private var refreshJob: Job? = null
     private var resumed = false
+    private var usageGranted by mutableStateOf(false)
     private var target: String? = null
     private var fromAttach = false
     private var usbToken: String? = null
@@ -193,6 +194,7 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             setContent {
                 WorkspaceTheme {
                     WorkspacePanel(tab,session,presentation,::handleScreenEvent,
+                        usageGranted = usageGranted, onUsageSettings = ::openUsageSettings,
                         onSetup = { openSetup(firstRun = false) },
                         onExport = { layoutSaver.launch("mx-pocket-layouts.json") },
                         onImport = { layoutPicker.launch(arrayOf("application/json","text/*","application/octet-stream")) })
@@ -228,6 +230,16 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
 
     private fun openSetup(firstRun: Boolean) {
         setup.launch(SetupActivity.intent(this, firstRun))
+    }
+
+    private fun openUsageSettings() {
+        try {
+            startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+        } catch (_: ActivityNotFoundException) {
+            Snackbar.make(workspace, "Usage access settings are unavailable on this phone.", Snackbar.LENGTH_LONG).show()
+        } catch (_: SecurityException) {
+            Snackbar.make(workspace, "Android restricted access to these settings.", Snackbar.LENGTH_LONG).show()
+        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -276,6 +288,7 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
 
     override fun onResume() {
         super.onResume()
+        usageGranted = hasUsageAccess()
         resumed = true
         session.attach(this)
         refreshDiagnostics()

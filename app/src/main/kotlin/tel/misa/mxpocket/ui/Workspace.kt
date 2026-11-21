@@ -51,7 +51,8 @@ internal enum class WorkspaceTab(val label: String,val glyph: String) {
 }
 
 @Composable internal fun WorkspacePanel(tab: WorkspaceTab, session: PocketSession, state: PocketScreenState?,
-    event: (PocketScreenEvent) -> Unit, onSetup: () -> Unit, onExport: () -> Unit, onImport: () -> Unit) {
+    event: (PocketScreenEvent) -> Unit, usageGranted: Boolean, onUsageSettings: () -> Unit,
+    onSetup: () -> Unit, onExport: () -> Unit, onImport: () -> Unit) {
     if (tab == WorkspaceTab.HOME || state == null) return
     val deck by session.deck.state.collectAsStateWithLifecycle()
     val signals by session.signals.collectAsStateWithLifecycle()
@@ -68,7 +69,14 @@ internal enum class WorkspaceTab(val label: String,val glyph: String) {
     }
     Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))) {
         when (tab) {
-            WorkspaceTab.KEYPAD -> LayoutEditor(session.deck, options, signals, onExport, onImport)
+            WorkspaceTab.KEYPAD -> LayoutEditor(session.deck, options, signals, onExport, onImport, session.favoriteApps::discover) {
+                val enabled by session.detectForegroundApps.collectAsStateWithLifecycle()
+                EditorSwitch("Detect foreground apps", enabled, true, session::setDetectForegroundApps)
+                if (enabled) {
+                    EditorNote("Android Usage Access: ${if (usageGranted) "granted" else "not granted"}. Change access for MX Pocket in Android settings.")
+                    TextButton(onClick = onUsageSettings) { Text("Open usage access settings") }
+                }
+            }
             WorkspaceTab.WORKFLOWS -> WorkflowScreen(session.workflows)
             WorkspaceTab.PLUGINS -> Section("Plugins") {
                 Text("Enable the controls you use. Android access is configured separately.")

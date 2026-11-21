@@ -59,13 +59,23 @@ have their own steps. If Android restricts access, leave that option off.
    local hour/range, media, plugin or workflow state. Pin Desk, change playback
    and verify it stays on Desk. Unpin to resume automatic selection. Disabling
    automatic switching for a profile prevents entering or leaving it by rule.
-   MX Pocket does not infer the foreground package of other apps.
+   Foreground app mappings are optional; see below.
 6. Export layouts, duplicate or rename a profile, then import the export.
    The confirmed import restores profiles, bindings, rules, pins and per-profile
    histories as one versioned document. Invalid or oversized input must leave
    the old deck intact. **Restore factory layouts** restores only layouts.
    Workflows, permissions, favorites and capture files are separate; importing a
    workflow key does not import its code, grant access, or run it.
+
+## Show a profile when an app opens
+
+1. In **Keypad**, pick **Studio** in the **Profile** picker. Under **Context rules > Choose app**, tap **Camera** (Samsung Camera on a Galaxy). Pick **Audio** and repeat for **YouTube Music**. You can choose a custom profile the same way. Saving a mapping does not enable detection, change key bindings or launch anything.
+2. Enable **Automatic profile switching** and **Detect foreground apps**. Tap **Open usage access settings**, select **MX Pocket**, and allow Usage Access. No notification, accessibility or overlay access is needed for detection. Turn detection off here or revoke the Android grant at any time.
+3. With the physical keypad connected and the phone unlocked, open one app, then the other. After a stable match the keypad shows that profile’s last page. Opening Camera does **not** take a picture, and opening YouTube Music does **not** start playback. Studio’s optional physical shutter and recording controls require separate setup for the default camera; mapping Camera does not enable them.
+
+The picker creates one ordinary `foregroundApp` rule for the chosen package, with weight **5**: enough to beat the stock Audio playback rule (**3**) by the required two points. Use **Advanced rules** only to inspect signals or change weights. If no app matches, other eligible rules still compete (including playback); if none match, the eligible default wins after debounce. Pins and profile opt-outs still take precedence.
+
+Detection reads local Android activity transitions, not media sessions or screen text. It runs only while MX Pocket is visible or hosting a connected keypad, unlocked, with an eligible mapping. The picker lists launchable apps visible in this Android user/profile. Usage events don’t identify the focused pane in multi-window mode; simultaneous resumed apps, missing events or an observation older than ten minutes give no app match. After granting access, unpinning, or unlocking, reopen the app if Android hasn't reported a fresh resume. Locked playback and authorized hardware media controls work as before. MX Pocket saves your mappings, not an app usage history.
 
 ## Integrated controls
 
