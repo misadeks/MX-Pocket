@@ -55,7 +55,8 @@ internal object DeckJson {
                 else page.copy(keys = page.keys.map { key ->
                     val call = key.action
                     if (call?.id == "plugin.key" && call.params["pluginId"] == "audio")
-                        key.copy(action = ActionCall(legacy[call.params.getValue("index").toInt()].id))
+                        key.copy(action = ActionCall(legacy[call.params.getValue("index").toInt()].id,
+                            mapOf(DeckActions.LEGACY_SLOT_OWNER to "audio")))
                     else key
                 })
             })

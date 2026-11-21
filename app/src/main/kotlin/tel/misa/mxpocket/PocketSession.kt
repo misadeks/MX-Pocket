@@ -172,9 +172,7 @@ internal class PocketSession(
         val state = deck.state.value
         if (lastLayout?.let { it.profile != state.activeProfileId || it.page != state.activePage } == true)
             plugins.setEnabled(false) // Release held keys before rebinding even if the plugin ID is unchanged.
-        val id = state.activePage.keys.mapNotNull { key ->
-            key.action?.takeIf { it.id == "plugin.key" }?.params?.get("pluginId")
-        }.firstOrNull { hasPlugin(it) }
+        val id = state.activePage.keys.mapNotNull { it.action?.slotOwner() }.firstOrNull(::hasPlugin)
         if (id != null && plugins.selectedId != id) plugins.select(id)
         plugins.setEnabled((output != null || preview && screen != null) && id != null && id !in disabled.value &&
             (!preview || screen != null))
@@ -232,8 +230,9 @@ internal class PocketSession(
         val native = plugins.render()
         return PluginFrame(deck.state.value.activePage.keys.mapIndexed { index, key ->
             val call = key.action
-            val plugin = call?.params?.get("pluginId")?.takeIf { call.id == "plugin.key" }
-            val tile = if (plugin == plugins.selectedId) call.params["index"]?.toIntOrNull()?.let(native.keys::getOrNull)
+            val plugin = call?.slotOwner()
+            val tile = if (call?.id == "plugin.key" && plugin == plugins.selectedId)
+                call.params["index"]?.toIntOrNull()?.let(native.keys::getOrNull)
                 else workflowTile(call) ?: platformTile(call)
             val registered = tile != null || call?.id in setOf(DeckActions.PAGE, DeckActions.PROFILE,
                 DeckActions.BACK, DeckActions.ROOT, "sound.play","phone.open","keypad.status")
@@ -541,7 +540,7 @@ internal class PocketSession(
                 if (event.pressed && !virtual && (epoch == 0L || epoch != receipt || paintedLayout != layout() ||
                     !sameBinding(lcd[index]?.tile, frame().keys[index]))) return
                 val tile = frame().keys[index]
-                if (!tile.enabled || tile.readOnly) return
+                if (event.pressed && (!tile.enabled || tile.readOnly)) return
                 physicalPressAt = arrivedAt.takeIf { !virtual && event.pressed && !event.synthetic && request != null }
                 physicalIndex = index.takeIf { physicalPressAt != null }
                 visibleKey = virtual && event.pressed && !event.synthetic

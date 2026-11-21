@@ -11,6 +11,15 @@ object DeckActions {
     const val PROFILE = "profile.switch"
     const val PAGE_ID = "pageId"
     const val PROFILE_ID = "profileId"
+    const val LEGACY_SLOT_OWNER = "legacySlotOwner"
+}
+
+// A migrated Audio slot still participates in the original page's single-plugin selection.
+// An explicitly bound media command has no such constraint.
+internal fun ActionCall.slotOwner(): String? = when {
+    id == "plugin.key" -> params["pluginId"]
+    id.startsWith("media.") && params[DeckActions.LEGACY_SLOT_OWNER] == "audio" -> "audio"
+    else -> null
 }
 
 enum class SelectionSource { USER, AUTOMATIC }
