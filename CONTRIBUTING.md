@@ -6,8 +6,7 @@ This is a private repository. An owner must invite collaborators; having the URL
 does not grant access. Do not make the repository public or publish private forks,
 code, logs or screenshots without the owner's approval.
 
-The initial MVP is the bootstrap baseline on `main`. All subsequent code,
-documentation, dependency and workflow changes go through pull requests. Do not
+Code, documentation, dependency and workflow changes go through pull requests. Do not
 push directly to `main`, merge your own changes automatically, bypass its PR rule
 or enable auto-merge. No approval count is required for solo maintenance; a
 maintainer still reviews and explicitly merges the PR.
@@ -46,23 +45,37 @@ Linux/macOS:
 ./gradlew --no-daemon --console=plain :mx-driver:testDebugUnitTest :app:testDebugUnitTest :app:assembleDebug :mx-driver:assembleRelease :app:lintDebug :mx-driver:lintDebug
 ```
 
+Run the smallest relevant test selector during development; run the full
+Android build, tests and lint above before requesting review. Add focused
+regression tests for new behavior. Do not weaken tests or silently default on
+failed USB/plugin operations to make checks pass.
+
 On Windows ARM64 use an x64 JDK for Robolectric; its native runtime and
 Conscrypt do not support Windows ARM64. Pure Kotlin tests and Android compilation
-can use ARM64 Java. Follow [README](README.md) for installation and USB checks.
+can use ARM64 Java. See the [quick start](README.md#quick-start) for installation
+and the [hardware checklist](docs/workspace.md#hardware-acceptance-manual-not-established-by-jvm-tests) for USB checks.
 
-Run the smallest relevant test selector during development; run the complete
-command above before requesting review. Add focused regression tests for new
-behavior and preserve existing tests. Do not weaken tests or silently default on
-failed USB/plugin operations to make checks pass.
+The Android debug APK is `app/build/outputs/apk/debug/app-debug.apk`, signed
+with the local debug key. For a reusable Android library, see the
+[AAR guide](docs/driver.md). To test and package the standalone Windows
+simulator, run:
+
+```powershell
+.\gradlew.bat :desktop-preview:test :desktop-preview:packageUberJarForCurrentOS
+```
+
+Run `java -jar` with the path to the generated JAR in
+`desktop-preview/build/compose/jars/`. Use a matching x64 JDK on Windows
+ARM64. Running the packaged JAR does not require the Android SDK.
 
 ## Phone UI layout and safe preview
 
-Android and Windows render `PocketScreenState` using `PocketWorkspace` in
-`shared-ui/src/commonMain`. Taps emit typed `PocketScreenEvent` values.
-Use `PocketTheme` for appearance and Compose semantics for UI tests.
-Rendering does not activate plugins or execute actions.
-Keep the safe-area insets, 48dp control/84dp key minimum heights, selectable
-diagnostics/logs and polite live status announcements.
+Start in the [Android UI sources](app/src/main/kotlin/tel/misa/mxpocket/ui)
+for the live workspace and in [`:desktop-preview`](desktop-preview) for the
+Windows simulator. The simulator shares the factory layouts, Focus timer and
+X-O game, not the Android services. Keep safe-area insets, accessible touch
+targets, selectable diagnostics and live status announcements when changing
+the phone layout.
 
 `MainActivity` remains the live state/event adapter: it owns visible consent and
 hands hardware sessions to `KeypadService`/`PocketSession`. Styling the phone
@@ -82,8 +95,8 @@ Scene IDs include `disconnected`, `focus`, `audio` and `phone`. Profile controls
 fixtures; key and connection taps only display UI events. This host does not
 construct the live Activity/engine, register USB receivers, activate plugins,
 query USB/audio state or launch phone actions. It and its fixture data/manifest
-entry exist only in `src/debug`, not release builds. The ordinary **Phone-only
-preview** in the live app still executes real phone controls; do not confuse it
+entry exist only in the debug build, not release builds. **Connect virtual
+keypad** in the live app still executes real phone controls; do not confuse it
 with this UI-only preview.
 
 Use emulator light/dark mode, font scaling and screen sizes for visual checks.
@@ -96,7 +109,8 @@ Preview fixtures are not evidence of a USB connection or hardware behavior.
 - `mx-driver` owns USB descriptors, interface claims, reports, JPEG encoding,
   HID++ exchanges and physical input decoding. It must remain usable without
   the app, plugin engine or Android Activity.
-- `app/.../plugins` owns logical features. Use the host actions and nine-key
+- The [app plugins](app/src/main/kotlin/tel/misa/mxpocket/plugins) own logical
+  features. Use the host actions and nine-key
   frame API instead of importing the driver, accessing raw USB or duplicating
   Android action dispatch. See [plugin authoring](docs/plugins.md).
 - `MainActivity` owns visible consent and phone UI. `KeypadService` owns the
