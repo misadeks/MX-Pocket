@@ -41,6 +41,7 @@ import tel.misa.mxpocket.plugins.PhoneApp
 import tel.misa.mxpocket.decks.DeckCommand
 import tel.misa.mxpocket.decks.StudioActivity
 import tel.misa.mxpocket.actions.ActionCall
+import tel.misa.mxpocket.deck.DeckJson
 import tel.misa.mxpocket.deck.DeckKey
 import tel.misa.mxpocket.decks.Favorite
 
@@ -234,6 +235,62 @@ class KeypadSessionTest {
         assertTrue(shadowOf(service).isForegroundStopped)
         assertTrue(shadowOf(service).isStoppedBySelf)
         controller.destroy()
+    }
+
+    private fun connectPageControls() {
+        val real = device("test-keypad")
+        val session = app.session
+        session.connect(session.reserve(real)!!, usb, real, {}, { error("Unexpected shortcut") })
+        main.idle()
+    }
+
+    private fun press(control: Int) {
+        app.emit(KeyEvent(control, true))
+        app.emit(KeyEvent(control, false))
+        main.idle()
+    }
+
+    @Test fun physicalPageButtonsCycleEveryFactoryProfileInBothDirections() {
+        connectPageControls()
+        val session = app.session
+        fun expectProfile(id: String) {
+            assertEquals(id, session.deck.state.value.activeProfileId)
+            assertEquals(id, session.plugins.selectedId)
+        }
+        expectProfile("focus")
+        val remaining = listOf("audio", "phone", "launcher", "studio", "navigation")
+        for (id in remaining + "focus") {
+            press(0x01a2)
+            expectProfile(id)
+        }
+        for (id in remaining.asReversed() + "focus") {
+            press(0x01a1)
+            expectProfile(id)
+        }
+        session.disconnect()
+    }
+
+    @Test fun physicalPageButtonsRespectImportedOrderPinAndNestedBackHistory() {
+        val repo = app.session.deck
+        val desk = repo.createProfile("Desk").getOrThrow()
+        val tools = repo.createPage(desk, "Tools").getOrThrow()
+        val leaf = repo.createPage(desk, "Details").getOrThrow()
+        repo.setKey(desk, "root", 0, DeckKey(action = ActionCall("page.open", mapOf("pageId" to leaf)))).getOrThrow()
+        val state = repo.state.value
+        repo.importJson(DeckJson.encode(state.copy(profiles = state.profiles.reversed()))).getOrThrow()
+        repo.setPinned("focus").getOrThrow()
+        connectPageControls()
+        press(0x01a2) // In the imported order Focus wraps forward to Desk.
+        assertEquals(desk, repo.state.value.activeProfileId)
+        assertEquals(desk, repo.state.value.pinnedProfileId)
+        press(1)
+        assertEquals(leaf, repo.state.value.activePage.id)
+        press(0x01a1) // Back to root, not the preceding Tools page.
+        assertEquals("root", repo.state.value.activePage.id)
+        press(0x01a2)
+        assertEquals(tools, repo.state.value.activePage.id)
+        assertEquals(desk, repo.state.value.activeProfileId)
+        app.session.disconnect()
     }
 
     @Test fun screenReplacementAndBackgroundKeepOneInputOwnerAndFinishInFlightLcdBeforeSwitch() {

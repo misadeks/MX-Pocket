@@ -96,12 +96,7 @@ class DeckRepositoryTest {
     }
 
     @Test fun nestedNavigationDuplicationAndDeletionPreserveValidHistoryAndLinks() {
-        repo.cycleProfile(-1).getOrThrow()
-        assertEquals("phone", repo.state.value.activeProfileId)
-        repo.cycleProfile(1).getOrThrow()
-        assertEquals("focus", repo.state.value.activeProfileId)
-        repo.cycleProfile(1).getOrThrow()
-        assertEquals("audio", repo.state.value.activeProfileId)
+        repo.selectProfile("audio").getOrThrow()
         val child = repo.createPage("audio", "One").getOrThrow()
         val leaf = repo.duplicatePage("audio", child, "Two").getOrThrow()
         fun link(page: String) = DeckKey(action = ActionCall("page.open", mapOf("pageId" to page)))
