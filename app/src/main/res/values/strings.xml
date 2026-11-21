@@ -10,8 +10,9 @@
     <string name="phone_action_open">Open %1$s</string>
     <string name="phone_action_note">Tap to open the app selected on your keypad.</string>
     <string name="phone_action_retry">If the app did not open, tap to try again.</string>
+    <string name="phone_action_failed">Could not open the shortcut directly. Tap to try again.</string>
     <string name="direct_shortcuts">Open apps directly from keypad</string>
-    <string name="direct_shortcuts_rationale">On an unlocked phone, a physical key can open a Phone shortcut, the default camera, or Pocket Studio without a notification tap. Camera keys open the viewfinder; they do not take a photo or record. Other favorites still need a tap. Android requires “Display over other apps”, which also allows drawing over other apps. MX Pocket does not draw overlays. Leave this off to use notifications, or revoke access in Android settings at any time.</string>
+    <string name="direct_shortcuts_rationale">On an unlocked phone, each physical keypad press can open a saved favorite, a Phone shortcut, or a camera viewfinder without a notification tap. Opening the viewfinder does not take a photo or record. Android requires “Display over other apps”, which also allows drawing over other apps. MX Pocket does not draw overlays. Leave this off to use notifications, or revoke access in Android settings at any time.</string>
     <string name="open_settings">Open Android settings</string>
     <string name="enable_shortcuts">Enable shortcuts</string>
     <string name="phone_action_locked">Unlock the phone and press the keypad shortcut again.</string>
