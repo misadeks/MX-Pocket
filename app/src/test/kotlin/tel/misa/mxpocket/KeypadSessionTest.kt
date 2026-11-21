@@ -33,6 +33,8 @@ import org.robolectric.shadows.ShadowSettings
 import org.robolectric.util.ReflectionHelpers
 import tel.misa.mxpocket.driver.KeyEvent
 import tel.misa.mxpocket.plugins.PhoneApp
+import tel.misa.mxpocket.decks.DeckCommand
+import tel.misa.mxpocket.decks.StudioActivity
 
 @RunWith(org.robolectric.RobolectricTestRunner::class)
 @Config(sdk = [28, 35], application = KeypadSessionTest.FakeApp::class, shadows = [KeypadSessionTest.ConsentUsb::class])
@@ -262,7 +264,10 @@ class KeypadSessionTest {
         main.idle()
         assertEquals("Pause", session.plugins.render().keys[0].label)
         // Focus's updated Start/Pause tile is now in flight. Switch to Phone and try Camera.
-        event(KeyEvent(0x01a1, true))
+        event(KeyEvent(0x01a2, true)) // Focus -> Media
+        event(KeyEvent(0x01a2, false))
+        event(KeyEvent(0x01a2, true)) // Media -> Phone, while the old frame is in flight.
+        event(KeyEvent(0x01a2, false))
         event(KeyEvent(1, true))
         event(KeyEvent(1, false))
         main.idle()
@@ -307,7 +312,8 @@ class KeypadSessionTest {
                 Robolectric.buildActivity(PhoneActionActivity::class.java, intent).setup().use {
                     shadowOf(it.get()).nextStartedActivity
                 }
-            press(0x01a1)
+            press(0x01a2)
+            press(0x01a2)
             press(1)
             assertEquals("android.media.action.STILL_IMAGE_CAMERA", shadowOf(controller.get()).nextStartedActivity?.action)
             controller.pause().stop()
@@ -375,6 +381,42 @@ class KeypadSessionTest {
             assertNull(tap(disconnected))
             controller.start().resume()
         }
+        service.destroy()
+    }
+
+    @Test fun studioMayOfferAnUnlockedFreshOpenButNeverBackgroundCaptureOrOverlayLaunch() {
+        val real = device("test-keypad")
+        shadowOf(usb).addOrUpdateUsbDevice(real, true)
+        val ticket = app.session.reserve(real)!!
+        val service = Robolectric.buildService(KeypadService::class.java).create()
+        service.get().onStartCommand(KeypadService.command(app, ticket), 0, 1)
+        val manager = shadowOf(app.getSystemService(NotificationManager::class.java))
+        app.session.selectProfile("studio")
+        main.idle()
+        fun press(key: Int) {
+            app.emit(KeyEvent(key, true)); app.emit(KeyEvent(key, false)); main.idle()
+        }
+        ShadowSettings.setCanDrawOverlays(true)
+        DirectShortcuts(app).enabled = true
+        press(2) // Record without a resumed Studio.
+        assertNull(manager.getNotification(PHONE_NOTICE))
+        assertFalse(app.session.deckState.value.studio.recording)
+        assertFalse(app.session.runDeckAction(DeckCommand.STUDIO.id).success)
+        press(8)
+        assertNull(shadowOf(app).nextStartedActivity)
+        val open = shadowOf(manager.getNotification(PHONE_NOTICE).contentIntent).savedIntent
+        Robolectric.buildActivity(PhoneActionActivity::class.java, open).setup().use {
+            val target = shadowOf(it.get()).nextStartedActivity
+            assertEquals(StudioActivity::class.java.name, target.component?.className)
+            assertNull(target.extras) // No capture action can be embedded in this handoff.
+        }
+        press(8)
+        val stale = shadowOf(manager.getNotification(PHONE_NOTICE).contentIntent).savedIntent
+        shadowOf(usb).revokePermission(real, app.packageName)
+        Robolectric.buildActivity(PhoneActionActivity::class.java, stale).setup().use {
+            assertNull(shadowOf(it.get()).nextStartedActivity)
+        }
+        app.session.disconnect()
         service.destroy()
     }
 }

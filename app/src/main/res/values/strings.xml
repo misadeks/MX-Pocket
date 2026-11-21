@@ -27,7 +27,7 @@
     <string name="preview_note">Virtual keypad connected. Keys perform real actions. No USB messages are sent.</string>
     <string name="profile_note">Source-supported profile: one 480x480 panel, nine 118x118 visible key regions. Physical behavior has not been verified on this phone.</string>
     <string name="focus">Focus</string>
-    <string name="audio">Audio</string>
+    <string name="audio">Media Deck</string>
     <string name="media_access">MX Pocket media sessions</string>
     <string name="navigation_access">MX Pocket navigation</string>
     <string name="navigation_description">Responds to your navigation key presses. Uses the current app’s focused element for scrolling, focus movement and activation. Does not record screen text, keystrokes or notifications.</string>

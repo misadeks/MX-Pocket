@@ -1,0 +1,66 @@
+# Android keypad decks
+
+Select **Phone-only preview** or connect an authorized keypad, then select a
+deck. Preview runs real phone actions. The debug-only UI fixture does not.
+
+| Deck | How to use it | If access is missing |
+| --- | --- | --- |
+| App Launcher | Choose **Edit favorites**, check apps, then **Done**. Up to seven alphabetical favorites, an edit key and a page key fit on each keypad page. **Next apps** wraps. Real launcher icons appear on both the phone and LCD keys. | No permission prompt. Only exported, currently available `MAIN`/`LAUNCHER` activities in this Android profile are eligible. Removed/deselected targets do not launch. |
+| Media Deck (`audio`) | Volume, mute, play/pause and skip work with supported players. Press the middle status/title key to learn about optional session access. With access, MX Pocket selects a playing session first, otherwise the first session Android returns. | Without access, MX Pocket sends standard media keys without claiming playback is active. Volume uses the local music stream. With access, unsupported controls report why they cannot run. Remote-device/cast volume is not controlled. |
+| Pocket Studio | **Open Studio**, then **Allow camera**. Use the foreground viewfinder or physical keys. Shutter takes a photo; Photo timer cycles off/3/10 seconds. **Record**, **Stop**, **Marker**, center focus, zoom and torch act on this camera only. LCD recording state and elapsed time come from CameraX events, not the Record button. | No camera grant, unavailable hardware, and unsupported use cases do not trigger fallback camera apps. No microphone permission: video is silent. Leaving the Activity stops recording, cancels the shutter timer and releases the camera. |
+| Android Navigation | Home opens the system launcher. Back, scrolling, focus movement and activation work in the visible MX Pocket screen. Select **Navigation access** to read the disclosure and optionally enable the service in system settings. | Recents and navigation of other apps require that service. It uses the focused element or scrollable ancestors; when there is no focus it looks for a visible focus/scroll target, with a bounded search. Screens without suitable targets may reject actions. Password elements, Android settings and system permission surfaces are not navigation targets. |
+
+**Saved captures** opens private photos, videos and per-video text markers
+(milliseconds from recording start) using a viewer with a single-file read
+grant. Recording and capture are never triggered by opening Studio, USB attach,
+Activity recreation, a delayed workflow, or a locked-screen shortcut. No
+background camera, microphone or storage permission is used. If background
+launches are restricted, a fresh authorized physical press for a favorite or
+Studio offers a one-shot notification; tapping rechecks page, connection,
+grant, expiry and unlock. The legacy Phone page's direct-launch opt-in does
+not extend to arbitrary favorites.
+
+Android requires a notification-listener grant to inspect active media
+sessions. It is broad at the OS level. This app uses the component solely as
+authorization for `MediaSessionManager`; it does not retrieve, log, or act
+on notifications. Track titles are display-only; they are not exported to
+diagnostic logs. The navigation service does not subscribe to screen events,
+read element text, inject gestures, or record keys. Both grants are optional
+and revocable in Android settings.
+
+## Profile and workflow bindings
+
+Persist `DeckCommand.id`, never an ordinal. Only `launcher.open` takes a
+parameter: `component` is the exact flattened component of a current favorite.
+Unknown actions, unexpected parameters and stale favorites fail closed.
+Use `DeckCommand.workflowSafe` to restrict workflow steps to volume/transport.
+Navigation, captures, permission setup and launching need an immediate user
+press; dispatch must not carry that authority into asynchronous work.
+`PocketSession.runDeckAction(id, params)` returns `DeckResult(success, message)`.
+An accepted transport or capture request is not proof playback or capture
+succeeded. `PocketSession.deckState` supplies the confirmed live state,
+independent of the selected page.
+
+## Physical acceptance gates (not established by JVM tests)
+
+1. With the keypad connected, select at least ten favorites. Verify each icon,
+   truncated long label and target on both pages. Change selection, remove an
+   app and restart. Press during a page upload: no old label may open a new
+   target. Background the app and verify one-shot notifications, grant
+   revocation, expiry and lock rejection, including with direct shortcuts on.
+2. Start a player, test volume and media keys without listener access; then
+   grant access, change tracks and pause from the player. Confirm title and
+   playback state follow on the LCD. Test a second player without skip, no
+   session, lock and revocation. No title should appear in the diagnostic log.
+3. In Studio deny, then grant camera. Capture immediate and timed photos, zoom
+   both ways, test center focus and torch where supported. Record a silent
+   video, mark twice, confirm elapsed/recording LCDs, stop and open the video
+   and corresponding timestamp file. Leave/lock during a timer and once during
+   recording; no delayed shutter, continuing recording or camera use afterward.
+4. Test local navigation with the service off, then enable it manually. In a
+   normal scrollable app test Back/Home/Recents, focus, activation and scrolling.
+   Confirm locked, unsupported, password and permission screens do not permit
+   element actions. Disable the service; cross-app actions stop.
+5. Test all nine LCD regions and both physical page keys, stale presses during
+   uploads, USB detach/replug and service stop. Verify visible pixels and actual
+   Android outcomes, not USB acknowledgement alone.

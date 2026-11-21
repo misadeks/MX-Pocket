@@ -53,12 +53,16 @@ class NavigationService : AccessibilityService() {
                 DeckCommand.ACTIVATE -> focused?.takeIf { it.isEnabled && it.isClickable }?.performAction(Node.ACTION_CLICK) == true
                 DeckCommand.FORWARD, DeckCommand.REVERSE -> {
                     val target = source.focusSearch(if (command == DeckCommand.FORWARD) View.FOCUS_FORWARD else View.FOCUS_BACKWARD)
-                        ?: return false
+                        ?: return focused == null && firstMatch(root, reverse = command == DeckCommand.REVERSE) {
+                            it.isFocusable && it.performAction(Node.ACTION_FOCUS)
+                        }
                     try { !target.isPassword && target.isEnabled && target.performAction(Node.ACTION_FOCUS) }
                     finally { target.recycle() }
                 }
                 DeckCommand.UP, DeckCommand.DOWN -> {
                     val action = if (command == DeckCommand.UP) Node.ACTION_SCROLL_BACKWARD else Node.ACTION_SCROLL_FORWARD
+                    // Many touch-first screens do not give any item input or accessibility focus.
+                    if (focused == null) return firstMatch(root) { it.isScrollable && it.performAction(action) }
                     var node: Node? = Node.obtain(source)
                     try {
                         repeat(32) {
@@ -75,6 +79,24 @@ class NavigationService : AccessibilityService() {
         } finally {
             focused?.recycle()
             root.recycle()
+        }
+
+        /** Only on an explicit key press, and only when Android cannot identify a focus anchor. */
+        @Suppress("DEPRECATION")
+        private fun firstMatch(root: Node, reverse: Boolean = false, act: (Node) -> Boolean): Boolean {
+            var remaining = 64
+            fun visit(node: Node, depth: Int): Boolean {
+                if (--remaining < 0 || depth > 12 || node.isPassword || !node.isVisibleToUser) return false
+                if (node.isEnabled && act(node)) return true
+                val count = node.childCount
+                for (i in 0 until minOf(count, remaining.coerceAtLeast(0))) {
+                    val child = node.getChild(if (reverse) count - 1 - i else i) ?: continue
+                    try { if (visit(child, depth + 1)) return true } finally { child.recycle() }
+                    if (remaining <= 0) break
+                }
+                return false
+            }
+            return visit(root, 0)
         }
     }
 }

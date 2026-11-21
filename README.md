@@ -22,7 +22,8 @@ There is no hosted CI; validation runs locally.
   USB attach handling and a foreground service for an active keypad, device
   and endpoint diagnostics, connection/cancellation/detach handling, bounded
   event log with user-selected file export, custom image picker, and dynamic
-  Focus/Audio/Phone plugins. The two physical page buttons switch plugins.
+  Focus, Audio, Phone, Launcher, Studio and Navigation controls. See the
+  [Android deck walkthrough](docs/android-decks.md) and [workflow guide](docs/workflows.md).
 - The Material 3 workspace includes Home, Keypad, Plugins, Flows and Settings.
   Profiles, page history, pins, rules and individual key bindings are saved
   locally. Layouts support JSON export/import and restoring factory defaults.
