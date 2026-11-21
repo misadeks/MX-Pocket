@@ -1,10 +1,17 @@
 package tel.misa.mxpocket
 
+import android.app.NotificationManager
+import android.content.ComponentName
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.hardware.usb.UsbConfiguration
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.media.AudioManager
+import android.media.MediaMetadata
+import android.media.session.MediaSession
+import android.media.session.MediaSessionManager
+import android.media.session.PlaybackState
 import android.os.Looper
 import android.provider.Settings
 import kotlinx.coroutines.CompletableDeferred
@@ -17,6 +24,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.util.ReflectionHelpers
+import tel.misa.mxpocket.decks.MediaSessionAccess
 import tel.misa.mxpocket.decks.ok
 import tel.misa.mxpocket.driver.KeyEvent
 
@@ -58,7 +66,12 @@ class KeypadPaintTest {
             shadowOf(app).grantPermissions("tel.misa.mxpocket.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION")
             val device = ReflectionHelpers.newInstance(UsbDevice::class.java)
             ReflectionHelpers.setField(device, "mName", "test-panel")
-            session.connect(session.reserve(device)!!, app.getSystemService(UsbManager::class.java), device, {}, {
+            ReflectionHelpers.setField(device, "mVendorId", 0x046d)
+            ReflectionHelpers.setField(device, "mProductId", 0xc354)
+            ReflectionHelpers.setField(device, "mConfigurations", emptyArray<UsbConfiguration>())
+            val usb = app.getSystemService(UsbManager::class.java)
+            shadowOf(usb).addOrUpdateUsbDevice(device, true)
+            session.connect(session.reserve(device)!!, usb, device, {}, {
                 shortcuts++; ok("Offered")
             })
             main.idle()
@@ -94,6 +107,38 @@ class KeypadPaintTest {
             p.session.repaint(); main.idle()
             assertEquals((0..8).toList(), p.writes.sorted())
         } finally { p.session.disconnect() }
+    }
+
+    @Test fun artworkChangesBetweenAcksCannotStarveTheLastEightKeys() {
+        shadowOf(app.getSystemService(NotificationManager::class.java)).setNotificationListenerAccessGranted(
+            ComponentName(app, MediaSessionAccess::class.java), true)
+        val media = MediaSession(app, "test-player")
+        val controller = shadowOf(media.controller)
+        controller.setPlaybackState(PlaybackState.Builder().setState(PlaybackState.STATE_PLAYING, 0, 1f)
+            .setActions(PlaybackState.ACTION_PAUSE).build())
+        shadowOf(app.getSystemService(MediaSessionManager::class.java)).addController(media.controller)
+        val p = Panel()
+        fun cover(color: Int) {
+            val bitmap = Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888).apply { eraseColor(color) }
+            controller.executeOnMetadataChanged(MediaMetadata.Builder().putString(MediaMetadata.METADATA_KEY_MEDIA_ID, "same")
+                .putString(MediaMetadata.METADATA_KEY_TITLE, "Same").putBitmap(MediaMetadata.METADATA_KEY_ART, bitmap).build())
+            val end = System.nanoTime() + 5_000_000_000L
+            do { main.idle(); if (p.session.panelArt?.getPixel(5, 5) == color) return; Thread.yield() }
+            while (System.nanoTime() < end)
+            fail("Test player did not publish its cover")
+        }
+        try {
+            p.session.selectProfile("audio"); main.idle()
+            cover(Color.RED); p.expectAll()
+            val bindings = p.session.frame().keys
+            p.pause = true; p.writes.clear()
+            cover(Color.BLUE)
+            repeat(8) { i -> cover(Color.rgb(80 + i * 10, 100, 150)); p.ack() }
+            val servedDuringChurn = p.writes.toSet()
+            p.settle(); p.expectAll()
+            assertEquals(bindings, p.session.frame().keys)
+            assertEquals("Even continuously changing covers must visit every window", (0..8).toSet(), servedDuringChurn)
+        } finally { p.session.disconnect(); media.release() }
     }
 
     @Test fun newerVolumeReachesLaterKeysWhileTheFirstKeyKeepsChanging() {
