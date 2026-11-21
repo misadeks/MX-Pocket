@@ -51,6 +51,7 @@ internal class DeckPlugin(id: String, title: String, capability: PluginCapabilit
         "studio" -> listOf(C.PHOTO,
             if (state.studio.recording) C.STOP else C.RECORD, C.MARKER, C.ZOOM_OUT, C.FOCUS, C.ZOOM_IN,
             C.TIMER, C.STUDIO, C.TORCH).map { slot(it) }
+        // These are persisted plugin.key indices, not the physical positions of the factory keys.
         "navigation" -> listOf(C.BACK, C.HOME, C.RECENTS, C.UP, C.ACTIVATE, C.DOWN, C.REVERSE, C.NAV_ACCESS, C.FORWARD).map { slot(it) }
         else -> error("Unknown page")
     }

@@ -13,6 +13,7 @@ import android.text.TextUtils
 import android.util.LruCache
 import tel.misa.mxpocket.driver.KeypadProtocol
 import tel.misa.mxpocket.plugins.KeyTile
+import tel.misa.mxpocket.plugins.NavigationGlyph
 
 /** Entries are immutable after drawing. Views and an in-flight upload may outlive a cache entry. */
 internal class KeyImages(private val appIcon: (String) -> Bitmap?) {
@@ -61,14 +62,17 @@ internal class KeyImages(private val appIcon: (String) -> Bitmap?) {
         val subdued = if (whiteInk) 0xffbec4ca.toInt() else 0xff42484e.toInt()
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         val glyph = tile.glyph
+        val navigation = glyph is NavigationGlyph
         val primary = tile.primary
         val caption = tile.showLabel
         val withFooter = tile.showFooter && tile.footer.isNotBlank() && tile.footer != tile.label
-        val face = if (caption) 21f else if (withFooter) 47f else 59f
+        val face = if (navigation) (if (withFooter) 29f else 38f)
+            else if (caption) 21f else if (withFooter) 47f else 59f
         val appImage = tile.iconComponent?.takeIf { tile.icon.isBlank() }?.let(appIcon)
         if (glyph != null && tile.icon.isBlank()) {
-            val disk = if (caption) 28f else if (primary) 76f else 58f
-            val diameter = if (caption) 20f else if (primary) 43f else 38f
+            val diameter = if (navigation) (if (withFooter) 35f else 48f)
+                else if (caption) 20f else if (primary) 43f else 38f
+            val disk = if (navigation) diameter + 8f else if (caption) 28f else if (primary) 76f else 58f
             val lightDisk = primary && tile.enabled
             if (photo || primary) {
                 paint.color = if (lightDisk) Color.WHITE else 0xdd17191c.toInt()
@@ -81,7 +85,8 @@ internal class KeyImages(private val appIcon: (String) -> Bitmap?) {
         } else {
             caption(canvas, bitmap, tile.icon.ifBlank { "${index+1}" }, face, 20f, 1, false, ink, photo)
         }
-        if (caption) caption(canvas, bitmap, tile.label, if (withFooter) 62f else 70f, 19f, 2, true, ink, photo)
+        val labelY = if (navigation) (if (withFooter) 67f else 87f) else if (withFooter) 62f else 70f
+        if (caption) caption(canvas, bitmap, tile.label, labelY, 19f, 2, true, ink, photo)
         if (withFooter) caption(canvas, bitmap, tile.footer, if (caption) 100f else 94f, 15f, 1, false, subdued, photo)
         images.put(key, bitmap)
         return bitmap

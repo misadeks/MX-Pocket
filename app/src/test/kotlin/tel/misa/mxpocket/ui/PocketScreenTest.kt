@@ -2,7 +2,6 @@ package tel.misa.mxpocket.ui
 
 import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.Color
 import android.media.AudioManager
 import android.view.View
 import android.view.ViewGroup
@@ -72,31 +71,29 @@ class PocketScreenTest {
 
     }
 
-    @Test fun liveCoverUsesNineExistingAccessibleButtonsAndRestoresAllWithoutArt() {
+    @Test fun liveMirrorUsesTheSameNineAccessibleNativeControlsWithOrWithoutArt() {
         Robolectric.buildActivity(UiPreviewActivity::class.java).setup().use { controller ->
             val activity = controller.get()
             val scenes = UiPreviewScenes(activity)
             val events = mutableListOf<PocketScreenEvent>()
             val screen = PocketScreen(activity,scenes.descriptors,events::add,live = true)
             val image = Bitmap.createBitmap(118,118,Bitmap.Config.ARGB_8888)
-            val state = scenes.state("audio").copy(rendered = List(9) { image })
+            val state = scenes.state("focus").copy(rendered = List(9) { image })
             screen.render(state)
             val panel = views(screen.view).filterIsInstance<KeypadPanel>().single()
             val keys = (0 until panel.childCount).map { panel.getChildAt(it) as MaterialButton }
-            val colors = keys.map { it.textColors }
-            screen.render(state.copy(panelArt = image))
-            assertEquals(9,keys.size)
-            keys.forEachIndexed { i,key ->
-                assertEquals(Color.TRANSPARENT,key.currentTextColor)
-                assertNull(key.icon)
-                assertTrue(key.contentDescription.contains(state.frame.keys[i].label))
-                key.performClick()
-            }
-            assertEquals(keys.indices.map { PocketScreenEvent.TapKey(it) },events)
-            screen.render(state)
-            keys.forEachIndexed { i,key ->
-                assertEquals(colors[i],key.textColors)
-                assertNotNull(key.icon)
+            for (art in listOf(null,image,null)) {
+                screen.render(state.copy(panelArt = art))
+                events.clear()
+                assertEquals(9,keys.size)
+                keys.forEachIndexed { i,key ->
+                    assertSame(key, panel.getChildAt(i))
+                    assertTrue(key.text.isEmpty())
+                    assertNull(key.icon)
+                    assertTrue(key.contentDescription.contains(state.frame.keys[i].label))
+                    key.performClick()
+                }
+                assertEquals(keys.indices.map { PocketScreenEvent.TapKey(it) },events)
             }
         }
     }

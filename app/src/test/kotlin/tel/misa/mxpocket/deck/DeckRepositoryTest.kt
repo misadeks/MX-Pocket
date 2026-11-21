@@ -19,6 +19,73 @@ class DeckRepositoryTest {
     private val file: File get() = File(folder.root, "deck.json")
     private val repo by lazy { DeckRepository(file) }
 
+    private fun pluginKey(id: String, index: Int) =
+        DeckKey(action = ActionCall("plugin.key", mapOf("pluginId" to id, "index" to index.toString())))
+
+    @Test fun freshAndRestoredNavigationDefaultsUsePhysicalOrderWithoutChangingOtherDecks() {
+        fun checkDefaults() {
+            for (profile in repo.state.value.profiles) {
+                val slots = if (profile.id == "navigation") listOf(0, 3, 1, 6, 4, 8, 2, 5, 7) else (0..8).toList()
+                assertEquals(profile.id, slots.map { pluginKey(profile.id, it) }, profile.pages.single().keys)
+            }
+        }
+        checkDefaults()
+        repo.setKey("navigation", "root", 1, DeckKey()).getOrThrow()
+        repo.restoreDefaults().getOrThrow()
+        checkDefaults()
+    }
+
+    // The v1 on-disk format, independent of the current default generator and writer.
+    private fun historicalNavigation(): JSONObject {
+        val keys = (0..8).joinToString(",") {
+            """{"icon":"","label":"","color":-14138284,"enabled":true,"action":{"id":"plugin.key","params":{"pluginId":"navigation","index":"$it"}}}"""
+        }
+        return JSONObject("""{"version":1,"activeProfileId":"navigation","defaultProfileId":"navigation",
+            "pinnedProfileId":null,"automatic":false,"histories":{"navigation":["root"]},"selectionReason":"Default profile",
+            "profiles":[{"id":"navigation","name":"Navigation","rootPageId":"root","automatic":true,"rules":[],
+            "pages":[{"id":"root","name":"Navigation","keys":[$keys]}]}]}""")
+    }
+
+    @Test fun loadingHistoricalStockUpgradesOnlyTheOriginalRootAndCanBeRetried() {
+        val old = historicalNavigation()
+        val profiles = old.getJSONArray("profiles")
+        val profile = profiles.getJSONObject(0)
+        profiles.put(JSONObject(profile.toString()).put("id", "copy"))
+        old.getJSONObject("histories").put("copy", old.getJSONObject("histories").getJSONArray("navigation"))
+        val pages = profile.getJSONArray("pages")
+        pages.put(JSONObject(pages.getJSONObject(0).toString()).put("id", "copy"))
+        for (version in setOf(1, DeckLimits.VERSION)) {
+            file.writeText(old.put("version", version).toString())
+            val loaded = DeckRepository(file)
+            val state = loaded.state.value
+            val originalKeys = (0..8).map { pluginKey("navigation", it) }
+            assertEquals(listOf(0, 3, 1, 6, 4, 8, 2, 5, 7).map(originalKeys::get), state.activePage.keys)
+            assertEquals(originalKeys, state.activeProfile.pages.last().keys)
+            assertEquals(originalKeys, state.profiles.last().pages.single().keys)
+            assertEquals(state, DeckRepository(file).state.value) // retry before a save
+            loaded.save().getOrThrow()
+            assertEquals(state, DeckRepository(file).state.value) // no second permutation
+        }
+    }
+
+    @Test fun anyEditToTheHistoricalNavigationRootPreservesAllNineBindingsOnLoadAndImport() {
+        val state = DeckJson.decode(historicalNavigation().toString())
+        val keys = (0..8).map { pluginKey("navigation", it) }
+        val root = DeckPage("root", "Navigation", keys)
+        val edits = listOf(keys[1].copy(enabled = false), keys[1].copy(label = "Mine"), keys[1].copy(icon = "X"),
+            keys[1].copy(color = 1), keys[7], DeckKey(action = ActionCall("navigation.home")))
+        for (page in edits.map { root.copy(keys = keys.toMutableList().apply { set(1, it) }) } + root.copy(name = "Mine")) {
+            val old = DeckJson.encode(state.copy(version = 1, profiles = listOf(state.activeProfile.copy(pages = listOf(page)))))
+            file.writeText(old)
+            val loaded = DeckRepository(file)
+            assertNull(loaded.loadError)
+            assertEquals(page, loaded.state.value.activePage)
+            loaded.restoreDefaults().getOrThrow()
+            loaded.importJson(old).getOrThrow()
+            assertEquals(page, loaded.state.value.activePage)
+        }
+    }
+
     @Test fun savesUnicodeBindingsRulesAndNavigationWithoutLeakingMutableReferences() {
         val id = repo.createProfile("Travail 🐈").getOrThrow()
         val page = repo.createPage(id, "🌿").getOrThrow()

@@ -25,6 +25,8 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.util.ReflectionHelpers
 import tel.misa.mxpocket.decks.MediaSessionAccess
+import tel.misa.mxpocket.decks.DeckCommand
+import tel.misa.mxpocket.plugins.PhoneApp
 import tel.misa.mxpocket.decks.ok
 import tel.misa.mxpocket.driver.KeyEvent
 
@@ -98,6 +100,38 @@ class KeypadPaintTest {
             for (i in pixels.indices)
                 assertTrue("Wrong pixels on key ${i + 1}", pixels[i]?.sameAs(session.keyImage(i, frame.keys[i])) == true)
         }
+    }
+
+    @Test fun navigationPhysicalWindowsAndPhoneTapsDispatchTheSameUnlockedLocalActions() {
+        val p = Panel()
+        val actions = mutableListOf<DeckCommand>()
+        val screen = object : PocketSession.Screen {
+            override fun render() {}
+            override fun openApp(app: PhoneApp) = false
+            override fun deckAction(command: DeckCommand, component: String?) = ok("Handled").also { actions += command }
+        }
+        val expected = listOf(DeckCommand.BACK, DeckCommand.UP, DeckCommand.HOME, DeckCommand.REVERSE,
+            DeckCommand.ACTIVATE, DeckCommand.FORWARD, DeckCommand.RECENTS, DeckCommand.DOWN, DeckCommand.NAV_ACCESS)
+        fun physical(i: Int) {
+            p.event(KeyEvent(i + 1, true)); p.event(KeyEvent(i + 1, false)); main.idle()
+        }
+        try {
+            p.session.attach(screen)
+            p.session.selectProfile("navigation"); main.idle()
+            p.expectAll()
+            for (i in expected.indices) {
+                actions.clear()
+                physical(i)
+                p.session.phoneKey(i)
+                assertEquals("Window ${i + 1}", if (i == 6) emptyList() else List(2) { expected[i] }, actions)
+            }
+            actions.clear()
+            // Showing a disclosure and sending Back are not exceptions to the lock guard.
+            val guard = app.getSystemService(android.app.KeyguardManager::class.java)
+            shadowOf(guard).setKeyguardLocked(true)
+            for (i in listOf(0, 8)) { physical(i); p.session.phoneKey(i) }
+            assertTrue(actions.isEmpty())
+        } finally { p.session.detach(screen); p.session.disconnect() }
     }
 
     @Test fun interruptedBackdropRestoresOnlyKeysThatAcknowledgedDifferentPixels() {

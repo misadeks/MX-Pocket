@@ -9,7 +9,9 @@ import tel.misa.mxpocket.actions.ActionCall
 
 /** Strict token types, bounded depth and collections, and duplicate/unknown field rejection for v1. */
 internal object DeckJson {
-    fun decode(text: String): DeckState {
+    fun decode(text: String): DeckState = decodeValidated(text).upgradeStockNavigationRoot()
+
+    private fun decodeValidated(text: String): DeckState {
         checkSize(text)
         checkLexemes(text)
         val obj = JsonReader(StringReader(text)).use { reader ->
