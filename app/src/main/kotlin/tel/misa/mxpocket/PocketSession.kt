@@ -141,8 +141,15 @@ internal class PocketSession(
     val workflows = WorkflowController(app, sessionScope, object : WorkflowHost {
         override fun snapshot() = workflowContext()
         override fun actions() = workflowActions()
-        override suspend fun execute(id: String, params: Map<String,String>): Boolean =
-            this@PocketSession.actions.dispatch(ActionCall(id, params)).success
+        override suspend fun execute(id: String, params: Map<String,String>): Boolean {
+            // These host actions are offered only behind a visible confirmation in the workflow runner.
+            if (id == DeckCommand.HOME.id || id == DeckCommand.OPEN.id) {
+                val command = DeckCommand.fromId(id) ?: return false
+                if (command.deck in disabled.value || !app.isUnlockedAndInteractive()) return false
+                return screen?.deckAction(command, params["component"])?.success == true
+            }
+            return this@PocketSession.actions.dispatch(ActionCall(id,params)).success
+        }
     })
 
     init {
@@ -150,11 +157,14 @@ internal class PocketSession(
             deck.state.collect { syncLayout(); invalidate() }
         }
         sessionScope.launch { workflows.status.collect { invalidate() } }
+        sessionScope.launch { workflows.definitions.collect { invalidate() } }
         sessionScope.launch { deckState.collect { invalidate() } }
     }
 
     private fun syncLayout() {
         val state = deck.state.value
+        if (lastLayout?.let { it.profile != state.activeProfileId || it.page != state.activePage } == true)
+            plugins.setEnabled(false) // Release held keys before rebinding even if the plugin ID is unchanged.
         val id = state.activePage.keys.mapNotNull { key ->
             key.action?.takeIf { it.id == "plugin.key" }?.params?.get("pluginId")
         }.firstOrNull { hasPlugin(it) }
@@ -242,8 +252,8 @@ internal class PocketSession(
         val connected = output != null && request != null
         val state = deck.state.value
         val snapshot = mapOf("foreground" to (screen != null || studio != null).toString(),
-            "activity" to if (screen != null) "MX Pocket" else "Not observed",
-            "mediaActive" to audio.isMusicActive.toString(), "keypadConnected" to connected.toString(),
+            "activity" to when { studio != null -> "Pocket Studio"; screen != null -> "MX Pocket"; else -> "Not observed" },
+            "mediaActive" to (audio.isMusicActive && "audio" !in disabled.value).toString(), "keypadConnected" to connected.toString(),
             "usbDevice" to if (connected) "046D:C354" else "None",
             "simulator" to preview.toString(), "hour" to time.hour.toString(),
             "weekday" to time.dayOfWeek.name, "profile" to state.activeProfileId,
@@ -304,7 +314,12 @@ internal class PocketSession(
             WorkflowPhase.RUNNING, WorkflowPhase.CONFIRMATION -> 0xff66488c
             else -> 0xff234f72
         }.toInt()
-        return KeyTile(definition.name, status?.let { "${it.phase.name.lowercase()} ${it.step}" } ?: "Run workflow", color)
+        val footer = when (status?.phase) {
+            null -> "Run workflow"
+            WorkflowPhase.CONFIRMATION -> "Confirm in Flows"
+            else -> "${status.phase.name.lowercase()} ${status.step}"
+        }
+        return KeyTile(definition.name, footer, color)
     }
 
     private fun workflowActions() = listOf(
@@ -333,8 +348,16 @@ internal class PocketSession(
             DeckActions.PROFILE -> result(deck.selectProfile(call.params["profileId"].orEmpty()))
             DeckActions.PAGE -> result(deck.openPage(call.params["pageId"].orEmpty()))
             "sound.play" -> {
-                perform(PluginAction.CompletionTone, sessionScope)
-                ActionResult(true, "Tone requested")
+                try {
+                    val tone = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 50)
+                    if (!tone.startTone(ToneGenerator.TONE_PROP_ACK,500)) {
+                        tone.release()
+                        ActionResult(false,"Tone output unavailable")
+                    } else {
+                        sessionScope.launch { try { delay(600) } finally { tone.release() } }
+                        ActionResult(true,"Tone started")
+                    }
+                } catch (_: RuntimeException) { ActionResult(false,"Tone output unavailable") }
             }
             "phone.open" -> {
                 val target = PhoneApp.entries.find { it.name == call.params["app"] }
@@ -638,7 +661,8 @@ internal class PocketSession(
                 try {
                     favoritesChanged()
                     while (true) {
-                        decks.value = decks.value.copy(media = media.snapshot(), navigationEnabled = NavigationService.connected != null)
+                        decks.value = decks.value.copy(media = if ("audio" in disabled.value) MediaDeckState() else media.snapshot(),
+                            navigationEnabled = NavigationService.connected != null)
                         delay(1000)
                     }
                 } finally { app.unregisterReceiver(packages) }
@@ -648,6 +672,7 @@ internal class PocketSession(
     /** Main thread. User authority is synchronous input, never a parameter a saved workflow can forge. */
     fun runDeckAction(id: String, params: Map<String, String> = emptyMap()): DeckResult {
         val c = DeckCommand.fromId(id) ?: return unavailable("Unknown deck action.")
+        if (c.deck in disabled.value) return unavailable("Enable this plugin first.")
         val component = params["component"]
         if ((c == DeckCommand.OPEN && (component.isNullOrBlank() || params.size != 1)) ||
             (c != DeckCommand.OPEN && params.isNotEmpty())) return unavailable("Invalid action parameters.")

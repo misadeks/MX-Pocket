@@ -69,7 +69,7 @@ module never imports plugin/app code.
 
 The phone layout/theme and safe debug-only UI fixtures are described in
 [Contributing: phone UI](CONTRIBUTING.md#phone-ui-layout-and-safe-preview).
-This is separate from the live Phone-only preview, which executes phone actions.
+This is separate from **Connect virtual keypad**, which executes phone actions.
 
 The registry is `BuiltInPlugins.create()`. Saved profiles reference stable
 actions rather than registry positions. See [plugin authoring](docs/plugins.md).

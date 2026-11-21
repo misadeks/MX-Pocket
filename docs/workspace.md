@@ -45,11 +45,17 @@ the session-only image picker and diagnostic log export.
 
 | Profile | What to exercise | Platform boundary |
 | --- | --- | --- |
+| Phone | Select the factory **Phone** profile, connect an authorized physical keypad, opt in to **Open apps directly from keypad** in Settings and grant the explained Android special access. With the phone unlocked, background MX Pocket and press **Dialer**. | This legacy Phone shortcut can open immediately from one fresh physical press. Without the opt-in/grant it offers a notification instead. Virtual input and workflow steps never inherit this permission. |
 | Launcher | Edit favorites, choose installed apps, open one and page through additional favorites. Assign a favorite directly in a custom layout. | Uses launcher-visible components only; removed/non-favorite components cannot launch. A physical background shortcut offers a notification, not a silent app start. |
 | Audio | Start a player, adjust volume, skip and toggle playback. Observe the title and transport state. | Global metadata requires optional Android media-session access. Support for individual controls depends on the player. No notification inbox or message access features. |
 | Studio | Open Pocket Studio, grant camera access if desired, take a photo, record silent video, place a marker, stop and open the saved capture. | Only controls the visible in-app CameraX session. Torch, zoom and focus depend on camera support. Leaving the viewfinder stops capture. |
 | Navigation | Try Back, Home, focus movement, activation and scrolling; inspect the optional navigation-access explanation. | System Recents/cross-app operations need explicit service activation. Apps and protected system screens may refuse actions; no gesture recording or scanning mode. |
 | Custom | Put different media, page, profile, favorite and workflow actions on adjacent keys. Disable one plugin and verify its assigned controls no longer run. | An import is configuration, not new code. Optional Android grants remain controlled by the OS. |
+
+In Flows, app/favorite launches and Android Home wait for separate approval on
+the visible, unlocked phone. A delay, schedule or physical workflow trigger
+does not turn these steps into a one-press Phone shortcut. Workflows cannot
+start recording, enable access or drive the navigation service.
 
 ## Hardware acceptance (manual, not established by JVM tests)
 

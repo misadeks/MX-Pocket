@@ -1,7 +1,7 @@
 # Android keypad decks
 
-Select **Phone-only preview** or connect an authorized keypad, then select a
-deck. Preview runs real phone actions. The debug-only UI fixture does not.
+Select **Connect virtual keypad** or connect an authorized keypad, then select a
+profile. Virtual keys run real phone actions. The debug-only UI fixture does not.
 
 | Deck | How to use it | If access is missing |
 | --- | --- | --- |
@@ -35,7 +35,9 @@ parameter: `component` is the exact flattened component of a current favorite.
 Unknown actions, unexpected parameters and stale favorites fail closed.
 Use `DeckCommand.workflowSafe` to restrict workflow steps to volume/transport.
 Navigation, captures, permission setup and launching need an immediate user
-press; dispatch must not carry that authority into asynchronous work.
+press; dispatch must not carry that authority into asynchronous work. The Flows
+screen separately supports opening a current favorite or Android Home after
+foreground confirmation; it does not use the keypad's launch authority.
 `PocketSession.runDeckAction(id, params)` returns `DeckResult(success, message)`.
 An accepted transport or capture request is not proof playback or capture
 succeeded. `PocketSession.deckState` supplies the confirmed live state,

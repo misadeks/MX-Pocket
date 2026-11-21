@@ -16,6 +16,10 @@ import tel.misa.mxpocket.deck.*
 import tel.misa.mxpocket.driver.KeyEvent
 import tel.misa.mxpocket.plugins.PhoneApp
 import tel.misa.mxpocket.workflow.WorkflowPhase
+import tel.misa.mxpocket.workflow.WorkflowDefinition
+import tel.misa.mxpocket.workflow.WorkflowOrigin
+import tel.misa.mxpocket.workflow.WorkflowStep
+import tel.misa.mxpocket.workflow.StepKind
 import java.time.Duration
 import android.graphics.Bitmap
 import android.hardware.usb.UsbDevice
@@ -102,5 +106,53 @@ class DeckSessionTest {
         main.idle()
         assertEquals(page,layout.state.value.activePage.id)
         session.disconnect()
+    }
+
+    @Test fun rebindingAHeldPhysicalPluginKeyReleasesTheOldSlot() {
+        lateinit var emit: (KeyEvent) -> Unit
+        val session = PocketSession(app) { _,_,event,_,_ ->
+            emit = event
+            object : KeypadOutput {
+                override fun close() {}
+                override suspend fun setKeyImage(index: Int, bitmap: Bitmap) {}
+            }
+        }
+        val device = ReflectionHelpers.newInstance(UsbDevice::class.java)
+        ReflectionHelpers.setField(device,"mName","simulated")
+        session.connect(session.reserve(device)!!,app.getSystemService(UsbManager::class.java),device,{}, {})
+        main.idle()
+        emit(KeyEvent(1,true))
+        main.idle()
+        assertEquals("Pause",session.frame().keys[0].label)
+        session.deck.swapKeys("focus","root",0,2).getOrThrow()
+        main.idle()
+        emit(KeyEvent(1,false))
+        emit(KeyEvent(3,true))
+        main.idle()
+        assertEquals("Start",session.frame().keys[2].label)
+        session.disconnect()
+    }
+
+    @Test fun delayedPhysicalWorkflowCannotNavigateOrLaunchWithoutSeparateApproval() {
+        val session = app.session
+        var navigations = 0
+        session.attach(object : PocketSession.Screen by screen {
+            override fun deckAction(command: tel.misa.mxpocket.decks.DeckCommand, component: String?):
+                tel.misa.mxpocket.decks.DeckResult {
+                navigations++
+                return tel.misa.mxpocket.decks.ok("Opened")
+            }
+        })
+        val runner = session.workflows
+        val draft = WorkflowDefinition(name = "Delayed Home",steps = listOf(
+            WorkflowStep(StepKind.WAIT,value = "1"), WorkflowStep(StepKind.ACTION,target = "navigation.home")))
+        assertNotNull(runner.start(draft,WorkflowOrigin.PHYSICAL))
+        main.idleFor(Duration.ofSeconds(2))
+        assertEquals(WorkflowPhase.CONFIRMATION,runner.status.value?.phase)
+        assertEquals(0,navigations)
+        runner.effects.respond(runner.effects.prompt.value!!,accept = false,activity = null)
+        main.idle()
+        assertEquals(WorkflowPhase.FAILED,runner.status.value?.phase)
+        assertEquals(0,navigations)
     }
 }

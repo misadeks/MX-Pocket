@@ -25,8 +25,8 @@ allocate/recycle host images or import `MxKeypad`/raw USB.
 
 `PluginEngine` validates nonempty/unique registration, frame size and navigation
 targets. Identifiers match `[a-z][a-z0-9.-]{2,63}`. Use an ID such as `weather.local`;
-do not reuse or rename a published ID casually. Registration order is physical
-page-button rotation order.
+do not reuse or rename a published ID casually. The saved layout determines
+page-button navigation; registration alone does not create a layout.
 
 ## Register the working example
 
@@ -40,10 +40,10 @@ Add the import and instance to `BuiltInPlugins.kt`:
 Import `tel.misa.mxpocket.plugins.examples.CounterPlugin` and append
 `CounterPlugin()` to the list returned by `BuiltInPlugins.create()`.
 
-No Activity edit, USB protocol knowledge or new framework is needed. Rebuild,
-select Phone-only preview, then choose Counter or cycle with the page buttons
-on hardware. The example is compiled for tests but **not enabled in the default
-registry**.
+To exercise it, include a layout whose nine actions are `plugin.key` with
+`pluginId=example.counter` and `index=0` through `8`. Select that profile and **Connect
+virtual keypad** on Home. No USB protocol or Activity change is needed. The
+example is compiled for tests but **not enabled in the default registry**.
 
 To author another plugin, copy the example into a named feature package, change
 its ID/title and implement its state, frame and input. Add a registry instance
@@ -100,7 +100,7 @@ inside that scope, then publish state/invalidate back on the owner dispatcher.
 Do not use `GlobalScope`, unowned threads, an application-wide static scope or a
 background service in a plugin.
 
-Selection change, disconnect, leaving the foreground in phone-only preview, or engine close:
+Selection change, disconnect, leaving the foreground with the virtual keypad, or engine close:
 
 1. Invalidates the old activation generation and disables its host effects.
 2. Cancels its child scope.
@@ -115,7 +115,7 @@ state from a cancelled task. `onDeactivate()` must not block, throw or attempt
 new actions; release listeners/resources there or in coroutine `finally`.
 
 The engine suppresses duplicate presses and releases not owned by the current
-activation. Physical page buttons are reserved for switching plugins and are
+activation. Physical page buttons are reserved for layout navigation and are
 not delivered as plugin LCD keys. A release from a key held on the departing page
 must not be interpreted as input on its replacement.
 
@@ -124,7 +124,8 @@ do not. The Focus timer retains its monotonic deadline, but completion alerts
 wait until Focus is selected again. A physical session keeps its active plugin
 and LCD painter across Activity recreation or backgrounding; the app's
 connected-device foreground service, not the plugin, owns that lifetime.
-All state may be lost on process death. A background `OpenApp` dispatched
+Transient plugin state may be lost on process death; saved layouts and workflow
+definitions are independent of the activation. A background `OpenApp` dispatched
 synchronously for a real LCD key press offers a one-tap notification for that
 app. The tap requires a current request, USB grant and plugin page on an unlocked
 phone. Only the built-in Phone page, with direct shortcuts explicitly enabled and

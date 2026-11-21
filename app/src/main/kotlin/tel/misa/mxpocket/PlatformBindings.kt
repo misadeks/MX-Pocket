@@ -4,6 +4,7 @@ import tel.misa.mxpocket.actions.*
 import tel.misa.mxpocket.decks.DeckCommand
 import tel.misa.mxpocket.plugins.KeyTile
 import tel.misa.mxpocket.workflow.WorkflowActionSpec
+import tel.misa.mxpocket.workflow.WorkflowField
 import tel.misa.mxpocket.workflow.WorkflowOrigin
 
 internal fun PocketSession.platformBindings(): List<Pair<String,ActionCall>> = buildList {
@@ -33,9 +34,17 @@ internal fun PocketSession.pluginDetails(id: String): String {
     return listOf(access,commands).filter(String::isNotBlank).joinToString("\n")
 }
 
-internal fun PocketSession.platformWorkflowActions(): List<WorkflowActionSpec> =
-    DeckCommand.entries.filter { it.workflowSafe && it.deck !in disabledPlugins.value }
+internal fun PocketSession.platformWorkflowActions(): List<WorkflowActionSpec> = buildList {
+    addAll(DeckCommand.entries.filter { it.workflowSafe && it.deck !in disabledPlugins.value }
         .map { WorkflowActionSpec(it.id,it.label) }
+    )
+    if ("navigation" !in disabledPlugins.value) add(WorkflowActionSpec(DeckCommand.HOME.id,
+        "Open Android Home",requiresConfirmation = true))
+    val favorites = deckState.value.favorites
+    if ("launcher" !in disabledPlugins.value && favorites.isNotEmpty())
+        add(WorkflowActionSpec(DeckCommand.OPEN.id,"Open a favorite app",listOf(
+            WorkflowField("component","Favorite activity",favorites.map { it.component })), requiresConfirmation = true))
+}
 
 internal fun PocketSession.platformAction(call: ActionCall, origin: WorkflowOrigin?): ActionResult {
     val command = DeckCommand.fromId(call.id) ?: return ActionResult(false,"Unknown action: ${call.id}")
