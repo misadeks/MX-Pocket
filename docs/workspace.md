@@ -5,6 +5,23 @@ anything. Plugins controls availability and optional Android access. Flows
 edits and runs workflows. Settings contains USB consent preferences, repaint,
 the session-only image picker and diagnostic log export.
 
+## Choose features on first launch
+
+Choose the features you want help setting up, or tap **Skip and try virtual
+keypad** to use the on-screen keys without hardware or permissions. Reopen
+**Settings > Feature setup** at any time. Reviewing a choice does not enable
+it, and removing a choice from the guide does not revoke access. Each step
+checks Android's current state; you can finish with steps still pending.
+
+For physical keys, authorize the **attached keypad** and allow MX Pocket to
+show its session notification. Start the session with **Connect keypad** on
+Home. Automatic connection is separate: enable plug-in handling, reconnect
+the keypad and select MX Pocket if Android offers a handler choice.
+Optional **notification access** is for richer player controls and artwork,
+not for posting the session notification. Basic media keys still work without
+it. Pocket Studio camera, one-press app opening and cross-app navigation each
+have their own steps. If Android restricts access, leave that option off.
+
 ## Run without hardware
 
 1. On Home choose **Connect virtual keypad** and press **Start** on Focus.

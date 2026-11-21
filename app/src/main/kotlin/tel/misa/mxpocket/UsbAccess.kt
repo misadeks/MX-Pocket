@@ -1,5 +1,6 @@
 package tel.misa.mxpocket
 
+import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -16,6 +17,12 @@ internal fun Intent.usbDevice(): UsbDevice? = if (Build.VERSION.SDK_INT >= 33)
 /** Never open a parcelled UsbDevice or infer a USB grant from an intent. */
 internal fun UsbManager.keypad(name: String?): UsbDevice? =
     deviceList.values.singleOrNull { UsbDiagnostics.isKeypad(it) }?.takeIf { it.deviceName == name }
+
+internal fun UsbManager.requestKeypadAccess(context: Context, device: UsbDevice, action: String, token: String) {
+    val callback = Intent(action).setPackage(context.packageName).putExtra("token", token)
+    requestPermission(device, PendingIntent.getBroadcast(context, token.hashCode(), callback,
+        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_ONE_SHOT))
+}
 
 internal class UsbAccess(private val context: Context) {
     private val alias = ComponentName(context, "${context.packageName}.KeypadAttach")

@@ -15,12 +15,14 @@ import tel.misa.mxpocket.isUnlockedAndInteractive
 /** A component token for getActiveSessions. No posted/removed callbacks, notification queries or exports. */
 class MediaSessionAccess : NotificationListenerService()
 
+internal fun Context.hasMediaSessionAccess(): Boolean = getSystemService(NotificationManager::class.java)
+    .isNotificationListenerAccessGranted(ComponentName(this, MediaSessionAccess::class.java))
+
 internal class MediaDeck(private val app: Context) {
     private val audio = app.getSystemService(AudioManager::class.java)
     private val manager = app.getSystemService(MediaSessionManager::class.java)
     private val token = ComponentName(app, MediaSessionAccess::class.java)
-    private val access get() = app.getSystemService(NotificationManager::class.java)
-        .isNotificationListenerAccessGranted(token)
+    private val access get() = app.hasMediaSessionAccess()
     private fun controller(): MediaController? {
         val sessions = manager.getActiveSessions(token)
         return sessions.firstOrNull { it.playbackState?.state == P.STATE_PLAYING } ?: sessions.firstOrNull()

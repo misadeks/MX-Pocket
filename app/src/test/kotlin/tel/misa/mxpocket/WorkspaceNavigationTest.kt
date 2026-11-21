@@ -7,7 +7,10 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import tel.misa.mxpocket.setup.SetupActivity
+import org.junit.Assert.assertEquals
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w400dp-h800dp")
@@ -25,5 +28,7 @@ class WorkspaceNavigationTest {
         compose.onNodeWithText("Edit favorites").assertExists()
         compose.onNodeWithText("Settings").performClick()
         compose.onNodeWithText("Connect automatically on USB attach").assertExists()
+        compose.onNodeWithText("Feature setup").performClick()
+        assertEquals(SetupActivity::class.java.name, shadowOf(compose.activity).nextStartedActivity.component?.className)
     }
 }
