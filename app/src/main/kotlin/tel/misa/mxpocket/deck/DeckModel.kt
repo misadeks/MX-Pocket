@@ -11,7 +11,8 @@ object DeckActions {
     const val PROFILE = "profile.switch"
     const val PAGE_ID = "pageId"
     const val PROFILE_ID = "profileId"
-    const val LEGACY_SLOT_OWNER = "legacySlotOwner"
+    // The longest migrated media action, including this field, must not exceed the v1 slot's UTF-8 size.
+    const val LEGACY_SLOT_OWNER = "slot"
 }
 
 // A migrated Audio slot still participates in the original page's single-plugin selection.
