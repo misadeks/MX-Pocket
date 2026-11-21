@@ -401,7 +401,7 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             frame = frame, profiles = deck.profiles.map { it.id to it.name },
             activeId = deck.activeProfileId, reason = session.deck.reason.value,
             simulating = session.preview, canRunKeys = session.ready,
-            rendered = frame.keys.mapIndexed(session::keyImage),
+            rendered = frame.keys.mapIndexed(session::keyImage), panelArt = session.panelArt,
             connectionActive = target != null || session.request != null,
             diagnostics = diagnostics, log = session.logText(60), automatic = access.automatic, directShortcuts = direct.enabled,
         )

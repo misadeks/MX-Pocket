@@ -27,7 +27,9 @@ the session-only image picker and diagnostic log export.
    is visible or hosting a real session, a stable match selects Audio after
    debounce. Supported players expose Play/Pause and title with consent;
    without it the app sends ordinary media keys and does not invent a title
-   or playback state.
+   or playback state. While unlocked, the player's local cover fills the Home
+   keypad and spans the nine LCD keys. Paused artwork stays on Audio; playing
+   artwork also appears on a pinned profile without replacing its keys.
 5. Inspect the selection reason, matched rules and observed values in Keypad.
    Create or change weighted rules for an observed app-owned activity, device,
    local hour/range, media, plugin or workflow state. Pin Desk, change playback
@@ -72,6 +74,11 @@ keypad model and outcomes without identifiers or media metadata.
 - Start playback and confirm the selected media profile, physical Play/Pause,
   corresponding playback-state redraw, then open a nested page. Run the saved
   workflow with a physical key. Compare progress and result on phone and LCD.
+- Lock the phone, then turn the screen off. Use the physical media keys without
+  waking the screen. State and supported controls should follow the player;
+  neither title nor artwork should remain on the LCD. Unlock and change player.
+  Confirm the new cover replaces the old one on all nine keys. See the
+  [media access and privacy checks](android-decks.md#physical-acceptance-gates-not-established-by-jvm-tests).
 - Detach during upload, reconnect and verify saved location and full repaint.
   Background, rotate and lock/unlock the phone. Recheck direct Phone shortcuts,
   notification handoff and revoked permissions. Verify CameraX capture/markers,

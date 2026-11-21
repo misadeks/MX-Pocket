@@ -49,7 +49,7 @@ internal fun PocketSession.platformWorkflowActions(): List<WorkflowActionSpec> =
 internal fun PocketSession.platformAction(call: ActionCall, origin: WorkflowOrigin?): ActionResult {
     val command = DeckCommand.fromId(call.id) ?: return ActionResult(false,"Unknown action: ${call.id}")
     if (origin == null && !command.workflowSafe) return ActionResult(false,"This control requires a fresh keypad press.")
-    val result = runDeckAction(call.id,call.params)
+    val result = runDeckAction(call.id, call.params, fromPhysicalKey = origin == WorkflowOrigin.PHYSICAL)
     return ActionResult(result.success,result.message)
 }
 

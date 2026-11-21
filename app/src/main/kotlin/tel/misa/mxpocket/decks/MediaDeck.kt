@@ -1,19 +1,40 @@
 package tel.misa.mxpocket.decks
 
 import android.app.NotificationManager
+import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.graphics.Bitmap
 import android.media.AudioManager
 import android.media.MediaMetadata
 import android.media.session.MediaController
+import android.media.session.MediaSession
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState as P
+import android.os.Handler
+import android.os.Looper
 import android.service.notification.NotificationListenerService
 import android.view.KeyEvent
+import androidx.core.content.ContextCompat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runInterruptible
 import tel.misa.mxpocket.isUnlockedAndInteractive
 
 /** A component token for getActiveSessions. No posted/removed callbacks, notification queries or exports. */
-class MediaSessionAccess : NotificationListenerService()
+class MediaSessionAccess : NotificationListenerService() {
+    override fun onListenerConnected() { changes.update { it + 1 } }
+    override fun onListenerDisconnected() { changes.update { it + 1 } }
+    companion object { internal val changes = MutableStateFlow(0L) }
+}
 
 internal class MediaDeck(private val app: Context) {
     private val audio = app.getSystemService(AudioManager::class.java)
@@ -21,25 +42,136 @@ internal class MediaDeck(private val app: Context) {
     private val token = ComponentName(app, MediaSessionAccess::class.java)
     private val access get() = app.getSystemService(NotificationManager::class.java)
         .isNotificationListenerAccessGranted(token)
-    private fun controller(): MediaController? {
-        val sessions = manager.getActiveSessions(token)
-        return sessions.firstOrNull { it.playbackState?.state == P.STATE_PLAYING } ?: sessions.firstOrNull()
+    private fun basic() = MediaDeckState(volume = audio.getStreamVolume(AudioManager.STREAM_MUSIC),
+        maximum = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC), fixedVolume = audio.isVolumeFixed)
+
+    /** Main-thread scoped to an enabled Audio deck with a visible screen or a hardware session. */
+    suspend fun observe(publish: (MediaDeckState) -> Unit): Unit = coroutineScope {
+        val watch = Watch(this, publish)
+        val power = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) = watch.refresh()
+        }
+        ContextCompat.registerReceiver(app, power, IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_USER_PRESENT)
+        }, ContextCompat.RECEIVER_NOT_EXPORTED)
+        try {
+            launch { MediaSessionAccess.changes.collect { watch.reconnect() } }
+            // URI grants, stream volume and some OEM lock/grant transitions have no reliable callback.
+            while (true) { delay(2000); watch.refresh() }
+        } finally {
+            watch.close()
+            app.unregisterReceiver(power)
+        }
     }
-    fun snapshot(): MediaDeckState {
-        val basic = MediaDeckState(volume = audio.getStreamVolume(AudioManager.STREAM_MUSIC),
-            maximum = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC))
-        if (!access) return basic
-        if (!app.isUnlockedAndInteractive()) return basic.copy(access = true, status = "Locked")
-        return try {
-            val controller = controller() ?: return basic.copy(access = true, status = "No session")
-            val state = controller.playbackState
-            val metadata = controller.metadata
-            val title = (metadata?.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE)
-                ?: metadata?.getString(MediaMetadata.METADATA_KEY_TITLE)).orEmpty().take(80)
-                .replace(Regex("[\\p{C}\\s]+"), " ").trim()
-            basic.copy(access = true, status = status(state?.state), title = title, playing = playing(state?.state),
-                supported = supported(state))
-        } catch (_: SecurityException) { basic.copy(status = "Access unavailable") }
+
+    private inner class Watch(val scope: CoroutineScope, val publish: (MediaDeckState) -> Unit) {
+        private val main = Handler(Looper.getMainLooper())
+        private var listener: MediaSessionManager.OnActiveSessionsChangedListener? = null
+        private inner class Player(val controller: MediaController) : MediaController.Callback() {
+            var playback: P? = null
+            val current get() = players[controller.sessionToken] === this
+            override fun onPlaybackStateChanged(state: P?) {
+                if (!current) return
+                playback = state
+                refresh()
+            }
+            override fun onMetadataChanged(metadata: MediaMetadata?) {
+                if (!current || this !== metadataOwner) return
+                metadataOwner = null
+                refresh()
+            }
+            override fun onSessionDestroyed() {
+                if (!current) return
+                replace(players.values.filterNot { it === this }.map { it.controller })
+                refresh()
+            }
+        }
+        private val players = linkedMapOf<MediaSession.Token, Player>()
+        private var metadataOwner: Player? = null
+        private var title = ""
+        private var source: SessionArtwork? = null
+        private var loading: SessionArtwork? = null
+        private var artwork: Bitmap? = null
+        private var job: Job? = null
+        private var closed = false
+
+        private fun replace(ordered: List<MediaController>) {
+            val tokens = ordered.mapTo(mutableSetOf()) { it.sessionToken }
+            for (id in players.keys - tokens) {
+                players.remove(id)?.let { it.controller.unregisterCallback(it) }
+            }
+            for (c in ordered) {
+                // Keep registrations across wrapper changes, but respect the latest priority order.
+                val id = c.sessionToken
+                players[id] = players.remove(id) ?: Player(c).also {
+                    c.registerCallback(it, main)
+                    it.playback = c.playbackState
+                }
+            }
+        }
+
+        private fun subscribe() {
+            val change = object : MediaSessionManager.OnActiveSessionsChangedListener {
+                override fun onActiveSessionsChanged(controllers: List<MediaController>?) {
+                    if (this === listener) refresh(controllers.orEmpty())
+                }
+            }
+            manager.addOnActiveSessionsChangedListener(change, token, main)
+            listener = change
+            replace(manager.getActiveSessions(token))
+        }
+
+        fun refresh(roster: List<MediaController>? = null) {
+            if (closed) return
+            val basic = basic()
+            if (!access) { reset(); publish(basic); return }
+            try {
+                if (listener == null) subscribe() else if (roster != null) replace(roster)
+                val player = players.values.firstOrNull { it.playback?.state == P.STATE_PLAYING } ?: players.values.firstOrNull()
+                val state = player?.playback
+                val owner = player?.takeIf { app.isUnlockedAndInteractive() && state?.state in displayStates }
+                if (owner !== metadataOwner || owner == null) {
+                    val data = owner?.controller?.metadata
+                    title = (data?.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE)
+                        ?: data?.getString(MediaMetadata.METADATA_KEY_TITLE)).orEmpty().take(80)
+                        .replace(whitespace, " ").trim()
+                    source = SessionArtwork.from(data)
+                    metadataOwner = owner
+                }
+                load(source?.takeIf { it.readable(app) })
+                publish(basic.copy(access = true, status = if (player == null) "No session" else status(state?.state),
+                    title = title, playing = playing(state?.state), supported = supported(state), artwork = artwork))
+            } catch (_: SecurityException) {
+                reset()
+                publish(basic.copy(status = "Access unavailable"))
+            }
+        }
+
+        private fun load(next: SessionArtwork?) {
+            if (next === loading) return
+            job?.cancel()
+            loading = next
+            artwork = null
+            if (next != null) job = scope.launch {
+                val image = runInterruptible(artworkIO) { next.load(app) }
+                if (!closed && next === loading) {
+                    if (app.isUnlockedAndInteractive() && access && next.readable(app)) artwork = image
+                    refresh()
+                }
+            }
+        }
+
+        private fun reset() {
+            listener?.let(manager::removeOnActiveSessionsChangedListener)
+            listener = null
+            replace(emptyList())
+            metadataOwner = null
+            title = ""
+            source = null
+            load(null)
+        }
+        fun reconnect() { reset(); refresh() }
+        fun close() { closed = true; reset() }
     }
     fun execute(command: DeckCommand): DeckResult {
         val direction = when (command) {
@@ -56,7 +188,9 @@ internal class MediaDeck(private val app: Context) {
                 return ok("Music volume adjusted.")
             }
             if (access) {
-                val controller = controller() ?: return unavailable("Start a media player first.")
+                val sessions = manager.getActiveSessions(token)
+                val controller = sessions.firstOrNull { it.playbackState?.state == P.STATE_PLAYING }
+                    ?: sessions.firstOrNull() ?: return unavailable("Start a media player first.")
                 val state = controller.playbackState
                 if (command !in supported(state)) return unavailable("The active player does not offer this control.")
                 when (command) {
@@ -91,6 +225,9 @@ internal class MediaDeck(private val app: Context) {
         } catch (_: SecurityException) { unavailable("Android restricted media access or the volume change.") }
     }
     companion object {
+        private val artworkIO = Dispatchers.IO.limitedParallelism(1)
+        private val displayStates = setOf(P.STATE_PLAYING, P.STATE_PAUSED, P.STATE_FAST_FORWARDING, P.STATE_REWINDING, P.STATE_BUFFERING)
+        private val whitespace = Regex("[\\p{C}\\s]+")
         private fun playing(state: Int?) = when (state) {
             P.STATE_PLAYING, P.STATE_FAST_FORWARDING, P.STATE_REWINDING -> true
             P.STATE_STOPPED, P.STATE_PAUSED -> false

@@ -13,7 +13,6 @@ import android.media.ToneGenerator
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
-import android.view.KeyEvent as AndroidKeyEvent
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -26,6 +25,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import androidx.core.content.ContextCompat
 import tel.misa.mxpocket.decks.*
@@ -209,7 +211,11 @@ internal class PocketSession(
         }
     }
 
+    private fun visibleArtwork(state: MediaDeckState) = state.artwork?.takeIf { "audio" !in disabled.value &&
+        (deck.state.value.activeProfileId == "audio" || state.playing == true) && app.isUnlockedAndInteractive() }
+
     fun frame(): PluginFrame {
+        if (images.useArtwork(visibleArtwork(deckState.value.media))) revision++
         val native = plugins.render()
         return PluginFrame(deck.state.value.activePage.keys.mapIndexed { index, key ->
             val call = key.action
@@ -235,6 +241,7 @@ internal class PocketSession(
     }
 
     fun keyImage(index: Int, tile: KeyTile): Bitmap = images.image(index, tile)
+    val panelArt get() = images.artwork
 
     private fun workflowContext() = WorkflowContext(request != null && output != null,
         signals.value["activity"].orEmpty(), signals.value)
@@ -592,25 +599,21 @@ internal class PocketSession(
     private fun perform(action: PluginAction, scope: CoroutineScope) {
         when (action) {
             is PluginAction.Deck -> {
-                val result = runDeckAction(action.command.id, action.component?.let { mapOf("component" to it) }.orEmpty())
+                val result = runDeckAction(action.command.id, action.component?.let { mapOf("component" to it) }.orEmpty(),
+                    fromPhysicalKey = physicalPressAt != null)
                 message(result.message)
             }
-            is PluginAction.Volume -> audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, when (action.change) {
-                VolumeChange.LOWER -> AudioManager.ADJUST_LOWER
-                VolumeChange.RAISE -> AudioManager.ADJUST_RAISE
-                VolumeChange.MUTE -> AudioManager.ADJUST_MUTE
-                VolumeChange.UNMUTE -> AudioManager.ADJUST_UNMUTE
-            }, if (screen == null) 0 else AudioManager.FLAG_SHOW_UI)
-            is PluginAction.Media -> {
-                val code = when (action.command) {
-                    MediaCommand.PLAY_PAUSE -> AndroidKeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
-                    MediaCommand.PREVIOUS -> AndroidKeyEvent.KEYCODE_MEDIA_PREVIOUS
-                    MediaCommand.NEXT -> AndroidKeyEvent.KEYCODE_MEDIA_NEXT
-                }
-                audio.dispatchMediaKeyEvent(AndroidKeyEvent(AndroidKeyEvent.ACTION_DOWN, code))
-                audio.dispatchMediaKeyEvent(AndroidKeyEvent(AndroidKeyEvent.ACTION_UP, code))
-                log("Media command sent; an active media session is required")
-            }
+            is PluginAction.Volume -> message(runDeckAction(when (action.change) {
+                VolumeChange.LOWER -> DeckCommand.QUIETER
+                VolumeChange.RAISE -> DeckCommand.LOUDER
+                VolumeChange.MUTE -> DeckCommand.MUTE
+                VolumeChange.UNMUTE -> DeckCommand.UNMUTE
+            }.id, fromPhysicalKey = physicalPressAt != null).message)
+            is PluginAction.Media -> message(runDeckAction(when (action.command) {
+                MediaCommand.PLAY_PAUSE -> DeckCommand.PLAY
+                MediaCommand.PREVIOUS -> DeckCommand.PREVIOUS
+                MediaCommand.NEXT -> DeckCommand.NEXT
+            }.id, fromPhysicalKey = physicalPressAt != null).message)
             is PluginAction.OpenApp -> {
                 if (screen != null && physicalPressAt != null && !freshAuthorizedPress()) {
                     message("Press the shortcut again on the authorized keypad.")
@@ -643,6 +646,8 @@ internal class PocketSession(
     private fun watchDecks() {
         if (screen == null && request == null) {
             deckWatch?.cancel(); deckWatch = null
+            images.useArtwork(null)
+            images.clear()
             decks.value = decks.value.copy(media = MediaDeckState(), navigationEnabled = false)
             return
         }
@@ -650,6 +655,14 @@ internal class PocketSession(
         deckWatch = CoroutineScope(Dispatchers.Main.immediate).launch {
             coroutineScope {
                 var reload: Job? = null
+                fun publishMedia(next: MediaDeckState) {
+                    val old = decks.value.media
+                    if (old == next) return
+                    if (old.title.isNotEmpty() && old.title != next.title) images.clear()
+                    decks.value = decks.value.copy(media = next)
+                    // Advance the stamp even during an in-flight HID write; finish that key, not the stale frame.
+                    if (images.useArtwork(visibleArtwork(next)) || old.title != next.title) revision++
+                }
                 fun favoritesChanged() {
                     reload?.cancel()
                     reload = launch {
@@ -669,10 +682,14 @@ internal class PocketSession(
                 }
                 ContextCompat.registerReceiver(app, packages, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
                 try {
+                    launch {
+                        disabled.map { "audio" !in it }.distinctUntilChanged().collectLatest { enabled ->
+                            if (enabled) media.observe(::publishMedia) else publishMedia(MediaDeckState())
+                        }
+                    }
                     favoritesChanged()
                     while (true) {
-                        decks.value = decks.value.copy(media = if ("audio" in disabled.value) MediaDeckState() else media.snapshot(),
-                            navigationEnabled = NavigationService.connected != null)
+                        decks.value = decks.value.copy(navigationEnabled = NavigationService.connected != null)
                         delay(1000)
                     }
                 } finally { app.unregisterReceiver(packages) }
@@ -680,13 +697,14 @@ internal class PocketSession(
         }
     }
     /** Main thread. User authority is synchronous input, never a parameter a saved workflow can forge. */
-    fun runDeckAction(id: String, params: Map<String, String> = emptyMap()): DeckResult {
+    fun runDeckAction(id: String, params: Map<String, String> = emptyMap(), fromPhysicalKey: Boolean = false): DeckResult {
         val c = DeckCommand.fromId(id) ?: return unavailable("Unknown deck action.")
         if (c.deck in disabled.value) return unavailable("Enable this plugin first.")
         val component = params["component"]
         if ((c == DeckCommand.OPEN && (component.isNullOrBlank() || params.size != 1)) ||
             (c != DeckCommand.OPEN && params.isNotEmpty())) return unavailable("Invalid action parameters.")
-        if (!app.isUnlockedAndInteractive()) return unavailable("Unlock the phone before using this control.")
+        if (!app.isUnlockedAndInteractive() && !(c.workflowSafe && fromPhysicalKey && freshAuthorizedPress()))
+            return unavailable("Unlock the phone or use a connected keypad media key.")
         if (c.workflowSafe) return media.execute(c)
         if (!(visibleKey && screen != null) && !freshAuthorizedPress())
             return unavailable("Press a key on the unlocked phone or connected keypad.")

@@ -5,7 +5,9 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
+import android.graphics.Rect
 import android.util.LruCache
+import tel.misa.mxpocket.driver.KeypadProtocol
 import tel.misa.mxpocket.plugins.KeyTile
 
 /** Entries are immutable after drawing. Views and an in-flight upload may outlive a cache entry. */
@@ -13,6 +15,15 @@ internal class KeyImages(private val appIcon: (String) -> Bitmap?) {
     private data class CacheKey(val index: Int, val tile: KeyTile)
     private val images = LruCache<CacheKey, Bitmap>(36)
     private var backdrop: Bitmap? = null
+    var artwork: Bitmap? = null
+        private set
+
+    fun useArtwork(image: Bitmap?): Boolean {
+        if (image === artwork) return false
+        artwork = image
+        clear()
+        return true
+    }
 
     fun setBackdrop(image: Bitmap) {
         backdrop = image
@@ -27,12 +38,18 @@ internal class KeyImages(private val appIcon: (String) -> Bitmap?) {
         val bitmap = Bitmap.createBitmap(118, 118, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         canvas.drawColor(tile.background)
-        backdrop?.let {
+        val art = artwork
+        if (art != null) {
+            val region = KeypadProtocol.keyRegion(index)
+            val src = Rect(region.x, region.y, region.x + region.width, region.y + region.height)
+            canvas.drawBitmap(art, src, Rect(0, 0, bitmap.width, bitmap.height), Paint(Paint.FILTER_BITMAP_FLAG))
+            canvas.drawColor(if (tile.enabled) 0x92000000.toInt() else 0xba000000.toInt())
+        } else backdrop?.let {
             canvas.drawBitmap(it, 0f, 0f, null)
             canvas.drawColor(0xab000000.toInt())
         }
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = if (backdrop != null || Color.luminance(tile.background) < .179f) Color.WHITE else Color.BLACK
+            color = if (art != null || backdrop != null || Color.luminance(tile.background) < .179f) Color.WHITE else Color.BLACK
             textAlign = Paint.Align.CENTER
         }
         fun line(text: String, y: Float, size: Float) {

@@ -61,7 +61,7 @@ class DeckAccessActivity : DeckActivity() {
         val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         scroll.addView(body)
         description(body, if (media)
-            "To show track titles and playback status, Android requires notification listener access. This is a broad system grant. MX Pocket only queries media sessions; it does not read, store or act on notifications. Without access you can still send media keys and change volume."
+            "Android requires notification listener access to show player status, track titles and cover art. This is a broad system grant. MX Pocket uses media sessions only: it does not read, store or act on notifications. Covers come from the player or a local image it lets MX Pocket read, never from the web. Locking the phone hides titles and covers on the keypad. Its physical media keys still work. Without access you can still send standard media keys and change volume."
             else "Enable MX Pocket navigation in Android Accessibility settings to use your keypad across apps. On a key press it uses the current app's focused element for scrolling, focus and activation. It does not read or store screen text, record keys or automate gestures. Without access, navigation works inside MX Pocket.")
         description(body, "Access is optional. You can turn it off in the same settings at any time.")
         val status = description(body, "")

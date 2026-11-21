@@ -306,7 +306,8 @@ hardware-confirmed behavior throughout the diagnostic UI and logs.
 | Interface claim fails | Inspect unforced/forced claim results; OEM/kernel HID conflicts may prevent userspace access |
 | Unsupported descriptor | Provide a small redacted interface/report table; do not guess interface numbers or replay packets |
 | Missing ACK or rejected image | Save the first relevant redacted error; connection closes rather than claiming success |
-| Media command has no effect | An active Android media session is required; validate audio stream state separately |
+| Media key says Unavailable or has no effect | Start a player. With optional media access, only the transport actions offered by its Android session are enabled. Without access, Android routes standard media keys; the app cannot confirm playback. Volume controls the phone's music stream, not a cast device. |
+| Title and cover disappear when the phone locks | This is intentional. A fresh press on the connected, authorized USB keypad can still change volume or use supported transport while locked or screen-off. Phone taps, workflows and permission/setup actions do not gain that authority. Unlock to restore the current title and local cover. See the [media checks](docs/android-decks.md#physical-acceptance-gates-not-established-by-jvm-tests). |
 | Plugin error | Error is attributed to its ID; its tasks stop. Reconnect/re-enter preview or reselect the plugin to retry |
 | Windows ARM64 Robolectric failure | Run local app tests with an x64 JDK, not ARM64 Java |
 

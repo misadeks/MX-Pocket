@@ -24,6 +24,7 @@ internal class DeckPlugin(id: String, title: String, capability: PluginCapabilit
         state = states.value
         host.scope.launch { states.collect { state = it; host.invalidate() } }
     }
+    override fun onDeactivate() { state = DeckState() }
     private fun slot(command: C, component: String? = null) =
         Slot(state.tile(command, component), PluginAction.Deck(command, component))
     private fun launcher(): List<Slot> {

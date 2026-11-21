@@ -27,8 +27,24 @@ After a direct request the notification is a quiet retry, not proof of launch.
 Android requires a notification-listener grant to inspect active media
 sessions. It is broad at the OS level. This app uses the component solely as
 authorization for `MediaSessionManager`; it does not retrieve, log, or act
-on notifications. Track titles are display-only; they are not exported to
-diagnostic logs. The navigation service does not subscribe to screen events,
+on notifications. Spotify and other players use the same Android interface:
+there is no Spotify sign-in, SDK, playlist browser or downloaded artwork.
+While unlocked, a local cover spans the keypad panel on Home and the nine
+visible LCD regions. A paused cover appears only on Audio. Playing artwork
+can appear behind another profile, including a pinned one; it does not change
+bindings or selection rules. Without usable cover art, the normal key design
+(or the user's selected backdrop) remains.
+
+Only embedded bitmaps and bounded, read-granted `content://` images are used.
+Titles and cover images are display-only, never written to files or diagnostic
+logs. Screen-off or keyguard lock hides both; it does **not** mean the player
+is unavailable. One fresh press on the authorized USB keypad can change music
+volume, mute or request an advertised transport action without unlocking.
+Phone/simulator taps, workflow steps, settings and app launches do not get
+this exception. Player sessions can end or drop an action; MX Pocket does not
+wake the phone or start a player to compensate.
+
+The navigation service does not subscribe to screen events,
 read element text, inject gestures, or record keys. Both grants are optional
 and revocable in Android settings.
 
@@ -56,8 +72,13 @@ independent of the selected page.
    revocation, expiry and lock rejection, including with direct shortcuts on.
 2. Start a player, test volume and media keys without listener access; then
    grant access, change tracks and pause from the player. Confirm title and
-   playback state follow on the LCD. Test a second player without skip, no
-   session, lock and revocation. No title should appear in the diagnostic log.
+   playback state follow on the LCD. Try Spotify and a second player without
+   skip. Change the cover without changing the title if possible. Check Audio
+   paused/playing, then pin a different profile: its own keys should remain.
+   Test locked and screen-off physical Play/Pause, skip, mute and volume; no
+   title/cover should remain, and settings/launch keys must not open anything.
+   Unlock, end the session, remove media access and test missing art. Check all
+   nine regions redraw on each change. No title or URI should appear in logs.
 3. In Studio deny, then grant camera. Capture immediate and timed photos, zoom
    both ways, test center focus and torch where supported. Record a silent
    video, mark twice, confirm elapsed/recording LCDs, stop and open the video
