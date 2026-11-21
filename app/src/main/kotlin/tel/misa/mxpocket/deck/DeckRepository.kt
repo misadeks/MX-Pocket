@@ -101,13 +101,11 @@ class DeckRepository internal constructor(private val file: File) {
         if (history.size > 1) old.withHistory(history.dropLast(1)) else old
     }
 
-    /** The original hardware Focus/Audio/Phone rotation remains a closed ring on the factory deck. */
     fun cycleProfile(delta: Int) = edit { old ->
-        val all = old.profiles.map { it.id }
-        val factory = all.toSet() == factoryIds
-        val ring = if (factory && old.activeProfileId in classicIds) classicIds else all
-        val index = Math.floorMod(ring.indexOf(old.activeProfileId).toLong() + delta, ring.size.toLong()).toInt()
-        val id = ring[index]
+        val profiles = old.profiles
+        val current = profiles.indexOfFirst { it.id == old.activeProfileId }
+        val index = Math.floorMod(current.toLong() + delta, profiles.size.toLong()).toInt()
+        val id = profiles[index].id
         old.copy(activeProfileId = id, pinnedProfileId = old.pinnedProfileId?.let { id },
             selectionReason = if (old.pinnedProfileId != null) "Manually cycled and pinned" else "Manually cycled")
     }
@@ -279,8 +277,6 @@ class DeckRepository internal constructor(private val file: File) {
     companion object {
         const val DEBOUNCE_MS = 1500L
         const val SCORE_MARGIN = 2
-        private val classicIds = listOf("focus", "audio", "phone")
-        private val factoryIds = (classicIds + listOf("launcher", "studio", "navigation")).toSet()
     }
 }
 
