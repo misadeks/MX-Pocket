@@ -175,7 +175,8 @@ class PluginEngine(
             val capability = when (action) {
                 is PluginAction.Deck -> action.command.capability()
                 is PluginAction.Volume, is PluginAction.Media -> PluginCapability.AUDIO
-                is PluginAction.OpenApp -> PluginCapability.OPEN_APPS
+                is PluginAction.OpenApp, is PluginAction.OpenUri, is PluginAction.ShareText ->
+                    PluginCapability.OPEN_APPS
                 is PluginAction.SelectPlugin -> PluginCapability.NAVIGATION
                 PluginAction.CompletionTone -> PluginCapability.TONE
                 PluginAction.Repaint -> null

@@ -33,13 +33,17 @@ data class PluginKeyEvent(val index: Int, val pressed: Boolean, val synthetic: B
 data class AudioSnapshot(val volume: Int, val maximum: Int)
 enum class VolumeChange { LOWER, RAISE, MUTE, UNMUTE }
 enum class MediaCommand { PLAY_PAUSE, PREVIOUS, NEXT }
-enum class PhoneApp { CAMERA, SETTINGS, DIALER, WEB, ALARMS }
+enum class PhoneApp { CAMERA, SETTINGS, DIALER, WEB, ALARMS, ONENOTE }
 
 sealed interface PluginAction {
     data class Deck(val command: DeckCommand, val component: String? = null) : PluginAction
     data class Volume(val change: VolumeChange) : PluginAction
     data class Media(val command: MediaCommand) : PluginAction
     data class OpenApp(val app: PhoneApp) : PluginAction
+    /** ACTION_VIEW for an external URI scheme/host, e.g. a `onenote:` deep link. */
+    data class OpenUri(val uri: String) : PluginAction
+    /** ACTION_SEND text/plain, e.g. OneNote's share target creating a quick note. */
+    data class ShareText(val text: String) : PluginAction
     data class SelectPlugin(val id: String) : PluginAction
     data object CompletionTone : PluginAction
     data object Repaint : PluginAction

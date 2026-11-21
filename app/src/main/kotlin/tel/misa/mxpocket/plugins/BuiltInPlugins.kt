@@ -6,12 +6,12 @@ import tel.misa.mxpocket.FocusTimer
 
 /** Registration order is the page-button order. Add your compiled-in plugin here. */
 object BuiltInPlugins {
-    fun create(focusTitle: String, audioTitle: String, phoneTitle: String, xoTitle: String = TIC_TAC_TOE_TITLE): List<PocketPlugin> =
+    fun create(focusTitle: String, audioTitle: String, phoneTitle: String, xoTitle: String = TIC_TAC_TOE_TITLE, oneNoteTitle: String = "OneNote"): List<PocketPlugin> =
         listOf(FocusPlugin(focusTitle), DeckPlugin("audio", audioTitle, PluginCapability.AUDIO), PhonePlugin(phoneTitle),
             DeckPlugin("launcher", "App Launcher", PluginCapability.OPEN_APPS),
             DeckPlugin("studio", "Pocket Studio", PluginCapability.STUDIO),
             DeckPlugin("navigation", "Android Navigation", PluginCapability.SYSTEM_NAVIGATION),
-            TicTacToePlugin(xoTitle))
+            TicTacToePlugin(xoTitle), OneNotePlugin(oneNoteTitle))
 }
 
 class FocusPlugin(title: String) : PocketPlugin {
@@ -61,6 +61,37 @@ class PhonePlugin(title: String) : PocketPlugin {
             5 -> PluginAction.OpenApp(PhoneApp.ALARMS)
             6 -> PluginAction.SelectPlugin("focus")
             7 -> PluginAction.SelectPlugin("audio")
+            8 -> PluginAction.Repaint
+            else -> null
+        }
+        action?.let(host::dispatch)
+    }
+}
+
+/**
+ * OneNote page. Logi Options/Options+ ships no native OneNote profile on PC (custom keystrokes only),
+ * so these keys use the actions Android exposes for OneNote: launch the app, a `onenote:` deep link,
+ * OneNote on the web and Send-to-OneNote (ACTION_SEND), which creates a quick note.
+ */
+class OneNotePlugin(title: String) : PocketPlugin {
+    override val descriptor = PluginDescriptor("onenote", title,
+        setOf(PluginCapability.OPEN_APPS, PluginCapability.NAVIGATION))
+
+    override fun render(nowMillis: Long) = frame(
+        listOf("Open", "Quick note", "Web", "Deep link", "OneNote", "Focus", "Audio", "Phone", "Repaint"),
+        "ONENOTE", 0xff7719aa.toInt(),
+    )
+
+    override fun onKey(event: PluginKeyEvent, host: PluginHost) {
+        if (!event.pressed || event.synthetic) return
+        val action = when (event.index) {
+            0 -> PluginAction.OpenApp(PhoneApp.ONENOTE)
+            1 -> PluginAction.ShareText("MX Pocket quick note ${host.nowMillis()}")
+            2 -> PluginAction.OpenUri("https://www.onenote.com")
+            3 -> PluginAction.OpenUri("onenote:")
+            5 -> PluginAction.SelectPlugin("focus")
+            6 -> PluginAction.SelectPlugin("audio")
+            7 -> PluginAction.SelectPlugin("phone")
             8 -> PluginAction.Repaint
             else -> null
         }

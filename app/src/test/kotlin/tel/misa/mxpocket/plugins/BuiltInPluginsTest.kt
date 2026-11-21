@@ -14,7 +14,7 @@ class BuiltInPluginsTest {
     @Test fun focusActionsAndCountdownSurvivePageSwitchWithoutStaleTicks() = runTest {
         val actions = mutableListOf<PluginAction>()
         var updates = 0
-        val engine = PluginEngine(BuiltInPlugins.create("Focus", "Audio", "Phone"), this,
+        val engine = PluginEngine(BuiltInPlugins.create("Focus", "Audio", "Phone", oneNoteTitle = "OneNote"), this,
             { testScheduler.currentTime }, { AudioSnapshot(5, 15) },
             { action, _ -> actions += action }, { updates++ }, { _, error -> throw AssertionError(error) })
         fun tap(index: Int) {
@@ -87,6 +87,36 @@ class BuiltInPluginsTest {
         tap(7)
         assertEquals("audio", engine.selectedId)
         engine.setEnabled(false)
+        engine.close()
+    }
+
+    @Test fun oneNotePageExposesOpenDeepLinkWebShareAndNavigation() = runTest {
+        val actions = mutableListOf<PluginAction>()
+        val engine = PluginEngine(BuiltInPlugins.create("Focus", "Audio", "Phone", oneNoteTitle = "OneNote"), this,
+            { testScheduler.currentTime }, { AudioSnapshot(0, 15) },
+            { action, _ -> actions += action }, {}, { _, error -> throw AssertionError(error) },
+            MutableStateFlow(DeckState()))
+        fun tap(index: Int) {
+            engine.key(PluginKeyEvent(index, true))
+            engine.key(PluginKeyEvent(index, false))
+        }
+        engine.setEnabled(true)
+        engine.select("onenote")
+        assertEquals(9, engine.render().keys.size)
+        for (index in listOf(0, 1, 2, 3, 8)) tap(index)
+        tap(4) // The centered OneNote tile is a filler, like the Phone page's center tile.
+        assertEquals(listOf(
+            PluginAction.OpenApp(PhoneApp.ONENOTE),
+            PluginAction.ShareText("MX Pocket quick note ${testScheduler.currentTime}"),
+            PluginAction.OpenUri("https://www.onenote.com"),
+            PluginAction.OpenUri("onenote:"),
+            PluginAction.Repaint,
+        ), actions)
+        for ((index, target) in listOf(5 to "focus", 6 to "audio", 7 to "phone")) {
+            engine.select("onenote")
+            tap(index)
+            assertEquals(target, engine.selectedId) // SelectPlugin is handled by the engine, not performed.
+        }
         engine.close()
     }
 }

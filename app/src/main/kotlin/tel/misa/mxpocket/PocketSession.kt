@@ -59,7 +59,7 @@ internal typealias OpenKeypad = suspend (UsbManager, UsbDevice, (KeyEvent) -> Un
 internal class PocketSession(
     private val app: Context,
     registeredPlugins: List<PocketPlugin> = BuiltInPlugins.create(app.getString(R.string.focus),
-        app.getString(R.string.audio), app.getString(R.string.phone), app.getString(R.string.xo)),
+        app.getString(R.string.audio), app.getString(R.string.phone), app.getString(R.string.xo), app.getString(R.string.onenote)),
     private val usageDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val usageTimeMillis: () -> Long = System::currentTimeMillis,
     private val open: OpenKeypad = { manager, device, event, log, error ->
@@ -69,6 +69,8 @@ internal class PocketSession(
     interface Screen {
         fun render()
         fun openApp(app: PhoneApp): Boolean
+        fun openUri(uri: String): Boolean = false
+        fun shareText(text: String): Boolean = false
         fun deckAction(command: DeckCommand, component: String?): DeckResult = unavailable("Open MX Pocket to use this control.")
     }
     data class Request(val name: String, val token: String = UUID.randomUUID().toString())
@@ -76,6 +78,8 @@ internal class PocketSession(
         data class Phone(val app: PhoneApp) : Target
         data class FavoriteApp(val component: String) : Target
         data class Studio(val mode: CameraMode) : Target
+        data class Uri(val uri: String) : Target
+        data class Share(val text: String) : Target
     }
     data class PhoneAction(val target: Target, val ticket: Request, val index: Int, val receipt: Long,
         val pressedAt: Long, val id: String = UUID.randomUUID().toString())
@@ -865,12 +869,26 @@ internal class PocketSession(
                 MediaCommand.PREVIOUS -> DeckCommand.PREVIOUS
                 MediaCommand.NEXT -> DeckCommand.NEXT
             }.id, fromPhysicalKey = physicalPressAt != null).message)
-            is PluginAction.OpenApp -> {
+            is PluginAction.OpenApp, is PluginAction.OpenUri, is PluginAction.ShareText -> {
                 if (!visibleKey && physicalPressAt == null) return
                 if (screen != null && physicalPressAt != null && !freshAuthorizedPress()) {
                     message("Press the shortcut again on the authorized keypad.")
-                } else if (screen?.openApp(action.app) != true && physicalPressAt != null) {
-                    message(offerPhysicalShortcut(Target.Phone(action.app)).message)
+                    return
+                }
+                val target = when (action) {
+                    is PluginAction.OpenApp -> Target.Phone(action.app)
+                    is PluginAction.OpenUri -> Target.Uri(action.uri)
+                    is PluginAction.ShareText -> Target.Share(action.text)
+                    else -> return
+                }
+                val opened = when (action) {
+                    is PluginAction.OpenApp -> screen?.openApp(action.app) == true
+                    is PluginAction.OpenUri -> screen?.openUri(action.uri) == true
+                    is PluginAction.ShareText -> screen?.shareText(action.text) == true
+                    else -> false
+                }
+                if (!opened && physicalPressAt != null) {
+                    message(offerPhysicalShortcut(target).message)
                 }
             }
             PluginAction.CompletionTone -> scope.launch {
