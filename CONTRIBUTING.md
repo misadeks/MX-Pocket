@@ -67,8 +67,8 @@ layout refactoring. Rendering does not activate plugins or execute actions.
 Keep the safe-area insets, 48dp control/84dp key minimum heights, selectable
 diagnostics/logs and polite live status announcements.
 
-`MainActivity` remains the live state/event adapter: it owns permission,
-connection/lifecycle, Android actions and LCD image uploads. Styling the phone
+`MainActivity` remains the live state/event adapter: it owns visible consent and
+hands hardware sessions to `KeypadService`/`PocketSession`. Styling the phone
 must not require changing USB reports, the plugin API or keypad LCD composition.
 
 For a deterministic, **non-operational** screen preview, choose the debug variant
@@ -102,8 +102,9 @@ Preview fixtures are not evidence of a USB connection or hardware behavior.
 - `app/.../plugins` owns logical features. Use the host actions and nine-key
   frame API instead of importing the driver, accessing raw USB or duplicating
   Android action dispatch. See [plugin authoring](docs/plugins.md).
-- `MainActivity` owns permission/lifecycle, Android action execution, UI,
-  custom-image composition and driver connections. USB traffic stays off-main.
+- `MainActivity` owns visible consent and phone UI. `KeypadService` owns the
+  foreground hardware lifetime; `PocketSession` centralizes driver I/O, plugin
+  actions and custom-image composition independent of any Activity. USB traffic stays off-main.
 - Protocol edits require source-supported evidence and a boundary regression
   test. Preserve embedded license notices. Experimental notes/captured packets
   are not verified protocol facts.

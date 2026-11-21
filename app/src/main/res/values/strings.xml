@@ -3,6 +3,9 @@
     <string name="subtitle">A native USB workspace for your MX Creative Keypad</string>
     <string name="connect">Connect keypad</string>
     <string name="disconnect">Disconnect</string>
+    <string name="auto_connect">Connect automatically when this keypad is attached</string>
+    <string name="session_title">MX Pocket keypad session</string>
+    <string name="session_note">Physical keys and LCD updates stay active. Tap to return to MX Pocket.</string>
     <string name="refresh">Refresh USB diagnostics</string>
     <string name="preview">Phone-only preview</string>
     <string name="import_image">Choose custom image for all nine keys</string>

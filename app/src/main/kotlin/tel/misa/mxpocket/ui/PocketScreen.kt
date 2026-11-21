@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Typeface
 import android.util.TypedValue
 import android.view.View
+import android.widget.CheckBox
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -23,10 +24,12 @@ data class PocketScreenState(
     val connectionActive: Boolean = false,
     val diagnostics: String = "",
     val log: String = "",
+    val automatic: Boolean = false,
 )
 
 sealed interface PocketScreenEvent {
     data object ToggleConnection : PocketScreenEvent
+    data class SetAutomatic(val enabled: Boolean) : PocketScreenEvent
     data object EnterPreview : PocketScreenEvent
     data class SelectPlugin(val id: String) : PocketScreenEvent
     data class TapKey(val index: Int) : PocketScreenEvent
@@ -60,6 +63,7 @@ class PocketScreen(
     }
     private val status: TextView
     private val connectButton: MaterialButton
+    private val automatic: CheckBox
     private val pageTitle: TextView
     private val keys = mutableListOf<MaterialButton>()
     private val diagnostics: TextView
@@ -74,6 +78,12 @@ class PocketScreen(
         }
         connectButton = button(context.getString(R.string.connect), event = PocketScreenEvent.ToggleConnection).apply {
             id = R.id.pocket_connect
+        }
+        automatic = CheckBox(context).apply {
+            setText(R.string.auto_connect)
+            minHeight = dimension(R.dimen.screen_control_min_height)
+            setOnClickListener { onEvent(PocketScreenEvent.SetAutomatic(isChecked)) }
+            content.addView(this)
         }
         button(context.getString(R.string.preview), outlined = true, event = PocketScreenEvent.EnterPreview)
         pageTitle = text(context.getString(R.string.focus), R.dimen.screen_heading_size, heading = true).apply {
@@ -130,6 +140,7 @@ class PocketScreen(
 
     fun render(state: PocketScreenState) {
         status.updateText(state.status)
+        automatic.isChecked = state.automatic
         connectButton.updateText(context.getString(if (state.connectionActive) R.string.disconnect else R.string.connect))
         pageTitle.updateText(state.pluginTitle)
         keys.forEachIndexed { index, button -> button.updateText(state.frame.keys[index].label) }

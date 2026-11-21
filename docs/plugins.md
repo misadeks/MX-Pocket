@@ -95,7 +95,7 @@ inside that scope, then publish state/invalidate back on the owner dispatcher.
 Do not use `GlobalScope`, unowned threads, an application-wide static scope or a
 background service in a plugin.
 
-Selection change, disconnect, app stop or engine close:
+Selection change, disconnect, leaving the foreground in phone-only preview, or engine close:
 
 1. Invalidates the old activation generation and disables its host effects.
 2. Cancels its child scope.
@@ -116,8 +116,12 @@ must not be interpreted as input on its replacement.
 
 Plugin state objects remain in memory across switches; activation-scoped tasks
 do not. The Focus timer retains its monotonic deadline, but completion alerts
-wait until Focus is selected again. All state may be lost on Activity/process
-recreation. Persistent/background plugin services are outside this API.
+wait until Focus is selected again. A physical session keeps its active plugin
+and LCD painter across Activity recreation or backgrounding; the app's
+connected-device foreground service, not the plugin, owns that lifetime.
+All state may be lost on process death. Background `OpenApp` actions ask the
+user to return via the notification and tap the key; they cannot launch other
+apps or dismiss the lock screen from a service.
 
 USB upload is not a plugin task. On a switch the app lets the one in-flight JPEG
 transaction finish so it does not corrupt the report stream, skips any remaining
