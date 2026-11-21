@@ -4,8 +4,8 @@ import android.graphics.Bitmap
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import java.io.ByteArrayOutputStream
-import java.io.Closeable
 import java.io.IOException
+import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -14,11 +14,9 @@ import kotlinx.coroutines.withContext
 /** No Activity, UI, automation or media dependency. Call suspend operations from a caller-owned scope. */
 class MxKeypad private constructor(
     private val session: HidSession,
-    private val input: KeyInput,
-    private val emit: (KeyEvent) -> Unit,
     private val log: (String) -> Unit,
-) : Closeable {
-    suspend fun setKeyImage(index: Int, bitmap: Bitmap) {
+) : KeypadSink {
+    override suspend fun setKeyImage(index: Int, bitmap: Bitmap) {
         val region = KeypadProtocol.keyRegion(index)
         val jpeg = withContext(Dispatchers.Default) {
             val scaled = Bitmap.createScaledBitmap(bitmap, region.width, region.height, true)
@@ -48,10 +46,7 @@ class MxKeypad private constructor(
         log("LCD ${index + 1}: ${jpeg.size} JPEG bytes acknowledged (visibility not verified)")
     }
 
-    override fun close() {
-        session.close()
-        input.releaseAll().forEach(emit)
-    }
+    override fun close() = session.close()
 
     companion object {
         suspend fun connect(
@@ -62,18 +57,17 @@ class MxKeypad private constructor(
             onError: (Throwable) -> Unit,
         ): MxKeypad {
             val usb = UsbReportTransport.open(manager, device, onLog)
-            var decoder: KeyInput? = null
-            val session = HidSession(usb) { report ->
-                decoder?.accept(report)?.forEach(onEvent)
+            val decoder = AtomicReference<KeyInput?>()
+            val events = ButtonEvents(onEvent)
+            val session = HidSession(usb, usb.inputSizes, events::close) { report ->
+                decoder.get()?.accept(report)?.forEach(events::deliver)
             }
             usb.onReport = { report ->
                 onLog("RX ${report.take(32).hex()}")
                 session.receive(report)
             }
             usb.onFailure = { error ->
-                session.close()
-                decoder?.releaseAll()?.forEach(onEvent)
-                onError(error)
+                session.close(error) { onError(error) }
             }
             try {
                 withContext(Dispatchers.IO) { usb.start() }
@@ -82,13 +76,13 @@ class MxKeypad private constructor(
                 if (root.size < 7 || root.u8(4) == 0) throw IOException("Reprogrammable controls feature unavailable")
                 val feature = root.u8(4)
                 onLog("Discovered HID++ 0x1b04 index=0x${feature.toString(16)}")
-                decoder = KeyInput(feature)
+                decoder.set(KeyInput(feature))
                 for (id in listOf(0x01a1, 0x01a2)) {
                     session.command(feature, 3, id shr 8, id and 255, 3)
                     onLog("Divert page control 0x${id.toString(16)}: acknowledged")
                 }
                 onLog("Using source-supported LCD VLP index=2, 480x480 panel / nine 118x118 regions")
-                return MxKeypad(session, decoder, onEvent, onLog)
+                return MxKeypad(session, onLog)
             } catch (e: Exception) {
                 session.close()
                 if (e is CancellationException) throw e

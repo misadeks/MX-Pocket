@@ -9,16 +9,15 @@ class KeyInput(private val pageFeature: Int) {
 
     @Synchronized
     fun accept(report: ByteArray): List<KeyEvent> {
-        if (report.size < 4 || report.u8(1) != 0xff || report.u8(3) != 0) return emptyList()
+        if (!report.isComplete() || report.u8(1) != 0xff || report.u8(3) != 0) return emptyList()
         return when {
             report.u8(0) == 0x13 && report.u8(2) == KeypadProtocol.LCD_FEATURE -> {
-                if (report.size < 7 || report.u8(5) != 1) return emptyList()
+                if (report.u8(5) != 1) return emptyList()
                 val current = report.drop(6).takeWhile { it != 0.toByte() }
                     .map { it.toInt() and 255 }.filter { it in 1..9 }.toSet()
                 transitions(grid, current).also { grid = current }
             }
             report.u8(0) == 0x11 && report.u8(2) == pageFeature -> {
-                if (report.size < 6 || (report.size - 4) % 2 != 0) return emptyList()
                 val current = (4 until report.size step 2).map { report.u16(it) }
                     .takeWhile { it != 0 }.filter { it == 0x01a1 || it == 0x01a2 }.toSet()
                 transitions(pages, current).also { pages = current }

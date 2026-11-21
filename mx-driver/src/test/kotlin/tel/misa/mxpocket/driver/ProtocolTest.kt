@@ -51,6 +51,7 @@ class ProtocolTest {
             { KeypadProtocol.imageReports(KeypadProtocol.keyRegion(0), jpeg(65536)) },
             { KeypadProtocol.imageReports(KeypadProtocol.keyRegion(0), ByteArray(10)) },
             { KeypadProtocol.imageReports(KeypadProtocol.Region(479, 0, 2, 2), jpeg(10)) },
+            { KeypadProtocol.imageReports(KeypadProtocol.Region(Int.MAX_VALUE, 0, 2, 2), jpeg(10)) },
             { KeypadProtocol.keyRegion(9) },
             { KeypadProtocol.command(0, 16) },
         )) {
@@ -59,11 +60,13 @@ class ProtocolTest {
     }
 
     @Test fun acknowledgementFlagsAreNotDataFrameFlags() {
-        assertEquals(0, KeypadProtocol.imageStatus(byteArrayOf(0x13, -1, 2, 0x2b, 0xc1.toByte(), 0, 1)))
-        assertEquals(0xfb, KeypadProtocol.imageStatus(byteArrayOf(0x13, -1, 2, 0x2b, 0xc1.toByte(), 0xfb.toByte())))
-        assertThrows(IOException::class.java) { KeypadProtocol.imageStatus(byteArrayOf(0x13, -1, 2, 0x2b)) }
+        val answer = byteArrayOf(0x13, -1, 2, 0x2b, 0xc1.toByte(), 0, 1).copyOf(32)
+        assertEquals(0, KeypadProtocol.imageStatus(answer))
+        assertThrows(IOException::class.java) { KeypadProtocol.imageStatus(answer.copyOf(31)) }
+        answer[5] = 0xfb.toByte()
+        assertEquals(0xfb, KeypadProtocol.imageStatus(answer))
         assertThrows(IOException::class.java) {
-            KeypadProtocol.imageStatus(byteArrayOf(0x13, -1, 2, 0x2b, 0xc1.toByte(), 5))
+            KeypadProtocol.imageStatus(answer.apply { this[5] = 5 })
         }
     }
 }
