@@ -254,7 +254,7 @@ class KeypadSessionTest {
         }
         session.attach(screen)
         val ticket = session.reserve(real)!!
-        session.connect(ticket, usb, real, { stops++ }, { handoff = it.app })
+        session.connect(ticket, usb, real, { stops++ }, { handoff = (it.target as PocketSession.Target.Phone).app })
         main.idle()
         session.detach(screen)
         event(KeyEvent(1, true))
@@ -262,7 +262,7 @@ class KeypadSessionTest {
         main.idle()
         assertEquals("Pause", session.plugins.render().keys[0].label)
         // Focus's updated Start/Pause tile is now in flight. Switch to Phone and try Camera.
-        event(KeyEvent(0x01a1, true))
+        session.plugins.select("phone")
         event(KeyEvent(1, true))
         event(KeyEvent(1, false))
         main.idle()
@@ -307,7 +307,8 @@ class KeypadSessionTest {
                 Robolectric.buildActivity(PhoneActionActivity::class.java, intent).setup().use {
                     shadowOf(it.get()).nextStartedActivity
                 }
-            press(0x01a1) // Focus -> Phone
+            app.session.plugins.select("phone")
+            main.idle()
             press(1)
             assertEquals("android.media.action.STILL_IMAGE_CAMERA", shadowOf(controller.get()).nextStartedActivity?.action)
             controller.pause().stop()
