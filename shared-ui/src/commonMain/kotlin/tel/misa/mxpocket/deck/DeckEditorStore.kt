@@ -7,6 +7,7 @@ interface DeckEditorStore {
     val state: StateFlow<DeckState>
     val decision: StateFlow<DeckDecision>
     val loadError: String?
+    val cleanupWarning: String?
     suspend fun create(change: DeckCreate): Result<String>
     suspend fun edit(change: DeckEdit): Result<Unit>
 }
@@ -35,4 +36,5 @@ sealed interface DeckEdit {
     data class Back(val activeProfileId: String) : DeckEdit
     data class Root(val activeProfileId: String) : DeckEdit
     data object Restore : DeckEdit
+    data object RetryCleanup : DeckEdit
 }

@@ -4,7 +4,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -180,11 +180,17 @@ private fun SettingsScreen(state: PocketScreenState, event: (PocketScreenEvent) 
         Note(state.reason)
         Text("480 x 480 panel; nine 118 x 118 visible regions. An upload acknowledgement does not verify LCD visibility.")
         if (state.deviceLimit == null) OutlinedButton(onClick = { event(PocketScreenEvent.RefreshDiagnostics) }) { Text("Refresh USB diagnostics") }
-        SelectionContainer { Text(state.diagnostics, fontFamily = FontFamily.Monospace) }
+        SelectableReadout(state.diagnostics)
         Heading("Session log")
         if (state.deviceLimit == null) OutlinedButton(onClick = { event(PocketScreenEvent.SaveLog) }) { Text("Export session log") }
-        SelectionContainer { Text(state.log.ifEmpty { "No events yet." }, fontFamily = FontFamily.Monospace) }
+        SelectableReadout(state.log.ifEmpty { "No events yet." })
     }
+}
+
+@Composable
+private fun SelectableReadout(text: String) {
+    BasicTextField(text, onValueChange = {}, readOnly = true, modifier = Modifier.fillMaxWidth(),
+        textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace, color = LocalContentColor.current))
 }
 
 @Composable

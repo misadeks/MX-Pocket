@@ -10,6 +10,7 @@ private class RepositoryEditorStore(private val repo: DeckRepository) : DeckEdit
     override val state get() = repo.state
     override val decision get() = repo.decision
     override val loadError get() = repo.loadError
+    override val cleanupWarning get() = repo.cleanupWarning
 
     override suspend fun create(change: DeckCreate) = withContext(Dispatchers.IO) {
         when (change) {
@@ -49,6 +50,7 @@ private class RepositoryEditorStore(private val repo: DeckRepository) : DeckEdit
                 is DeckEdit.Back -> navigate(change.activeProfileId, repo::back)
                 is DeckEdit.Root -> navigate(change.activeProfileId, repo::root)
                 DeckEdit.Restore -> repo.restoreDefaults()
+                DeckEdit.RetryCleanup -> repo.save()
             }
         }
     }

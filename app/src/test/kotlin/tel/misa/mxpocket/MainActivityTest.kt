@@ -5,6 +5,7 @@ import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.test.core.app.ActivityScenario
 import androidx.lifecycle.Lifecycle
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -24,6 +25,7 @@ class MainActivityTest {
     }
     @Test fun startsWithoutUsbDeviceAndConnectReportsMissingHardware() {
         ActivityScenario.launch(MainActivity::class.java).use {
+            assertEquals("tel.misa.mxpocket", app.packageName)
             ui.onNodeWithText("Connect keypad").performClick()
             ui.onNodeWithText("No MX Creative Keypad", substring = true).assertExists()
         }
@@ -33,9 +35,10 @@ class MainActivityTest {
             ui.onNodeWithText("Connect virtual keypad").performClick()
             ui.onNodeWithContentDescription("Key 1, Start", substring = true).performClick()
             ui.onNodeWithContentDescription("Key 1, Pause", substring = true).assertExists()
-            ui.onNodeWithText("Next page").performClick()
-            ui.onNodeWithContentDescription("Play/Pause", substring = true).assertExists()
-            ui.onNodeWithText("Next page").performClick()
+            ui.onNodeWithText("Next page").performScrollTo().performClick()
+            assertEquals("audio", app.session.deck.state.value.activeProfileId)
+            ui.onNodeWithContentDescription("Play/Pause").assertExists()
+            ui.onNodeWithText("Next page").performScrollTo().performClick()
             ui.onNodeWithContentDescription("Key 1, Camera", substring = true).assertExists()
             ui.onNodeWithText("No USB messages are sent", substring = true).assertExists()
             ui.onNodeWithText("Nine LCD image uploads acknowledged", substring = true).assertDoesNotExist()

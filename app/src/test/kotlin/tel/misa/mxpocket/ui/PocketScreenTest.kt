@@ -5,6 +5,9 @@ import android.media.AudioManager
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.core.app.ActivityScenario
@@ -16,6 +19,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 import tel.misa.mxpocket.shared.ui.*
 
 @RunWith(RobolectricTestRunner::class)
@@ -24,6 +28,23 @@ class PocketScreenTest {
     @get:Rule val ui = createComposeRule()
     private val app get() = RuntimeEnvironment.getApplication()
 
+    @Config(sdk = [28, 35])
+    @Test fun redrawPreservesDiagnosticSelectionAndAnnouncesStatusPolitely() {
+        val scenes = UiPreviewScenes(app)
+        val state = mutableStateOf(scenes.state("disconnected"))
+        val tab = mutableStateOf(WorkspaceTab.HOME)
+        val events = mutableListOf<PocketScreenEvent>()
+        ui.setContent { PocketTheme { PocketWorkspace(tab.value, { tab.value = it }, state.value,
+            emptyList(), events::add, editor = {}, workflows = {}) } }
+        ui.onNodeWithText(state.value.status).assert(SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite))
+        ui.onNodeWithText("Settings").performClick()
+        val readout = ui.onNodeWithText(state.value.diagnostics)
+        readout.performScrollTo().performSemanticsAction(SemanticsActions.SetSelection) { it(2, 5, false) }
+        ui.runOnIdle { state.value = scenes.state("audio").copy(connectionActive = true) }
+        readout.assert(SemanticsMatcher.expectValue(SemanticsProperties.TextSelectionRange, TextRange(2, 5)))
+        ui.runOnIdle { assertTrue(events.isEmpty()) }
+    }
+
     @OptIn(ExperimentalTestApi::class)
     @Test fun redrawDoesNotExecuteAndEachInputModalityEmitsExactlyOneTap() {
         val scenes = UiPreviewScenes(app)
@@ -31,7 +52,7 @@ class PocketScreenTest {
         val events = mutableListOf<PocketScreenEvent>()
         ui.setContent { PocketTheme { HomeScreen(state.value, events::add) } }
         ui.runOnIdle { state.value = scenes.state("audio") }
-        val key = ui.onNodeWithContentDescription("Key 1, Volume -", substring = true)
+        val key = ui.onNodeWithContentDescription("Volume -")
         key.performScrollTo()
         key.performTouchInput { down(center); cancel() }
         ui.runOnIdle { assertTrue(events.isEmpty()) }
@@ -46,7 +67,7 @@ class PocketScreenTest {
         ActivityScenario.launch<UiPreviewActivity>(Intent(app, UiPreviewActivity::class.java).putExtra("scene", "audio")).use { scene ->
             val volume = app.getSystemService(AudioManager::class.java)
             val before = volume.getStreamVolume(AudioManager.STREAM_MUSIC)
-            ui.onNodeWithContentDescription("Key 1, Volume -", substring = true).performClick()
+            ui.onNodeWithContentDescription("Volume -").performClick()
             assertEquals(before, volume.getStreamVolume(AudioManager.STREAM_MUSIC))
             ui.onNodeWithText("Phone").performClick()
             ui.onNodeWithContentDescription("Key 1, Camera", substring = true).performClick()
@@ -63,6 +84,37 @@ class PocketScreenTest {
             assertEquals(scenes.state(id), scenes.state(id))
             assertEquals(9, scenes.state(id).tiles.size)
         }
+
         assertThrows(IllegalArgumentException::class.java) { scenes.state("unregistered") }
+    }
+
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    @Test fun liveMirrorRestoresActionsAfterReadOnlyAudioWithOrWithoutArtwork() {
+        val scenes = UiPreviewScenes(app)
+        val events = mutableListOf<PocketScreenEvent>()
+        val image = androidx.compose.ui.graphics.ImageBitmap(118, 118)
+        val state = mutableStateOf(scenes.state("focus"))
+        ui.setContent { PocketTheme { HomeScreen(state.value, events::add) } }
+        for (scene in listOf("audio", "focus")) for (art in listOf(null, image, null)) {
+            val frame = scenes.state(scene)
+            ui.runOnIdle {
+                events.clear()
+                state.value = frame.copy(tiles = frame.tiles.map { it.copy(image = image) }, panelArt = art)
+            }
+            frame.tiles.forEachIndexed { i, tile ->
+                val node = ui.onNodeWithContentDescription(tile.accessibleName ?:
+                    listOf("Key ${i + 1}", tile.label, tile.footer).filter(String::isNotBlank).joinToString(", "))
+                when {
+                    tile.readOnly -> node.assertHasNoClickAction()
+                    !tile.enabled -> node.assertIsNotEnabled()
+                    else -> node.performClick()
+                }
+            }
+            if (scene == "audio") {
+                ui.onNodeWithContentDescription("Mute, Sound on, 6 / 15").assertExists()
+                ui.onNodeWithContentDescription("Now playing, Night train, Paused").assertHasNoClickAction()
+            }
+            assertEquals((if (scene == "audio") 0..5 else 0..8).map { PocketScreenEvent.TapKey(it) }, events)
+        }
     }
 }

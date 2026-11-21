@@ -13,8 +13,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.testTag
 import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.*
+import tel.misa.mxpocket.decks.navigationCommands
 
 data class BindingOption(val label: String, val call: ActionCall)
+
+val factoryKeyBindings = defaultDeck().profiles.flatMap { profile ->
+    profile.pages.single { it.id == profile.rootPageId }.keys.mapIndexedNotNull { physical, key ->
+        val call = key.action ?: return@mapIndexedNotNull null
+        val suffix = if (profile.id == "navigation") ": ${navigationCommands[call.params.getValue("index").toInt()].label}" else ""
+        BindingOption("${profile.name} key ${physical + 1}$suffix", call)
+    }
+}
 
 /** Page IDs are profile-local; a duplicated profile can have the same page IDs with different names. */
 fun localBindings(options: List<BindingOption>, pages: List<DeckPage>): List<BindingOption> {
@@ -28,10 +37,10 @@ fun localBindings(options: List<BindingOption>, pages: List<DeckPage>): List<Bin
 
 internal fun bindingName(call: ActionCall?, options: List<BindingOption>): String {
     if (call == null) return "Unassigned"
-    return options.firstOrNull { it.call == call }?.label ?: when (call.id) {
+    return options.firstOrNull { it.call == call.commandBinding() }?.label ?: when (call.id) {
         "plugin.key" -> {
             val number = call.params["index"]?.toIntOrNull()?.plus(1)
-            "${call.params["pluginId"] ?: "Plugin"} key ${number ?: "?"}"
+            factoryKeyBindings.firstOrNull { it.call == call }?.label ?: "${call.params["pluginId"] ?: "Plugin"} slot ${number ?: "?"}"
         }
         else -> "${call.id} (unavailable)"
     }

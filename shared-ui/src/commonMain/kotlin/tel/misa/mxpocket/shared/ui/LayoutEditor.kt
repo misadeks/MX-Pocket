@@ -67,6 +67,7 @@ fun LayoutEditor(
     onExport: () -> Unit,
     onImport: () -> Unit,
     modifier: Modifier = Modifier,
+    foreground: ForegroundControls? = null,
     backHandler: @Composable (enabled: Boolean, onBack: () -> Unit) -> Unit = { _, _ -> },
 ) {
     val deck by repo.state.collectAsState()
@@ -188,6 +189,10 @@ fun LayoutEditor(
                     Text("Profile settings and rules")
                 }
                 repo.loadError?.let { EditorError("$it. Recover in Layout backups under profile settings.") }
+                repo.cleanupWarning?.let {
+                    EditorError(it)
+                    TextButton(onClick = { writer.edit(DeckEdit.RetryCleanup) }, enabled = writable) { Text("Retry cleanup") }
+                }
             }
             val inspector: @Composable () -> Unit = {
                 if (index != null && draft != null) {
@@ -199,7 +204,10 @@ fun LayoutEditor(
                     if (!wide) TextButton(onClick = { show(Pane.PREVIEW) }) { Text("Back to preview") }
                     ProfileSettings(profile, deck, decision, writable) { writer.edit(it) }
                     HorizontalDivider()
-                    RuleSection(profile, signals, writable, edit = { removingRule = false; rule = it },
+                    RuleSection(profile, deck.profiles, signals, writable, foreground, addApp = { pkg, done ->
+                        writer.edit(DeckEdit.Rules(profile.id, profile.rules, profile.rules +
+                            DeckRule(tel.misa.mxpocket.FOREGROUND_APP, pkg, tel.misa.mxpocket.APP_RULE_WEIGHT)), done)
+                    }, edit = { removingRule = false; rule = it },
                         remove = { removingRule = true; rule = it })
                     HorizontalDivider()
                     EditorHeading("Layout backups")

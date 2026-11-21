@@ -84,6 +84,7 @@ class AdaptiveLayoutEditorTest {
         open()
         ui.runOnIdle { assertNull(back) }
         ui.onNodeWithText("Profile settings and rules").performScrollTo().performClick()
+        ui.onNodeWithText("Advanced rules", substring = true).performScrollTo().performClick()
         ui.onNodeWithText("Add rule").performScrollTo().performClick()
         ui.onNodeWithText("Matching value").performTextReplacement("studio")
         ui.runOnIdle { width.value = 760.dp }

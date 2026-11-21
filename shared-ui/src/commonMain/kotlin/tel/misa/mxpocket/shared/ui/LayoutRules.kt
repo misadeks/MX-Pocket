@@ -11,12 +11,64 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import tel.misa.mxpocket.deck.*
+import tel.misa.mxpocket.FOREGROUND_APP
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+
+data class MappingApp(val packageId: String, val label: String)
+data class ForegroundControls(val enabled: Boolean, val granted: Boolean,
+    val setEnabled: (Boolean) -> Unit, val openSettings: () -> String?,
+    val discover: suspend () -> List<MappingApp>?)
 
 @Composable
-internal fun RuleSection(profile: DeckProfile, signals: Map<String, String>, writable: Boolean,
+internal fun RuleSection(profile: DeckProfile, profiles: List<DeckProfile>, signals: Map<String, String>, writable: Boolean,
+                         foreground: ForegroundControls?, addApp: (String, () -> Unit) -> Unit,
                          edit: (Int) -> Unit, remove: (Int) -> Unit) {
     var showSignals by rememberSaveable { mutableStateOf(false) }
+    var choosing by rememberSaveable { mutableStateOf(false) }
+    var advanced by rememberSaveable { mutableStateOf(false) }
     EditorHeading("Context rules")
+    profile.rules.forEachIndexed { i, rule -> if (rule.signal == FOREGROUND_APP) {
+        EditorNote("${rule.value} → ${profile.name}")
+        TextButton(onClick = { remove(i) }, enabled = writable) { Text("Remove mapping") }
+    } }
+    if (foreground == null) EditorNote("Installed-app discovery and foreground detection require Android.")
+    else {
+        OutlinedButton(onClick = { choosing = !choosing }, enabled = writable && profile.rules.size < DeckLimits.RULES) {
+            Text(if (choosing) "Cancel app selection" else "Choose app")
+        }
+        if (choosing) {
+            var apps by remember { mutableStateOf<List<MappingApp>?>(null) }
+            var loaded by remember { mutableStateOf(false) }
+            var query by rememberSaveable { mutableStateOf("") }
+            LaunchedEffect(Unit) { apps = foreground.discover(); loaded = true }
+            Text("When this app is open, show ${profile.name}")
+            OutlinedTextField(query, { query = it }, label = { Text("Find an app") }, singleLine = true)
+            val results = apps.orEmpty().filter { it.label.contains(query, true) || it.packageId.contains(query, true) }
+            when {
+                !loaded -> EditorNote("Loading apps…")
+                apps == null -> EditorError("Android restricted the list of launchable apps.")
+                results.isEmpty() -> EditorNote("No matching launchable apps in this Android profile.")
+                else -> LazyColumn(Modifier.heightIn(max = 320.dp)) { items(results, key = { it.packageId }) { app ->
+                    val mapped = profiles.filter { p -> p.rules.any { it.signal == FOREGROUND_APP && it.value == app.packageId } }
+                    TextButton(onClick = { addApp(app.packageId) { choosing = false } },
+                        enabled = writable && mapped.isEmpty() && app.packageId.length <= DeckLimits.RULE_VALUE) {
+                        Column { Text(app.label); Text(if (mapped.isEmpty()) app.packageId else "Mapped to ${mapped.joinToString { it.name }}") }
+                    }
+                } }
+            }
+        }
+        EditorNote("Usage Access lets MX Pocket check for mapped apps while switching is available and the phone is unlocked. No usage history is saved or sent.")
+        EditorSwitch("Detect foreground apps", foreground.enabled, true, foreground.setEnabled)
+        if (foreground.enabled) {
+            var error by remember { mutableStateOf<String?>(null) }
+            EditorNote("Android Usage Access: ${if (foreground.granted) "granted" else "not granted"}.")
+            TextButton(onClick = { error = foreground.openSettings() }) { Text("Open usage access settings") }
+            error?.let { EditorError(it) }
+        }
+    }
+    TextButton(onClick = { advanced = !advanced }) { Text(if (advanced) "Hide advanced rules" else "Advanced rules (${profile.rules.size})") }
+    if (!advanced) return
     EditorNote("Matching rules add their weight to ${profile.name}’s score. A signal that isn’t observed adds nothing.")
     if (profile.rules.isEmpty()) {
         EditorNote("No rules for this profile.")

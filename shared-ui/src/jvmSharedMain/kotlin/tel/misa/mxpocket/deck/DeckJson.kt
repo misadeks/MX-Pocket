@@ -7,8 +7,9 @@ import java.io.StringReader
 import org.json.JSONArray
 import org.json.JSONObject
 import tel.misa.mxpocket.actions.ActionCall
+import tel.misa.mxpocket.decks.DeckCommand
 
-/** Strict token types, bounded depth and collections, and duplicate/unknown field rejection for v1. */
+/** Strict token types, bounded depth and collections, and duplicate/unknown field rejection. */
 object DeckJson {
     fun decode(text: String): DeckState {
         checkSize(text)
@@ -19,6 +20,7 @@ object DeckJson {
             require(reader.peek() == JsonToken.END_DOCUMENT) { "Trailing JSON" }
             root
         }
+        val xoProfileRemoved = if (obj.has("xoProfileRemoved")) obj.remove("xoProfileRemoved") as Boolean else false
         obj.fields("version", "profiles", "activeProfileId", "defaultProfileId", "pinnedProfileId", "automatic", "histories", "selectionReason")
         val state = DeckState(
             version = obj.get("version") as Int,
@@ -34,9 +36,36 @@ object DeckJson {
                 }
             },
             selectionReason = obj.string("selectionReason"),
+            xoProfileRemoved = xoProfileRemoved,
         )
+        if (state.version == 1 || state.version == 2) {
+            val validated = state.copy(version = DeckLimits.VERSION)
+            validateDeck(validated)
+            val audio = if (state.version == 1) upgradeAudioSlots(validated) else validated
+            return audio.upgradeStockNavigationRoot()
+        }
         validateDeck(state)
         return state
+    }
+
+    // v1 plugin.key identified a position, not a command. Upgrade the stock page; freeze the
+    // old meanings on edited pages and copies, including explicit mute versus unmute.
+    private fun upgradeAudioSlots(state: DeckState): DeckState {
+        val legacy = listOf(DeckCommand.QUIETER, DeckCommand.PLAY, DeckCommand.LOUDER, DeckCommand.PREVIOUS,
+            DeckCommand.MEDIA_ACCESS, DeckCommand.NEXT, DeckCommand.MUTE, DeckCommand.VOLUME_LEVEL, DeckCommand.UNMUTE)
+        val stock = defaultDeck().profiles.single { it.id == "audio" }.pages.single()
+        return state.copy(profiles = state.profiles.map { profile ->
+            profile.copy(pages = profile.pages.map { page ->
+                if (profile.id == "audio" && page.id == profile.rootPageId && page == stock) page
+                else page.copy(keys = page.keys.map { key ->
+                    val call = key.action
+                    if (call?.id == "plugin.key" && call.params["pluginId"] == "audio")
+                        key.copy(action = ActionCall(legacy[call.params.getValue("index").toInt()].id,
+                            mapOf(DeckActions.LEGACY_SLOT_OWNER to "audio")))
+                    else key
+                })
+            })
+        })
     }
 
     private fun profile(obj: JSONObject): DeckProfile {
@@ -65,7 +94,10 @@ object DeckJson {
         return DeckKey(obj.string("icon"), obj.string("label"), obj.get("color") as Int, action, obj.get("enabled") as Boolean)
     }
 
-    fun encode(deck: DeckState): String {
+    fun encode(deck: DeckState) = serialize(deck).also(::checkSize)
+    fun fits(deck: DeckState) = fits(serialize(deck))
+
+    private fun serialize(deck: DeckState): String {
         val profiles = deck.profiles.map { profile ->
             val pages = profile.pages.map { page ->
                 val keys = page.keys.map { key ->
@@ -88,7 +120,8 @@ object DeckJson {
         return JSONObject().put("version", deck.version).put("profiles", JSONArray(profiles))
             .put("activeProfileId", deck.activeProfileId).put("defaultProfileId", deck.defaultProfileId)
             .put("pinnedProfileId", deck.pinnedProfileId ?: JSONObject.NULL).put("automatic", deck.automatic)
-            .put("histories", histories).put("selectionReason", deck.selectionReason).toString().also(::checkSize)
+            .put("histories", histories).put("selectionReason", deck.selectionReason)
+            .apply { if (deck.xoProfileRemoved) put("xoProfileRemoved", true) }.toString()
     }
 
     private fun JSONObject.string(name: String) = get(name) as String
@@ -100,10 +133,10 @@ object DeckJson {
         return List(a.length()) { transform(a.get(it) as JSONObject) }
     }
 
-    private fun checkSize(text: String) =
-        require(text.length <= DeckLimits.MAX_BYTES && text.toByteArray(Charsets.UTF_8).size <= DeckLimits.MAX_BYTES) {
-            "Deck exceeds ${DeckLimits.MAX_BYTES} bytes"
-        }
+    private fun fits(text: String) =
+        text.length <= DeckLimits.MAX_BYTES && text.toByteArray(Charsets.UTF_8).size <= DeckLimits.MAX_BYTES
+
+    private fun checkSize(text: String) = require(fits(text)) { "Deck exceeds ${DeckLimits.MAX_BYTES} bytes" }
 
     // Android's non-lenient JsonReader still accepts raw newlines, unknown escapes, and
     // case-insensitive literals. Reject these before it normalizes them into ordinary values.

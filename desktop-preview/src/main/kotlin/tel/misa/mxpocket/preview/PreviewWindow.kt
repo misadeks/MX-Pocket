@@ -11,6 +11,7 @@ import java.nio.file.Files
 import kotlinx.coroutines.delay
 import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.*
+import tel.misa.mxpocket.decks.DeckCommand
 import tel.misa.mxpocket.shared.ui.*
 
 private fun now() = System.nanoTime() / 1_000_000
@@ -98,19 +99,21 @@ fun main() = application {
             PluginItem(it.id, it.name, true, "Local simulation", when (it.id) {
                 "focus" -> "Timer and presets run locally. No completion sound."
                 "audio" -> "Volume and playback are simulated. Windows media is unchanged."
+                "game.xo" -> "Play against the computer or a second player on this keypad."
                 else -> "Android device actions do not run on Windows."
             }, profiles.any { profile -> profile.id == it.id }, it.id == deck.defaultProfileId, null, canToggle = false)
         }
         val options = buildList {
             add(BindingOption("Back", ActionCall(DeckActions.BACK)))
             add(BindingOption("Return to root", ActionCall(DeckActions.ROOT)))
+            DeckCommand.entries.filter { it.deck == "audio" || it.deck == "navigation" }.forEach {
+                add(BindingOption("${it.deck}: ${it.label}", ActionCall(it.id)))
+            }
             profiles.forEach { add(BindingOption("Profile: ${it.name}", ActionCall(DeckActions.PROFILE, mapOf("profileId" to it.id)))) }
             workflowState.definitions.forEach {
                 add(BindingOption("Workflow: ${it.name} (Android execution)", ActionCall("workflow.run", mapOf("workflowId" to it.id))))
             }
-            defaultDeck().profiles.forEach { p -> repeat(9) { index ->
-                add(BindingOption("${p.name} key ${index + 1}", ActionCall("plugin.key", mapOf("pluginId" to p.id, "index" to "$index"))))
-            } }
+            addAll(factoryKeyBindings)
         }
         val backup = { save: Boolean ->
             try { chooseBackup(window, repo, save)?.let(::status) }

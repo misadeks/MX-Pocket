@@ -48,14 +48,18 @@ class ChordSessionTest {
     }
     private val events = mutableListOf<String>()
     private var token = "initial"
+    private var readOnly = false
+    private lateinit var probeHost: PluginHost
     private var effect: PluginAction? = null
     private var launches = 0
     private var captures = 0
     private val probe = object : PocketPlugin {
         override val descriptor = PluginDescriptor("probe", "Probe", setOf(PluginCapability.OPEN_APPS, PluginCapability.STUDIO),
             chords = setOf(KeyChord(0, 8), KeyChord(1, 8)))
+        override fun onActivate(host: PluginHost) { probeHost = host }
         override fun render(nowMillis: Long) = PluginFrame(List(9) {
-            KeyTile("Key $it", "", 0xff222222.toInt(), inputToken = if (it == 0) token else null)
+            KeyTile("Key $it", "", 0xff222222.toInt(), inputToken = if (it == 0) token else null,
+                readOnly = it == 0 && readOnly)
         })
         override fun onKey(event: PluginKeyEvent, host: PluginHost) {
             events += "${event.index}${if (event.pressed) "+" else "-"}"
@@ -237,6 +241,29 @@ class ChordSessionTest {
         assertNull(session.workflows.status.value)
         report(9)
         assertEquals("keypad-check", session.workflows.status.value?.workflowId)
+    }
+
+    @Test fun changingOnlyReadOnlyRevokesBufferedInputAndRequiresAcknowledgmentBeforeRearming() {
+        for (viaTimeout in listOf(false, true)) {
+            report(1)
+            val disarm = CompletableDeferred<Unit>()
+            uploadGate = disarm
+            readOnly = true; probeHost.invalidate(); main.idle()
+            if (viaTimeout) waitWindow()
+            report()
+            assertTrue(events.isEmpty())
+            disarm.complete(Unit); main.idle()
+
+            val rearm = CompletableDeferred<Unit>()
+            uploadGate = rearm
+            readOnly = false; probeHost.invalidate(); main.idle()
+            report(1) // Identical pixels, but the actionable role has not been acknowledged.
+            rearm.complete(Unit); main.idle()
+            event(1, true); waitWindow(); report()
+            assertTrue(events.isEmpty())
+        }
+        report(1); waitWindow(); report()
+        assertEquals(listOf("0+", "0-"), events)
     }
 
     @Test fun chordAndDeferredSingleCannotBorrowLaunchCaptureOrPhoneTapAuthority() {

@@ -1,6 +1,7 @@
 package tel.misa.mxpocket.deck
 
 import java.io.File
+import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
@@ -9,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import tel.misa.mxpocket.actions.ActionCall
+import tel.misa.mxpocket.FOREGROUND_APP
 
 /** Own one instance per app session. Successful edits replace the file before publishing the new snapshot. */
 class DeckRepository(private val file: File) {
@@ -23,13 +25,15 @@ class DeckRepository(private val file: File) {
     /** An unreadable or future-format file is preserved until an explicit restore or valid import. */
     var loadError: String? = null
         private set
+    var cleanupWarning: String? = null
+        private set
 
     private var candidate: String? = null
     private var candidateSince = 0L
     private var lastSample = -1L
 
     init {
-        val initial = try {
+        val loaded = try {
             if (!file.exists()) defaultDeck() else {
                 val text = file.inputStream().use {
                     val length = it.channel.size()
@@ -39,12 +43,20 @@ class DeckRepository(private val file: File) {
                     require(it.read() == -1) { "Deck file changed while reading" }
                     Charsets.UTF_8.newDecoder().decode(ByteBuffer.wrap(bytes)).toString()
                 }
-                DeckJson.decode(text)
+                val decoded = DeckJson.decode(text)
+                decoded.withPrivateReason().also { clean ->
+                    if (clean !== decoded) {
+                        try { write(DeckJson.encode(clean)) }
+                        catch (_: IOException) { cleanupWarning = CLEANUP_WARNING }
+                        catch (_: SecurityException) { cleanupWarning = CLEANUP_WARNING }
+                    }
+                }
             }
         } catch (e: Exception) {
             loadError = "Saved deck unreadable; import a backup or restore defaults"
             defaultDeck()
         }
+        val initial = loaded.withBuiltInXo()
         mutable = MutableStateFlow(initial.snapshot())
         state = mutable.asStateFlow()
         mutableReason = MutableStateFlow(initial.selectionReason)
@@ -54,7 +66,9 @@ class DeckRepository(private val file: File) {
     }
 
     fun exportJson(): String = DeckJson.encode(state.value)
-    fun importJson(text: String) = edit(recover = true, force = true) { DeckJson.decode(text) }
+    fun importJson(text: String) = edit(recover = true, force = true) {
+        DeckJson.decode(text).withPrivateReason().withBuiltInXo()
+    }
     fun restoreDefaults() = edit(recover = true, force = true) { defaultDeck() }
     fun save() = edit(force = true) { it }
 
@@ -144,6 +158,7 @@ class DeckRepository(private val file: File) {
         }
         val defaultId = if (id == old.defaultProfileId) remaining.first().id else old.defaultProfileId
         old.copy(profiles = remaining, defaultProfileId = defaultId, histories = old.histories - id,
+            xoProfileRemoved = old.xoProfileRemoved || id == "game.xo",
             activeProfileId = if (id == old.activeProfileId) defaultId else old.activeProfileId,
             pinnedProfileId = old.pinnedProfileId?.takeUnless { it == id },
             selectionReason = if (id == old.activeProfileId) "Default selected after profile deletion" else old.selectionReason)
@@ -224,6 +239,7 @@ class DeckRepository(private val file: File) {
         } else if (nowMillis - candidateSince >= DEBOUNCE_MS) {
             val rules = matches.getValue(target)
             val explanation = if (rules.isEmpty()) "Automatic: default profile (no matching rules)"
+                else if (rules.any { it.signal == FOREGROUND_APP }) APP_MATCH_REASON
                 else "Automatic: score ${scores[target]} — " + rules.take(4).joinToString { "${it.signal}=${it.value} (+${it.weight})" } +
                     if (rules.size > 4) " and ${rules.size - 4} more" else ""
             val result = edit { it.copy(activeProfileId = target, selectionReason = explanation) }
@@ -233,6 +249,10 @@ class DeckRepository(private val file: File) {
         mutableDecision.value = DeckDecision(reason.value, scores.locked(), matches.locked(), candidate)
         return Result.success(Unit)
     }
+
+    private fun DeckState.withPrivateReason() =
+        if (selectionReason.startsWith("Automatic: score ") && "$FOREGROUND_APP=" in selectionReason)
+            copy(selectionReason = APP_MATCH_REASON) else this
 
     @Synchronized
     fun clearObservation() {
@@ -259,6 +279,7 @@ class DeckRepository(private val file: File) {
             validateDeck(snapshot)
             write(DeckJson.encode(snapshot))
             loadError = null
+            cleanupWarning = null
             mutableReason.value = snapshot.selectionReason
             clearObservation()
             mutable.value = snapshot
@@ -283,9 +304,19 @@ class DeckRepository(private val file: File) {
     }
 
     companion object {
+        private const val APP_MATCH_REASON = "Automatic: matched an app mapping"
+        private const val CLEANUP_WARNING =
+            "Your layout is loaded and exports are redacted. The old selection detail could not be removed from device storage. Free up storage and retry."
         const val DEBOUNCE_MS = 1500L
         const val SCORE_MARGIN = 2
     }
+}
+
+private fun DeckState.withBuiltInXo(): DeckState {
+    if (xoProfileRemoved || profiles.size >= DeckLimits.PROFILES || profiles.any { it.id == "game.xo" }) return this
+    val xo = defaultDeck().profile("game.xo")
+    val augmented = copy(profiles = profiles + xo, histories = histories + (xo.id to listOf(xo.rootPageId)))
+    return if (DeckJson.fits(augmented)) augmented else this
 }
 
 private fun DeckState.profile(id: String) = profiles.firstOrNull { it.id == id } ?: error("Unknown profile")

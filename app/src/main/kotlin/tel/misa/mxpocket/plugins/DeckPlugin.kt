@@ -4,6 +4,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import tel.misa.mxpocket.decks.DeckCommand as C
 import tel.misa.mxpocket.decks.DeckState
+import tel.misa.mxpocket.decks.navigationCommands
 
 internal fun C.capability() = when (deck) {
     "launcher" -> PluginCapability.OPEN_APPS
@@ -27,6 +28,28 @@ internal class DeckPlugin(id: String, title: String, capability: PluginCapabilit
     override fun onDeactivate() { state = DeckState() }
     private fun slot(command: C, component: String? = null) =
         Slot(state.tile(command, component), PluginAction.Deck(command, component))
+    private fun player(): List<Slot> {
+        val media = state.media
+        val volume = VolumeLevel(media.volume, media.maximum, media.muted)
+        fun control(command: C, glyph: PlayerGlyph, footer: String = "", level: VolumeLevel? = null) = slot(command).let {
+            it.copy(tile = it.tile.copy(glyph = glyph, footer = footer, showLabel = false,
+                showFooter = false, primary = command == C.PLAY, volumeLevel = level))
+        }
+        val transport = when (media.playing) {
+            true -> PlayerGlyph.PAUSE
+            false -> PlayerGlyph.PLAY
+            null -> PlayerGlyph.PLAY_PAUSE
+        }
+        return listOf(control(C.QUIETER, PlayerGlyph.VOLUME_DOWN),
+            control(if (media.muted) C.UNMUTE else C.MUTE, if (media.muted) PlayerGlyph.UNMUTE else PlayerGlyph.MUTE,
+                volume.description, volume),
+            control(C.LOUDER, PlayerGlyph.VOLUME_UP),
+            control(C.PREVIOUS, PlayerGlyph.PREVIOUS), control(C.PLAY, transport), control(C.NEXT, PlayerGlyph.NEXT),
+            control(C.BACK_10, PlayerGlyph.BACK_10),
+            Slot(KeyTile(media.title.ifBlank { media.status }, media.status, tel.misa.mxpocket.decks.AUDIO_BACKGROUND.toInt(),
+                glyph = PlayerGlyph.TRACK, readOnly = true, showFooter = false)),
+            control(C.FORWARD_10, PlayerGlyph.FORWARD_10))
+    }
     private val pages get() = ((state.favorites.size + 6) / 7).coerceAtLeast(1)
     private val current get() = page.coerceIn(0, pages - 1)
     private fun launcher(): List<Slot> {
@@ -38,27 +61,20 @@ internal class DeckPlugin(id: String, title: String, capability: PluginCapabilit
     }
     private fun slots(): List<Slot> = when (descriptor.id) {
         "launcher" -> launcher()
-        "audio" -> {
-            val media = state.media
-            val access = slot(C.MEDIA_ACCESS)
-            listOf(slot(C.QUIETER), slot(C.PLAY), slot(C.LOUDER), slot(C.PREVIOUS),
-                access.copy(tile = access.tile.copy(label = media.title.ifBlank { media.status },
-                    footer = if (media.access) media.status else "Media access")),
-                slot(C.NEXT), slot(C.MUTE), Slot(KeyTile("${media.volume} / ${media.maximum}", "Volume",
-                    tel.misa.mxpocket.decks.AUDIO_BACKGROUND.toInt())),
-                slot(C.UNMUTE))
-        }
+        "audio" -> player()
         "studio" -> listOf(C.SHUTTER, C.START_VIDEO, C.STOP_VIDEO, null, null, null,
             C.VIDEO, C.STUDIO, C.CAMERA_ACCESS).map { command ->
             command?.let { slot(it) } ?: Slot(KeyTile("-", "", 0xff49345f.toInt(), enabled = false))
         }
-        "navigation" -> listOf(C.BACK, C.HOME, C.RECENTS, C.UP, C.ACTIVATE, C.DOWN, C.REVERSE, C.NAV_ACCESS, C.FORWARD).map { slot(it) }
+        // These are persisted plugin.key indices, not the physical positions of the factory keys.
+        "navigation" -> navigationCommands.map { slot(it) }
         else -> error("Unknown page")
     }
     override fun render(nowMillis: Long) = PluginFrame(slots().map { it.tile }, current)
     override fun onKey(event: PluginKeyEvent, host: PluginHost) {
         if (!event.pressed || event.synthetic) return
         val key = slots()[event.index]
+        if (!key.tile.enabled || key.tile.readOnly) return
         if (key.next) {
             page = (current + 1) % pages
             host.invalidate()

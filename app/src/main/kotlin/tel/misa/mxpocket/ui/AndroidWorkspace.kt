@@ -18,11 +18,13 @@ import tel.misa.mxpocket.workflow.WorkflowScreen
 internal fun AndroidWorkspace(
     tab: WorkspaceTab, select: (WorkspaceTab) -> Unit, session: PocketSession, state: PocketScreenState,
     event: (PocketScreenEvent) -> Unit, onExport: () -> Unit, onImport: () -> Unit,
+    usageGranted: Boolean, onUsageSettings: () -> String?,
 ) {
     val deck by session.deck.state.collectAsStateWithLifecycle()
     val signals by session.signals.collectAsStateWithLifecycle()
     val flows by session.workflows.definitions.collectAsStateWithLifecycle()
     val disabled by session.disabledPlugins.collectAsStateWithLifecycle()
+    val detection by session.detectForegroundApps.collectAsStateWithLifecycle()
     val plugins = session.plugins.descriptors.map { plugin ->
         PluginItem(plugin.id, plugin.title, plugin.id !in disabled,
             plugin.capabilities.joinToString { it.name.lowercase().replace('_', ' ') }, session.pluginDetails(plugin.id),
@@ -35,9 +37,19 @@ internal fun AndroidWorkspace(
             deck.profiles.forEach { add(BindingOption("Profile: ${it.name}", ActionCall(DeckActions.PROFILE, mapOf("profileId" to it.id)))) }
             flows.forEach { add(BindingOption("Workflow: ${it.name}", ActionCall("workflow.run", mapOf("workflowId" to it.id)))) }
             add(BindingOption("Play a sound", ActionCall("sound.play")))
+            addAll(factoryKeyBindings)
             session.platformBindings().forEach { (label, call) -> add(BindingOption(label, call)) }
         }
         LayoutEditor(remember(session.deck) { session.deck.asEditorStore() }, options, signals, onExport, onImport,
+            foreground = ForegroundControls(detection, usageGranted, session::setDetectForegroundApps, onUsageSettings) {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    try {
+                        session.favoriteApps.discover().mapNotNull { app ->
+                            android.content.ComponentName.unflattenFromString(app.component)?.let { MappingApp(it.packageName, app.label) }
+                        }.distinctBy { it.packageId }
+                    } catch (_: SecurityException) { null }
+                }
+            },
             backHandler = { enabled, back -> BackHandler(enabled, back) })
     }, workflows = { WorkflowScreen(session.workflows) })
 }
