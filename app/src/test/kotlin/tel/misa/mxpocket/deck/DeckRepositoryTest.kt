@@ -2,6 +2,7 @@ package tel.misa.mxpocket.deck
 
 import android.app.Application
 import java.io.File
+import java.nio.file.Path
 import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Rule
@@ -18,6 +19,31 @@ class DeckRepositoryTest {
     @get:Rule val folder = TemporaryFolder()
     private val file: File get() = File(folder.root, "deck.json")
     private val repo by lazy { DeckRepository(file) }
+
+    @Test fun failedPrivacyRewriteKeepsTheDecodedCustomDeckAndCanRetry() {
+        val custom = repo.createProfile("My controls").getOrThrow()
+        repo.selectProfile(custom).getOrThrow()
+        val pkg = "example.privateplayer"
+        val legacy = JSONObject(repo.exportJson()).put("selectionReason", "Automatic: score 5 — foregroundApp=$pkg (+5)").toString()
+        file.writeText(legacy)
+        // Reads still see the valid file; simulate a missing staging directory for atomic writes.
+        var allowWrite = false
+        val target = object : File(file.absolutePath) {
+            override fun toPath(): Path = if (allowWrite) super.toPath() else super.toPath().resolve("missing/deck.json")
+        }
+        val recovered = DeckRepository(target)
+        assertNull(recovered.loadError)
+        assertNotNull(recovered.cleanupWarning)
+        assertFalse(recovered.cleanupWarning!!.contains(pkg))
+        assertEquals(custom, recovered.state.value.activeProfileId)
+        assertFalse(recovered.exportJson().contains(pkg))
+        assertEquals(legacy, file.readText())
+        allowWrite = true
+        recovered.save().getOrThrow()
+        assertNull(recovered.cleanupWarning)
+        assertFalse(file.readText().contains(pkg))
+        assertEquals(custom, DeckRepository(file).state.value.activeProfileId)
+    }
 
     @Test fun removingAnAppMappingLeavesNoPackageInTheSavedOrExportedReason() {
         val pkg = "example.privateplayer"

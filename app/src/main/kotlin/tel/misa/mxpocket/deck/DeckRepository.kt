@@ -2,6 +2,7 @@ package tel.misa.mxpocket.deck
 
 import android.content.Context
 import java.io.File
+import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
@@ -26,6 +27,8 @@ class DeckRepository internal constructor(private val file: File) {
     /** An unreadable or future-format file is preserved until an explicit restore or valid import. */
     var loadError: String? = null
         private set
+    var cleanupWarning: String? = null
+        private set
 
     private var candidate: String? = null
     private var candidateSince = 0L
@@ -44,7 +47,11 @@ class DeckRepository internal constructor(private val file: File) {
                 }
                 val decoded = DeckJson.decode(text)
                 decoded.withPrivateReason().also { clean ->
-                    if (clean !== decoded) write(DeckJson.encode(clean))
+                    if (clean !== decoded) {
+                        try { write(DeckJson.encode(clean)) }
+                        catch (_: IOException) { cleanupWarning = CLEANUP_WARNING }
+                        catch (_: SecurityException) { cleanupWarning = CLEANUP_WARNING }
+                    }
                 }
             }
         } catch (e: Exception) {
@@ -260,6 +267,7 @@ class DeckRepository internal constructor(private val file: File) {
             validateDeck(snapshot)
             write(DeckJson.encode(snapshot))
             loadError = null
+            cleanupWarning = null
             mutableReason.value = snapshot.selectionReason
             clearObservation()
             mutable.value = snapshot
@@ -285,6 +293,8 @@ class DeckRepository internal constructor(private val file: File) {
 
     companion object {
         private const val APP_MATCH_REASON = "Automatic: matched an app mapping"
+        private const val CLEANUP_WARNING =
+            "Your layout is loaded and exports are redacted. The old selection detail could not be removed from device storage. Free up storage and retry."
         const val DEBOUNCE_MS = 1500L
         const val SCORE_MARGIN = 2
     }

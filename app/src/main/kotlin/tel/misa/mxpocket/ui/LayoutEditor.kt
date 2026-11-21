@@ -92,6 +92,10 @@ internal fun LayoutEditor(
             Text("Layout editor", Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineSmall)
             EditorNote("On deck: ${deck.activeProfile.name} / ${deck.activePage.name}")
             repo.loadError?.let { EditorError("$it. Use Layout backups below to recover.") }
+            repo.cleanupWarning?.let {
+                EditorError(it)
+                TextButton(onClick = { writer.run(repo::save) }, enabled = !writer.busy) { Text("Retry cleanup") }
+            }
 
             key(profile.id, page.id) {
                 var command by rememberSaveable { mutableStateOf<Command?>(null) }
