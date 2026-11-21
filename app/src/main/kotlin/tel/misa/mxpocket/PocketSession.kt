@@ -75,7 +75,7 @@ internal class PocketSession(
     companion object { const val PHONE_ACTION_TTL = 60_000L }
     private data class Layout(val profile: String, val page: DeckPage, val pluginEpoch: Int,
         val disabled: Set<String>)
-    private data class Stamp(val layout: Layout, val frame: PluginFrame, val revision: Int)
+    private data class Acknowledged(val tile: KeyTile, val image: Bitmap, val repaint: Long)
 
     private val main = Handler(Looper.getMainLooper())
     private val audio = app.getSystemService(AudioManager::class.java)
@@ -117,8 +117,10 @@ internal class PocketSession(
     private var physicalIndex: Int? = null
     private var pendingAction: PhoneAction? = null
     private val images = KeyImages(favoriteApps::icon)
-    private var revision = 0
-    private var painted: Stamp? = null
+    private var repaintEpoch = 0L
+    private var paintedLayout: Layout? = null
+    private var scanLayout: Layout? = null
+    private var nextKey = 0
     private var painting: Job? = null
     private var scheduled = false
     private var simulator: SimulatedKeypad? = null
@@ -133,7 +135,7 @@ internal class PocketSession(
         it.activeProfileId == "phone" && it.activePage.id == it.activeProfile.rootPageId && plugins.selectedId == "phone"
     }
     private var signalClock: Job? = null
-    private val lcd = arrayOfNulls<KeyTile>(9)
+    private val lcd = arrayOfNulls<Acknowledged>(9)
     @Volatile private var receipt = 0L
     private var lastLayout: Layout? = null
     private val feedback = mutableMapOf<Int, String>()
@@ -224,7 +226,7 @@ internal class PocketSession(
     fun frame(): PluginFrame {
         val mediaState = deckState.value.media
         if ((mediaState.title.isNotEmpty() || mediaState.artwork != null) && !canShowTrack()) media.refreshDisplay()
-        if (images.useArtwork(deckState.value.media.artwork)) revision++
+        images.useArtwork(deckState.value.media.artwork)
         val native = plugins.render()
         return PluginFrame(deck.state.value.activePage.keys.mapIndexed { index, key ->
             val call = key.action
@@ -492,7 +494,8 @@ internal class PocketSession(
         watchDecks()
         media.refreshDisplay()
         painting = null
-        painted = null
+        paintedLayout = null
+        scanLayout = null
         onHandoff = null
         pendingAction = null
         val end = onEnd
@@ -528,8 +531,8 @@ internal class PocketSession(
                 val index = event.controlId - 1
                 val page = deck.state.value.activePage
                 val call = page.keys[index].action ?: return
-                if (event.pressed && !virtual && (epoch == 0L || epoch != receipt || painted?.layout != layout() ||
-                    !sameBinding(lcd[index], frame().keys[index]))) return
+                if (event.pressed && !virtual && (epoch == 0L || epoch != receipt || paintedLayout != layout() ||
+                    !sameBinding(lcd[index]?.tile, frame().keys[index]))) return
                 if (!frame().keys[index].enabled) return
                 physicalPressAt = arrivedAt.takeIf { !virtual && event.pressed && !event.synthetic && request != null }
                 physicalIndex = index.takeIf { physicalPressAt != null }
@@ -556,10 +559,10 @@ internal class PocketSession(
         // Only composed copies leave the main thread. Don't cancel an in-flight HID transaction.
         images.setBackdrop(image)
         log("Custom image loaded; labels will be overlaid on all nine keys")
-        repaint()
+        invalidate()
     }
 
-    fun repaint() { revision++; images.clear(); invalidate() }
+    fun repaint() { repaintEpoch++; images.clear(); invalidate() }
 
     private fun invalidate() {
         if (scheduled) return
@@ -576,35 +579,46 @@ internal class PocketSession(
         val scope = hardwareScope ?: return
         if (painting?.isActive == true) return
         val frame = frame()
-        val stamp = Stamp(layout(), frame, revision)
-        val previous = painted
-        if (stamp == previous && receipt != 0L && lcd.indices.all { lcd[it] == frame.keys[it] }) return
-        if (lcd.indices.any { !sameBinding(lcd[it], frame.keys[it]) }) receipt = 0
-        painting = scope.launch {
-            try {
-                val force = previous?.revision != revision
-                for (index in 0..8) {
-                    if (stamp.layout != layout() || stamp.revision != revision || output !== connected) break
-                    if (!force && lcd[index] == frame.keys[index]) continue
-                    val image = images.image(index, frame.keys[index])
-                    if (connected is RenderedKeypad && images.artwork != null)
-                        connected.setKeyImage(index, image, coverArt = true)
-                    else connected.setKeyImage(index, image)
-                    if (output === connected) lcd[index] = frame.keys[index]
+        val layout = layout()
+        if (scanLayout != layout) { scanLayout = layout; nextKey = 0 }
+        if (lcd.indices.any { !sameBinding(lcd[it]?.tile, frame.keys[it]) }) receipt = 0
+        val epoch = repaintEpoch
+        // One transaction at a time. Re-read desired state after its ACK, continuing around the panel
+        // rather than repeatedly starting at a rapidly changing first key.
+        for (offset in lcd.indices) {
+            val index = (nextKey + offset) % lcd.size
+            val tile = frame.keys[index]
+            val image = images.image(index, tile)
+            val ack = lcd[index]
+            if (ack != null && ack.repaint == epoch && ack.tile == tile) {
+                if (ack.image === image) continue
+                // The renderer can evict or rebuild an identical image (for example A -> B -> A).
+                if (ack.image.sameAs(image)) {
+                    lcd[index] = ack.copy(image = image)
+                    continue
                 }
-                if (stamp.layout == layout() && stamp.revision == revision && output === connected) {
-                    painted = stamp
-                    if (receipt == 0L) receipt = ++receiptSequence
-                    if (previous == null && !preview) message("LCD image updates acknowledged. Verify visibility on the keypad.")
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                if (output === connected) stopWithError("LCD upload failed", e)
-            } finally {
-                if (output === connected) invalidate()
             }
+            nextKey = (index + 1) % lcd.size
+            val cover = images.artwork != null
+            painting = scope.launch {
+                try {
+                    if (connected is RenderedKeypad && cover) connected.setKeyImage(index, image, coverArt = true)
+                    else connected.setKeyImage(index, image)
+                    if (output === connected) lcd[index] = Acknowledged(tile, image, epoch)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    if (output === connected) stopWithError("LCD upload failed", e)
+                } finally {
+                    if (output === connected) main.post(::paint)
+                }
+            }
+            return
         }
+        val first = paintedLayout == null
+        paintedLayout = layout
+        if (receipt == 0L) receipt = ++receiptSequence
+        if (first && !preview) message("LCD image updates acknowledged. Verify visibility on the keypad.")
     }
 
     private var receiptSequence = 0L
@@ -678,8 +692,7 @@ internal class PocketSession(
                         (output as? RenderedKeypad)?.clearImages()
                     }
                     decks.value = decks.value.copy(media = next)
-                    // Advance the stamp even during an in-flight HID write; finish that key, not the stale frame.
-                    if (images.useArtwork(visibleArtwork(next)) || old.title != next.title) revision++
+                    images.useArtwork(visibleArtwork(next))
                 }
                 fun favoritesChanged() {
                     reload?.cancel()
@@ -758,7 +771,7 @@ internal class PocketSession(
 
     fun isCurrentShortcut(action: PhoneAction): Boolean =
         pendingAction == action && action.ticket == request && output != null && action.receipt != 0L &&
-            action.receipt == receipt && painted?.layout == layout() && sameBinding(lcd[action.index], frame().keys[action.index])
+            action.receipt == receipt && paintedLayout == layout() && sameBinding(lcd[action.index]?.tile, frame().keys[action.index])
 
     fun logText(limit: Int = 250) = logs.takeLast(limit).joinToString("\n")
     fun takePhoneAction(id: String?): PhoneAction? {
