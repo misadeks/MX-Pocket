@@ -59,8 +59,8 @@ class DeckRepositoryTest {
         val state = loaded.state.value
         val originalKeys = (0..8).map { pluginKey("navigation", it) }
         assertEquals(listOf(0, 3, 1, 6, 4, 8, 2, 5, 7).map(originalKeys::get), state.activePage.keys)
-        assertEquals(originalKeys, state.activeProfile.pages.last().keys)
-        assertEquals(originalKeys, state.profiles.last().pages.single().keys)
+        assertEquals(originalKeys, state.activeProfile.pages.single { it.id == "copy" }.keys)
+        assertEquals(originalKeys, state.profiles.single { it.id == "copy" }.pages.single().keys)
         assertEquals(state, DeckRepository(file).state.value) // retry before a save
         loaded.save().getOrThrow()
         assertEquals(state, DeckRepository(file).state.value) // no second permutation
@@ -89,6 +89,19 @@ class DeckRepositoryTest {
         assertEquals(ActionCall("media.play-pause"), play(DeckRepository(file)))
         repo.importJson(old).getOrThrow()
         assertEquals(ActionCall("media.play-pause"), play(repo))
+    }
+
+    @Test fun intermediateV2UpdatesNavigationWithoutReapplyingTheAudioMigration() {
+        val copy = repo.duplicateProfile("audio", "My v2 player").getOrThrow()
+        val exported = JSONObject(repo.exportJson()).put("version", 2)
+        val profiles = exported.getJSONArray("profiles")
+        val nav = (0 until profiles.length()).map(profiles::getJSONObject).single { it.getString("id") == "navigation" }
+        nav.put("pages", historicalNavigation().getJSONArray("profiles").getJSONObject(0).getJSONArray("pages"))
+        repo.importJson(exported.toString()).getOrThrow()
+        val result = repo.state.value.profiles.associateBy { it.id }
+        assertEquals(listOf(0, 3, 1, 6, 4, 8, 2, 5, 7).map { pluginKey("navigation", it) },
+            result.getValue("navigation").pages.single().keys)
+        assertEquals((0..8).map { pluginKey("audio", it) }, result.getValue(copy).pages.single().keys)
     }
 
     @Test fun anyEditToTheHistoricalNavigationRootPreservesAllNineBindingsOnLoadAndImport() {
@@ -147,8 +160,8 @@ class DeckRepositoryTest {
         val original = repo.exportJson()
         fun edit(f: (JSONObject) -> Unit) = JSONObject(original).apply(f).toString()
         val bad = listOf(
-            original.replaceFirst("\"version\":2", "\"version\":3"),
-            original.replaceFirst("\"version\":2", "\"version\":2,\"version\":2"),
+            edit { it.put("version", DeckLimits.VERSION + 1) },
+            original.replaceFirst("\"version\":", "\"version\":${DeckLimits.VERSION},\"version\":"),
             edit { it.put("automatic", "true") }, edit { it.put("activeProfileId", "missing") },
             edit { it.getJSONArray("profiles").getJSONObject(0).put("id", "audio") },
             edit { it.getJSONObject("histories").getJSONArray("focus").put("missing") },

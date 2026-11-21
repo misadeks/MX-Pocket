@@ -34,10 +34,11 @@ internal object DeckJson {
             },
             selectionReason = obj.string("selectionReason"),
         )
-        if (state.version == 1) {
+        if (state.version == 1 || state.version == 2) {
             val validated = state.copy(version = DeckLimits.VERSION)
             validateDeck(validated)
-            return upgradeAudioSlots(validated).upgradeStockNavigationRoot()
+            val audio = if (state.version == 1) upgradeAudioSlots(validated) else validated
+            return audio.upgradeStockNavigationRoot()
         }
         validateDeck(state)
         return state

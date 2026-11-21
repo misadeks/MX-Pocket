@@ -12,7 +12,7 @@ profile. Virtual keys run real phone actions. The debug-only UI fixture does not
 
 The factory navigation pad reads left to right: **Back / Scroll up / Home**,
 **Prev focus / Select / Next focus**, **Recents / Scroll down / Access info**.
-An untouched version 1 navigation root adopts this arrangement on upgrade.
+An untouched version 1 or 2 navigation root adopts this arrangement when upgrading to version 3.
 Edited roots, independent copies and all current-format layouts keep their saved
 key positions and actions, including when imported.
 
