@@ -2,7 +2,7 @@ package tel.misa.mxpocket.plugins
 
 import kotlinx.coroutines.CoroutineScope
 
-enum class PluginCapability { AUDIO, OPEN_APPS, NAVIGATION, TONE }
+enum class PluginCapability { AUDIO, OPEN_APPS, NAVIGATION, TONE, ACCESSIBILITY }
 
 data class PluginDescriptor(
     val id: String,
@@ -38,6 +38,13 @@ sealed interface PluginAction {
     data class SelectPlugin(val id: String) : PluginAction
     data object CompletionTone : PluginAction
     data object Repaint : PluginAction
+    /**
+     * Semantic command for the on-device accessibility bridge (for example a Clip Studio
+     * tool or setting change). The app-layer service maps the command to UI actions in the
+     * target app; plugins never see windows, nodes or coordinates. A command that cannot be
+     * performed is reported as a failure, never as success.
+     */
+    data class AccessibilityCommand(val command: String) : PluginAction
 }
 
 /** Capabilities are checked by the engine, not an Android security sandbox for compiled-in code. */

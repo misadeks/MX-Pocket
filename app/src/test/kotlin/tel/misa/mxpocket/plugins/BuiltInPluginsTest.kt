@@ -12,7 +12,7 @@ class BuiltInPluginsTest {
     @Test fun focusActionsAndCountdownSurvivePageSwitchWithoutStaleTicks() = runTest {
         val actions = mutableListOf<PluginAction>()
         var updates = 0
-        val engine = PluginEngine(BuiltInPlugins.create("Focus", "Audio", "Phone"), this,
+        val engine = PluginEngine(BuiltInPlugins.create("Focus", "Audio", "Phone", "Clip Studio"), this,
             { testScheduler.currentTime }, { AudioSnapshot(5, 15) },
             { action, _ -> actions += action }, { updates++ }, { _, error -> throw AssertionError(error) })
         fun tap(index: Int) {
@@ -43,7 +43,7 @@ class BuiltInPluginsTest {
 
     @Test fun audioAndPhoneKeepExistingControlsAndNavigation() = runTest {
         val actions = mutableListOf<PluginAction>()
-        val engine = PluginEngine(BuiltInPlugins.create("Focus", "Audio", "Phone"), this,
+        val engine = PluginEngine(BuiltInPlugins.create("Focus", "Audio", "Phone", "Clip Studio"), this,
             { testScheduler.currentTime }, { AudioSnapshot(6, 15) },
             { action, _ -> actions += action }, {}, { _, error -> throw AssertionError(error) })
         fun tap(index: Int) {
@@ -68,6 +68,8 @@ class BuiltInPluginsTest {
         assertEquals(PluginAction.Repaint, actions.last())
         tap(6)
         assertEquals("focus", engine.selectedId)
+        engine.next(-1)
+        assertEquals("clipstudio", engine.selectedId)
         engine.next(-1)
         assertEquals("phone", engine.selectedId)
         tap(7)

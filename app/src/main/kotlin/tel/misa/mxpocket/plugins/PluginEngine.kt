@@ -160,6 +160,7 @@ class PluginEngine(
                 is PluginAction.OpenApp -> PluginCapability.OPEN_APPS
                 is PluginAction.SelectPlugin -> PluginCapability.NAVIGATION
                 PluginAction.CompletionTone -> PluginCapability.TONE
+                is PluginAction.AccessibilityCommand -> PluginCapability.ACCESSIBILITY
                 PluginAction.Repaint -> null
             }
             require(capability == null || capability in descriptor.capabilities) {

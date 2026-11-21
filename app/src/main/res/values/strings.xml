@@ -28,6 +28,12 @@
     <string name="focus">Focus</string>
     <string name="audio">Audio</string>
     <string name="phone">Phone</string>
+    <string name="clipstudio">Clip Studio</string>
+    <string name="accessibility_control">Clip Studio keypad control</string>
+    <string name="accessibility_on">Accessibility control is enabled. Clip Studio page keys drive Clip Studio Paint.</string>
+    <string name="accessibility_off">Enable the MX Pocket service in Android accessibility settings to let the Clip Studio page drive Clip Studio Paint.</string>
+    <string name="open_accessibility_settings">Open accessibility settings</string>
+    <string name="accessibility_service_description">Lets the MX Pocket Clip Studio keypad page drive Clip Studio Paint (tool selection and tool settings) by tapping its on-screen controls. Only Clip Studio Paint windows are observed. Enable or disable this service in Android accessibility settings.</string>
     <string name="previous">Previous page</string>
     <string name="next">Next page</string>
     <string name="repaint">Repaint all nine LCDs</string>

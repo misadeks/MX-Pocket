@@ -21,13 +21,18 @@ There is no hosted CI; validation runs locally.
   USB attach handling and a foreground service for an active keypad, device
   and endpoint diagnostics, connection/cancellation/detach handling, bounded
   event log with user-selected file export, custom image picker, and dynamic
-  Focus/Audio/Phone plugins. The two physical page buttons switch plugins.
+  Focus/Audio/Phone/Clip Studio plugins. The two physical page buttons switch plugins.
 - Focus starts/pauses/resets a real monotonic countdown, changes duration, and
   plays a completion tone. Audio changes the music stream volume/mute and
   dispatches media keys to an existing Android media session. Phone opens
-  installed camera/settings/dialer/browser/alarm apps. There is no accessibility
-  service or dependency on Options+, the official Actions SDK, Node, WebHID,
-  root, a custom kernel, or BLE Dialpad.
+  installed camera/settings/dialer/browser/alarm apps. Clip Studio selects a tool
+  (pencil, lasso, bucket, eraser) and adjusts its settings by driving the
+  on-device Clip Studio Paint window through an optional accessibility service
+  (`KeypadAccessibilityService`) that the user enables in Android accessibility
+  settings; the service observes only Clip Studio windows and reports unmatched
+  commands as failures. Apart from that opt-in bridge there is no dependency on
+  Options+, the official Actions SDK, Node, WebHID, root, a custom kernel, or
+  BLE Dialpad.
 - Phone-only preview exercises app actions without pretending to connect or
   sending any USB reports.
 - Compile-time Kotlin plugin engine with stable registration IDs, exactly nine
@@ -44,7 +49,7 @@ app/ui/PocketScreen               phone Views, screen state and tap events
 KeypadService                     foreground notification, detach and disconnect
   -> PocketSession                one plugin/input/LCD owner; Activity optional
   -> plugins/PluginEngine         selection, key ownership, scopes, errors
-       -> PocketPlugin            Focus, Audio, Phone, optional Counter
+       -> PocketPlugin            Focus, Audio, Phone, Clip Studio, optional Counter
        -> PluginHost              bounded Android actions + invalidate
   -> mx-driver/MxKeypad            independent reusable USB Host API
        -> HidSession              serialized command/acknowledgement protocol
@@ -178,7 +183,7 @@ finishes. Close on detach, cancellation or your chosen lifecycle boundary.
    is attempted. Claim failure is an actionable OEM/kernel compatibility limit.
 4. Confirm custom text appears on **all nine physical LCD buttons**, remains
    visible for at least 60 seconds without logo fallback, and changes between
-   Focus/Audio/Phone pages. Choose a custom image, return to the app, then
+   Focus/Audio/Phone/Clip Studio pages. Choose a custom image, return to the app, then
    verify the image plus labels on every key without reconnecting.
 5. Press/release each LCD key and both page buttons. Verify their identities in
    the session log; hold multiple keys and verify independent releases. Use the

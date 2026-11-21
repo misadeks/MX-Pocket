@@ -66,7 +66,8 @@ internal class PocketSession(
     private val logs = ArrayDeque<String>()
     private var screen: Screen? = null
     val plugins = PluginEngine(
-        BuiltInPlugins.create(app.getString(R.string.focus), app.getString(R.string.audio), app.getString(R.string.phone)),
+        BuiltInPlugins.create(app.getString(R.string.focus), app.getString(R.string.audio), app.getString(R.string.phone),
+            app.getString(R.string.clipstudio)),
         CoroutineScope(Dispatchers.Main.immediate), SystemClock::elapsedRealtime,
         readAudio = { AudioSnapshot(audio.getStreamVolume(AudioManager.STREAM_MUSIC),
             audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)) },
@@ -299,9 +300,17 @@ internal class PocketSession(
                 log("Focus session complete")
             }
             PluginAction.Repaint -> repaint()
+            is PluginAction.AccessibilityCommand -> {
+                val performed = KeypadAccessibilityService.perform(action.command)
+                log(if (performed) "Accessibility command '${action.command}' performed on the foreground Clip Studio window"
+                else "Accessibility command '${action.command}' not performed: enable the MX Pocket accessibility service and open Clip Studio Paint")
+            }
             is PluginAction.SelectPlugin -> error("Navigation is handled by PluginEngine")
         }
     }
+
+    /** Whether the user enabled the accessibility bridge in Android settings. */
+    fun accessibilityEnabled(): Boolean = KeypadAccessibilityService.isEnabled(app)
 
     fun logText(limit: Int = 250) = logs.takeLast(limit).joinToString("\n")
     fun takePhoneAction(id: String?): PhoneAction? {

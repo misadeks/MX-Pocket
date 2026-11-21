@@ -261,7 +261,8 @@ class KeypadSessionTest {
         event(KeyEvent(1, false))
         main.idle()
         assertEquals("Pause", session.plugins.render().keys[0].label)
-        // Focus's updated Start/Pause tile is now in flight. Switch to Phone and try Camera.
+        // Focus's updated Start/Pause tile is now in flight. Switch to Phone (via Clip Studio) and try Camera.
+        event(KeyEvent(0x01a1, true))
         event(KeyEvent(0x01a1, true))
         event(KeyEvent(1, true))
         event(KeyEvent(1, false))
@@ -307,7 +308,8 @@ class KeypadSessionTest {
                 Robolectric.buildActivity(PhoneActionActivity::class.java, intent).setup().use {
                     shadowOf(it.get()).nextStartedActivity
                 }
-            press(0x01a1) // Focus -> Phone
+            press(0x01a1) // Focus -> Clip Studio
+            press(0x01a1) // Clip Studio -> Phone
             press(1)
             assertEquals("android.media.action.STILL_IMAGE_CAMERA", shadowOf(controller.get()).nextStartedActivity?.action)
             controller.pause().stop()

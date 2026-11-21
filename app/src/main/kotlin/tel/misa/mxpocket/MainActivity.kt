@@ -307,6 +307,13 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             PocketScreenEvent.ChooseImage -> imagePicker.launch(arrayOf("image/*"))
             PocketScreenEvent.RefreshDiagnostics -> refreshDiagnostics()
             PocketScreenEvent.SaveLog -> logSaver.launch("mx-pocket-diagnostics.txt")
+            PocketScreenEvent.OpenAccessibilitySettings -> try {
+                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            } catch (_: ActivityNotFoundException) {
+                session.message("Accessibility settings are unavailable on this device.")
+            } catch (_: SecurityException) {
+                session.message("Android restricted opening accessibility settings.")
+            }
         }
         render()
     }
@@ -318,6 +325,7 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             frame = session.plugins.render(),
             connectionActive = target != null || session.request != null,
             diagnostics = diagnostics, log = session.logText(60), automatic = access.automatic, directShortcuts = direct.enabled,
+            accessibilityEnabled = session.accessibilityEnabled(),
         ))
     }
 

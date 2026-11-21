@@ -8,7 +8,7 @@ import tel.misa.mxpocket.plugins.PluginFrame
 /** Deterministic display fixtures. No activation callbacks, host, timers or platform services. */
 class UiPreviewScenes(context: Context) {
     private val plugins = BuiltInPlugins.create(context.getString(R.string.focus),
-        context.getString(R.string.audio), context.getString(R.string.phone))
+        context.getString(R.string.audio), context.getString(R.string.phone), context.getString(R.string.clipstudio))
     val descriptors = plugins.map { it.descriptor }
     val ids = listOf("disconnected") + descriptors.map { it.id }
     private val note = "UI-only preview. No USB access, phone actions or running plugins."

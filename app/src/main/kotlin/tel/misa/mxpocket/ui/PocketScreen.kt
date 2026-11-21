@@ -26,6 +26,7 @@ data class PocketScreenState(
     val log: String = "",
     val automatic: Boolean = false,
     val directShortcuts: Boolean = false,
+    val accessibilityEnabled: Boolean = false,
 )
 
 sealed interface PocketScreenEvent {
@@ -40,6 +41,7 @@ sealed interface PocketScreenEvent {
     data object ChooseImage : PocketScreenEvent
     data object RefreshDiagnostics : PocketScreenEvent
     data object SaveLog : PocketScreenEvent
+    data object OpenAccessibilitySettings : PocketScreenEvent
 }
 
 /** Presentation only: constructing/rendering the screen never invokes an event or a device action. */
@@ -67,6 +69,7 @@ class PocketScreen(
     private val connectButton: MaterialButton
     private val automatic: CheckBox
     private val directShortcuts: CheckBox
+    private val accessibility: TextView
     private val pageTitle: TextView
     private val keys = mutableListOf<MaterialButton>()
     private val diagnostics: TextView
@@ -94,6 +97,13 @@ class PocketScreen(
             setOnClickListener { onEvent(PocketScreenEvent.SetDirectShortcuts(isChecked)) }
             content.addView(this)
         }
+        text(context.getString(R.string.accessibility_control), R.dimen.screen_heading_size, heading = true)
+        accessibility = text("", R.dimen.screen_note_size).apply {
+            id = R.id.pocket_accessibility
+            setTextIsSelectable(true)
+        }
+        button(context.getString(R.string.open_accessibility_settings), outlined = true,
+            event = PocketScreenEvent.OpenAccessibilitySettings)
         button(context.getString(R.string.preview), outlined = true, event = PocketScreenEvent.EnterPreview)
         pageTitle = text(context.getString(R.string.focus), R.dimen.screen_heading_size, heading = true).apply {
             id = R.id.pocket_plugin_title
@@ -151,6 +161,8 @@ class PocketScreen(
         status.updateText(state.status)
         automatic.isChecked = state.automatic
         directShortcuts.isChecked = state.directShortcuts
+        accessibility.updateText(context.getString(
+            if (state.accessibilityEnabled) R.string.accessibility_on else R.string.accessibility_off))
         connectButton.updateText(context.getString(if (state.connectionActive) R.string.disconnect else R.string.connect))
         pageTitle.updateText(state.pluginTitle)
         keys.forEachIndexed { index, button -> button.updateText(state.frame.keys[index].label) }

@@ -53,7 +53,9 @@ registry**, so the original three-page rotation remains intact.
 
 To author another plugin, copy the example into a named feature package, change
 its ID/title and implement its state, frame and input. Add a registry instance
-and focused tests, then open a PR.
+and focused tests, then open a PR. `plugins/clipstudio/ClipStudioPlugin.kt` shows a
+two-level page (tool selection plus per-tool settings submenus) that drives another
+on-device app through `AccessibilityCommand`.
 
 ## Host actions and capabilities
 
@@ -66,7 +68,14 @@ and focused tests, then open a PR.
 | `OPEN_APPS` | Open supported PhoneApp CAMERA/SETTINGS/DIALER/WEB/ALARMS |
 | `NAVIGATION` | Select another registered plugin by ID |
 | `TONE` | Play the short completion tone |
+| `ACCESSIBILITY` | Send semantic `AccessibilityCommand` strings to the on-device accessibility bridge (for example the Clip Studio page) |
 | None | Repaint current frame and invalidate changed state |
+
+The `ACCESSIBILITY` bridge is `KeypadAccessibilityService`, which the user must enable in
+Android accessibility settings; the app only opens that settings screen. It observes only
+Clip Studio Paint windows and clicks the control matching a command. A command with no
+matching node fails and is logged — it is never reported as success. The command vocabulary
+lives in `plugins/clipstudio/ClipStudioCommand.kt`, the single place that builds and parses it.
 
 For example:
 

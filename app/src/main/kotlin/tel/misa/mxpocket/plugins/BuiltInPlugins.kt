@@ -3,11 +3,12 @@ package tel.misa.mxpocket.plugins
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import tel.misa.mxpocket.FocusTimer
+import tel.misa.mxpocket.plugins.clipstudio.ClipStudioPlugin
 
 /** Registration order is the page-button order. Add your compiled-in plugin here. */
 object BuiltInPlugins {
-    fun create(focusTitle: String, audioTitle: String, phoneTitle: String): List<PocketPlugin> =
-        listOf(FocusPlugin(focusTitle), AudioPlugin(audioTitle), PhonePlugin(phoneTitle))
+    fun create(focusTitle: String, audioTitle: String, phoneTitle: String, clipStudioTitle: String): List<PocketPlugin> =
+        listOf(FocusPlugin(focusTitle), AudioPlugin(audioTitle), PhonePlugin(phoneTitle), ClipStudioPlugin(clipStudioTitle))
 }
 
 class FocusPlugin(title: String) : PocketPlugin {
