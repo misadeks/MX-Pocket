@@ -54,7 +54,7 @@ internal typealias OpenKeypad = suspend (UsbManager, UsbDevice, (KeyEvent) -> Un
 internal class PocketSession(
     private val app: Context,
     private val open: OpenKeypad = { manager, device, event, log, error ->
-        MxKeypad.connect(manager, device, event, log, error)
+        RenderedKeypad(MxKeypad.connect(manager, device, event, log, error))
     },
 ) {
     interface Screen {
