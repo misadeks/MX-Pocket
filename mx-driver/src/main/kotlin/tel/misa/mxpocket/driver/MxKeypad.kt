@@ -17,8 +17,14 @@ class MxKeypad private constructor(
     private val log: (String) -> Unit,
 ) : KeypadSink {
     override suspend fun setKeyImage(index: Int, bitmap: Bitmap) {
+        setKeyJpeg(index, encodeKeyJpeg(index, bitmap))
+    }
+
+    /** Prepare a key-sized JPEG without uploading or retaining the caller's bitmap. */
+    suspend fun encodeKeyJpeg(index: Int, bitmap: Bitmap): ByteArray {
         val region = KeypadProtocol.keyRegion(index)
-        val jpeg = withContext(Dispatchers.Default) {
+        return withContext(Dispatchers.Default) {
+            val start = System.nanoTime()
             val scaled = Bitmap.createScaledBitmap(bitmap, region.width, region.height, true)
             try {
                 var encoded: ByteArray? = null
@@ -33,17 +39,20 @@ class MxKeypad private constructor(
                         break
                     }
                 }
-                encoded ?: throw IOException("JPEG exceeds supported image limit after quality reduction")
+                val jpeg = encoded ?: throw IOException("JPEG exceeds supported image limit after quality reduction")
+                log("LCD ${index + 1}: JPEG prepared in ${(System.nanoTime() - start) / 1_000} us")
+                jpeg
             } finally {
                 if (scaled !== bitmap) scaled.recycle()
             }
         }
-        setKeyJpeg(index, jpeg)
     }
 
     suspend fun setKeyJpeg(index: Int, jpeg: ByteArray) {
+        val start = System.nanoTime()
         session.upload(KeypadProtocol.keyRegion(index), jpeg)
-        log("LCD ${index + 1}: ${jpeg.size} JPEG bytes acknowledged (visibility not verified)")
+        log("LCD ${index + 1}: ${jpeg.size} JPEG bytes acknowledged in ${(System.nanoTime() - start) / 1_000} us " +
+            "(upload including ACKs; visibility not verified)")
     }
 
     override fun close() = session.close()
