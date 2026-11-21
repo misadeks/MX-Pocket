@@ -6,9 +6,10 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo as Node
 
 /**
- * Optional, user-enabled service scoped to the OneNote package. A keypad key clicks the visible
- * toolbar control whose text matches (Pen, Eraser, ...). No event subscriptions, no text
- * extraction, no persistent node references.
+ * Optional, user-enabled service scoped to the OneNote package. OneNote's draw toolbar exposes
+ * tools via content descriptions ("pen options", "Stroke Eraser", ...), not text, and marks the
+ * active tool with selected=true. No event subscriptions, no note content extraction, no
+ * persistent node references.
  */
 class OneNoteAccessService : AccessibilityService() {
     companion object {
@@ -29,56 +30,71 @@ class OneNoteAccessService : AccessibilityService() {
         super.onDestroy()
     }
 
-    /** Click the first clickable ancestor of a visible node whose text contains [text]. */
-    @Suppress("DEPRECATION")
-    internal fun clickText(text: String): Boolean {
-        val root = rootInActiveWindow ?: return false
-        try {
-            if (root.packageName?.toString() != ONENOTE_PACKAGE) return false
-            val matches = root.findAccessibilityNodeInfosByText(text)
-            if (matches.isEmpty()) return false
-            var node: Node? = matches[0]
-            matches.drop(1).forEach { it.recycle() }
-            while (node != null && !node.isClickable) {
-                val parent = node.parent
-                node.recycle()
-                node = parent
-            }
-            val clicked = node?.performAction(Node.ACTION_CLICK) == true
-            node?.recycle()
-            return clicked
-        } finally {
-            root.recycle()
+    /**
+     * Select a draw tool by content-description keyword. If the tool is already active, long-press
+     * it instead: that is how OneNote opens the tool's settings. In home view the draw toolbar is
+     * hidden, so open the Draw tab first when the tool is not visible.
+     */
+    internal fun selectTool(keyword: String): Boolean = withRoot { root ->
+        val selected = findNode(root) { it.isSelected && !it.contentDescription.isNullOrBlank() }
+        if (selected != null && label(selected).contains(keyword, ignoreCase = true)) {
+            longClick(selected)
+        } else {
+            clickDesc(root, keyword) || (clickDesc(root, "draw") && clickDesc(root, keyword))
         }
+    } ?: false
+
+    /** Content description of the currently selected toolbar control, for the keypad display. */
+    internal fun activeTool(): String? = withRoot { root ->
+        findNode(root) { it.isSelected && !it.contentDescription.isNullOrBlank() }
+            ?.contentDescription?.toString()
     }
 
-    /**
-     * Select a draw tool. In OneNote's home view the draw toolbar is hidden, so open the Draw
-     * tab first when the tool is not visible. Re-tapping the active tool is OneNote's native
-     * gesture for opening that tool's settings.
-     */
-    internal fun selectTool(text: String): Boolean =
-        clickText(text) || (clickText("Draw") && clickText(text))
-
-    /** Text of the currently checked toolbar control, for the keypad display. */
     @Suppress("DEPRECATION")
-    internal fun activeTool(): String? {
+    private fun <T> withRoot(block: (Node) -> T): T? {
         val root = rootInActiveWindow ?: return null
         try {
             if (root.packageName?.toString() != ONENOTE_PACKAGE) return null
-            return firstChecked(root)?.text?.toString()
+            return block(root)
         } finally {
             root.recycle()
         }
     }
 
+    private fun label(node: Node): String =
+        (node.contentDescription?.toString() ?: "") + " " + (node.text?.toString() ?: "")
+
+    private fun clickDesc(root: Node, keyword: String): Boolean {
+        val found = findNode(root) { label(it).contains(keyword, ignoreCase = true) } ?: return false
+        val target = clickableAncestor(found) ?: return false
+        val clicked = target.performAction(Node.ACTION_CLICK)
+        target.recycle()
+        return clicked
+    }
+
+    private fun longClick(node: Node): Boolean {
+        val target = clickableAncestor(node) ?: return false
+        val clicked = target.performAction(Node.ACTION_LONG_CLICK)
+        target.recycle()
+        return clicked
+    }
+
+    private fun clickableAncestor(node: Node): Node? {
+        var current: Node? = node
+        while (current != null && !current.isClickable) {
+            val parent = current.parent
+            current.recycle()
+            current = parent
+        }
+        return current
+    }
+
     @Suppress("DEPRECATION")
-    private fun firstChecked(root: Node): Node? {
-        var remaining = 64
+    private fun findNode(root: Node, predicate: (Node) -> Boolean): Node? {
+        var remaining = 128
         fun visit(node: Node, depth: Int): Node? {
             if (--remaining < 0 || depth > 12 || !node.isVisibleToUser) return null
-            val text = node.text?.toString()
-            if (node.isChecked && !text.isNullOrBlank()) return node
+            if (predicate(node)) return node
             val count = node.childCount
             for (i in 0 until minOf(count, remaining.coerceAtLeast(0))) {
                 val child = node.getChild(i) ?: continue

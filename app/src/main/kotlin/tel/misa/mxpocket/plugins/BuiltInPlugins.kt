@@ -78,7 +78,11 @@ class OneNotePlugin(title: String) : PocketPlugin {
     override val descriptor = PluginDescriptor("onenote", title,
         setOf(PluginCapability.OPEN_APPS, PluginCapability.NAVIGATION, PluginCapability.ACCESSIBILITY))
 
-    private val toolKeys = listOf("Pen", "Eraser", "Highlighter", "Lasso", "More")
+    // OneNote exposes draw tools via content descriptions, not text.
+    private val tools = listOf(
+        "Pen" to "pen options", "Eraser" to "eraser", "Highlighter" to "highlighter options",
+        "Lasso" to "lasso", "Tools" to "more options",
+    )
     private var active: String? = null
 
     override fun onActivate(host: PluginHost) {
@@ -92,11 +96,10 @@ class OneNotePlugin(title: String) : PocketPlugin {
     }
 
     override fun render(nowMillis: Long): PluginFrame {
-        val labels = listOf("Open") + toolKeys.map { if (it == "More") "Tools" else it } +
-            listOf("Draw", "Quick note", "Repaint")
+        val labels = listOf("Open") + tools.map { it.first } + listOf("Draw", "Quick note", "Repaint")
         return PluginFrame(labels.mapIndexed { index, label ->
-            val tool = toolKeys.getOrNull(index - 1)
-            val isActive = tool != null && active?.contains(tool, ignoreCase = true) == true
+            val keyword = tools.getOrNull(index - 1)?.second
+            val isActive = keyword != null && active?.contains(keyword, ignoreCase = true) == true
             KeyTile(label, "ONENOTE", if (isActive) 0xffa56eff.toInt() else 0xff7719aa.toInt())
         })
     }
@@ -105,10 +108,10 @@ class OneNotePlugin(title: String) : PocketPlugin {
         if (!event.pressed || event.synthetic) return
         val action = when (event.index) {
             0 -> PluginAction.OpenApp(PhoneApp.ONENOTE)
-            1, 2, 3, 4, 5 -> PluginAction.AccessibilityClick(toolKeys[event.index - 1])
-            // Re-tapping the active tool is OneNote's native gesture for its settings; the
-            // service also opens the Draw tab first when the toolbar is hidden in home view.
-            6 -> PluginAction.AccessibilityClick("Draw")
+            // Re-pressing the active tool long-presses it in the service, opening its settings;
+            // the service also opens the Draw tab first when the toolbar is hidden in home view.
+            1, 2, 3, 4, 5 -> PluginAction.AccessibilityClick(tools[event.index - 1].second)
+            6 -> PluginAction.AccessibilityClick("draw")
             7 -> PluginAction.ShareText("MX Pocket quick note ${host.nowMillis()}")
             8 -> PluginAction.Repaint
             else -> null
