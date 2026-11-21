@@ -10,6 +10,28 @@ This repository is private: invited collaborators can work through feature
 branches and pull requests. Start with [CONTRIBUTING.md](CONTRIBUTING.md).
 There is no hosted CI; validation runs locally.
 
+## Try the keypad on Windows
+
+From the repository root, build and launch the standalone desktop preview:
+
+```powershell
+.\gradlew.bat :desktop-preview:test :desktop-preview:packageUberJarForCurrentOS
+.\gradlew.bat :desktop-preview:run
+```
+
+Use the repository JDK/SDK setup below. On Windows ARM64 use an **x64 JDK**
+for the packaged Windows x64 Compose/Skiko runtime. The standalone JAR is in
+`desktop-preview\build\compose\jars`; run it using `java -jar <path-to-jar>`
+with a matching desktop JVM. Running the JAR needs no Android SDK or keypad.
+
+Click **Next profile** to go from Focus to Audio. Wider windows also show a
+profile list alongside the keypad; narrow windows show one pane. Click any
+enabled key to try it. Compose Multiplatform draws the keypad from `:shared-ui`
+on both supported targets. The preview uses the app's factory
+profiles, nine-key bindings and Focus timer. Other tile labels and media state
+are preview fixtures: they do not access USB, change Windows volume, launch
+apps, operate a camera or invoke accessibility actions. Nothing is saved.
+
 ## What is implemented
 
 - `mx-driver`: Kotlin AAR independent of Activities, UI and application actions.
@@ -43,7 +65,8 @@ There is no hosted CI; validation runs locally.
 - Compile-time Kotlin plugin engine with stable registration IDs, exactly nine
   key tiles per frame, physical press/release handling, scoped contextual updates
   and host-mediated Android actions. Focus, Audio and Phone all use this API.
-  [Plugin authoring guide](docs/plugins.md) includes a working Counter example.
+  The [Counter example](docs/plugins.md#bind-physical-lcd-keys-1--9) shows how
+  to register an optional two-key binding without changing the USB driver.
   No downloaded code, external APK plugin loading or runtime class loading.
 
 ## Architecture
@@ -98,13 +121,16 @@ The host waits for a protocol answer after **every** fragment. The answer flags
 are not required to echo the outbound data-frame flags. Busy 0xfb resends the
 whole image within a bounded retry window; other errors and missing
 acknowledgements fail explicitly. Timeouts/cancellation close the transport to
-avoid misattributing a late answer. A new album cover and its nine labeled tiles
-normally travel as one 434x434 JPEG rectangle, at (23,6) in the panel. It uses
+avoid misattributing a late answer. The initial screen, a profile or page switch,
+a new album cover, and changes to multiple keys normally travel as one 434x434
+JPEG rectangle at (23,6) in the panel. It uses
 the same image command and fragment acknowledgements as an individual key; there
-is no separate display commit. A cover too large for the 65535-byte limit at
+is no separate display commit. A grid too large for the 65,535-byte limit at
 the supported qualities falls back to separate keys. Old artwork in the gaps
-is erased before falling back if needed. Sparse changes such as a volume label
-only update changed keys. Separate updates can briefly show parts of both frames;
+is erased before falling back if needed. On the same page, a single changed
+tile or binding uses one key upload, and an unchanged frame sends nothing.
+The changed key cannot run its action until the matching upload is acknowledged.
+Separate fallback updates can briefly show parts of both frames;
 the app checks current pixels after each image and continues around the panel.
 When a physical key needs rewriting,
 the app reuses the JPEG if the same rendered bitmap is still cached. The cache

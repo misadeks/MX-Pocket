@@ -58,6 +58,8 @@ internal typealias OpenKeypad = suspend (UsbManager, UsbDevice, (KeyEvent) -> Un
 /** One main-thread owner across phone screens. Only preview or a promoted service enables plugins. */
 internal class PocketSession(
     private val app: Context,
+    registeredPlugins: List<PocketPlugin> = BuiltInPlugins.create(app.getString(R.string.focus),
+        app.getString(R.string.audio), app.getString(R.string.phone)),
     private val usageDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val open: OpenKeypad = { manager, device, event, log, error ->
         RenderedKeypad(MxKeypad.connect(manager, device, event, log, error))
@@ -79,9 +81,18 @@ internal class PocketSession(
     companion object { const val PHONE_ACTION_TTL = 60_000L }
     private data class Layout(val profile: String, val page: DeckPage, val pluginEpoch: Int,
         val disabled: Set<String>)
-    private data class Acknowledged(val tile: KeyTile, val image: Bitmap, val repaint: Long, val hasTrackDetails: Boolean)
+    private data class GridTarget(val screen: Long, val pluginPage: Int, val repaint: Long, val art: Long)
+    private data class LcdKey(val tile: KeyTile, val action: ActionCall?, val image: Bitmap,
+        val repaint: Long, val hasTrackDetails: Boolean) {
+        fun matches(other: LcdKey) = repaint == other.repaint && action == other.action &&
+            tile.enabled == other.tile.enabled && tile.inputToken == other.tile.inputToken &&
+            (image === other.image || image.sameAs(other.image))
+    }
 
     private val main = Handler(Looper.getMainLooper())
+    private val physicalKeys = PhysicalChordInput(main)
+    private data class PluginSlot(val index: Int, val generation: Int)
+    private val physicalOwners = arrayOfNulls<PluginSlot>(9)
     private val audio = app.getSystemService(AudioManager::class.java)
     private val logs = ArrayDeque<String>()
     private var screen: Screen? = null
@@ -106,7 +117,7 @@ internal class PocketSession(
     val deckState = decks.asStateFlow()
     private var deckWatch: Job? = null
     val plugins = PluginEngine(
-        BuiltInPlugins.create(app.getString(R.string.focus), app.getString(R.string.audio), app.getString(R.string.phone)),
+        registeredPlugins,
         CoroutineScope(Dispatchers.Main.immediate), SystemClock::elapsedRealtime,
         readAudio = { AudioSnapshot(audio.getStreamVolume(AudioManager.STREAM_MUSIC),
             audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)) },
@@ -131,7 +142,9 @@ internal class PocketSession(
     private var paintedLayout: Layout? = null
     private var scanLayout: Layout? = null
     private var nextKey = 0
-    private var gridRevision = -1L
+    private var screenGeneration = 0L
+    private var paintedTarget: GridTarget? = null
+    private var splitTarget: GridTarget? = null
     private var gridHasArt = false
     private var painting: Job? = null
     private var scheduled = false
@@ -147,8 +160,9 @@ internal class PocketSession(
         it.activeProfileId == "phone" && it.activePage.id == it.activeProfile.rootPageId && plugins.selectedId == "phone"
     }
     private var signalClock: Job? = null
-    private val lcd = arrayOfNulls<Acknowledged>(9)
-    @Volatile private var receipt = 0L
+    private val lcd = arrayOfNulls<LcdKey>(9)
+    // The input reader captures the receipt at arrival, before posting the event to main.
+    @Volatile private var receipts = LongArray(9)
     private var lastLayout: Layout? = null
     private val feedback = mutableMapOf<Int, String>()
     private var feedbackPage: DeckPage? = null
@@ -171,7 +185,7 @@ internal class PocketSession(
 
     init {
         sessionScope.launch {
-            deck.state.collect { syncLayout(); invalidate() }
+            deck.state.collect { physicalKeys.cancel(); syncLayout(); invalidate() }
         }
         sessionScope.launch { workflows.status.collect { invalidate() } }
         sessionScope.launch { workflows.definitions.collect { invalidate() } }
@@ -190,8 +204,11 @@ internal class PocketSession(
             (!preview || screen != null))
         val layout = layout()
         if (layout != lastLayout) {
+            physicalKeys.cancel()
+            if (lastLayout?.profile != layout.profile || lastLayout?.page?.id != layout.page.id)
+                screenGeneration++
             lastLayout = layout
-            receipt = 0
+            receipts = LongArray(9)
             pendingAction = null
             media.refreshDisplay()
         }
@@ -240,7 +257,8 @@ internal class PocketSession(
         if ((mediaState.title.isNotEmpty() || mediaState.artwork != null) && !canShowTrack()) media.refreshDisplay()
         images.useArtwork(visibleArtwork(deckState.value.media))
         val native = plugins.render()
-        return PluginFrame(deck.state.value.activePage.keys.mapIndexed { index, key ->
+        val page = deck.state.value.activePage
+        val keys = page.keys.mapIndexed { index, key ->
             val call = key.action
             val plugin = call?.params?.get("pluginId")?.takeIf { call.id == "plugin.key" }
             val tile = if (plugin == plugins.selectedId) call.params["index"]?.toIntOrNull()?.let(native.keys::getOrNull)
@@ -262,7 +280,11 @@ internal class PocketSession(
                 background = if (!available) 0xff494c51.toInt() else if (key.color == DeckKey().color)
                     tile?.background ?: key.color else key.color,
                 icon = key.icon.ifBlank { tile?.icon.orEmpty() }, enabled = available)
-        })
+        }
+        val hasPluginKeys = page.keys.any {
+            it.action?.id == "plugin.key" && it.action.params["pluginId"] == plugins.selectedId
+        }
+        return PluginFrame(keys, if (hasPluginKeys) native.page else 0)
     }
 
     fun keyImage(index: Int, tile: KeyTile): Bitmap = images.image(index, tile)
@@ -530,7 +552,7 @@ internal class PocketSession(
                 val connected = open(manager, device,
                     { event ->
                         val arrivedAt = SystemClock.elapsedRealtime()
-                        val epoch = receipt
+                        val epoch = receipts.getOrElse(event.controlId - 1) { 0L }
                         main.post { if (request == ticket) handleKey(event, arrivedAt, epoch = epoch) }
                     },
                     { line -> main.post { if (request == ticket) log(line) } },
@@ -552,6 +574,8 @@ internal class PocketSession(
     }
 
     fun disconnect(reason: String = app.getString(R.string.not_connected)) {
+        physicalKeys.disconnect()
+        physicalOwners.fill(null)
         request = null
         preview = false
         plugins.setEnabled(false)
@@ -560,9 +584,10 @@ internal class PocketSession(
         output?.close()
         output = null
         simulator = null
-        receipt = 0
+        receipts = LongArray(9)
         lcd.fill(null)
-        gridRevision = -1L
+        paintedTarget = null
+        splitTarget = null
         gridHasArt = false
         watchDecks()
         media.refreshDisplay()
@@ -593,39 +618,110 @@ internal class PocketSession(
         return true
     }
 
-    private fun handleKey(event: KeyEvent, arrivedAt: Long, virtual: Boolean = false, epoch: Long = receipt) {
+    private fun handleKey(event: KeyEvent, arrivedAt: Long, virtual: Boolean = false, epoch: Long = 0L) {
         log("${if (event.synthetic) "CANCEL" else "KEY"} 0x${event.controlId.toString(16)} " +
             if (event.pressed) "press" else "release")
         when (event.controlId) {
             0x01a1 -> if (event.pressed && !event.synthetic) changePage(-1)
             0x01a2 -> if (event.pressed && !event.synthetic) changePage(1)
             in 1..9 -> {
-                // Old labels can still be visible while a new page is uploading. Never replay a skipped press.
                 val index = event.controlId - 1
-                val page = deck.state.value.activePage
-                val call = page.keys[index].action ?: return
-                if (event.pressed && !virtual && (epoch == 0L || epoch != receipt || paintedLayout != layout() ||
-                    !sameBinding(lcd[index]?.tile, frame().keys[index]))) return
-                if (!frame().keys[index].enabled) return
-                physicalPressAt = arrivedAt.takeIf { !virtual && event.pressed && !event.synthetic && request != null }
-                physicalIndex = index.takeIf { physicalPressAt != null }
-                visibleKey = virtual && event.pressed && !event.synthetic
-                try {
-                    if (call.id == "plugin.key" && call.params["pluginId"] == plugins.selectedId) {
-                        plugins.key(PluginKeyEvent(call.params.getValue("index").toInt(), event.pressed, event.synthetic))
-                        // A built-in plugin may request navigation as part of its input handler.
-                        if (plugins.selectedId != call.params["pluginId"] && deck.state.value.profiles.any { it.id == plugins.selectedId })
-                            selectProfile(plugins.selectedId)
-                    } else if (event.pressed && !event.synthetic) {
-                        press(call, virtual, index)
-                    }
-                } finally {
-                    physicalPressAt = null
-                    physicalIndex = null
-                    visibleKey = false
+                if (virtual) {
+                    val call = deck.state.value.activePage.keys[index].action ?: return
+                    if (frame().keys[index].enabled)
+                        dispatchKey(index, call, event, virtual = true, pressAt = null)
+                } else if (!event.pressed || event.synthetic) {
+                    if (!physicalKeys.release(index, event.synthetic)) return
+                    val owner = physicalOwners[index]
+                    physicalOwners[index] = null
+                    if (owner != null && owner.generation == plugins.generation)
+                        plugins.key(PluginKeyEvent(owner.index, false, event.synthetic))
+                } else if (physicalKeys.begin(index)) {
+                    physicalDown(index, arrivedAt, epoch)
                 }
             }
         }
+    }
+
+    private fun physicalDown(index: Int, arrivedAt: Long, epoch: Long) {
+        val binding = layout()
+        val ticket = request ?: return
+        val call = binding.page.keys[index].action ?: return
+        val tiles = frame()
+        if (!tiles.keys[index].enabled || !acknowledged(index, epoch, tiles, binding)) return
+        val partners = chordPartners(binding, tiles, index)
+        val event = KeyEvent(index + 1, true)
+        if (partners.isEmpty() && !physicalKeys.hasPending) {
+            dispatchKey(index, call, event, virtual = false, pressAt = arrivedAt)
+            return
+        }
+        val profile = deck.state.value.activeProfile
+        physicalKeys.press(index, arrivedAt, epoch, partners, current = {
+            request == ticket && binding == layout() && acknowledged(index, epoch) &&
+                (partners.isEmpty() || (deck.state.value.activeProfile == profile &&
+                    SystemClock.elapsedRealtime() - arrivedAt in 0 until 2_000L &&
+                    app.isUnlockedAndInteractive() && app.hasKeypadAccess(ticket)))
+        }, single = { deferred ->
+            dispatchKey(index, call, event, virtual = false, pressAt = arrivedAt.takeUnless { deferred })
+        }, chord = { chord ->
+            val id = plugins.selectedId
+            plugins.chord(chord) // Neither member lends a synchronous user-press authority to the callback.
+            followPluginSelection(id)
+        })
+    }
+
+    private fun chordPartners(layout: Layout, frame: PluginFrame, index: Int): Map<Int, PhysicalChordInput.Partner> {
+        if (plugins.chords.isEmpty()) return emptyMap()
+        val page = layout.page
+        fun slot(i: Int) = page.keys[i].action?.takeIf { it.id == "plugin.key" && it.params["pluginId"] == plugins.selectedId }
+            ?.params?.get("index")?.toIntOrNull()
+        val own = slot(index) ?: return emptyMap()
+        if (PluginSlot(own, plugins.generation) in physicalOwners) return emptyMap()
+        return buildMap {
+            for (pair in plugins.chords) {
+                val partner = pair.partner(own) ?: continue
+                if (PluginSlot(partner, plugins.generation) in physicalOwners) continue
+                for (i in page.keys.indices) {
+                    if (physicalKeys.available(i) && slot(i) == partner && frame.keys[i].enabled &&
+                        acknowledged(i, receipts[i], frame, layout))
+                        put(i, PhysicalChordInput.Partner(pair, receipts[i]))
+                }
+            }
+        }
+    }
+
+    private fun dispatchKey(index: Int, call: ActionCall, event: KeyEvent, virtual: Boolean, pressAt: Long?) {
+        physicalPressAt = pressAt
+        physicalIndex = index.takeIf { pressAt != null }
+        visibleKey = virtual && event.pressed && !event.synthetic
+        try {
+            if (call.id == "plugin.key" && call.params["pluginId"] == plugins.selectedId) {
+                val slot = PluginSlot(call.params.getValue("index").toInt(), plugins.generation)
+                // Two physical aliases (or a phone tap) must not release another input's plugin slot.
+                if (slot in physicalOwners) return
+                if (!virtual) physicalOwners[index] = slot
+                plugins.key(PluginKeyEvent(slot.index, event.pressed, event.synthetic))
+                followPluginSelection(call.params.getValue("pluginId"))
+            } else if (event.pressed && !event.synthetic) {
+                press(call, virtual, index)
+            }
+        } finally {
+            physicalPressAt = null
+            physicalIndex = null
+            visibleKey = false
+        }
+    }
+
+    private fun followPluginSelection(previous: String) {
+        if (plugins.selectedId != previous && deck.state.value.profiles.any { it.id == plugins.selectedId })
+            selectProfile(plugins.selectedId)
+    }
+
+    fun cancelPhysicalGesture() {
+        if (plugins.chords.isEmpty()) return
+        physicalKeys.cancel()
+        receipts = LongArray(9) // Also reject input posted from the USB thread before this boundary.
+        invalidate()
     }
 
     fun setImage(image: Bitmap) {
@@ -654,34 +750,35 @@ internal class PocketSession(
         val frame = frame()
         val layout = layout()
         if (scanLayout != layout) { scanLayout = layout; nextKey = 0 }
-        if (lcd.indices.any { !sameBinding(lcd[it]?.tile, frame.keys[it]) }) receipt = 0
         // Cold Audio entry: keep the old, non-private layout until cover bytes or the bounded fallback arrive.
         if (!preview && decks.value.media.awaitingCover && layout.profile == "audio" &&
             lcd.none { it?.hasTrackDetails == true }) return
-        val epoch = repaintEpoch
+        val target = target(frame)
         val art = images.artwork
-        val artRevision = images.artworkRevision
-        if (connected is GridOutput && gridRevision != artRevision && (art != null || gridHasArt)) {
-            val tiles = frame.keys.mapIndexed(images::image)
-            val hasTrackDetails = art != null || decks.value.media.title.isNotEmpty()
+        val keys = lcd.indices.map { desiredKey(layout, frame, it) }
+        val dirty = lcd.indices.filter { lcd[it]?.matches(keys[it]) != true }
+        if (splitTarget != target) splitTarget = null
+
+        if (connected is GridOutput && splitTarget == null && (paintedTarget != target || dirty.size > 1)) {
+            receipts = LongArray(9)
             painting = scope.launch {
                 try {
-                    val result = connected.writeGrid(art, tiles, gridHasArt) {
+                    val result = connected.writeGrid(art, keys.map { it.image }, gridHasArt) {
                         val latest = frame()
                         output === connected && this@PocketSession.layout() == layout &&
-                            repaintEpoch == epoch && images.artworkRevision == artRevision &&
-                            latest.keys.indices.all { sameBinding(frame.keys[it], latest.keys[it]) }
+                            target(latest) == target && keys.indices.all { keys[it].matches(desiredKey(layout, latest, it)) }
                     }
-                    if (output === connected && result != GridWrite.SUPERSEDED) {
-                        gridRevision = artRevision
-                        when (result) {
-                            GridWrite.ACKNOWLEDGED -> {
-                                gridHasArt = art != null
-                                for (i in tiles.indices) lcd[i] = Acknowledged(frame.keys[i], tiles[i], epoch, hasTrackDetails)
-                            }
-                            GridWrite.CLEARED -> { gridHasArt = false; lcd.fill(null); receipt = 0 }
-                            else -> Unit // Too large: use the existing serial per-key path.
+                    // Record what actually reached the panel, even if superseded in flight.
+                    // Only the next paint against live state may issue input receipts.
+                    if (output === connected) when (result) {
+                        GridWrite.ACKNOWLEDGED -> {
+                            paintedTarget = target
+                            gridHasArt = art != null
+                            for (i in keys.indices) lcd[i] = keys[i]
                         }
+                        GridWrite.CLEARED -> { gridHasArt = false; lcd.fill(null); splitTarget = target }
+                        GridWrite.TOO_LARGE -> splitTarget = target
+                        GridWrite.SUPERSEDED -> Unit
                     }
                 } catch (e: CancellationException) {
                     throw e
@@ -695,31 +792,20 @@ internal class PocketSession(
         }
         // One transaction at a time. Re-read desired state after its ACK, continuing around the panel
         // rather than repeatedly starting at a rapidly changing first key.
-        for (offset in lcd.indices) {
-            val index = (nextKey + offset) % lcd.size
-            val tile = frame.keys[index]
-            val image = images.image(index, tile)
-            val ack = lcd[index]
-            if (ack != null && ack.repaint == epoch && ack.tile == tile) {
-                if (ack.image === image) continue
-                // The renderer can evict or rebuild an identical image (for example A -> B -> A).
-                if (ack.image.sameAs(image)) {
-                    lcd[index] = ack.copy(image = image)
-                    continue
-                }
-            }
+        if (dirty.isNotEmpty()) {
+            receipts = receipts.copyOf().also { values -> dirty.forEach { values[it] = 0 } }
+            val index = dirty.minBy { (it - nextKey + lcd.size) % lcd.size }
             nextKey = (index + 1) % lcd.size
-            val cover = images.artwork != null
-            val hasTrackDetails = cover || decks.value.media.title.isNotEmpty()
+            val key = keys[index]
             painting = scope.launch {
                 try {
                     val sent = if (connected is RenderedKeypad) {
-                        connected.setKeyImage(index, image, coverArt = cover)
+                        connected.setKeyImage(index, key.image, coverArt = art != null)
                     } else {
-                        connected.setKeyImage(index, image)
+                        connected.setKeyImage(index, key.image)
                         true
                     }
-                    if (sent && output === connected) lcd[index] = Acknowledged(tile, image, epoch, hasTrackDetails)
+                    if (sent && output === connected) lcd[index] = key
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -732,13 +818,31 @@ internal class PocketSession(
         }
         val first = paintedLayout == null
         paintedLayout = layout
-        if (receipt == 0L) receipt = ++receiptSequence
+        paintedTarget = target
+        splitTarget = null
+        keys.forEachIndexed { index, key -> lcd[index] = key }
+        if (receipts.any { it == 0L }) {
+            val previous = receipts
+            val fresh = ++receiptSequence
+            receipts = LongArray(previous.size) { if (previous[it] == 0L) fresh else previous[it] }
+        }
         if (first && !preview) message("LCD image updates acknowledged. Verify visibility on the keypad.")
     }
 
     private var receiptSequence = 0L
-    private fun sameBinding(a: KeyTile?, b: KeyTile): Boolean =
-        a != null && a.enabled == b.enabled && a.inputToken == b.inputToken
+    private fun target(frame: PluginFrame) = GridTarget(screenGeneration, frame.page, repaintEpoch, images.artworkRevision)
+
+    private fun desiredKey(layout: Layout, frame: PluginFrame, index: Int): LcdKey {
+        val tile = frame.keys[index]
+        return LcdKey(tile, layout.page.keys[index].action, images.image(index, tile), repaintEpoch,
+            images.artwork != null || decks.value.media.title.isNotEmpty())
+    }
+
+    private fun acknowledged(index: Int, epoch: Long, latest: PluginFrame = frame(), layout: Layout = layout()): Boolean {
+        if (epoch == 0L || epoch != receipts[index]) return false
+        return paintedLayout == layout && paintedTarget == target(latest) &&
+            lcd[index]?.matches(desiredKey(layout, latest, index)) == true
+    }
 
     private fun perform(action: PluginAction, scope: CoroutineScope) {
         when (action) {
@@ -762,6 +866,7 @@ internal class PocketSession(
                 MediaCommand.NEXT -> DeckCommand.NEXT
             }.id, fromPhysicalKey = physicalPressAt != null).message)
             is PluginAction.OpenApp -> {
+                if (!visibleKey && physicalPressAt == null) return
                 if (screen != null && physicalPressAt != null && !freshAuthorizedPress()) {
                     message("Press the shortcut again on the authorized keypad.")
                 } else if (screen?.openApp(action.app) != true && physicalPressAt != null) {
@@ -812,7 +917,7 @@ internal class PocketSession(
                         val hadIcons = decks.value.favorites.isNotEmpty()
                         favoriteApps.invalidateIcons()
                         publishFavorites(installed)
-                        if (hadIcons) repaint()
+                        if (hadIcons) { images.clear(); invalidate() }
                     }
                 }
                 val packages = object : BroadcastReceiver() {
@@ -858,7 +963,7 @@ internal class PocketSession(
             val service = NavigationService.connected ?: return unavailable("Enable MX Pocket navigation in Accessibility for camera controls.")
             fun authorized() = freshAuthorizedPress() && app.isUnlockedAndInteractive() && output != null &&
                 cameraAccess.enabled && NavigationService.connected === service && isStudioKey(index, c) &&
-                receipt != 0L && paintedLayout == layout() && lcd[index]?.tile?.inputToken == c.id
+                acknowledged(index, receipts[index]) && lcd[index]?.tile?.inputToken == c.id
             if (!authorized()) return unavailable("Enable Camera controls and press the matching Studio key on the unlocked phone.")
             return service.cameraPress(c, ::authorized)
         }
@@ -894,14 +999,13 @@ internal class PocketSession(
         val time = physicalPressAt ?: return unavailable("Press a keypad key.")
         val index = physicalIndex ?: return unavailable("Press a keypad key.")
         val offer = onHandoff ?: return unavailable("Keypad session unavailable.")
-        val action = PhoneAction(target, ticket, index, receipt, time)
+        val action = PhoneAction(target, ticket, index, receipts[index], time)
         pendingAction = action
         return offer(action)
     }
 
     fun isCurrentShortcut(action: PhoneAction): Boolean =
-        pendingAction == action && action.ticket == request && output != null && action.receipt != 0L &&
-            action.receipt == receipt && paintedLayout == layout() && sameBinding(lcd[action.index]?.tile, frame().keys[action.index])
+        pendingAction == action && action.ticket == request && output != null && acknowledged(action.index, action.receipt)
 
     fun logText(limit: Int = 250) = logs.takeLast(limit).joinToString("\n")
     fun takePhoneAction(id: String?): PhoneAction? {

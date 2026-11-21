@@ -16,12 +16,17 @@ It deliberately uses logical state rather than Bitmaps or USB reports:
 | `onActivate(host)` | Acquire activation-scoped resources; launch contextual work in `host.scope` |
 | `render(nowMillis)` | Pure, fast rendering of **exactly nine** `KeyTile` values |
 | `onKey(event, host)` | LCD key index 0..8, press/release and synthetic release flag |
+| `descriptor.chords` / `onChord(chord, host)` | Optional physical LCD pairs, declared at registration; one callback replaces both singles |
 | `onDeactivate()` | Synchronous cleanup; scope is already cancelled and host effects disabled |
 
 A `KeyTile` contains a label, footer and ARGB background color. The app draws
 the key number, label and footer and overlays any user-selected background image.
 The independent driver scales, JPEG-encodes and uploads it. Plugins must not
 allocate/recycle host images or import `MxKeypad`/raw USB.
+
+For a plugin with internal navigation, set `PluginFrame.page` to the current
+page index (default `0`). A change of page requests a whole-grid redraw even
+if the new page happens to reuse most or all of the same tiles.
 
 `PluginEngine` validates nonempty/unique registration, frame size and navigation
 targets. Identifiers match `[a-z][a-z0-9.-]{2,63}`. Use an ID such as `weather.local`;
@@ -44,6 +49,47 @@ To exercise it, include a layout whose nine actions are `plugin.key` with
 `pluginId=example.counter` and `index=0` through `8`. Select that profile and **Connect
 virtual keypad** on Home. No USB protocol or Activity change is needed. The
 example is compiled for tests but **not enabled in the default registry**.
+
+### Bind physical LCD keys 1 + 9
+
+The optional Counter plugin binds those two keys to **reset all counters**. Declare
+an unordered pair using its two **logical plugin indices** in ascending order:
+
+```kotlin
+private val reset = KeyChord(0, 8)
+override val descriptor = PluginDescriptor("example.counter", "Counter", chords = setOf(reset))
+
+override fun onChord(chord: KeyChord, host: PluginHost) {
+    if (chord == reset) counts.fill(0)
+}
+```
+
+Register Counter as above and use a page where physical LCD keys 1 and 9 have
+`plugin.key` bindings to `example.counter` indices `0` and `8`. Other page
+positions can bind those slots instead. On a connected keypad, press either
+key and then the other while the first is still down. Tapping the keys on the
+phone still increments individual counters; phone input never joins a USB pair.
+There is no factory shortcut or change to the layout JSON.
+
+- Only an enabled, acknowledged slot with an available, enabled, acknowledged
+  partner waits. Other singles remain immediate. The window is **150 ms** from
+  arrival of the first down; both downs must be processed before it expires.
+- An early release delivers the ordinary down then up. Timeout commits the
+  single down and its eventual release goes to the same slot. A nonmatching
+  eligible down commits the older single first, then starts its own decision.
+- Pairs only: the first matching second down wins, even when pairs overlap.
+  The driver orders simultaneous new downs by LCD number. Both member presses
+  and their releases are consumed; neither member can act as a modifier again
+  until it has been released and pressed anew. Extra keys are processed normally.
+  Repeated reports/down events do not retrigger anything.
+- Pending input is discarded on synthetic cleanup, layout edits or activation
+  changes, disconnect and lock/screen transitions. Both keys' original
+  binding/ACK, session, unlocked state and USB grant must still be valid.
+  A redraw of an unrelated single key does not invalidate the pair. Repainting
+  either member requires a fresh pair of presses; a late ACK never replays a held key.
+  A chord or buffered single can update plugin state and use ordinary host
+  capabilities, but does **not** convey direct-launch, capture or workflow
+  authority. Keep actions requiring a fresh physical press on unchorded slots.
 
 To author another plugin, copy the example into a named feature package, change
 its ID/title and implement its state, frame and input. Add a registry instance
