@@ -1,6 +1,5 @@
 package tel.misa.mxpocket.deck
 
-import android.content.Context
 import java.io.File
 import java.io.IOException
 import java.nio.ByteBuffer
@@ -14,8 +13,7 @@ import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.FOREGROUND_APP
 
 /** Own one instance per app session. Successful edits replace the file before publishing the new snapshot. */
-class DeckRepository internal constructor(private val file: File) {
-    constructor(context: Context) : this(File(context.applicationContext.filesDir, "deck.json"))
+class DeckRepository(private val file: File) {
 
     private val mutable: MutableStateFlow<DeckState>
     val state: StateFlow<DeckState>
@@ -113,6 +111,16 @@ class DeckRepository internal constructor(private val file: File) {
     fun back() = edit { old ->
         val history = old.histories.getValue(old.activeProfileId)
         if (history.size > 1) old.withHistory(history.dropLast(1)) else old
+    }
+
+    fun changePage(delta: Int): Result<Unit> {
+        val deck = state.value
+        val pages = deck.activeProfile.pages
+        return when {
+            delta < 0 && deck.histories.getValue(deck.activeProfileId).size > 1 -> back()
+            pages.size > 1 -> openPage(pages[Math.floorMod(pages.indexOf(deck.activePage) + delta, pages.size)].id)
+            else -> cycleProfile(delta)
+        }
     }
 
     fun cycleProfile(delta: Int) = edit { old ->

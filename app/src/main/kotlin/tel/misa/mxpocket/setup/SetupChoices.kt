@@ -2,15 +2,7 @@ package tel.misa.mxpocket.setup
 
 import android.content.Context
 import android.content.Intent
-
-internal enum class Feature(val title: String, val summary: String) {
-    USB("Use a USB keypad", "Keep the keys active when MX Pocket is in the background."),
-    AUTO("Connect on plug-in", "Let Android offer MX Pocket when you attach the keypad."),
-    MUSIC("Show player controls and artwork", "Use track details and controls supplied by the active player."),
-    STUDIO("Control the phone camera", "Open the native viewfinder. Optionally use the physical Studio keys for shutter, record and stop."),
-    DIRECT("Open apps with one press", "Open a supported shortcut from your physical keypad without a notification tap."),
-    NAVIGATION("Navigate other apps", "Use keypad buttons for Back, Home, scrolling and focus.")
-}
+import tel.misa.mxpocket.shared.ui.SetupFeature as Feature
 
 /** Feature choices describe the guide, not Android grants or plugin switches. */
 internal class SetupChoices(private val context: Context) {

@@ -43,8 +43,9 @@ class WorkspaceNavigationTest {
             })
         val before = session.deck.state.value.profiles.first { it.id == "studio" }
         compose.onNodeWithText("Keypad").performClick()
-        compose.onNodeWithText("Profile: Focus ▾").performClick()
+        compose.onNodeWithText("Focus / Focus ▾").performClick()
         compose.onNodeWithText("Studio").performClick()
+        compose.onNodeWithText("Profile settings and rules").performScrollTo().performClick()
         compose.onNodeWithText("Choose app").performScrollTo().performClick()
         compose.onNodeWithText("When this app is open, show Studio").performScrollTo()
         compose.waitUntil(10_000) { compose.onAllNodes(hasText("Test camera")).fetchSemanticsNodes().isNotEmpty() }

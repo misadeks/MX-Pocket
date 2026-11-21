@@ -10,9 +10,6 @@ import android.content.IntentFilter
 import android.os.Build
 import androidx.core.content.ContextCompat
 
-internal const val FOREGROUND_APP = "foregroundApp"
-internal const val APP_RULE_WEIGHT = 5 // Stock media scores 3; changing a positive incumbent needs a lead of 2.
-
 @Suppress("DEPRECATION")
 internal fun Context.hasUsageAccess(): Boolean {
     val ops = getSystemService(AppOpsManager::class.java)
@@ -61,6 +58,7 @@ internal class ForegroundApps(private val usage: UsageStatsManager, since: Long,
     private var lastPoll = since
     private var earliest = lastLockedPoll?.coerceIn((since - 5_000L)..since) ?: since
     private val firstUnlockedPoll = since
+    private val freshInterval = lastLockedPoll == null
 
     @Suppress("DEPRECATION") // MOVE_TO_FOREGROUND/BACKGROUND are the API 28 names for RESUMED/PAUSED.
     fun match(configured: Set<String>, now: Long): String? {
@@ -111,7 +109,11 @@ internal class ForegroundApps(private val usage: UsageStatsManager, since: Long,
         // A second resumed package (e.g. split screen) is not evidence of input focus.
         val pkg = resumed.keys.firstOrNull()?.first ?: return null
         if (pkg !in configured || resumed.keys.any { it.first != pkg }) return null
-        return pkg.takeIf { resumed.values.any { now - it in 0..FRESH_MS } }
+        // Keep same-millisecond resumes for split-screen ambiguity, but not as proof of a
+        // post-consent resume: Android timestamps cannot order them against the grant.
+        return pkg.takeIf { resumed.values.any { stamp ->
+            (!freshInterval || stamp > firstUnlockedPoll) && now - stamp in 0..FRESH_MS
+        } }
     }
 
     companion object { const val FRESH_MS = 10 * 60_000L }

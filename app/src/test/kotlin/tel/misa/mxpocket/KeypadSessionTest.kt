@@ -25,8 +25,7 @@ import android.os.Build
 import android.os.Looper
 import android.os.SystemClock
 import android.provider.MediaStore
-import android.view.View
-import android.widget.TextView
+import tel.misa.mxpocket.shared.ui.PocketScreenEvent
 import kotlinx.coroutines.CompletableDeferred
 import org.junit.Assert.*
 import org.junit.Before
@@ -204,12 +203,12 @@ class KeypadSessionTest {
         shadowOf(usb).addOrUpdateUsbDevice(real, false)
         assertFalse(access.automatic)
         Robolectric.buildActivity(MainActivity::class.java).setup().use { controller ->
-            fun click() = controller.get().findViewById<View>(R.id.pocket_connect).performClick()
+            fun click() = controller.get().handleScreenEvent(PocketScreenEvent.ToggleConnection)
             click()
             (shadowOf(usb) as ConsentUsb).reply.send()
             main.idle()
             assertNull(shadowOf(app).nextStartedService)
-            assertTrue(controller.get().findViewById<TextView>(R.id.pocket_status).text.contains("denied"))
+            assertTrue(app.session.status.contains("denied"))
             click()
             val grant = (shadowOf(usb) as ConsentUsb).reply
             controller.recreate()
@@ -239,12 +238,12 @@ class KeypadSessionTest {
         val real = device("test-keypad")
         shadowOf(usb).addOrUpdateUsbDevice(real, false)
         Robolectric.buildActivity(MainActivity::class.java).setup().use { controller ->
-            controller.get().findViewById<View>(R.id.pocket_connect).performClick()
+            controller.get().handleScreenEvent(PocketScreenEvent.ToggleConnection)
             val stale = (shadowOf(usb) as ConsentUsb).reply
             shadowOf(usb).removeUsbDevice(real)
             app.sendBroadcast(Intent(UsbManager.ACTION_USB_DEVICE_DETACHED).putExtra(UsbManager.EXTRA_DEVICE, real))
             main.idle()
-            assertEquals(app.getString(R.string.connect), controller.get().findViewById<TextView>(R.id.pocket_connect).text)
+            assertNull(app.session.request)
             shadowOf(usb).addOrUpdateUsbDevice(real, true)
             stale.send()
             main.idle()
@@ -256,7 +255,7 @@ class KeypadSessionTest {
             assertNull(shadowOf(app).nextStartedService)
             lock.setKeyguardLocked(false)
             shadowOf(app.getSystemService(NotificationManager::class.java)).setNotificationsEnabled(false)
-            controller.get().findViewById<View>(R.id.pocket_connect).performClick()
+            controller.get().handleScreenEvent(PocketScreenEvent.ToggleConnection)
             assertNull(shadowOf(app).nextStartedService)
         }
     }

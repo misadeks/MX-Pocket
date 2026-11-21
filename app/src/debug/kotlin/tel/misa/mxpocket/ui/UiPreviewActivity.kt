@@ -1,22 +1,23 @@
 package tel.misa.mxpocket.ui
 
 import android.os.Bundle
+import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.runtime.*
+import tel.misa.mxpocket.shared.ui.*
 
 /** Debug-only screen host. Intentionally does not construct MainActivity or PluginEngine. */
 class UiPreviewActivity : AppCompatActivity() {
     private lateinit var scenes: UiPreviewScenes
-    private lateinit var screen: PocketScreen
+    private var state by mutableStateOf<PocketScreenState?>(null)
     private lateinit var scene: String
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         scenes = UiPreviewScenes(this)
         scene = savedInstanceState?.getString("scene") ?: intent.getStringExtra("scene") ?: "disconnected"
-        val initial = scenes.state(scene)
-        screen = PocketScreen(this, scenes.descriptors, ::handleEvent)
-        setContentView(screen.view)
-        screen.render(initial)
+        state = scenes.state(scene)
+        setContent { PocketTheme { state?.let { HomeScreen(it, ::handleEvent) } } }
     }
 
     private fun handleEvent(event: PocketScreenEvent) {
@@ -28,11 +29,11 @@ class UiPreviewActivity : AppCompatActivity() {
             }
             PocketScreenEvent.EnterPreview -> scene = "disconnected"
             else -> {
-                screen.render(scenes.state(scene).copy(log = "UI-only event: $event. No action executed."))
+                state = scenes.state(scene).copy(status = "UI-only event: $event. No action executed.")
                 return
             }
         }
-        screen.render(scenes.state(scene))
+        state = scenes.state(scene)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

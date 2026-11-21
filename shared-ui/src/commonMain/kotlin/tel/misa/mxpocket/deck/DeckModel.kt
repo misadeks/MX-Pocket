@@ -1,6 +1,5 @@
 package tel.misa.mxpocket.deck
 
-import java.util.Collections
 import tel.misa.mxpocket.actions.ActionCall
 
 /** Stable IDs for host-dispatched navigation. Page IDs are local to a profile. */
@@ -17,13 +16,13 @@ object DeckActions {
 
 // A migrated Audio slot still participates in the original page's single-plugin selection.
 // An explicitly bound media command has no such constraint.
-internal fun ActionCall.slotOwner(): String? = when {
+fun ActionCall.slotOwner(): String? = when {
     id == "plugin.key" -> params["pluginId"]
     id.startsWith("media.") && params[DeckActions.LEGACY_SLOT_OWNER] == "audio" -> "audio"
     else -> null
 }
 
-internal fun ActionCall.commandBinding() =
+fun ActionCall.commandBinding() =
     if (id.startsWith("media.") && slotOwner() == "audio") copy(params = params - DeckActions.LEGACY_SLOT_OWNER) else this
 
 enum class SelectionSource { USER, AUTOMATIC }
@@ -85,29 +84,12 @@ object DeckLimits {
     const val MAX_WEIGHT = 100
 }
 
-internal fun <T> List<T>.locked(): List<T> = Collections.unmodifiableList(ArrayList(this))
-internal fun <K, V> Map<K, V>.locked(): Map<K, V> = Collections.unmodifiableMap(LinkedHashMap(this))
-
-internal fun DeckState.snapshot() = copy(
-    profiles = profiles.map { profile ->
-        profile.copy(
-            rules = profile.rules.locked(),
-            pages = profile.pages.map { page ->
-                page.copy(keys = page.keys.map { key ->
-                    key.copy(action = key.action?.let { it.copy(params = it.params.locked()) })
-                }.locked())
-            }.locked(),
-        )
-    }.locked(),
-    histories = histories.mapValues { it.value.locked() }.locked(),
-)
-
 // plugin.key indices are persisted action identities; only their physical placement changes.
-internal val navigationFactorySlots = listOf(
+val navigationFactorySlots get() = listOf(
     0, 3, 1, // Back, Scroll up, Home
     6, 4, 8, // Previous, Select, Next
     2, 5, 7, // Recents, Scroll down, Access
-).locked()
+)
 
 private fun pluginRoot(id: String, name: String, slots: Iterable<Int> = 0..8) = DeckPage("root", name, slots.map { index ->
     DeckKey(action = ActionCall("plugin.key", mapOf("pluginId" to id, "index" to index.toString())))
@@ -122,7 +104,7 @@ internal fun DeckState.upgradeStockNavigationRoot(): DeckState {
     return copy(profiles = profiles.map { if (it.id == owner.id) updated else it })
 }
 
-internal fun defaultDeck(): DeckState {
+fun defaultDeck(): DeckState {
     fun plugin(id: String, name: String, rules: List<DeckRule> = emptyList(), slots: Iterable<Int> = 0..8) =
         DeckProfile(id, name, "root", listOf(pluginRoot(id, name, slots)), rules = rules)
     val profiles = listOf(

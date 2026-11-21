@@ -1,21 +1,85 @@
 package tel.misa.mxpocket.preview
 
 import kotlin.test.Test
+import org.junit.Rule
+import org.junit.rules.TemporaryFolder
+import tel.misa.mxpocket.deck.DeckRepository
+import java.io.File
+import kotlin.test.assertEquals
+import tel.misa.mxpocket.FocusTimer
+import tel.misa.mxpocket.plugins.present
+import tel.misa.mxpocket.actions.ActionCall
+import tel.misa.mxpocket.deck.DeckActions
+import tel.misa.mxpocket.deck.DeckKey
+import tel.misa.mxpocket.decks.DeckCommand
+import tel.misa.mxpocket.shared.ui.factoryKeyBindings
 
 class PreviewDeckTest {
+    @get:Rule val folder = TemporaryFolder()
+    @Test fun legacyOwnerAndExplicitMediaCommandsKeepTheirMeaningsOnEditedPages() {
+        val repo = DeckRepository(File(folder.root, "deck.json"))
+        val deck = PreviewDeck(repo)
+        fun bind(i: Int, command: DeckCommand, migrated: Boolean = false) {
+            val owner = if (migrated) mapOf(DeckActions.LEGACY_SLOT_OWNER to "audio") else emptyMap()
+            repo.setKey("focus", "root", i, DeckKey(action = ActionCall(command.id, owner))).getOrThrow()
+        }
+        bind(1, DeckCommand.MUTE, true)
+        bind(2, DeckCommand.QUIETER)
+        bind(3, DeckCommand.VOLUME_LEVEL)
+        check(!deck.tiles(0)[1].enabled)
+        deck.press(1, 0); deck.press(2, 0)
+        check(deck.tiles(0)[3].let { it.label == "5 / 15" && it.readOnly })
+        bind(0, DeckCommand.UNMUTE, true)
+        check(deck.tiles(0)[1].enabled)
+        repeat(2) { deck.press(1, 0) }
+        check(deck.tiles(0)[3].label == "0 / 15")
+        repeat(2) { deck.press(0, 0) }
+        check(deck.tiles(0)[3].label == "5 / 15")
+        repo.setKey("focus", "root", 2, DeckKey(action = ActionCall(DeckCommand.QUIETER.id,
+            mapOf("unexpected" to "x")))).getOrThrow()
+        check(!deck.tiles(0)[2].enabled)
+        check(deck.press(2, 0).startsWith("Invalid action parameters"))
+        check(deck.tiles(0)[3].label == "5 / 15")
+    }
+    @Test fun pageButtonsUseFolderHistoryBeforeCyclingProfiles() {
+        val repo = DeckRepository(File(folder.root, "deck.json"))
+        val deck = PreviewDeck(repo)
+        val page = repo.createPage("focus", "Projects").getOrThrow()
+        deck.cycle(1)
+        assertEquals(page, repo.state.value.activePage.id)
+        deck.cycle(-1)
+        assertEquals("root", repo.state.value.activePage.id)
+        assertEquals("focus", deck.profileId)
+    }
+
+    @Test fun focusUsesTheProductionFrameAndKeepsPerKeyVisualOverrides() {
+        val repo = DeckRepository(File(folder.root, "deck.json"))
+        val deck = PreviewDeck(repo)
+        val factory = FocusTimer().present(0).keys
+        assertEquals(factory, deck.tiles(0))
+        val state = repo.state.value
+        val custom = state.activePage.keys[2].copy(label = "Restart", icon = "R", color = 0xff7d3645.toInt())
+        repo.setKey(state.activeProfileId, state.activePage.id, 2, custom).getOrThrow()
+        assertEquals(factory.mapIndexed { i, tile ->
+            if (i == 2) tile.copy(label = "Restart", icon = "R", background = custom.color) else tile
+        }, deck.tiles(0))
+    }
+
     @Test fun navigationUsesFactoryBindingsAndNeverClaimsAndroidAccess() {
-        val deck = PreviewDeck()
+        val deck = PreviewDeck(DeckRepository(File(folder.root, "deck.json")))
         deck.select("navigation")
+        val up = factoryKeyBindings.single { it.label == "Navigation key 2: Scroll up" }
+        assertEquals(deck.repository.state.value.activePage.keys[1].action, up.call)
         val tiles = deck.tiles(0)
         check(tiles.map { it.label } == listOf("Back", "Scroll up", "Home", "Prev focus", "Select",
             "Next focus", "Recents", "Scroll down", "Access info"))
-        check(tiles.filterNot { it.enabled }.single() == PreviewDeck.Tile("Recents", false, "Needs access"))
+        check(tiles.filterNot { it.enabled }.single().let { it.label == "Recents" && it.footer == "Needs access" })
         check(tiles.last().footer == "System nav off")
         tiles.forEachIndexed { index, tile -> check(deck.press(index, 0).startsWith(tile.label)) }
     }
 
     @Test fun factoryNavigationTimerAndSimulatedAudio() {
-    val deck = PreviewDeck()
+    val deck = PreviewDeck(DeckRepository(File(folder.root, "deck.json")))
     fun label(key: Int, now: Long = 0) = deck.tiles(now)[key - 1].label
     check(deck.profileName == "Focus")
     deck.press(6, 0) // 15-minute preset
@@ -56,7 +120,7 @@ class PreviewDeckTest {
     }
 
     @Test fun xoUsesThePlayableAndroidBoard() {
-        val deck = PreviewDeck()
+        val deck = PreviewDeck(DeckRepository(File(folder.root, "deck.json")))
         deck.select("game.xo")
         fun press(slot: Int) = deck.press(slot, 0)
         fun label(slot: Int) = deck.tiles(0)[slot].label

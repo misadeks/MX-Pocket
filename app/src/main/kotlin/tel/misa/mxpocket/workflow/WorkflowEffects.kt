@@ -27,8 +27,6 @@ import okhttp3.RequestBody
 import okhttp3.Response
 import okio.BufferedSink
 
-internal data class WorkflowPrompt(val text: String, val openUrl: String? = null)
-
 internal class AndroidWorkflowEffects(private val app: Context) : WorkflowEffects {
     private val client = OkHttpClient.Builder().followRedirects(false).followSslRedirects(false)
         .retryOnConnectionFailure(false).callTimeout(8, TimeUnit.SECONDS).build()

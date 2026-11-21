@@ -5,6 +5,7 @@ import tel.misa.mxpocket.R
 import tel.misa.mxpocket.deck.navigationFactorySlots
 import tel.misa.mxpocket.plugins.BuiltInPlugins
 import tel.misa.mxpocket.plugins.PluginFrame
+import tel.misa.mxpocket.shared.ui.*
 
 /** Deterministic display fixtures. No activation callbacks, host, timers or platform services. */
 class UiPreviewScenes(context: Context) {
@@ -30,7 +31,9 @@ class UiPreviewScenes(context: Context) {
         return PocketScreenState(
             status = if (id == "disconnected") "$note\n$disconnectedNote" else "$note\n${plugin.descriptor.title} fixture",
             pluginTitle = plugin.descriptor.title,
-            frame = if (id == "navigation") PluginFrame(navigationFactorySlots.map(frame.keys::get)) else displayFrame,
+            tiles = (if (id == "navigation") navigationFactorySlots.map(frame.keys::get) else displayFrame.keys).map { it.toGridTile(true) },
+            profiles = descriptors.map { ProfileChoice(it.id, it.title) },
+            activeId = plugin.descriptor.id,
             diagnostics = "UI fixture: no USB enumeration has been performed.",
             log = "Static scene: $id. Controls only emit UI preview events.",
         )

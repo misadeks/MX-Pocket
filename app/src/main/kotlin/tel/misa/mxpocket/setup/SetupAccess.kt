@@ -14,7 +14,6 @@ import android.provider.Settings
 import android.view.accessibility.AccessibilityManager
 import tel.misa.mxpocket.DirectShortcuts
 import tel.misa.mxpocket.KeypadService
-import tel.misa.mxpocket.R
 import tel.misa.mxpocket.UsbAccess
 import tel.misa.mxpocket.decks.DeckAccessActivity
 import tel.misa.mxpocket.decks.CameraControlsAccess
@@ -22,16 +21,12 @@ import tel.misa.mxpocket.decks.CameraControlsActivity
 import tel.misa.mxpocket.decks.NavigationService
 import tel.misa.mxpocket.decks.hasMediaSessionAccess
 import tel.misa.mxpocket.driver.UsbDiagnostics
-
-internal enum class SetupAction(val label: String) {
-    USB("Allow this keypad"), POST("Allow session notifications"), APP_NOTICES("Open notification settings"),
-    CHANNEL("Open session channel"), AUTO("Enable plug-in handling"), MEDIA("Open notification access"),
-    CAMERA("Manage camera controls"), OVERLAY("Open special access"),
-    DIRECT("Enable one-press shortcuts"), NAVIGATION("Open accessibility settings")
-}
-
-internal data class SetupStep(val title: String, val detail: String, val status: String,
-    val ready: Boolean = false, val action: SetupAction? = null)
+import tel.misa.mxpocket.shared.ui.SetupAction
+import tel.misa.mxpocket.shared.ui.SetupFeature as Feature
+import tel.misa.mxpocket.shared.ui.SetupStep
+import tel.misa.mxpocket.shared.ui.CameraControlsDisclosure
+import tel.misa.mxpocket.shared.ui.DeckAccess
+import tel.misa.mxpocket.shared.ui.DirectShortcutDisclosure
 
 internal class SetupAccess(private val host: Activity, private val choices: SetupChoices) {
     val usb: UsbManager = host.getSystemService(UsbManager::class.java)
@@ -93,27 +88,27 @@ internal class SetupAccess(private val host: Activity, private val choices: Setu
         }
         if (Feature.MUSIC in features) {
             val allowed = host.hasMediaSessionAccess()
-            add(SetupStep("Player controls and artwork", DeckAccessActivity.disclosure(true) +
+            add(SetupStep("Player controls and artwork", DeckAccess.Media.disclosure +
                 " In Notification access, select MX Pocket media sessions. This is separate from showing session notifications.",
                 if (allowed) "Media session access allowed" else "Basic media keys only", allowed, SetupAction.MEDIA.takeUnless { allowed }))
         }
         if (Feature.STUDIO in features) {
             val enabled = CameraControlsAccess(host).enabled
             val ready = enabled && navigationAllowed()
-            add(SetupStep("Studio camera controls", CameraControlsAccess.disclosure,
+            add(SetupStep("Studio camera controls", CameraControlsDisclosure,
                 when { ready -> "Keypad controls enabled"; enabled -> "Navigation service off"; else -> "Viewfinder only" },
                 ready, SetupAction.CAMERA))
         }
         if (Feature.DIRECT in features) {
             val allowed = Settings.canDrawOverlays(host)
             val enabled = shortcuts.enabled
-            add(SetupStep("One-press app opening", host.getString(R.string.direct_shortcuts_rationale),
+            add(SetupStep("One-press app opening", DirectShortcutDisclosure,
                 when { enabled -> "One-press shortcuts on"; allowed -> "Access allowed; app option off"; else -> "Display over other apps is off" },
                 enabled, when { enabled -> null; allowed -> SetupAction.DIRECT; else -> SetupAction.OVERLAY }))
         }
         if (Feature.NAVIGATION in features) {
             val allowed = navigationAllowed()
-            add(SetupStep("Cross-app navigation", DeckAccessActivity.disclosure(false) +
+            add(SetupStep("Cross-app navigation", DeckAccess.Navigation.disclosure +
                 " In Accessibility, select MX Pocket navigation.", if (allowed) "Navigation service enabled" else "In-app navigation only",
                 allowed, SetupAction.NAVIGATION.takeUnless { allowed }))
         }

@@ -3,6 +3,7 @@ plugins {
     id("com.android.library")
     id("org.jetbrains.compose")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("org.jetbrains.kotlin.plugin.serialization")
 }
 
 kotlin {
@@ -11,6 +12,18 @@ kotlin {
     sourceSets.commonMain.dependencies {
         api(compose.foundation)
         api(compose.material3)
+        api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
+    }
+    sourceSets.getByName("androidMain") {
+        kotlin.srcDir("src/jvmSharedMain/kotlin")
+        dependencies { implementation("com.google.code.gson:gson:2.13.2") }
+    }
+    sourceSets.getByName("desktopMain") {
+        kotlin.srcDir("src/jvmSharedMain/kotlin")
+        dependencies {
+            implementation("com.google.code.gson:gson:2.13.2")
+            implementation("org.json:json:20250517")
+        }
     }
     sourceSets.named("desktopTest") {
         dependencies {

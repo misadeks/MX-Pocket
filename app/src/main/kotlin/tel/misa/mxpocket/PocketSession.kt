@@ -61,6 +61,7 @@ internal class PocketSession(
     registeredPlugins: List<PocketPlugin> = BuiltInPlugins.create(app.getString(R.string.focus),
         app.getString(R.string.audio), app.getString(R.string.phone), app.getString(R.string.xo)),
     private val usageDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val usageTimeMillis: () -> Long = System::currentTimeMillis,
     private val open: OpenKeypad = { manager, device, event, log, error ->
         RenderedKeypad(MxKeypad.connect(manager, device, event, log, error))
     },
@@ -271,7 +272,6 @@ internal class PocketSession(
             val available = registered && key.enabled && call != null && (plugin == null || plugin == plugins.selectedId) &&
                 (cameraControl == null || isStudioKey(index, cameraControl)) &&
                 ownerOf(call) !in disabled.value && (tile?.enabled != false)
-            val label = key.label.ifBlank { tile?.label ?: actionLabel(call) }
             val footer = when {
                 !key.enabled || ownerOf(call) in disabled.value -> "Disabled"
                 // Keep the access state and its recovery hint even after an earlier failed press.
@@ -281,14 +281,11 @@ internal class PocketSession(
                 call?.id == "workflow.run" && workflows.status.value?.workflowId == call.params["workflowId"] -> tile?.footer.orEmpty()
                 else -> feedback[index] ?: tile?.footer.orEmpty()
             }
-            (tile ?: KeyTile(label, footer, key.color)).copy(label = label, footer = footer,
-                background = if (!available) 0xff494c51.toInt() else if (key.color == DeckKey().color)
-                    tile?.background ?: key.color else key.color,
-                showLabel = key.label.isNotBlank() || tile?.showLabel != false,
-                icon = key.icon.ifBlank { tile?.icon.orEmpty() }, enabled = available)
+            key.present(tile, actionLabel(call), footer, available)
         }
-        val hasPluginKeys = page.keys.any {
-            it.action?.id == "plugin.key" && it.action.params["pluginId"] == plugins.selectedId
+        val hasPluginKeys = page.keys.any { key ->
+            val action = key.action
+            action?.id == "plugin.key" && action.params["pluginId"] == plugins.selectedId
         }
         return PluginFrame(keys, if (hasPluginKeys) native.page else 0)
     }
@@ -331,7 +328,7 @@ internal class PocketSession(
         val watcher = if (configured.isEmpty()) null else app.watchForegroundBoundaries { boundary ->
             generation++
             reader = null
-            val now = System.currentTimeMillis()
+            val now = usageTimeMillis()
             val granted = app.hasUsageAccess()
             unlockedSince = now.takeIf { granted && boundary == ForegroundBoundary.UNLOCK }
             if (boundary == ForegroundBoundary.ACCESS || !granted) lastLockedPoll = null
@@ -344,9 +341,9 @@ internal class PocketSession(
                 val granted = configured.isNotEmpty() && app.hasUsageAccess()
                 if (granted && app.isUnlockedAndInteractive()) {
                     val source = reader ?: ForegroundApps(app.getSystemService(UsageStatsManager::class.java),
-                        unlockedSince ?: System.currentTimeMillis(), lastLockedPoll).also { reader = it }
+                        unlockedSince ?: usageTimeMillis(), lastLockedPoll).also { reader = it }
                     val started = generation
-                    val result = withContext(usageDispatcher) { source.match(configured, System.currentTimeMillis()) }
+                    val result = withContext(usageDispatcher) { source.match(configured, usageTimeMillis()) }
                     if (started == generation) {
                         if (app.isUnlockedAndInteractive() && app.hasUsageAccess()) match = result
                         else { reader = null; lastLockedPoll = null; unlockedSince = null }
@@ -354,7 +351,7 @@ internal class PocketSession(
                 } else {
                     reader = null
                     unlockedSince = null
-                    lastLockedPoll = if (granted) System.currentTimeMillis() else null
+                    lastLockedPoll = if (granted) usageTimeMillis() else null
                 }
                 sampleContext(match)
                 delay(1000)
@@ -392,14 +389,7 @@ internal class PocketSession(
     }
 
     fun changePage(delta: Int) {
-        val state = deck.state.value
-        val pages = state.activeProfile.pages
-        val result = when {
-            delta < 0 && state.histories.getValue(state.activeProfileId).size > 1 -> deck.back()
-            pages.size > 1 -> deck.openPage(pages[Math.floorMod(pages.indexOf(state.activePage) + delta, pages.size)].id)
-            else -> deck.cycleProfile(delta)
-        }
-        result.onFailure { fail("Cannot change page", it) }
+        deck.changePage(delta).onFailure { fail("Cannot change page", it) }
         syncLayout()
         invalidate()
     }
@@ -997,9 +987,10 @@ internal class PocketSession(
     private fun isStudioKey(index: Int, command: DeckCommand): Boolean {
         val state = deck.state.value
         val key = state.activePage.keys[index]
+        val call = key.action ?: return false
         return state.activeProfileId == "studio" && state.activePage.id == state.activeProfile.rootPageId &&
             key.enabled && (key.label.isBlank() || key.label == command.label) &&
-            key.action?.id == "plugin.key" && key.action.params["pluginId"] == "studio" && plugins.selectedId == "studio"
+            call.id == "plugin.key" && call.params["pluginId"] == "studio" && plugins.selectedId == "studio"
     }
 
     private fun freshAuthorizedPress() = physicalPressAt?.let { SystemClock.elapsedRealtime() - it in 0 until 2_000L } == true &&

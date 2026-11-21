@@ -3,56 +3,113 @@ package tel.misa.mxpocket.decks
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.os.Bundle
-import android.widget.LinearLayout
-import android.widget.ScrollView
-import androidx.appcompat.app.AlertDialog
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.core.content.FileProvider
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
+import java.text.DateFormat
+import java.util.Date
 import tel.misa.mxpocket.isUnlockedAndInteractive
+import tel.misa.mxpocket.shared.ui.CameraControlsEvent
+import tel.misa.mxpocket.shared.ui.CameraControlsScreen
+import tel.misa.mxpocket.shared.ui.CameraControlsState
+import tel.misa.mxpocket.shared.ui.StudioCaptureOption
 
 class CameraControlsActivity : DeckActivity() {
+    private val access by lazy { CameraControlsAccess(this) }
+    private val captures by lazy { File(filesDir, "captures") }
+    private val mimeTypes = mapOf("jpg" to "image/jpeg", "mp4" to "video/mp4", "txt" to "text/plain")
+    private var state by mutableStateOf(CameraControlsState.Available(false, false))
+    private var listing: Job? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val access = CameraControlsAccess(this)
-        val column = page("Studio camera controls")
-        val scroll = ScrollView(this)
-        column.addView(scroll)
-        val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        scroll.addView(body)
-        description(body, CameraControlsAccess.disclosure)
-        description(body, DeckAccessActivity.disclosure(false))
-        fun toggleLabel() = if (access.enabled) "Turn off keypad camera controls" else "Enable keypad camera controls"
-        val toggle = button(body, toggleLabel()) {}
-        toggle.setOnClickListener {
-            if (isUnlockedAndInteractive()) {
-                access.enabled = !access.enabled
-                toggle.text = toggleLabel()
+        state = state.copy(message = savedInstanceState?.getString("message").orEmpty())
+        page("Studio camera controls") { CameraControlsScreen(state, ::handle) }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        state = state.copy(enabled = access.enabled, hasCaptureDirectory = captures.isDirectory)
+    }
+
+    override fun onPause() {
+        listing?.cancel()
+        super.onPause()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString("message", state.message)
+    }
+
+    private fun handle(event: CameraControlsEvent) {
+        when {
+            event == CameraControlsEvent.Done -> { finish(); return }
+            event == CameraControlsEvent.DismissCaptures -> { state = state.copy(captureChoices = null); return }
+            !isUnlockedAndInteractive() -> return
+        }
+        when (event) {
+            is CameraControlsEvent.SetEnabled -> {
+                access.enabled = event.enabled
+                state = state.copy(enabled = access.enabled)
             }
+            CameraControlsEvent.OpenSettings -> {
+                val message = try {
+                    startActivity(DeckAccessActivity.settings(false))
+                    ""
+                } catch (_: ActivityNotFoundException) { "Accessibility settings unavailable." }
+                catch (_: SecurityException) { "Android restricted access to settings." }
+                state = state.copy(message = message)
+            }
+            CameraControlsEvent.ListCaptures -> listCaptures()
+            is CameraControlsEvent.OpenCapture -> openCapture(event.id)
+            CameraControlsEvent.Done, CameraControlsEvent.DismissCaptures -> Unit
         }
-        val status = description(body, "In Accessibility, select MX Pocket navigation. Both switches must be on for camera keys.")
-        button(body, "Open accessibility settings") {
-            try { startActivity(DeckAccessActivity.settings(false)) }
-            catch (_: ActivityNotFoundException) { status.text = "Accessibility settings unavailable." }
-            catch (_: SecurityException) { status.text = "Android restricted access to settings." }
+    }
+
+    private fun listCaptures() {
+        listing?.cancel()
+        listing = lifecycleScope.launch {
+            val options = withContext(Dispatchers.IO) {
+                val dates = DateFormat.getDateTimeInstance()
+                captures.listFiles().orEmpty().filter { it.isFile && it.extension in mimeTypes }
+                    .sortedByDescending { it.name }.map { file ->
+                        StudioCaptureOption(file.name, "${file.extension.uppercase()}  ${dates.format(Date(file.lastModified()))}")
+                    }
+            }
+            if (isUnlockedAndInteractive()) state = state.copy(
+                captureChoices = options.takeIf { it.isNotEmpty() },
+                message = if (options.isEmpty()) "No previous Studio captures." else ""
+            )
         }
-        val captures = File(filesDir, "captures")
-        if (captures.isDirectory) button(body, "Open previous Studio captures") {
-            val files = captures.listFiles().orEmpty().filter { it.isFile && it.extension in setOf("jpg", "mp4", "txt") }
-                .sortedByDescending { it.name }
-            if (files.isEmpty()) { status.text = "No previous Studio captures."; return@button }
-            val dates = java.text.DateFormat.getDateTimeInstance()
-            val labels = files.map { "${it.extension.uppercase()}  ${dates.format(java.util.Date(it.lastModified()))}" }
-            AlertDialog.Builder(this).setTitle("Previous Studio captures").setItems(labels.toTypedArray()) { _, i ->
-                if (!isUnlockedAndInteractive()) return@setItems
-                val file = files[i]
+    }
+
+    private fun openCapture(id: String) {
+        val choices = state.captureChoices ?: return
+        if (choices.none { it.id == id }) return
+        state = state.copy(captureChoices = null)
+        val file = File(captures, id)
+        val message = try {
+            val mime = mimeTypes[file.extension]
+            if (mime == null || !file.isFile || file.canonicalFile.parentFile != captures.canonicalFile)
+                "This capture is no longer available."
+            else {
                 val uri = FileProvider.getUriForFile(this, "$packageName.captures", file)
-                try {
-                    startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, when (file.extension) {
-                        "jpg" -> "image/jpeg"; "mp4" -> "video/mp4"; else -> "text/plain"
-                    }).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
-                } catch (_: ActivityNotFoundException) { status.text = "No viewer for this capture." }
-            }.setNegativeButton(android.R.string.cancel, null).show()
-        }
-        button(body, "Done") { finish() }
+                startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime)
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+                ""
+            }
+        } catch (_: ActivityNotFoundException) { "No viewer for this capture." }
+        catch (_: SecurityException) { "Android restricted access to this capture." }
+        catch (_: java.io.IOException) { "This capture is no longer available." }
+        catch (_: IllegalArgumentException) { "This capture is no longer available." }
+        state = state.copy(message = message)
     }
 }

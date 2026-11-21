@@ -2,10 +2,11 @@ package tel.misa.mxpocket
 
 import android.accessibilityservice.AccessibilityService
 import android.graphics.Bitmap
-import android.graphics.Canvas
 import android.os.Looper
-import android.view.View
-import com.google.android.material.button.MaterialButton
+import androidx.compose.ui.test.*
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.unit.dp
+import org.junit.Rule
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -21,54 +22,43 @@ import tel.misa.mxpocket.deck.DeckKey
 import tel.misa.mxpocket.decks.DeckAccessActivity
 import tel.misa.mxpocket.decks.NavigationService
 import tel.misa.mxpocket.driver.KeypadProtocol
-import tel.misa.mxpocket.ui.KeypadPanel
-import tel.misa.mxpocket.ui.PocketScreen
-import tel.misa.mxpocket.ui.PocketScreenEvent
-import tel.misa.mxpocket.ui.PocketScreenState
+import tel.misa.mxpocket.shared.ui.toGridTile
 import java.time.Duration
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35])
+@Config(sdk = [35], qualifiers = "w640dp-h800dp-mdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class NavigationPadTest {
+    @get:Rule val ui = createAndroidComposeRule<MainActivity>()
     @Test fun livePadMirrorsEachWindowAndAccessInfoNeverTogglesTheService() {
         val app = RuntimeEnvironment.getApplication() as PocketApplication
         shadowOf(app).grantPermissions("tel.misa.mxpocket.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION")
         val session = app.session
         val main = shadowOf(Looper.getMainLooper())
-        Robolectric.buildActivity(MainActivity::class.java).setup().use { host ->
-            val activity = host.get()
+        val activity = ui.activity
+        run {
             session.startPreview(); session.selectProfile("navigation"); main.idle()
-            val ui = PocketScreen(activity, session.plugins.descriptors, {
-                if (it is PocketScreenEvent.TapKey) session.phoneKey(it.index)
-            }, live = true)
-            val back = ui.view.findViewById<MaterialButton>(R.id.pocket_key_1)
-            val panel = back.parent as KeypadPanel
-            fun key(i: Int) = panel.getChildAt(i) as MaterialButton
+            val board = ComposeMirror(ui, session::phoneKey)
+            fun key(name: String) = ui.onNodeWithContentDescription(name, substring = true)
             fun render(): Bitmap {
                 val frame = session.frame()
                 val bitmaps = frame.keys.mapIndexed(session::keyImage)
-                ui.render(PocketScreenState("", "Navigation", frame, rendered = bitmaps))
-                val exact = View.MeasureSpec.makeMeasureSpec(480, View.MeasureSpec.EXACTLY)
-                panel.measure(exact, exact); panel.layout(0, 0, 480, panel.measuredHeight)
-                val preview = Bitmap.createBitmap(480, panel.height, Bitmap.Config.ARGB_8888)
-                panel.draw(Canvas(preview))
+                val preview = board.render(frame.keys, bitmaps)
                 bitmaps.forEachIndexed { i, tile ->
                     val region = KeypadProtocol.keyRegion(i)
-                    val mirrored = Bitmap.createBitmap(preview, region.x, region.y + (panel.height - 480) / 2, 118, 118)
+                    val mirrored = Bitmap.createBitmap(preview, region.x, region.y, 118, 118)
                     assertTrue("Mirror differed from LCD window ${i + 1}", tile.sameAs(mirrored))
-                    assertTrue(key(i).height >= activity.resources.getDimensionPixelSize(R.dimen.screen_key_min_height))
+                    val gridTile = frame.keys[i].toGridTile(true)
+                    ui.onNodeWithContentDescription(requireNotNull(gridTile.accessibleName)).assertHeightIsAtLeast(84.dp)
                 }
                 return preview
             }
             val off = render()
-            assertTrue(back.contentDescription.contains("Back in MX Pocket"))
-            assertTrue(key(3).contentDescription.contains("Move focus backward"))
-            assertTrue(key(4).contentDescription.contains("Activate focused item"))
-            assertFalse(key(6).isEnabled)
-            assertTrue(key(6).contentDescription.contains("Needs access"))
-            assertTrue(key(8).contentDescription.contains("System nav off"))
-            key(8).performClick()
+            key("Back in MX Pocket").assertExists()
+            key("Move focus backward").assertExists()
+            key("Activate focused item").assertExists()
+            key("Recents, Needs access").assertIsNotEnabled()
+            key("Access info, System nav off").performClick()
             val opened = shadowOf(activity).nextStartedActivity
             assertEquals(DeckAccessActivity::class.java.name, opened.component?.className)
             assertEquals("navigation.access", opened.getStringExtra("access"))
@@ -80,18 +70,17 @@ class NavigationPadTest {
                 main.idleFor(Duration.ofSeconds(1))
                 val on = render()
                 assertFalse(off.sameAs(on))
-                assertTrue(key(6).isEnabled)
-                assertTrue(key(8).contentDescription.contains("System nav on"))
-                key(6).performClick()
+                key("Access info, System nav on").assertExists()
+                key("Recents").assertIsEnabled().performClick()
                 assertEquals(listOf(AccessibilityService.GLOBAL_ACTION_RECENTS), shadowOf(service).globalActionsPerformed)
             } finally { connected.destroy() }
             main.idleFor(Duration.ofSeconds(1)); render()
-            assertFalse(key(6).isEnabled)
+            key("Recents").assertIsNotEnabled()
             val custom = DeckKey(label = "My select", icon = "X", color = 0xff344879.toInt(),
                 action = ActionCall("navigation.activate"))
             session.deck.setKey("navigation", "root", 3, custom).getOrThrow()
             render()
-            assertTrue(key(3).contentDescription.startsWith("My select"))
+            key("My select").assertExists()
             val tile = session.frame().keys[3]
             assertEquals(custom.color, tile.background)
             assertEquals("X", tile.icon)

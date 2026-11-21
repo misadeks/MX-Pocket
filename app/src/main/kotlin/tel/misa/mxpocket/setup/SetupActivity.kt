@@ -8,9 +8,10 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.hardware.usb.UsbManager
 import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -19,10 +20,16 @@ import java.util.UUID
 import tel.misa.mxpocket.isUnlockedAndInteractive
 import tel.misa.mxpocket.keypad
 import tel.misa.mxpocket.requestKeypadAccess
-import tel.misa.mxpocket.ui.WorkspaceTheme
+import tel.misa.mxpocket.shared.ui.SetupAction
+import tel.misa.mxpocket.shared.ui.SetupEvent
+import tel.misa.mxpocket.shared.ui.SetupFeature as Feature
+import tel.misa.mxpocket.shared.ui.SetupScreen
+import tel.misa.mxpocket.shared.ui.SetupScreenState
+import tel.misa.mxpocket.shared.ui.SetupStep
+import tel.misa.mxpocket.shared.ui.PocketTheme
 
 /** Consent only: this Activity never attaches a live screen to the session or opens a device. */
-class SetupActivity : AppCompatActivity() {
+class SetupActivity : ComponentActivity() {
     private val choices by lazy { SetupChoices(this) }
     private val access by lazy { SetupAccess(this, choices) }
     private var selected by mutableStateOf(emptySet<Feature>())
@@ -70,20 +77,27 @@ class SetupActivity : AppCompatActivity() {
             addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
         }, ContextCompat.RECEIVER_NOT_EXPORTED)
         setContent {
-            WorkspaceTheme {
-                SetupScreen(selected, reviewing, steps, message, intent.getBooleanExtra("firstRun", false),
-                    select = { feature -> selected = if (feature in selected) selected - feature else selected + feature },
-                    review = {
-                        choices.save(selected)
-                        if (selected.isEmpty()) finish() else {
-                            reviewing = true
-                            refresh()
-                        }
-                    },
-                    edit = { reviewing = false; message = "" },
-                    act = ::perform, done = ::finish,
-                    virtual = { setResult(TRY_VIRTUAL); finish() })
+            PocketTheme {
+                BackHandler(enabled = reviewing) { handle(SetupEvent.Edit) }
+                SetupScreen(SetupScreenState(selected, reviewing, steps, message, intent.getBooleanExtra("firstRun", false)), ::handle)
             }
+        }
+    }
+
+    private fun handle(event: SetupEvent) {
+        when (event) {
+            is SetupEvent.Select -> selected = if (event.feature in selected) selected - event.feature else selected + event.feature
+            SetupEvent.Review -> {
+                choices.save(selected)
+                if (selected.isEmpty()) finish() else {
+                    reviewing = true
+                    refresh()
+                }
+            }
+            SetupEvent.Edit -> { reviewing = false; message = "" }
+            is SetupEvent.Act -> perform(event.action)
+            SetupEvent.Cancel, SetupEvent.Finish -> finish()
+            SetupEvent.TryVirtual -> { setResult(TRY_VIRTUAL); finish() }
         }
     }
 

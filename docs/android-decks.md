@@ -102,6 +102,35 @@ An accepted transport or capture request is not proof playback or capture
 succeeded. `PocketSession.deckState` supplies the confirmed live state,
 independent of the selected page.
 
+## Shared setup and access screens
+
+The following Material 3 composables are public in
+`tel.misa.mxpocket.shared.ui`. Hosts supply the state; rendering a screen
+never requests a permission, persists a choice, or starts an external app.
+
+```kotlin
+SetupScreen(state: SetupScreenState, onEvent: (SetupEvent) -> Unit)
+DeckAccessScreen(access: DeckAccess, message: String, onOpenSettings: (() -> Unit)?, onDone: () -> Unit)
+CameraControlsScreen(state: CameraControlsState, onEvent: (CameraControlsEvent) -> Unit)
+FavoritesScreen(state: FavoritesState, onSetSelected: (String, Boolean) -> Unit, onDone: () -> Unit,
+    loadIcon: (suspend (String) -> ImageBitmap?)? = null)
+PhoneActionResultScreen(message: String, onDone: () -> Unit)
+DirectShortcutConsentDialog(hasOverlayAccess: Boolean, onConfirm: () -> Unit, onDismiss: () -> Unit)
+```
+
+Wrap the screens in `PocketTheme`. In setup, route Back from review to
+`SetupEvent.Edit`; cancelling the chooser does not save its pending edits.
+On Windows, supply `SetupOption.unavailableReason` for unavailable features
+and a host-specific introduction. A null settings callback,
+`CameraControlsState.Unavailable`, or `FavoritesState.Unavailable(reason)`
+explains a missing capability without offering a pretend control.
+
+The shortcut dialog's confirm callback must perform **only the action on its
+button**. Recheck the current grant before enabling; opening settings,
+dismissing the dialog or returning from settings is not consent to enable.
+The notification tap still consumes a one-shot request, not a target supplied
+by the screen. Only its failure path needs the result screen.
+
 ## Physical acceptance gates (not established by JVM tests)
 
 1. With the keypad connected, select at least ten favorites. Verify each icon,

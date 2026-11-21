@@ -1,6 +1,5 @@
 package tel.misa.mxpocket
 
-import android.app.Activity
 import android.app.KeyguardManager
 import android.app.NotificationManager
 import android.content.ActivityNotFoundException
@@ -14,20 +13,27 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.provider.MediaStore
 import android.content.pm.PackageManager
-import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import tel.misa.mxpocket.shared.ui.PhoneActionResultScreen
+import tel.misa.mxpocket.shared.ui.PocketTheme
 import tel.misa.mxpocket.decks.FavoriteApps
 import tel.misa.mxpocket.plugins.PhoneApp
 import tel.misa.mxpocket.decks.viewfinder
 
 /** Only opened by tapping the system notification. The intent identifies a request, not a target. */
-class PhoneActionActivity : Activity() {
+class PhoneActionActivity : ComponentActivity() {
+    private var failure: String? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setTitle(R.string.phone_action_title)
+        savedInstanceState?.getString("failure")?.let(::showFailure)
     }
 
     override fun onResume() {
         super.onResume()
+        if (failure != null || isFinishing) return
         val session = (application as PocketApplication).session
         val action = session.takePhoneAction(intent.data?.lastPathSegment)
         if (action != null) {
@@ -41,9 +47,18 @@ class PhoneActionActivity : Activity() {
         }
         if (error != null) {
             session.message(error)
-            Toast.makeText(this, error, Toast.LENGTH_SHORT).show()
-        }
-        finish()
+            showFailure(error)
+        } else finish()
+    }
+
+    private fun showFailure(message: String) {
+        failure = message
+        setContent { PocketTheme { PhoneActionResultScreen(message, ::finish) } }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString("failure", failure)
     }
 }
 

@@ -6,21 +6,22 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.text.InputFilter
+import android.os.Bundle
 import android.util.LruCache
-import android.widget.CheckBox
-import android.widget.EditText
-import android.widget.LinearLayout
-import android.widget.ListView
-import android.widget.BaseAdapter
-import android.view.View
-import android.view.ViewGroup
-import androidx.core.widget.doAfterTextChanged
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tel.misa.mxpocket.PocketApplication
+import tel.misa.mxpocket.isUnlockedAndInteractive
+import tel.misa.mxpocket.shared.ui.FavoriteOption
+import tel.misa.mxpocket.shared.ui.FavoritesScreen
+import tel.misa.mxpocket.shared.ui.FavoritesState
 
 internal class FavoriteApps(private val app: Context) {
     private val pm get() = app.packageManager
@@ -66,56 +67,32 @@ internal class FavoriteApps(private val app: Context) {
 
 class FavoritesActivity : DeckActivity() {
     private val session get() = (application as PocketApplication).session
-    private var apps = listOf<Favorite>()
-    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+    private var apps = emptyList<Favorite>()
+    private var state by mutableStateOf<FavoritesState>(FavoritesState.Loading)
+    override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val column = page("App Launcher")
-        val hint = description(column, "Loading launchable apps...")
-        val search = EditText(this).apply {
-            setSingleLine(); setHint("Find an app"); filters = arrayOf(InputFilter.LengthFilter(80))
-        }
-        column.addView(search)
-        val list = ListView(this)
-        column.addView(list, LinearLayout.LayoutParams(-1, 0, 1f))
-        var visible = apps
-        val adapter = object : BaseAdapter() {
-            override fun getCount() = visible.size
-            override fun getItem(position: Int) = visible[position]
-            override fun getItemId(position: Int) = position.toLong()
-            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
-                val item = getItem(position)
-                return ((convertView as? CheckBox) ?: CheckBox(this@FavoritesActivity)).apply {
-                    text = item.label; minHeight = dp(56)
-                    setOnCheckedChangeListener(null)
-                    isChecked = item.component in session.favoriteApps.selected()
-                    val icon = session.favoriteApps.icon(item.component)?.let { android.graphics.drawable.BitmapDrawable(resources, it) }
-                    icon?.setBounds(0, 0, dp(32), dp(32))
-                    setCompoundDrawablesRelative(null, null, icon, null)
-                    setOnCheckedChangeListener { _, on ->
-                        session.favoriteApps.setSelected(item.component, on)
-                        session.publishFavorites(apps)
-                        hint.text = summary()
-                    }
-                }
+        page("App Launcher") { FavoritesScreen(state, ::setSelected, ::finish, ::loadIcon) }
+        lifecycleScope.launch {
+            state = try {
+                apps = withContext(Dispatchers.IO) { session.favoriteApps.discover() }
+                session.publishFavorites(apps)
+                FavoritesState.Ready(apps.map { FavoriteOption(it.component, it.label) }, session.favoriteApps.selected(),
+                    "No launchable apps available in this Android profile.")
+            } catch (_: SecurityException) {
+                FavoritesState.Unavailable("Android restricted access to the apps in this profile.")
             }
         }
-        list.adapter = adapter
-        fun filter() {
-            visible = apps.filter { it.label.contains(search.text.toString(), ignoreCase = true) }
-            hint.text = if (visible.isEmpty() && search.length() > 0) "No matching apps." else summary()
-            adapter.notifyDataSetChanged()
-        }
-        search.doAfterTextChanged { filter() }
-        lifecycleScope.launch {
-            apps = withContext(Dispatchers.IO) { session.favoriteApps.discover() }
-            session.publishFavorites(apps)
-            filter()
-        }
-        button(column, "Done") { finish() }
     }
-    private fun summary(): String {
-        val selected = session.favoriteApps.selected()
-        return if (apps.isEmpty()) "No launchable apps available in this Android profile."
-            else "${apps.count { it.component in selected }} selected. Checked apps appear on the keypad."
+
+    private suspend fun loadIcon(id: String): ImageBitmap? = withContext(Dispatchers.IO) {
+        try { session.favoriteApps.icon(id)?.asImageBitmap() } catch (_: SecurityException) { null }
+    }
+
+    private fun setSelected(id: String, selected: Boolean) {
+        val ready = state as? FavoritesState.Ready ?: return
+        if (!isUnlockedAndInteractive() || apps.none { it.component == id }) return
+        session.favoriteApps.setSelected(id, selected)
+        session.publishFavorites(apps)
+        state = ready.copy(selected = session.favoriteApps.selected())
     }
 }

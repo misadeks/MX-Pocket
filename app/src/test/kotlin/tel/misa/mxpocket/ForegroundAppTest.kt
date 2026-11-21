@@ -46,7 +46,11 @@ class ForegroundAppTest {
         shadowOf(app).grantPermissions("${app.packageName}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION")
     }
 
-    private fun event(pkg: String, type: Int, time: Long = System.currentTimeMillis(), activity: String = "Main") {
+    // Android usage timestamps are wall time. Advance their test clock with the paused looper,
+    // not the host JVM's wall time: idleFor(4 s) can take less than a millisecond to execute.
+    private fun usageTime() = 1_700_000_000_000L + android.os.SystemClock.elapsedRealtime()
+
+    private fun event(pkg: String, type: Int, time: Long = usageTime(), activity: String = "Main") {
         shadowOf(usage).addEvent(EventBuilder.buildEvent().setPackage(pkg).setClass(activity)
             .setEventType(type).setTimeStamp(time).build())
     }
@@ -58,7 +62,7 @@ class ForegroundAppTest {
 
     @Test fun twoMappingsChangeOnlyTheMenuAndLoseTheirSignalOnPinLockAndRevocation() {
         lateinit var key: (KeyEvent) -> Unit
-        val session = PocketSession(app, usageDispatcher = Dispatchers.Main.immediate) { _, _, emit, _, _ ->
+        val session = PocketSession(app, usageDispatcher = Dispatchers.Main.immediate, usageTimeMillis = ::usageTime) { _, _, emit, _, _ ->
             key = emit
             object : KeypadOutput {
                 override fun close() {}
@@ -161,7 +165,7 @@ class ForegroundAppTest {
     }
 
     @Test fun unlockedResumeBeforeFirstPollMatchesButRegrantDoesNotReplayThatInterval() {
-        val session = PocketSession(app, usageDispatcher = Dispatchers.Main.immediate)
+        val session = PocketSession(app, usageDispatcher = Dispatchers.Main.immediate, usageTimeMillis = ::usageTime)
         val screen = object : PocketSession.Screen {
             override fun render() {}
             override fun openApp(app: tel.misa.mxpocket.plugins.PhoneApp) = false
@@ -209,8 +213,12 @@ class ForegroundAppTest {
         val reader = ForegroundApps(usage, 1)
         val mapped = setOf(player, camera)
         fun read(time: Long) = reader.match(mapped, time)
+        event(camera, Event.MOVE_TO_FOREGROUND, 1)
+        assertNull(read(2)) // Same millisecond as the new permission interval.
         event(player, Event.MOVE_TO_FOREGROUND, 100)
         event(camera, Event.FOREGROUND_SERVICE_START, 101)
+        assertNull(read(105)) // Camera may still be resumed alongside Player.
+        event(camera, Event.MOVE_TO_BACKGROUND, 106)
         assertEquals(player, read(110))
         event(camera, Event.MOVE_TO_FOREGROUND, 120)
         assertNull(read(130))
@@ -232,7 +240,7 @@ class ForegroundAppTest {
         val pausedReads = object : CoroutineDispatcher() {
             override fun dispatch(context: CoroutineContext, block: Runnable) { pending.addLast(block) }
         }
-        val session = PocketSession(app, usageDispatcher = pausedReads)
+        val session = PocketSession(app, usageDispatcher = pausedReads, usageTimeMillis = ::usageTime)
         val screen = object : PocketSession.Screen {
             override fun render() {}
             override fun openApp(app: tel.misa.mxpocket.plugins.PhoneApp) = false

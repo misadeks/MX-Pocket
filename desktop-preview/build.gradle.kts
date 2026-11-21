@@ -6,12 +6,6 @@ plugins {
 
 kotlin {
     compilerOptions.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
-    sourceSets.main {
-        kotlin.srcDir("../app/src/main/kotlin")
-        kotlin.include("tel/misa/mxpocket/preview/**", "tel/misa/mxpocket/FocusTimer.kt",
-            "tel/misa/mxpocket/actions/ActionDispatcher.kt", "tel/misa/mxpocket/deck/DeckModel.kt",
-            "tel/misa/mxpocket/plugins/TicTacToeGame.kt")
-    }
 }
 java {
     sourceCompatibility = JavaVersion.VERSION_17

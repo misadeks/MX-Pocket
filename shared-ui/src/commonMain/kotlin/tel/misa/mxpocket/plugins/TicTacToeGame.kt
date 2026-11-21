@@ -1,7 +1,7 @@
 package tel.misa.mxpocket.plugins
 
 /** A keypad-only tic-tac-toe game. The player is X; the built-in opponent is O. */
-internal class TicTacToeGame {
+class TicTacToeGame {
     data class Cell(val label: String, val footer: String, val background: Int)
 
     private enum class Mode { SINGLE_PLAYER, ONE_VS_ONE }

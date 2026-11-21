@@ -37,6 +37,7 @@ import tel.misa.mxpocket.MainActivity
 import tel.misa.mxpocket.PocketApplication
 import tel.misa.mxpocket.UsbAccess
 import tel.misa.mxpocket.decks.MediaSessionAccess
+import tel.misa.mxpocket.shared.ui.SetupFeature as Feature
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w400dp-h800dp")

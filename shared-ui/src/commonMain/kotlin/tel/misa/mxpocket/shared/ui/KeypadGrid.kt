@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import tel.misa.mxpocket.plugins.KeyTile
 import androidx.compose.ui.unit.LayoutDirection
 
 @Composable
@@ -32,7 +33,7 @@ fun PocketTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable
     MaterialTheme(
         colorScheme = if (darkTheme) darkColorScheme(primary = Color(0xFFAEC6FF))
             else lightColorScheme(primary = Color(0xFF245CA0)),
-        content = content,
+        content = { Surface(content = content) },
     )
 }
 
@@ -42,9 +43,23 @@ data class KeypadTile(
     val color: Color,
     val enabled: Boolean = true,
     val image: ImageBitmap? = null,
+    val icon: String = "",
     val readOnly: Boolean = false,
     val showNumber: Boolean = true,
+    val accessibleName: String? = null,
 )
+
+fun KeyTile.toGridTile(inputEnabled: Boolean, image: ImageBitmap? = null): KeypadTile {
+    val name = when {
+        glyph == tel.misa.mxpocket.plugins.PlayerGlyph.TRACK -> listOf("Now playing", label, footer)
+        volumeLevel != null -> listOf(label, if (volumeLevel.muted) "Muted" else "Sound on", volumeLevel.description, footer)
+        glyph != null -> listOf(label, footer)
+        else -> emptyList()
+    }
+    return KeypadTile(label, footer, Color(background), enabled && inputEnabled, image, icon, readOnly,
+        showNumber = glyph == null, accessibleName = name.takeIf { it.isNotEmpty() }
+            ?.filter(String::isNotBlank)?.distinct()?.joinToString(", "))
+}
 
 /** A completed touch, mouse, keyboard or accessibility click emits one logical down/up pair. */
 @Composable
@@ -57,14 +72,14 @@ fun KeypadGrid(
     require(tiles.size == 9) { "A keypad frame must have nine tiles" }
     val textDirection = LocalLayoutDirection.current
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-        if (panelArt != null) ArtPanel(tiles, onKey, modifier, panelArt, textDirection)
+        if (panelArt != null || tiles.all { it.image != null }) ArtPanel(tiles, onKey, modifier, panelArt, textDirection)
         else PlainPanel(tiles, onKey, modifier, textDirection)
     }
 }
 
 @Composable
 private fun ArtPanel(tiles: List<KeypadTile>, onKey: (Int, Boolean) -> Unit, modifier: Modifier,
-    panelArt: ImageBitmap, textDirection: LayoutDirection) {
+    panelArt: ImageBitmap?, textDirection: LayoutDirection) {
         BoxWithConstraints(modifier.fillMaxWidth()) {
             val side = maxWidth
             val height = maxOf(side, 252.dp)
@@ -72,7 +87,9 @@ private fun ArtPanel(tiles: List<KeypadTile>, onKey: (Int, Boolean) -> Unit, mod
             val unit = side / 480
             val keySize = unit * 118
             Box(Modifier.fillMaxWidth().height(height)) {
-                Image(panelArt, null, Modifier.offset(y = top).size(side), contentScale = ContentScale.FillBounds)
+                Box(Modifier.offset(y = top).size(side).background(Color.Black)) {
+                    if (panelArt != null) Image(panelArt, null, Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds)
+                }
                 tiles.forEachIndexed { i, tile ->
                     val x = unit * (23 + i % 3 * 158)
                     val y = top + unit * (6 + i / 3 * 158)
@@ -113,7 +130,7 @@ private fun PlainPanel(tiles: List<KeypadTile>, onKey: (Int, Boolean) -> Unit, m
 }
 
 private fun Modifier.keyAction(i: Int, tile: KeypadTile, onKey: (Int, Boolean) -> Unit): Modifier {
-    val description = listOfNotNull("Key ${i + 1}".takeIf { tile.showNumber }, tile.label, tile.footer)
+    val description = tile.accessibleName ?: listOfNotNull("Key ${i + 1}".takeIf { tile.showNumber }, tile.label, tile.footer)
         .filter { it.isNotBlank() }.joinToString(", ")
     val control = if (tile.readOnly) this else clickable(enabled = tile.enabled, role = Role.Button) { onKey(i, true); onKey(i, false) }
     return control.semantics { contentDescription = description }
@@ -125,7 +142,7 @@ private fun TileLabel(i: Int, tile: KeypadTile, textDirection: LayoutDirection) 
     CompositionLocalProvider(LocalLayoutDirection provides textDirection) {
         Column(Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally) {
-                if (tile.showNumber) Text("${i + 1}", color = foreground, style = MaterialTheme.typography.labelSmall)
+                if (tile.icon.isNotBlank() || tile.showNumber) Text(tile.icon.ifBlank { "${i + 1}" }, color = foreground, style = MaterialTheme.typography.labelSmall)
                 Text(tile.label, color = foreground, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
                     maxLines = 2, overflow = TextOverflow.Ellipsis)
                 if (tile.footer.isNotBlank()) Text(tile.footer, color = foreground,

@@ -2,7 +2,6 @@ package tel.misa.mxpocket.workflow
 
 import android.content.Context
 import java.io.IOException
-import java.util.UUID
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -73,24 +72,15 @@ class WorkflowController(context: Context, private val scope: CoroutineScope, pr
     }
     suspend fun save(draft: WorkflowDefinition): String? = writer.withLock {
         val data = library ?: return@withLock "The workflow library is unreadable."
-        validate(draft)?.let { return@withLock it }
-        val new = data.definitions.none { it.id == draft.id }
-        if (new && data.definitions.size >= MAX_DEFINITIONS) return@withLock "The library is full."
-        val next = data.copy(definitions = if (new) data.definitions + draft
-            else data.definitions.map { if (it.id == draft.id) draft else it })
-        persist(next)?.let { return@withLock it }
+        data.saveDefinition(draft, actions(), ::persist)?.let { return@withLock it }
         if (draft.trigger.kind == TriggerKind.DAILY) queueDaily(app, draft)
         null
     }
     suspend fun delete(id: String): String? = writer.withLock {
         val data = library ?: return@withLock "The workflow library is unreadable."
-        fun uses(step: WorkflowStep): Boolean = (step.kind == StepKind.CALL && step.target == id) ||
-            step.yes.any(::uses) || step.no.any(::uses)
-        if (data.definitions.any { it.id != id && it.steps.any(::uses) }) return@withLock "Another workflow uses this one."
-        persist(data.copy(definitions = data.definitions.filterNot { it.id == id }))
+        data.deleteDefinition(id, ::persist)
     }
-    fun duplicate(draft: WorkflowDefinition) = draft.copy(id = UUID.randomUUID().toString(),
-        name = "${draft.name.take(55)} copy", trigger = WorkflowTrigger())
+    fun duplicate(draft: WorkflowDefinition) = draft.duplicate()
     suspend fun addEndpoint(endpoint: WorkflowEndpoint): String? = writer.withLock {
         val data = library ?: return@withLock "The workflow library is unreadable."
         if (!endpoint.valid()) return@withLock "Use a name and an HTTPS address without credentials, query or fragment."

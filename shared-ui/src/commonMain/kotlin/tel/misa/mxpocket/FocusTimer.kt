@@ -47,6 +47,6 @@ class FocusTimer {
 
     fun label(now: Long): String {
         val seconds = (remainingMillis(now) + 999) / 1000
-        return "%02d:%02d".format(seconds / 60, seconds % 60)
+        return (seconds / 60).toString().padStart(2, '0') + ":" + (seconds % 60).toString().padStart(2, '0')
     }
 }

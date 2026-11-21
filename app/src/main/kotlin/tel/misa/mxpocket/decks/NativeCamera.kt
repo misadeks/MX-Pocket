@@ -33,14 +33,6 @@ internal class CameraControlsAccess(context: Context) {
     var enabled: Boolean
         get() = prefs.getBoolean("physical-keys", false)
         set(value) { prefs.edit().putBoolean("physical-keys", value).apply() }
-
-    companion object {
-        const val disclosure = "Open Camera and Open Video only open your phone's viewfinder; MX Pocket needs no camera permission. " +
-            "Optional keypad controls use the MX Pocket navigation accessibility service. On a physical Studio Shutter, Record or Stop press, " +
-            "MX Pocket checks the active window for the default camera and clicks a matching labeled camera button. " +
-            "It does not monitor the viewfinder, save screen content, or check whether a capture succeeded. " +
-            "Keep this off to use the camera's own controls."
-    }
 }
 
 /** Exact, mode-specific accessibility descriptions only. Never match screen text, positions or a generic toggle. */

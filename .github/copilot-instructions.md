@@ -8,5 +8,9 @@ Keep `mx-driver` independent of the app. New app features use the compile-time
 plugins. Preserve cancellation, activation generation and nine-key frame
 invariants. All changes use PRs; never push to main or merge automatically.
 
+Use `shared-ui/src/commonMain` and Compose Multiplatform for all application
+screens on Android and desktop. Keep host setup/effects outside the shared
+composables; do not add native widgets or a second platform UI.
+
 Do not flash firmware, publish device/private conversation data, or claim
 physical USB/LCD verification based solely on automated tests.

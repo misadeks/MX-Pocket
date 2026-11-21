@@ -20,6 +20,22 @@ import org.robolectric.annotation.Config
 class WorkflowEditorTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun editorWithoutHostEffectsStillEditsBranchesAndProtectsTheOriginal() {
+        val original = WorkflowDefinition.demo
+        compose.setContent { MaterialTheme { WorkflowScreen(WorkflowUiState(definitions = listOf(original))) } }
+        compose.onNodeWithText("Run").assertIsNotEnabled()
+        compose.onNodeWithText("Duplicate").performClick()
+        compose.onNodeWithText("Workflow name").performTextReplacement("Offline draft")
+        compose.onNodeWithText("If / else").performScrollTo().performClick()
+        compose.onNodeWithText("If true").assertExists()
+        compose.onNodeWithText("Otherwise").assertExists()
+        compose.onNodeWithText("Test run").assertIsNotEnabled()
+        compose.onNodeWithText("Back to workflows").performScrollTo().performClick()
+        compose.onNodeWithText("Discard").performClick()
+        compose.onNodeWithText(original.name).assertExists()
+        compose.onNodeWithText("Offline draft").assertDoesNotExist()
+    }
+
     @Test fun buildConfigureSaveRunAndReloadFromTheVisibleEditor() {
         val app = RuntimeEnvironment.getApplication()
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)

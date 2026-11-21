@@ -9,7 +9,9 @@ import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.Shader
 import android.media.MediaMetadata
-import android.view.View
+import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import org.junit.Rule
 import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
@@ -26,14 +28,15 @@ import tel.misa.mxpocket.driver.KeypadProtocol
 import tel.misa.mxpocket.driver.MxKeypad
 import tel.misa.mxpocket.driver.ReportTransport
 import tel.misa.mxpocket.plugins.*
-import tel.misa.mxpocket.ui.KeypadPanel
 import kotlin.math.abs
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35])
+@Config(sdk = [35], qualifiers = "w640dp-h800dp-mdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class PlayerRenderTest {
+    @get:Rule val ui = createAndroidComposeRule<ComponentActivity>()
     @Test fun lcdSymbolsAndWrappedTitleSurviveJpegAndPhoneMirrorsTheSameKeys() = runTest {
+        val board = ComposeMirror(ui)
         val app = RuntimeEnvironment.getApplication()
         val state = MutableStateFlow(DeckState(media = MediaDeckState(access = true, status = "Paused", playing = false,
             title = "Night train through the mountains", volume = 6, maximum = 15,
@@ -137,12 +140,7 @@ class PlayerRenderTest {
                 }
                 assertTrue("Key ${i+1} lost substantial strokes ($retained/$count)", count > 30 && retained >= count * .94)
             }
-            val panel = KeypadPanel(app)
-            panel.show(back, decoded)
-            val exact = View.MeasureSpec.makeMeasureSpec(480,View.MeasureSpec.EXACTLY)
-            panel.measure(exact,exact); panel.layout(0,0,480,480)
-            val mirror = Bitmap.createBitmap(480,480,Bitmap.Config.ARGB_8888)
-            panel.draw(Canvas(mirror))
+            val mirror = board.render(tiles, decoded, back)
             decoded.forEachIndexed { i,b ->
                 val r = KeypadProtocol.keyRegion(i)
                 val expected = IntArray(r.width * r.height)
