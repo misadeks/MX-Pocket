@@ -38,7 +38,8 @@ There is no hosted CI; validation runs locally.
 ## Architecture
 
 ```text
-app/MainActivity                  permission, lifecycle, UI, image composition
+app/ui/PocketScreen               phone Views, screen state and tap events
+  -> MainActivity                 permission, lifecycle, actions, image composition
   -> plugins/PluginEngine         selection, key ownership, scopes, errors
        -> PocketPlugin            Focus, Audio, Phone, optional Counter
        -> PluginHost              bounded Android actions + invalidate
@@ -51,6 +52,10 @@ Plugins return logical frames; the app composites key labels/custom images and
 the driver encodes/fragments JPEGs. A feature does not need to know VID/PID,
 report IDs, USB interfaces, packet sizes or firmware details. The `mx-driver`
 module never imports plugin/app code.
+
+The phone layout/theme and safe debug-only UI fixtures are described in
+[Contributing: phone UI](CONTRIBUTING.md#phone-ui-layout-and-safe-preview).
+This is separate from the live Phone-only preview, which executes phone actions.
 
 The registry is `BuiltInPlugins.create()`. Adding an instance there adds a page
 to the scrollable plugin selector and physical page-button rotation. Keep

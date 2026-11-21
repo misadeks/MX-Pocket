@@ -1,0 +1,16 @@
+<resources>
+    <item name="pocket_status" type="id" />
+    <item name="pocket_connect" type="id" />
+    <item name="pocket_plugin_title" type="id" />
+    <item name="pocket_diagnostics" type="id" />
+    <item name="pocket_log" type="id" />
+    <item name="pocket_key_1" type="id" />
+    <item name="pocket_key_2" type="id" />
+    <item name="pocket_key_3" type="id" />
+    <item name="pocket_key_4" type="id" />
+    <item name="pocket_key_5" type="id" />
+    <item name="pocket_key_6" type="id" />
+    <item name="pocket_key_7" type="id" />
+    <item name="pocket_key_8" type="id" />
+    <item name="pocket_key_9" type="id" />
+</resources>

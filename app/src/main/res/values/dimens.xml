@@ -1,0 +1,15 @@
+<resources>
+    <dimen name="screen_padding_horizontal">20dp</dimen>
+    <dimen name="screen_padding_top">16dp</dimen>
+    <dimen name="screen_padding_bottom">24dp</dimen>
+    <dimen name="screen_heading_padding_top">20dp</dimen>
+    <dimen name="screen_text_padding">8dp</dimen>
+    <dimen name="screen_control_margin">4dp</dimen>
+    <dimen name="screen_control_min_height">48dp</dimen>
+    <dimen name="screen_key_min_height">84dp</dimen>
+    <dimen name="screen_title_size">28sp</dimen>
+    <dimen name="screen_heading_size">22sp</dimen>
+    <dimen name="screen_body_size">16sp</dimen>
+    <dimen name="screen_note_size">14sp</dimen>
+    <dimen name="screen_log_size">12sp</dimen>
+</resources>
