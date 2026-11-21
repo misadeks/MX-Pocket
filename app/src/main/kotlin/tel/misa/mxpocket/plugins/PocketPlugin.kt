@@ -22,7 +22,7 @@ data class KeyTile(val label: String, val footer: String, val background: Int,
     val iconComponent: String? = null, val inputToken: String? = null,
     val icon: String = "", val enabled: Boolean = true)
 
-data class PluginFrame(val keys: List<KeyTile>) {
+data class PluginFrame(val keys: List<KeyTile>, val page: Int = 0) {
     init { require(keys.size == 9) { "A plugin frame must contain exactly nine keys" } }
 }
 

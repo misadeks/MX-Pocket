@@ -98,13 +98,16 @@ The host waits for a protocol answer after **every** fragment. The answer flags
 are not required to echo the outbound data-frame flags. Busy 0xfb resends the
 whole image within a bounded retry window; other errors and missing
 acknowledgements fail explicitly. Timeouts/cancellation close the transport to
-avoid misattributing a late answer. A new album cover and its nine labeled tiles
-normally travel as one 434x434 JPEG rectangle, at (23,6) in the panel. It uses
+avoid misattributing a late answer. The initial screen, a profile or page switch,
+a new album cover, and changes to multiple keys normally travel as one 434x434
+JPEG rectangle at (23,6) in the panel. It uses
 the same image command and fragment acknowledgements as an individual key; there
-is no separate display commit. A cover too large for the 65535-byte limit at
+is no separate display commit. A grid too large for the 65,535-byte limit at
 the supported qualities falls back to separate keys. Old artwork in the gaps
-is erased before falling back if needed. Sparse changes such as a volume label
-only update changed keys. Separate updates can briefly show parts of both frames;
+is erased before falling back if needed. On the same page, a single changed
+tile or binding uses one key upload, and an unchanged frame sends nothing.
+The changed key cannot run its action until the matching upload is acknowledged.
+Separate fallback updates can briefly show parts of both frames;
 the app checks current pixels after each image and continues around the panel.
 When a physical key needs rewriting,
 the app reuses the JPEG if the same rendered bitmap is still cached. The cache

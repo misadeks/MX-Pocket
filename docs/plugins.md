@@ -23,6 +23,10 @@ the key number, label and footer and overlays any user-selected background image
 The independent driver scales, JPEG-encodes and uploads it. Plugins must not
 allocate/recycle host images or import `MxKeypad`/raw USB.
 
+For a plugin with internal navigation, set `PluginFrame.page` to the current
+page index (default `0`). A change of page requests a whole-grid redraw even
+if the new page happens to reuse most or all of the same tiles.
+
 `PluginEngine` validates nonempty/unique registration, frame size and navigation
 targets. Identifiers match `[a-z][a-z0-9.-]{2,63}`. Use an ID such as `weather.local`;
 do not reuse or rename a published ID casually. The saved layout determines

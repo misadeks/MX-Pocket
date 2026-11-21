@@ -68,7 +68,7 @@ class PluginEngine(
         return try {
             val result = selected.render(nowMillis())
             // Snapshot mutable lists so a coroutine cannot change a frame while it is uploading.
-            PluginFrame(result.keys.toList())
+            result.copy(keys = result.keys.toList())
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
