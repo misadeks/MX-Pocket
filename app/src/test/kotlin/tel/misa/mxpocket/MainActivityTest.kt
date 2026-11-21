@@ -59,12 +59,14 @@ class MainActivityTest {
         }
     }
 
-    @Test fun backgroundLifecycleDoesNotPretendConnectionWasKeptAlive() {
+    @Test fun backgroundLifecycleNeverStartsServiceForAnIdleScreen() {
         Robolectric.buildActivity(MainActivity::class.java).setup().use { controller ->
             controller.pause().stop()
-            assertTrue(views(controller.get().window.decorView).filterIsInstance<TextView>()
-                .any { it.text.toString().contains("Tap Connect to resume") })
             controller.start().resume()
+            val activity = controller.get()
+            assertTrue(views(activity.window.decorView).filterIsInstance<TextView>()
+                .any { it.text == activity.getString(R.string.not_connected) })
+            assertNull(shadowOf(activity.application).nextStartedService)
         }
     }
 

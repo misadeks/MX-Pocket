@@ -17,7 +17,8 @@ There is no hosted CI; validation runs locally.
   interface has no interrupt OUT, serialized HID++ command/answer exchanges,
   page-button diversion, individual press/release snapshots, Android JPEG
   encoding, and acknowledged/fragmented image uploads to all nine key regions.
-- `app`: native Material Android UI with explicit USB permission request, device
+- `app`: native Material Android UI with explicit USB permission request, opt-in
+  USB attach handling and a foreground service for an active keypad, device
   and endpoint diagnostics, connection/cancellation/detach handling, bounded
   event log with user-selected file export, custom image picker, and dynamic
   Focus/Audio/Phone plugins. The two physical page buttons switch plugins.
@@ -39,7 +40,9 @@ There is no hosted CI; validation runs locally.
 
 ```text
 app/ui/PocketScreen               phone Views, screen state and tap events
-  -> MainActivity                 permission, lifecycle, actions, image composition
+  -> MainActivity                 visible USB/notification consent, screen adapter
+KeypadService                     foreground notification, detach and disconnect
+  -> PocketSession                one plugin/input/LCD owner; Activity optional
   -> plugins/PluginEngine         selection, key ownership, scopes, errors
        -> PocketPlugin            Focus, Audio, Phone, optional Counter
        -> PluginHost              bounded Android actions + invalidate
@@ -175,29 +178,88 @@ finishes. Close on detach, cancellation or your chosen lifecycle boundary.
    is attempted. Claim failure is an actionable OEM/kernel compatibility limit.
 4. Confirm custom text appears on **all nine physical LCD buttons**, remains
    visible for at least 60 seconds without logo fallback, and changes between
-   Focus/Audio/Phone pages. Choose a custom image, return to the app and connect
-   again, then verify the image plus labels on every key.
+   Focus/Audio/Phone pages. Choose a custom image, return to the app, then
+   verify the image plus labels on every key without reconnecting.
 5. Press/release each LCD key and both page buttons. Verify their identities in
    the session log; hold multiple keys and verify independent releases. Use the
    physical controls to change music volume and start/pause the focus timer.
-6. Deny permission, retry it, disconnect/reconnect the cable, background the app,
-   and return. Verify no stuck keys, stale events or leaked claims. Save the log
+6. Deny permission, retry it, disconnect/reconnect the cable, and run the
+   background/attach checks below. Verify no stuck keys or stale events. Save the log
    with the actual phone model/Android version and note which checks passed.
 
-**Lifecycle:** this foreground-demo Activity deliberately disconnects when
-stopped (including opening other apps/the image picker). Tap Connect on return.
-The phone timer continues to use its monotonic deadline while the process lives,
-but is not a background service and does not survive process death or recreation.
-Page diversion is volatile on the device; unplugging removes the session. This
-MVP does not restore a prior host's diversion configuration. Media-key dispatch
-requires an active media session and OEM behavior may differ.
+### Background sessions and automatic connection
 
-Plugin tasks are active only for the selected page during a connected or
-phone-preview session. Switching pages/backgrounding/disconnecting cancels the
-activation scope and synthesizes releases for its held keys. The focus deadline
-retains elapsed time in memory while another page is selected, but its completion
-tone is deferred until Focus becomes active again. There is no background plugin
-service. Custom images and plugin state do not survive process recreation.
+**Connect keypad** always works independently of the auto-connect setting.
+Allow USB access and session notifications (including the Android 13+ notification
+permission). MX Pocket requires the notification so **Disconnect** is accessible
+away from the app. If notifications were denied or the session channel is blocked,
+enable them in Android app settings and tap **Connect keypad** again.
+
+To opt in, enable **Connect automatically when this keypad is attached**, then
+unplug and reconnect **one** MX Creative Keypad. Choose MX Pocket in Android's USB
+handler dialog; select the default/always option if offered and desired. The OS
+may open the phone UI on attach. Android controls defaults, USB permission,
+lock-screen behavior and delivery after force-stop; open/unlock the app and use
+manual Connect if attach is not delivered. Turning the option off unregisters
+the attach handler; it does not end the current session. No boot receiver, USB
+polling while detached or silent service restart is used.
+
+**Opening apps while another app is visible:** to use a single physical keypress,
+select **Open apps directly from keypad**, read the explanation and grant
+**Display over other apps** to MX Pocket in Android settings. This optional
+special access is broader than launching apps: it also permits drawing over
+other apps. MX Pocket creates no overlay windows. Direct shortcuts apply only
+to fresh Phone-page presses from the active authorized keypad on an unlocked
+phone. Turn the option off in MX Pocket or revoke special access in Settings.
+
+With the option off, access denied/unavailable, or the phone locked, press a
+shortcut and tap its **Open Camera**, **Open Dialer**, etc. notification. No second keypad
+press or visit to the MX Pocket screen is needed. Allow the **Keypad app shortcuts**
+notification channel; Android controls whether it appears as a banner or in the
+shade. Only the latest request is usable, for one minute on the same connected
+keypad and plugin page. Unlock normally before opening the shortcut. In the
+foreground the same key still launches the app immediately. Android does not
+confirm that an external app appeared; a quiet tap-to-retry shortcut remains
+available if an OEM suppresses an otherwise permitted direct launch.
+
+USB access and a foreground service don't grant [background activity launch
+privileges](https://developer.android.com/guide/components/activities/background-starts).
+Android's [companion device pairing](https://developer.android.com/develop/connectivity/bluetooth/companion-device-pairing)
+scans Bluetooth or Wi-Fi, not USB. On Android 13–16 the self-managed association
+alternative requires `REQUEST_COMPANION_SELF_MANAGED`, a platform
+[signature/privileged permission](https://android.googlesource.com/platform/frameworks/base/+/android-16.0.0_r1/core/res/AndroidManifest.xml)
+that [the companion service enforces](https://android.googlesource.com/platform/frameworks/base/+/android-16.0.0_r1/services/companion/java/com/android/server/companion/utils/PermissionsUtils.java).
+It is not a user-grantable switch for this APK. The optional direct mode instead
+uses Android's documented user-granted `SYSTEM_ALERT_WINDOW` exception
+([AOSP BAL check](https://android.googlesource.com/platform/frameworks/base/+/android-16.0.0_r1/services/core/java/com/android/server/wm/BackgroundActivityStartController.java)).
+
+**Physical acceptance checklist** (not proven by JVM tests):
+
+1. With opt-in off, replug and verify the app does not connect until tapped.
+   Deny USB permission, retry, then check there is one session notification.
+2. Start Focus, press Home and use the physical page buttons and Audio controls.
+   Verify timer/LCD labels update, volume changes, the image picker and rotation
+   leave the connection intact, and returning shows the same page.
+3. With direct shortcuts off and another app in front, press Camera on the Phone page. The current app
+   should remain visible until you tap **Open Camera**; the tap should open the
+   camera without another press. Repeat with Dialer and verify the dialer, not
+   the previous camera request, opens. Try a tap after unplugging or after a
+   minute: it must not launch. Enable direct shortcuts as described above and
+   repeat: one Camera press should open the camera. Revoke special access and
+   repeat: it must require a tap again. Verify a shortcut never unlocks the phone.
+   Media controls need an active Android media session.
+4. With auto-connect enabled and Android's handler selected, replug. Verify
+   one session; stop via notification. Reopening the app must not reconnect the
+   same attachment. Replug again, then detach during an upload: the notification
+   should disappear and another manual or permitted attach should work. Try an
+   unrelated USB device; it must not start a keypad session.
+
+Session state and custom images are in memory, not restored after process death.
+Android may kill the service; reconnect manually or reattach. Preview never
+starts a service and pauses its plugin when the screen leaves the foreground.
+Switching plugins or disconnecting still cancels the old activation and releases
+held keys. A Focus completion on another page is deferred until Focus is active.
+Page diversion is volatile; the app does not restore a prior host's configuration.
 
 ## Evidence and limits
 

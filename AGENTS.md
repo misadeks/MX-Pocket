@@ -35,8 +35,10 @@
   platform actions or plugin activation. Keep the debug UI-only preview isolated
   from the live Activity/engine and excluded from release builds. Preserve
   accessible insets, minimum touch heights and selectable diagnostics.
-- `MainActivity`: USB permission and Android lifecycle/UI/actions. Preserve the
-  foreground connection policy, user-image composition and generation checks.
+- `MainActivity`: visible USB/notification permission and phone UI.
+  `KeypadService` gates the hardware lifetime; `PocketSession` owns input,
+  plugin actions and LCDs independently of Activity recreation. Preserve the
+  opt-in attach policy, user-image composition and generation checks.
   Page switches must not cancel a partly acknowledged image transaction; let
   the current image complete, then paint only the newest generation.
 - Preserve source provenance in
