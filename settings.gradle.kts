@@ -13,4 +13,4 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "MXPocket"
-include(":mx-driver", ":app")
+include(":mx-driver", ":app", ":shared-ui", ":desktop-preview")

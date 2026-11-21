@@ -10,6 +10,28 @@ This repository is private: invited collaborators can work through feature
 branches and pull requests. Start with [CONTRIBUTING.md](CONTRIBUTING.md).
 There is no hosted CI; validation runs locally.
 
+## Try the keypad on Windows
+
+From the repository root, build and launch the standalone desktop preview:
+
+```powershell
+.\gradlew.bat :desktop-preview:test :desktop-preview:packageUberJarForCurrentOS
+.\gradlew.bat :desktop-preview:run
+```
+
+Use the repository JDK/SDK setup below. On Windows ARM64 use an **x64 JDK**
+for the packaged Windows x64 Compose/Skiko runtime. The standalone JAR is in
+`desktop-preview\build\compose\jars`; run it using `java -jar <path-to-jar>`
+with a matching desktop JVM. Running the JAR needs no Android SDK or keypad.
+
+Click **Next profile** to go from Focus to Audio. Wider windows also show a
+profile list alongside the keypad; narrow windows show one pane. Click any
+enabled key to try it. Compose Multiplatform draws the keypad from `:shared-ui`
+on both supported targets. The preview uses the app's factory
+profiles, nine-key bindings and Focus timer. Other tile labels and media state
+are preview fixtures: they do not access USB, change Windows volume, launch
+apps, operate a camera or invoke accessibility actions. Nothing is saved.
+
 ## What is implemented
 
 - `mx-driver`: Kotlin AAR independent of Activities, UI and application actions.
