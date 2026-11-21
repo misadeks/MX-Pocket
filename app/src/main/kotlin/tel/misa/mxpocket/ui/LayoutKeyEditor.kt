@@ -29,8 +29,7 @@ internal fun localBindings(options: List<BindingOption>, pages: List<DeckPage>):
 
 internal fun bindingName(call: ActionCall?, options: List<BindingOption>): String {
     if (call == null) return "Unassigned"
-    val displayCall = if (call.slotOwner() == "audio" && call.id.startsWith("media."))
-        call.copy(params = call.params - DeckActions.LEGACY_SLOT_OWNER) else call
+    val displayCall = call.commandBinding()
     return options.firstOrNull { it.call == displayCall }?.label ?: when (call.id) {
         "plugin.key" -> {
             val number = call.params["index"]?.toIntOrNull()?.plus(1)

@@ -50,6 +50,12 @@ class DeckSessionTest {
         assertEquals("audio",session.plugins.selectedId)
         assertTrue(session.frame().keys[0].enabled)
         assertFalse(session.frame().keys[1].enabled)
+        val audio = app.getSystemService(android.media.AudioManager::class.java)
+        val stream = android.media.AudioManager.STREAM_MUSIC
+        audio.setStreamVolume(stream, 4, 0)
+        assertTrue(session.phoneKey(0))
+        main.idle()
+        assertEquals(3, audio.getStreamVolume(stream))
         session.disconnect()
         session.detach(screen)
     }

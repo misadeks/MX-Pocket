@@ -15,6 +15,7 @@ import android.media.session.PlaybackState
 import android.os.Looper
 import android.provider.Settings
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -24,6 +25,9 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.util.ReflectionHelpers
+import tel.misa.mxpocket.actions.ActionCall
+import tel.misa.mxpocket.deck.DeckActions
+import tel.misa.mxpocket.deck.DeckKey
 import tel.misa.mxpocket.decks.MediaSessionAccess
 import tel.misa.mxpocket.decks.ok
 import tel.misa.mxpocket.driver.KeyEvent
@@ -93,11 +97,117 @@ class KeypadPaintTest {
         }
         fun ack() { checkNotNull(outstanding).complete(Unit); main.idle() }
         fun settle() { pause = false; ack() }
+        fun press(id: Int) { event(KeyEvent(id, true)); event(KeyEvent(id, false)); main.idle() }
         fun expectAll() {
             val frame = session.frame()
             for (i in pixels.indices)
                 assertTrue("Wrong pixels on key ${i + 1}", pixels[i]?.sameAs(session.keyImage(i, frame.keys[i])) == true)
         }
+    }
+
+    @Test fun initialProfileAndCustomPageNavigationAlwaysWriteOneGridEvenWithIdenticalTiles() {
+        val p = Panel(supportsGrid = true)
+        val deck = p.session.deck
+        try {
+            val profile = deck.createProfile("Desk").getOrThrow()
+            val child = deck.createPage(profile, "Tools").getOrThrow()
+            // Even the Open key has identical pixels and binding in both pages.
+            val open = DeckKey(label = "Tools", action = ActionCall(DeckActions.PAGE, mapOf("pageId" to child)))
+            for (page in listOf("root", child)) deck.setKey(profile, page, 0, open).getOrThrow()
+            fun expectGrids(count: Int) {
+                assertEquals(List<Int?>(count) { null }, p.grids)
+                assertTrue(p.writes.isEmpty())
+                p.expectAll()
+            }
+            expectGrids(1)
+            p.session.selectProfile(profile); main.idle(); expectGrids(2)
+            p.press(1); assertEquals(child, deck.state.value.activePage.id); expectGrids(3)
+            p.press(0x01a1); assertEquals("root", deck.state.value.activePage.id); expectGrids(4)
+            p.press(0x01a2); assertEquals(child, deck.state.value.activePage.id); expectGrids(5)
+            p.press(1); expectGrids(5) // Already on Tools.
+        } finally { p.session.disconnect() }
+    }
+
+    @Test fun singleVisualChangeRequiresItsOwnAckAndLeavesOtherKeysActionable() {
+        val p = Panel(supportsGrid = true)
+        try {
+            p.session.selectProfile("phone"); main.idle()
+            p.grids.clear(); p.writes.clear()
+            fun status(text: String) {
+                assertTrue(runBlocking {
+                    p.session.actions.dispatch(ActionCall("keypad.status", mapOf("key" to "0", "text" to text))).success
+                })
+                main.idle()
+            }
+            p.pause = true
+            status("First"); status("Second")
+            assertEquals(listOf(0), p.writes)
+            p.press(1); assertEquals(0, p.shortcuts)
+            p.press(3); assertEquals(1, p.shortcuts) // Unchanged acknowledged Dialer still works.
+            p.ack() // "First" reached the panel, but "Second" is now desired.
+            p.press(1); assertEquals(1, p.shortcuts)
+            p.settle()
+            p.press(1); assertEquals(2, p.shortcuts)
+            status("Second")
+            assertEquals(listOf(0, 0), p.writes)
+            assertTrue(p.grids.isEmpty()); p.expectAll()
+        } finally { p.session.disconnect() }
+    }
+
+    @Test fun rebindingAnIdenticalLookingKeyRequiresOneKeyAckBeforeItCanNavigate() {
+        val p = Panel(supportsGrid = true)
+        try {
+            val deck = p.session.deck
+            p.session.selectProfile("phone")
+            val key = DeckKey(label = "Go", action = ActionCall(DeckActions.ROOT))
+            deck.setKey("phone", "root", 4, key).getOrThrow(); main.idle()
+            p.writes.clear(); p.grids.clear()
+            // The action changes despite identical pixels; the new binding needs its own ACK.
+            val child = deck.duplicatePage("phone", "root", "More").getOrThrow()
+            p.pause = true
+            deck.setKey("phone", "root", 4, key.copy(action = ActionCall(DeckActions.PAGE, mapOf("pageId" to child)))).getOrThrow()
+            main.idle(); p.press(5)
+            assertEquals("root", deck.state.value.activePage.id)
+            p.settle()
+            assertEquals(listOf(4), p.writes)
+            assertTrue(p.grids.isEmpty())
+            p.press(5); assertEquals(child, deck.state.value.activePage.id)
+            assertEquals(listOf<Int?>(null), p.grids)
+        } finally { p.session.disconnect() }
+    }
+
+    @Test fun samePageMultiTileChangeUsesOneGridAndIdenticalRebuiltPixelsSendNothing() {
+        val p = Panel(supportsGrid = true)
+        try {
+            val backdrop = Bitmap.createBitmap(118, 118, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.RED) }
+            p.grids.clear()
+            p.session.setImage(backdrop); main.idle()
+            p.expectAll()
+            assertEquals(listOf<Int?>(null), p.grids)
+            p.session.setImage(backdrop.copy(backdrop.config!!, false)); main.idle()
+            assertEquals(listOf<Int?>(null), p.grids)
+            assertTrue(p.writes.isEmpty())
+        } finally { p.session.disconnect() }
+    }
+
+    @Test fun delayedGridFromCustomPageRoundTripCannotAuthorizeAnIdenticalScreen() {
+        val p = Panel(supportsGrid = true)
+        try {
+            val deck = p.session.deck
+            val profile = deck.createProfile("Desk").getOrThrow()
+            val child = deck.createPage(profile, "Next").getOrThrow()
+            val open = DeckKey(label = "Go", action = ActionCall(DeckActions.PAGE, mapOf("pageId" to child)))
+            deck.setKey(profile, "root", 0, open).getOrThrow()
+            p.pause = true; p.grids.clear()
+            p.session.selectProfile(profile); main.idle()
+            p.session.changePage(1); p.session.changePage(-1); main.idle()
+            p.ack()
+            assertEquals(2, p.grids.size)
+            p.press(1); assertEquals("root", deck.state.value.activePage.id)
+            p.settle()
+            p.press(1); assertEquals(child, deck.state.value.activePage.id)
+            assertEquals(3, p.grids.size); assertTrue(p.writes.isEmpty()); p.expectAll()
+        } finally { p.session.disconnect() }
     }
 
     @Test fun interruptedBackdropRestoresOnlyKeysThatAcknowledgedDifferentPixels() {
@@ -207,7 +317,7 @@ class KeypadPaintTest {
         } finally { p.session.disconnect() }
     }
 
-    @Test fun oneGridPerChangedCoverSparseVolumeAndLatestPageAfterBlockedGrid() {
+    @Test fun oversizeCoverFallsBackOnceThenVolumeAndNewCoversUseGrids() {
         shadowOf(app.getSystemService(NotificationManager::class.java)).setNotificationListenerAccessGranted(
             ComponentName(app, MediaSessionAccess::class.java), true)
         val media = MediaSession(app, "panel")
@@ -226,7 +336,7 @@ class KeypadPaintTest {
             fail("Test cover not published")
         }
         try {
-            p.session.selectProfile("audio"); main.idle(); p.writes.clear()
+            p.session.selectProfile("audio"); main.idle(); p.writes.clear(); p.grids.clear()
             p.split = true; cover(Color.RED)
             assertEquals(listOf(Color.RED), p.grids)
             assertEquals((0..8).toList(), p.writes.sorted()); p.expectAll()
@@ -236,7 +346,7 @@ class KeypadPaintTest {
             val v = if (audio.getStreamVolume(AudioManager.STREAM_MUSIC) == 1) 2 else 1
             audio.setStreamVolume(AudioManager.STREAM_MUSIC,v,0)
             app.contentResolver.notifyChange(Settings.System.getUriFor("volume_music"),null); main.idle()
-            assertEquals(2, p.grids.size); assertTrue(p.writes.size in 1..8); p.expectAll()
+            assertEquals(listOf(Color.RED, Color.GREEN, Color.GREEN), p.grids); assertTrue(p.writes.isEmpty()); p.expectAll()
             p.writes.clear(); p.pause = true; cover(Color.BLUE); cover(Color.YELLOW)
             assertEquals(Color.BLUE, p.grids.last())
             p.ack()

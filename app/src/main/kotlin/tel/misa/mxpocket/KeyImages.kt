@@ -27,7 +27,9 @@ internal class KeyImages(private val appIcon: (String) -> Bitmap?) {
 
     fun useArtwork(image: Bitmap?): Boolean {
         if (image === artwork) return false
+        val previous = artwork
         artwork = image
+        if (previous != null && image != null && previous.sameAs(image)) return false
         artworkRevision++
         clear()
         return true
