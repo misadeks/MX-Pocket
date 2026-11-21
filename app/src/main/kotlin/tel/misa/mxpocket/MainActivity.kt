@@ -16,6 +16,12 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.view.View
+import android.widget.LinearLayout
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.ComposeView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AlertDialog
@@ -33,6 +39,9 @@ import tel.misa.mxpocket.plugins.PhoneApp
 import tel.misa.mxpocket.ui.PocketScreen
 import tel.misa.mxpocket.ui.PocketScreenEvent
 import tel.misa.mxpocket.ui.PocketScreenState
+import tel.misa.mxpocket.ui.*
+import tel.misa.mxpocket.deck.DeckLimits
+import java.io.ByteArrayOutputStream
 
 class MainActivity : AppCompatActivity(), PocketSession.Screen {
     private val session get() = (application as PocketApplication).session
@@ -41,6 +50,9 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
     private val direct by lazy { DirectShortcuts(this) }
     private lateinit var screen: PocketScreen
     private var diagnostics = ""
+    private var tab by mutableStateOf(WorkspaceTab.HOME)
+    private var presentation by mutableStateOf<PocketScreenState?>(null)
+    private lateinit var workspace: ComposeView
     private var refreshJob: Job? = null
     private var resumed = false
     private var target: String? = null
@@ -116,6 +128,47 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
                     val output = contentResolver.openOutputStream(uri) ?: error("Cannot open log destination")
                     output.bufferedWriter().use { it.write(text) }
                 }
+
+                private val layoutSaver = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+                    if (uri != null) lifecycleScope.launch {
+                        try {
+                            withContext(Dispatchers.IO) {
+                                val text = session.deck.exportJson()
+                                val out = contentResolver.openOutputStream(uri, "wt") ?: error("Cannot open destination")
+                                out.bufferedWriter(Charsets.UTF_8).use { it.write(text) }
+                            }
+                            session.message("Layouts exported.")
+                        } catch (e: CancellationException) { throw e }
+                        catch (e: Exception) { session.fail("Cannot export layouts",e) }
+                    }
+                }
+                private val layoutPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+                    if (uri != null) lifecycleScope.launch {
+                        try {
+                            val json = withContext(Dispatchers.IO) {
+                                val stream = contentResolver.openInputStream(uri) ?: error("Cannot open document")
+                                stream.use {
+                                    val bytes = ByteArrayOutputStream()
+                                    val buffer = ByteArray(8192)
+                                    while (true) {
+                                        val n = it.read(buffer)
+                                        if (n < 0) break
+                                        require(bytes.size() + n <= DeckLimits.MAX_BYTES) { "Layout file too large" }
+                                        bytes.write(buffer,0,n)
+                                    }
+                                    Charsets.UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(bytes.toByteArray())).toString()
+                                }
+                            }
+                            AlertDialog.Builder(this@MainActivity).setTitle("Replace saved layouts?")
+                                .setMessage("Import replaces profiles, page history, and context rules. Workflows and Android permissions are unchanged.")
+                                .setNegativeButton(android.R.string.cancel,null).setPositiveButton("Import") { _,_ ->
+                                    session.deck.importJson(json).fold({ session.message("Layouts imported.") },
+                                        { session.fail("Cannot import layouts", it) })
+                                }.show()
+                        } catch (e: CancellationException) { throw e }
+                        catch (e: Exception) { session.fail("Cannot import layouts",e) }
+                    }
+                }
                 Snackbar.make(screen.view, "Diagnostic log saved", Snackbar.LENGTH_SHORT).show()
             } catch (e: CancellationException) {
                 throw e
@@ -127,8 +180,29 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        screen = PocketScreen(this, session.plugins.descriptors, ::handleScreenEvent)
-        setContentView(screen.view)
+        tab = savedInstanceState?.getString("tab")?.let { name -> WorkspaceTab.entries.find { it.name == name } } ?: WorkspaceTab.HOME
+        screen = PocketScreen(this, session.plugins.descriptors, ::handleScreenEvent, live = true)
+        workspace = ComposeView(this).apply {
+            id = R.id.workspace_panel
+            setContent {
+                WorkspaceTheme {
+                    WorkspacePanel(tab,session,presentation,::handleScreenEvent,
+                        onExport = { layoutSaver.launch("mx-pocket-layouts.json") },
+                        onImport = { layoutPicker.launch(arrayOf("application/json","text/*","application/octet-stream")) })
+                }
+            }
+        }
+        val navigation = ComposeView(this).apply {
+            id = R.id.workspace_navigation
+            setContent { WorkspaceTheme { WorkspaceNav(tab,::showTab) } }
+        }
+        setContentView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(screen.view,LinearLayout.LayoutParams(-1,0,1f))
+            addView(workspace,LinearLayout.LayoutParams(-1,0,1f))
+            addView(navigation,LinearLayout.LayoutParams(-1,-2))
+        })
+        showTab(tab)
         ContextCompat.registerReceiver(this, permissionReceiver, IntentFilter(permissionAction), ContextCompat.RECEIVER_NOT_EXPORTED)
         ContextCompat.registerReceiver(this, attachReceiver, IntentFilter().apply {
             addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
@@ -149,6 +223,13 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
         outState.putBoolean("fromAttach", fromAttach)
         outState.putString("usbToken", usbToken)
         outState.putBoolean("notificationPrompt", waitingForNotifications)
+        outState.putString("tab",tab.name)
+    }
+
+    private fun showTab(value: WorkspaceTab) {
+        tab = value
+        screen.view.visibility = if (value == WorkspaceTab.HOME) View.VISIBLE else View.GONE
+        workspace.visibility = if (value == WorkspaceTab.HOME) View.GONE else View.VISIBLE
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -299,10 +380,11 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
                 usbToken = null
                 session.startPreview()
             }
-            is PocketScreenEvent.SelectPlugin -> session.plugins.select(event.id)
+            PocketScreenEvent.StopPreview -> session.disconnect("Virtual keypad disconnected. Reconnect to resume this layout.")
+            is PocketScreenEvent.SelectPlugin -> session.selectProfile(event.id)
             is PocketScreenEvent.TapKey -> if (!session.phoneKey(event.index))
                 Snackbar.make(screen.view, "Connect a keypad or select Phone-only preview first", Snackbar.LENGTH_SHORT).show()
-            is PocketScreenEvent.ChangePage -> session.plugins.next(event.delta)
+            is PocketScreenEvent.ChangePage -> session.changePage(event.delta)
             PocketScreenEvent.Repaint -> session.repaint()
             PocketScreenEvent.ChooseImage -> imagePicker.launch(arrayOf("image/*"))
             PocketScreenEvent.RefreshDiagnostics -> refreshDiagnostics()
@@ -312,13 +394,21 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
     }
 
     override fun render() {
-        screen.render(PocketScreenState(
+        val deck = session.deck.state.value
+        val frame = session.frame()
+        val state = PocketScreenState(
             status = session.status,
-            pluginTitle = session.plugins.descriptors.single { it.id == session.plugins.selectedId }.title,
-            frame = session.plugins.render(),
+            pluginTitle = if (deck.activePage.name == deck.activeProfile.name) deck.activeProfile.name
+                else "${deck.activeProfile.name} / ${deck.activePage.name}",
+            frame = frame, profiles = deck.profiles.map { it.id to it.name },
+            activeId = deck.activeProfileId, reason = session.deck.reason.value,
+            simulating = session.preview, canRunKeys = session.ready,
+            rendered = frame.keys.mapIndexed(session::keyImage),
             connectionActive = target != null || session.request != null,
             diagnostics = diagnostics, log = session.logText(60), automatic = access.automatic, directShortcuts = direct.enabled,
-        ))
+        )
+        presentation = state
+        screen.render(state)
     }
 
     override fun openApp(app: PhoneApp): Boolean {

@@ -86,7 +86,7 @@ class KeypadService : Service() {
         val age = SystemClock.elapsedRealtime() - action.pressedAt
         if (age >= PocketSession.PHONE_ACTION_TTL) return
         // Android provides no launch-success callback: retain a quiet tap-to-retry on OEM builds.
-        val direct = age < 2_000 && session.plugins.selectedId == "phone" &&
+        val direct = age < 2_000 && session.isPhoneShortcutPage &&
             DirectShortcuts(this).enabled && isUnlockedAndInteractive()
         val attempted = direct && launchPhoneApp(action.app).let { error ->
             if (error != null) session.log(error)
