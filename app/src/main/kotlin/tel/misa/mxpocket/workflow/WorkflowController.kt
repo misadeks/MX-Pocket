@@ -1,0 +1,145 @@
+package tel.misa.mxpocket.workflow
+
+import android.content.Context
+import java.io.IOException
+import java.util.UUID
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.SerializationException
+
+interface WorkflowProvider { val workflows: WorkflowController }
+
+/** One application-owned instance, called on the main thread, including scheduled deliveries. */
+class WorkflowController(context: Context, private val scope: CoroutineScope, private val host: WorkflowHost) {
+    private val app = context.applicationContext
+    private val store = WorkflowStore(app)
+    private val alerts = MutableStateFlow<String?>(null)
+    val error = alerts.asStateFlow()
+    private fun load(): WorkflowLibrary? = try {
+        store.load()
+    } catch (_: IOException) { null } catch (_: SerializationException) { null }
+    private var library = load()
+    private val saved = MutableStateFlow(library?.definitions.orEmpty())
+    val definitions = saved.asStateFlow()
+    private val allowed = MutableStateFlow(library?.endpoints.orEmpty())
+    val endpoints = allowed.asStateFlow()
+    internal val effects = AndroidWorkflowEffects(app)
+    private val historyState = MutableStateFlow(try {
+        store.loadHistory()
+    } catch (_: IOException) { historyLoadError() } catch (_: SerializationException) { historyLoadError() })
+    val history = historyState.asStateFlow()
+    private val historyWrites = Channel<List<WorkflowStatus>>(Channel.CONFLATED)
+    private val writer = Mutex()
+    private val runner = WorkflowRunner(scope, host, effects, ::record)
+    val status = runner.status
+    private var lastContext: WorkflowContext? = null
+    private fun historyLoadError(): List<WorkflowStatus> {
+        alerts.value = "Run history could not be read."
+        return emptyList()
+    }
+    init {
+        if (library == null) alerts.value = "Cannot read this workflow library. Existing data has not been replaced."
+        scope.launch {
+            for (entries in historyWrites) {
+                try { withContext(Dispatchers.IO) { store.saveHistory(entries) } }
+                catch (_: IOException) { alerts.value = "Run history could not be saved." }
+            }
+        }
+        saved.value.filter { it.trigger.kind == TriggerKind.DAILY }.forEach { queueDaily(app, it) }
+    }
+
+    private fun record(entry: WorkflowStatus) {
+        val entries = (listOf(entry) + historyState.value).take(30)
+        historyState.value = entries
+        historyWrites.trySend(entries)
+    }
+    fun actions() = host.actions().filter { it.id != "workflow.run" }
+    fun validate(draft: WorkflowDefinition) = validateWorkflow(draft, saved.value, allowed.value, actions())
+    private suspend fun persist(next: WorkflowLibrary): String? {
+        try { withContext(Dispatchers.IO) { store.save(next) } }
+        catch (_: IOException) { return "Could not save the library. Check available storage." }
+        library = next
+        saved.value = next.definitions
+        allowed.value = next.endpoints
+        return null
+    }
+    suspend fun save(draft: WorkflowDefinition): String? = writer.withLock {
+        val data = library ?: return@withLock "The workflow library is unreadable."
+        validate(draft)?.let { return@withLock it }
+        val new = data.definitions.none { it.id == draft.id }
+        if (new && data.definitions.size >= MAX_DEFINITIONS) return@withLock "The library is full."
+        val next = data.copy(definitions = if (new) data.definitions + draft
+            else data.definitions.map { if (it.id == draft.id) draft else it })
+        persist(next)?.let { return@withLock it }
+        if (draft.trigger.kind == TriggerKind.DAILY) queueDaily(app, draft)
+        null
+    }
+    suspend fun delete(id: String): String? = writer.withLock {
+        val data = library ?: return@withLock "The workflow library is unreadable."
+        fun uses(step: WorkflowStep): Boolean = (step.kind == StepKind.CALL && step.target == id) ||
+            step.yes.any(::uses) || step.no.any(::uses)
+        if (data.definitions.any { it.id != id && it.steps.any(::uses) }) return@withLock "Another workflow uses this one."
+        persist(data.copy(definitions = data.definitions.filterNot { it.id == id }))
+    }
+    fun duplicate(draft: WorkflowDefinition) = draft.copy(id = UUID.randomUUID().toString(),
+        name = "${draft.name.take(55)} copy", trigger = WorkflowTrigger())
+    suspend fun addEndpoint(endpoint: WorkflowEndpoint): String? = writer.withLock {
+        val data = library ?: return@withLock "The workflow library is unreadable."
+        if (!endpoint.valid()) return@withLock "Use a name and an HTTPS address without credentials, query or fragment."
+        if (data.endpoints.size >= 32) return@withLock "The endpoint list is full."
+        if (data.endpoints.any { it.id == endpoint.id || it.name.equals(endpoint.name, true) })
+            return@withLock "Use a different endpoint name."
+        persist(data.copy(endpoints = data.endpoints + endpoint))
+    }
+    suspend fun removeEndpoint(id: String): String? = writer.withLock {
+        val data = library ?: return@withLock "The workflow library is unreadable."
+        persist(data.copy(endpoints = data.endpoints.filterNot { it.id == id })).also {
+            if (it == null && runner.busy) runner.cancel() // A running snapshot may still carry the revoked endpoint.
+        }
+    }
+
+    fun run(id: String, origin: WorkflowOrigin): Boolean {
+        val definition = saved.value.find { it.id == id } ?: return false
+        val trigger = definition.trigger.kind
+        if (origin == WorkflowOrigin.PHYSICAL && trigger == TriggerKind.VIRTUAL ||
+            origin == WorkflowOrigin.VIRTUAL && trigger == TriggerKind.PHYSICAL) return false
+        return start(definition, origin) != null
+    }
+    internal fun test(draft: WorkflowDefinition) = start(draft, WorkflowOrigin.TEST) != null
+    internal fun start(definition: WorkflowDefinition, origin: WorkflowOrigin): Job? {
+        if (runner.busy) {
+            record(WorkflowStatus(definition.id, definition.name, origin, WorkflowPhase.FAILED,
+                FailureKind.BUSY.description, error = FailureKind.BUSY))
+            return null
+        }
+        return runner.start(definition, origin, saved.value, allowed.value)
+    }
+    fun cancel() { runner.cancel() }
+
+    fun onContextChanged(context: WorkflowContext) {
+        val before = lastContext
+        lastContext = context
+        if (before == null || before == context || runner.busy) return // Never feed a run's own changes back into itself.
+        val matching = saved.value.filter {
+            when (it.trigger.kind) {
+                TriggerKind.CONNECTED -> !before.connected && context.connected
+                TriggerKind.DISCONNECTED -> before.connected && !context.connected
+                TriggerKind.CONTEXT -> before.appContext != context.appContext && context.appContext == it.trigger.value
+                else -> false
+            }
+        }
+        if (matching.isNotEmpty()) scope.launch {
+            matching.forEach { matched ->
+                if (matched == saved.value.find { it.id == matched.id }) start(matched, WorkflowOrigin.CONTEXT)?.join()
+            }
+        }
+    }
+}
