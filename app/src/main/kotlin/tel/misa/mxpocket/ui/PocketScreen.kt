@@ -221,6 +221,8 @@ class PocketScreen(
                 }
                 val name = when {
                     tile.glyph == PlayerGlyph.TRACK -> listOf("Now playing", tile.label, tile.footer)
+                    tile.volumeLevel != null -> listOf(tile.label, if (tile.volumeLevel.muted) "Muted" else "Sound on",
+                        tile.volumeLevel.description, tile.footer)
                     tile.glyph != null -> listOf(tile.label, tile.footer)
                     else -> listOf("Key ${index + 1}", tile.label, tile.footer)
                 }

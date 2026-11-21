@@ -6,10 +6,10 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.Rect
 import android.graphics.Shader
 import android.media.MediaMetadata
 import android.view.View
-import java.io.ByteArrayOutputStream
 import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
@@ -21,6 +21,10 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import tel.misa.mxpocket.decks.*
+import tel.misa.mxpocket.driver.HidSession
+import tel.misa.mxpocket.driver.KeypadProtocol
+import tel.misa.mxpocket.driver.MxKeypad
+import tel.misa.mxpocket.driver.ReportTransport
 import tel.misa.mxpocket.plugins.*
 import tel.misa.mxpocket.ui.KeypadPanel
 import kotlin.math.abs
@@ -47,20 +51,45 @@ class PlayerRenderTest {
             intArrayOf(0xffede2c9.toInt(),0xffde6949.toInt(),0xff283e56.toInt()),null,Shader.TileMode.CLAMP) })
         // An original, patterned test cover with both bright and dark detail under the readout.
         val stripe = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 5f }
-        repeat(42) {
+        repeat(18) {
             stripe.color = if (it % 3 == 0) 0xff263a50.toInt() else 0xfff3d1a2.toInt()
-            c.drawCircle(452f, 466f, 9f + it * 12, stripe)
+            c.drawCircle(452f, 466f, 9f + it * 23, stripe)
         }
         val cover = SessionArtwork.from(MediaMetadata.Builder().putBitmap(MediaMetadata.METADATA_KEY_ART, art).build())!!.load(app)!!
-        for (back in listOf(null, cover)) {
+        val session = HidSession(object : ReportTransport {
+            override suspend fun send(report: ByteArray) = error("Rendering must not send USB reports")
+            override fun close() {}
+        }) {}
+        val encoder = MxKeypad::class.java.getDeclaredConstructor(HidSession::class.java, Function1::class.java)
+            .apply { isAccessible = true }.newInstance(session, { _: String -> })
+        fun flat(color: Int) = Bitmap.createBitmap(480,480,Bitmap.Config.ARGB_8888).apply { eraseColor(color) }
+        fun checkCaption(tile: KeyTile, jpeg: Bitmap, offsetX: Int = 0, offsetY: Int = 0) {
+            val plain = images.image(7,tile.copy(label = ""))
+            val labeled = images.image(7,tile)
+            val center = if (tile.glyph == PlayerGlyph.TRACK) 94 else 70
+            for (band in listOf(center-19 until center, center until center+19)) {
+                var solid = 0; var legible = 0
+                for (y in band) for (x in 7..110) {
+                    val ink = labeled.getPixel(x,y)
+                    if (ink != Color.BLACK && ink != Color.WHITE) continue
+                    if (abs(Color.red(plain.getPixel(x,y)) - Color.red(ink)) < 100) continue
+                    solid++
+                    if (abs(Color.red(jpeg.getPixel(offsetX+x,offsetY+y)) - Color.red(ink)) < 70) legible++
+                }
+                assertTrue("Caption lost ink in rows $band ($legible/$solid)", solid > 30 && legible >= solid * .9)
+            }
+        }
+        for (back in listOf(null, flat(Color.WHITE), flat(Color.BLACK), cover)) {
             images.useArtwork(back)
             val native = tiles.mapIndexed(images::image)
-            val decoded = native.map { src ->
-                val bytes = ByteArrayOutputStream().also {
-                    assertTrue(src.compress(Bitmap.CompressFormat.JPEG, if (back == null) 90 else 50, it))
-                }.toByteArray()
+            val decoded = native.mapIndexed { i, src ->
+                val bytes = encoder.encodeKeyJpeg(i,src,back != null)
                 BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
             }
+            checkCaption(tiles[7],decoded[7])
+            val normalTitle = KeyTile("Long ordinary key caption", "", Color.DKGRAY)
+            val ordinary = encoder.encodeKeyJpeg(7,images.image(7,normalTitle),back != null)
+            checkCaption(normalTitle,BitmapFactory.decodeByteArray(ordinary,0,ordinary.size))
             // Flat player keys have no numeric fallback or captions; changing only the physical
             // index cannot change any pixels. Normal plugin tiles still have distinct key numbers.
             if (back == null) {
@@ -71,14 +100,38 @@ class PlayerRenderTest {
                 assertFalse(native[0].sameAs(images.image(0, changed)))
                 assertFalse(native[6].sameAs(images.image(6, tiles[6].copy(enabled = false))))
                 assertEquals(tiles.size, native.map { b -> IntArray(118*118).also { b.getPixels(it,0,118,0,0,118,118) }.contentHashCode() }.distinct().size)
+                val tops = mutableListOf<Int>(); val bottoms = mutableListOf<Int>()
+                val variants = listOf(1 to PlayerGlyph.UNMUTE, 4 to PlayerGlyph.PAUSE, 4 to PlayerGlyph.PLAY_PAUSE)
+                    .map { (i,glyph) ->
+                        val bytes = encoder.encodeKeyJpeg(i,images.image(i,tiles[i].copy(glyph = glyph)),false)
+                        BitmapFactory.decodeByteArray(bytes,0,bytes.size)
+                    }
+                for (b in decoded + variants) {
+                    val rows = (10..73).filter { y -> (25..93).any { x -> Color.red(b.getPixel(x,y)) > 175 } }
+                    tops += rows.first(); bottoms += rows.last()
+                }
+                assertTrue("Glyph tops: $tops", tops.max() - tops.min() <= 1)
+                assertTrue("Glyph bottoms: $bottoms", bottoms.max() - bottoms.min() <= 1)
+                suspend fun fill(level: VolumeLevel): Int {
+                    val bytes = encoder.encodeKeyJpeg(1,images.image(1,tiles[1].copy(volumeLevel = level)))
+                    val b = BitmapFactory.decodeByteArray(bytes,0,bytes.size)
+                    return (30..88).count { Color.red(b.getPixel(it,85)) > 160 }
+                }
+                assertEquals(0,fill(VolumeLevel(10,15,true)))
+                assertEquals(0,fill(VolumeLevel(0,15,false)))
+                assertEquals(0,fill(VolumeLevel(6,0,false)))
+                assertTrue(fill(VolumeLevel(6,15,false)) in 20..26)
+                assertEquals(59,fill(VolumeLevel(15,15,false)))
             }
-            // Solid glyph strokes and the two lines of title must keep their contrast after JPEG.
+            // Strokes keep their contrasting ink on plain, bright, dark and textured regions.
             for (i in native.indices) {
-                val ys = if (i == 7) 42..83 else 37..78
-                val ink = if (i == 4) 0 else 255
+                val r = KeypadProtocol.keyRegion(i)
                 var count = 0; var retained = 0
-                for (y in ys) for (x in 39..79) {
-                    if (native[i].getPixel(x,y) != Color.rgb(ink,ink,ink)) continue
+                for (y in 32..70) for (x in 36..82) {
+                    val pixel = native[i].getPixel(x,y)
+                    if (pixel != Color.WHITE && pixel != Color.BLACK) continue
+                    if (pixel == back?.getPixel(r.x+x,r.y+y)) continue
+                    val ink = Color.red(pixel)
                     count++
                     if (abs(Color.red(decoded[i].getPixel(x,y)) - ink) < 70) retained++
                 }
@@ -91,17 +144,30 @@ class PlayerRenderTest {
             val mirror = Bitmap.createBitmap(480,480,Bitmap.Config.ARGB_8888)
             panel.draw(Canvas(mirror))
             decoded.forEachIndexed { i,b ->
-                val r = tel.misa.mxpocket.driver.KeypadProtocol.keyRegion(i)
+                val r = KeypadProtocol.keyRegion(i)
                 val expected = IntArray(r.width * r.height)
                 val actual = IntArray(expected.size)
                 b.getPixels(expected,0,r.width,0,0,r.width,r.height)
                 mirror.getPixels(actual,0,r.width,r.x,r.y,r.width,r.height)
                 assertArrayEquals("Mirror region $i", expected, actual)
             }
-            val name = if (back == null) "without-cover" else "with-cover"
+            if (back != null && back !== cover) continue
+            if (back != null) {
+                val g = KeypadProtocol.keyGrid
+                val sink = RenderedKeypad(encoder::encodeKeyJpeg, { _,_ -> error("Unexpected tile write") }, {},
+                    { encoder.encodeRegionJpeg(g,it) }, { bytes ->
+                        val actual = BitmapFactory.decodeByteArray(bytes,0,bytes.size)
+                        val r = KeypadProtocol.keyRegion(7)
+                        checkCaption(tiles[7],actual,r.x-g.x,r.y-g.y)
+                        Canvas(mirror).drawBitmap(actual,null,Rect(g.x,g.y,g.x+g.width,g.y+g.height),null)
+                    })
+                assertEquals(GridWrite.ACKNOWLEDGED,sink.writeGrid(back,native,false) { true })
+            }
+            val name = if (back == null) "flat-player" else "flat-player-cover"
             File("build/reports/player-preview/$name.png").apply {
                 parentFile?.mkdirs(); outputStream().use { mirror.compress(Bitmap.CompressFormat.PNG,100,it) }
             }
         }
+        encoder.close()
     }
 }

@@ -398,6 +398,7 @@ class MediaPanelTest {
                 val actual = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
                 val frame = session.frame()
                 assertEquals("$actual / ${audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)}",frame.keys[1].footer)
+                assertEquals(actual,frame.keys[1].volumeLevel?.current)
                 assertSame(session.keyImage(1,frame.keys[1]),writes.last { it.first == 1 }.second)
             }
             for (v in listOf(2,4,1)) {

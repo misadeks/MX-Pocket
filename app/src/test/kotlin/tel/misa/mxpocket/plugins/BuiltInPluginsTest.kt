@@ -57,7 +57,7 @@ class BuiltInPluginsTest {
         engine.setEnabled(true)
         engine.next(1)
         assertEquals("6 / 15", engine.render().keys[1].footer)
-        assertEquals("Now playing", engine.render().keys[7].label)
+        assertEquals("Media keys", engine.render().keys[7].label)
         for (index in 0..8) tap(index)
         assertEquals(listOf(
             DeckCommand.QUIETER, DeckCommand.MUTE, DeckCommand.LOUDER, DeckCommand.PREVIOUS,

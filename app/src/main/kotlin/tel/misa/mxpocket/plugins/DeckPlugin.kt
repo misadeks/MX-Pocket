@@ -29,9 +29,10 @@ internal class DeckPlugin(id: String, title: String, capability: PluginCapabilit
         Slot(state.tile(command, component), PluginAction.Deck(command, component))
     private fun player(): List<Slot> {
         val media = state.media
-        fun control(command: C, glyph: PlayerGlyph, footer: String = "") = slot(command).let {
+        val volume = VolumeLevel(media.volume, media.maximum, media.muted)
+        fun control(command: C, glyph: PlayerGlyph, footer: String = "", level: VolumeLevel? = null) = slot(command).let {
             it.copy(tile = it.tile.copy(glyph = glyph, footer = footer, showLabel = false,
-                showFooter = footer.isNotEmpty() && it.tile.enabled, primary = command == C.PLAY))
+                showFooter = false, primary = command == C.PLAY, volumeLevel = level))
         }
         val transport = when (media.playing) {
             true -> PlayerGlyph.PAUSE
@@ -40,12 +41,12 @@ internal class DeckPlugin(id: String, title: String, capability: PluginCapabilit
         }
         return listOf(control(C.QUIETER, PlayerGlyph.VOLUME_DOWN),
             control(if (media.muted) C.UNMUTE else C.MUTE, if (media.muted) PlayerGlyph.UNMUTE else PlayerGlyph.MUTE,
-                if (media.maximum > 0) "${media.volume} / ${media.maximum}" else ""),
+                volume.description, volume),
             control(C.LOUDER, PlayerGlyph.VOLUME_UP),
             control(C.PREVIOUS, PlayerGlyph.PREVIOUS), control(C.PLAY, transport), control(C.NEXT, PlayerGlyph.NEXT),
             control(C.BACK_10, PlayerGlyph.BACK_10),
-            Slot(KeyTile(media.title.ifBlank { "Now playing" }, media.status, tel.misa.mxpocket.decks.AUDIO_BACKGROUND.toInt(),
-                glyph = PlayerGlyph.TRACK, readOnly = true)),
+            Slot(KeyTile(media.title.ifBlank { media.status }, media.status, tel.misa.mxpocket.decks.AUDIO_BACKGROUND.toInt(),
+                glyph = PlayerGlyph.TRACK, readOnly = true, showFooter = false)),
             control(C.FORWARD_10, PlayerGlyph.FORWARD_10))
     }
     private fun launcher(): List<Slot> {

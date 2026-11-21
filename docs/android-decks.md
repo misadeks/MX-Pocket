@@ -40,7 +40,9 @@ updates immediately. The last authorized cover can remain for up to 650 ms; if
 no replacement arrives, the normal background returns. A new Audio page can
 wait that same brief interval before its first physical upload. Losing access
 or switching players does not extend the old cover's lifetime.
-Keypad volume changes read back Android's music-stream level right away.
+The bar beneath mute shows Android's local music-stream level. It empties when
+muted, fills at maximum and is omitted if the maximum is unknown. TalkBack
+announces the precise level and mute state. Keypad changes read the level back right away.
 Phone-side volume notifications refresh the same readout; devices that omit
 them fall back to a two-second check.
 

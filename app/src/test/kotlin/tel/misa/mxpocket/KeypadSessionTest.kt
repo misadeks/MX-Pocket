@@ -161,6 +161,7 @@ class KeypadSessionTest {
                 assertTrue(actual > 3)
                 assertEquals(actual,session.deckState.value.media.volume)
                 assertEquals("$actual / ${audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)}",session.frame().keys[1].footer)
+                assertEquals(actual,session.frame().keys[1].volumeLevel?.current)
             }
             press(7); press(8); press(9)
             assertEquals(P.ACTION_SKIP_TO_NEXT,controls.lastPerformedAction)

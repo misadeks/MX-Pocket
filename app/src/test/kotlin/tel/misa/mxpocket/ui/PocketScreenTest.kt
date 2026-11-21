@@ -94,6 +94,7 @@ class PocketScreenTest {
                     key.performClick()
                 }
                 assertEquals("Play", keys[4].contentDescription)
+                assertEquals("Mute, Sound on, 6 / 15", keys[1].contentDescription)
                 assertFalse(keys[6].isEnabled)
                 assertFalse(keys[7].isClickable)
                 assertEquals("android.widget.TextView", keys[7].createAccessibilityNodeInfo().className)
