@@ -1,3 +1,34 @@
 <resources>
     <color name="icon_background">#245CB5</color>
+    <!-- Dark workspace palette from the Stitch redesign. -->
+    <color name="pocket_background">#111215</color>
+    <color name="pocket_card">#18191D</color>
+    <color name="pocket_card_stroke">#272930</color>
+    <color name="pocket_inner">#121316</color>
+    <color name="pocket_inner_stroke">#24252B</color>
+    <color name="pocket_chip">#1B1C20</color>
+    <color name="pocket_chip_stroke">#2B2D35</color>
+    <color name="pocket_button_stroke">#30323D</color>
+    <color name="pocket_control">#1E2027</color>
+    <color name="pocket_nav">#131418</color>
+    <color name="pocket_nav_indicator">#2D323C</color>
+    <color name="pocket_text">#E5E5E5</color>
+    <color name="pocket_text_strong">#FFFFFF</color>
+    <color name="pocket_text_muted">#A3A3A3</color>
+    <color name="pocket_text_faint">#8A8A8A</color>
+    <color name="pocket_accent">#60A5FA</color>
+    <color name="pocket_on_accent">#0B1D3A</color>
+    <color name="pocket_accent_container">#194375</color>
+    <color name="pocket_success">#34D399</color>
+    <color name="pocket_success_container">#18392B</color>
+    <color name="pocket_success_stroke">#235840</color>
+    <color name="pocket_danger">#FCA5A5</color>
+    <color name="pocket_danger_container">#35191C</color>
+    <color name="pocket_danger_stroke">#522428</color>
+    <color name="pocket_warning">#FBBF24</color>
+    <color name="pocket_warning_container">#3A2E12</color>
+    <color name="pocket_warning_stroke">#5C4718</color>
+    <color name="pocket_virtual">#93C5FD</color>
+    <color name="pocket_virtual_container">#14304A</color>
+    <color name="pocket_virtual_stroke">#1F4D75</color>
 </resources>

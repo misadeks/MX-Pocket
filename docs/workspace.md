@@ -1,6 +1,9 @@
 # Workspace walkthrough
 
-Home operates the current nine keys. Keypad edits them without executing
+Home shows the connection state, profile and page selectors and a text
+summary of what the nine physical LCD keys show; it lays the keys out as an
+on-screen grid only while the virtual keypad is connected, because the real
+keys are on the hardware. Keypad edits them without executing
 anything. Plugins controls availability and optional Android access. Flows
 edits and runs workflows. Settings contains USB consent preferences, repaint,
 the session-only image picker and diagnostic log export.

@@ -27,10 +27,12 @@ class FocusPlugin(title: String) : PocketPlugin {
         }
     }
 
+    // The countdown key shows large digits without an icon, as in the keypad artwork.
     override fun render(nowMillis: Long) = frame(
         listOf(if (timer.running) "Pause" else "Start", timer.label(nowMillis), "Reset",
             "-5 min", "${timer.durationMillis / 60_000} min", "+5 min", "15 min", "25 min", "50 min"),
         "FOCUS", 0xff194375.toInt(),
+        listOf(if (timer.running) "⏸️" else "▶️", "", "🔄", "➖", "⏱️", "➕", "🕒", "🕔", "🕙"),
     )
 
     override fun onKey(event: PluginKeyEvent, host: PluginHost) {
@@ -55,6 +57,7 @@ class PhonePlugin(title: String) : PocketPlugin {
     override fun render(nowMillis: Long) = frame(
         listOf("Camera", "Settings", "Dialer", "Web", "Phone", "Alarm", "Focus", "Audio", "Repaint"),
         "PHONE", 0xff49345f.toInt(),
+        listOf("📷", "⚙️", "📞", "🌐", "📱", "⏰", "🎯", "🎵", "🔄"),
     )
 
     override fun onKey(event: PluginKeyEvent, host: PluginHost) {

@@ -18,8 +18,12 @@ It deliberately uses logical state rather than Bitmaps or USB reports:
 | `onKey(event, host)` | LCD key index 0..8, press/release and synthetic release flag |
 | `onDeactivate()` | Synchronous cleanup; scope is already cancelled and host effects disabled |
 
-A `KeyTile` contains a label, footer and ARGB background color. The app draws
-the key number, label and footer and overlays any user-selected background image.
+A `KeyTile` contains a label, footer, ARGB background color and an optional
+`icon` (an emoji or short text). The app draws each key as a rounded tile in its
+color with the icon above a bold label and an uppercase footer; key positions are
+not numbered. A label without an icon is centred, and numeric readouts such as a
+countdown use large monospace digits. A key icon set in the layout editor
+replaces the plugin's icon. Any user-selected background image is overlaid.
 The independent driver scales, JPEG-encodes and uploads it. Plugins must not
 allocate/recycle host images or import `MxKeypad`/raw USB.
 

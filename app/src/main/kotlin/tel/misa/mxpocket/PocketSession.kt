@@ -249,8 +249,19 @@ internal class PocketSession(
             (tile ?: KeyTile(label, footer, key.color)).copy(label = label, footer = footer,
                 background = if (!available) 0xff494c51.toInt() else if (key.color == DeckKey().color)
                     tile?.background ?: key.color else key.color,
-                icon = key.icon.ifBlank { tile?.icon.orEmpty() }, enabled = available)
+                icon = key.icon.ifBlank { tile?.icon.orEmpty() }.ifBlank { defaultIcon(call) }, enabled = available)
         })
+    }
+
+    /** Icons for keys whose action has no plugin tile of its own; a user-chosen key icon always wins. */
+    private fun defaultIcon(call: ActionCall?): String = when (call?.id) {
+        DeckActions.PAGE -> "📂"
+        DeckActions.PROFILE -> "🔀"
+        DeckActions.BACK -> "↩️"
+        DeckActions.ROOT -> "🏠"
+        "workflow.run" -> "⚡"
+        "sound.play" -> "🔔"
+        else -> ""
     }
 
     fun keyImage(index: Int, tile: KeyTile): Bitmap = images.image(index, tile)

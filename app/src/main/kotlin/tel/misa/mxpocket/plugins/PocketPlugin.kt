@@ -66,5 +66,6 @@ interface PocketPlugin {
     fun onDeactivate() {}
 }
 
-internal fun frame(labels: List<String>, footer: String, background: Int): PluginFrame =
-    PluginFrame(labels.map { KeyTile(it, footer, background) })
+/** [icons] are optional per-key emoji/text icons drawn above each label; blank means no icon. */
+internal fun frame(labels: List<String>, footer: String, background: Int, icons: List<String> = emptyList()): PluginFrame =
+    PluginFrame(labels.mapIndexed { index, label -> KeyTile(label, footer, background, icon = icons.getOrElse(index) { "" }) })

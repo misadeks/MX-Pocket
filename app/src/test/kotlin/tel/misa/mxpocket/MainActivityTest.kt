@@ -59,6 +59,27 @@ class MainActivityTest {
         }
     }
 
+    @Test fun homeSummarizesLcdKeysAndShowsGridOnlyForVirtualKeypad() {
+        Robolectric.buildActivity(MainActivity::class.java).setup().use { controller ->
+            val activity = controller.get()
+            val grid = activity.findViewById<View>(R.id.pocket_key_grid)
+            val state = activity.findViewById<TextView>(R.id.pocket_connection_state)
+            assertEquals(View.GONE, grid.visibility)
+            assertEquals(activity.getString(R.string.state_not_connected), state.text.toString())
+            assertTrue(activity.findViewById<TextView>(R.id.pocket_keypad_summary).text
+                .startsWith("▶️ Start, 25:00, 🔄 Reset"))
+            views(activity.window.decorView).filterIsInstance<MaterialButton>()
+                .single { it.text == activity.getString(R.string.preview) }.performClick()
+            assertEquals(View.VISIBLE, grid.visibility)
+            assertEquals(activity.getString(R.string.state_virtual), state.text.toString())
+            views(activity.window.decorView).filterIsInstance<MaterialButton>()
+                .single { it.text == activity.getString(R.string.stop_simulator) }.performClick()
+            assertEquals(View.GONE, grid.visibility)
+            assertEquals(activity.getString(R.string.state_not_connected), state.text.toString())
+            shadowOf(Looper.getMainLooper()).idle()
+        }
+    }
+
     @Test fun backgroundLifecycleNeverStartsServiceForAnIdleScreen() {
         Robolectric.buildActivity(MainActivity::class.java).setup().use { controller ->
             controller.pause().stop()

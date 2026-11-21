@@ -4,7 +4,20 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Color
+import tel.misa.mxpocket.R
+import tel.misa.mxpocket.ui.PocketButton
+import tel.misa.mxpocket.ui.PocketCard
+import tel.misa.mxpocket.ui.PocketColors
+import tel.misa.mxpocket.ui.PocketDivider
+import tel.misa.mxpocket.ui.PocketDot
+import tel.misa.mxpocket.ui.PocketIcon
+import tel.misa.mxpocket.ui.PocketInner
+import tel.misa.mxpocket.ui.PocketLabel
+import tel.misa.mxpocket.ui.PocketTone
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -60,15 +73,28 @@ fun WorkflowScreen(controller: WorkflowController) {
             Text(when (view) {
                 "edit" -> "Workflow editor"; "history" -> "Run history"; "endpoints" -> "Approved endpoints"
                 else -> "Workflows"
-            }, style = MaterialTheme.typography.headlineSmall)
+            }, color = Color.White, style = MaterialTheme.typography.headlineSmall)
             error?.let { ErrorLine(it) }
             status?.let { state ->
                 if (running || view == "edit") {
-                    Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.medium) {
-                        Column(Modifier.fillMaxWidth().padding(12.dp).semantics { liveRegion = LiveRegionMode.Polite }) {
-                            Text(state.name, style = MaterialTheme.typography.titleSmall)
-                            Text("${if (state.step > 0) "Step ${state.step}: " else ""}${state.message}")
-                            if (running) TextButton(onClick = controller::cancel) { Text("Cancel run") }
+                    Surface(color = PocketColors.card, shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, if (running) PocketColors.accentStroke else PocketColors.cardStroke)) {
+                        Column(Modifier.fillMaxWidth().padding(14.dp).semantics { liveRegion = LiveRegionMode.Polite },
+                            verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                if (running) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = PocketColors.accent)
+                                Column(Modifier.weight(1f)) {
+                                    Text(state.name, color = Color.White, style = MaterialTheme.typography.titleSmall)
+                                    Text("${if (state.step > 0) "Step ${state.step}: " else ""}${state.message}",
+                                        color = PocketColors.muted, style = MaterialTheme.typography.bodyMedium)
+                                }
+                                if (running) PocketButton("Cancel run", controller::cancel, tone = PocketTone.DANGER)
+                            }
+                            if (running) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                PocketIcon(R.drawable.ic_pocket_warning, PocketColors.warning, 14.dp)
+                                Text("Cancelling does not undo completed actions.", color = PocketColors.muted,
+                                    style = MaterialTheme.typography.bodySmall)
+                            }
                         }
                     }
                 }
@@ -109,35 +135,60 @@ fun WorkflowScreen(controller: WorkflowController) {
                 }
                 "endpoints" -> EndpointPanel(controller, endpoints)
                 else -> {
-                    Text("Build a sequence, test it here, then assign it to a keypad key.")
-                    ActionRow {
-                        Button(onClick = { open(WorkflowDefinition()) }) { Text("New workflow") }
-                        TextButton(onClick = { section = "history"; message = null }) { Text("Run history") }
-                        TextButton(onClick = { section = "endpoints"; message = null }) { Text("Endpoints") }
+                    Text("Build a sequence, test it here, then assign it to a keypad key.", color = PocketColors.muted,
+                        style = MaterialTheme.typography.bodyLarge)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        PocketButton("New workflow", { open(WorkflowDefinition()) }, Modifier.weight(1.2f),
+                            icon = R.drawable.ic_pocket_plus, tone = PocketTone.SUCCESS, compact = true)
+                        PocketButton("Run history", { section = "history"; message = null }, Modifier.weight(1f),
+                            icon = R.drawable.ic_pocket_history, compact = true)
+                        PocketButton("Endpoints", { section = "endpoints"; message = null }, Modifier.weight(1f),
+                            icon = R.drawable.ic_pocket_list, compact = true)
                     }
-                    HorizontalDivider()
-                    if (saved.isEmpty()) Text("No saved workflows.")
+                    PocketLabel("Configured workflows (${saved.size})", Modifier.padding(top = 8.dp))
+                    if (saved.isEmpty()) Text("No saved workflows.", color = PocketColors.muted)
+                    val actionLabels = controller.actions().associate { it.id to it.label }
                     for (workflow in saved) {
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f).clickable { open(workflow) }.padding(vertical = 8.dp)) {
-                                Text(workflow.name, style = MaterialTheme.typography.titleMedium)
-                                Text("${workflow.steps.size} steps · ${workflow.trigger.kind.label}",
+                        val active = status?.workflowId == workflow.id
+                        PocketCard {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.clickable(onClickLabel = "Edit ${workflow.name}") { open(workflow) }) {
+                                PocketDot(if (active && running) PocketColors.accent else PocketColors.faint)
+                                Column(Modifier.weight(1f)) {
+                                    Text(workflow.name, color = Color.White, style = MaterialTheme.typography.titleMedium)
+                                    Text("${workflow.steps.size} steps · ${workflow.trigger.kind.label}",
+                                        color = PocketColors.muted, style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                            if (workflow.steps.isNotEmpty()) PocketInner {
+                                workflow.steps.take(4).forEachIndexed { index, step ->
+                                    val name = if (step.kind == StepKind.ACTION) actionLabels[step.target] ?: step.kind.label
+                                        else step.kind.label
+                                    Text("${index + 1}. $name", color = PocketColors.text, maxLines = 1,
+                                        style = MaterialTheme.typography.bodyMedium)
+                                }
+                                if (workflow.steps.size > 4) Text("+${workflow.steps.size - 4} more", color = PocketColors.faint,
                                     style = MaterialTheme.typography.bodySmall)
                             }
-                            OutlinedButton(enabled = !running, onClick = {
-                                message = controller.validate(workflow)
-                                if (message == null && !controller.run(workflow.id, WorkflowOrigin.MANUAL))
-                                    message = "The workflow could not start."
-                            }) { Text("Run") }
+                            if (!running && active) Text(status!!.message,
+                                Modifier.semantics { liveRegion = LiveRegionMode.Polite }, color = PocketColors.muted,
+                                style = MaterialTheme.typography.labelLarge)
+                            PocketDivider()
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                PocketButton("Run", {
+                                    message = controller.validate(workflow)
+                                    if (message == null && !controller.run(workflow.id, WorkflowOrigin.MANUAL))
+                                        message = "The workflow could not start."
+                                }, Modifier.weight(1f), icon = R.drawable.ic_pocket_play, tone = PocketTone.SUCCESS,
+                                    enabled = !running, compact = true)
+                                PocketButton("Edit", { open(workflow) }, Modifier.weight(1f), icon = R.drawable.ic_pocket_edit,
+                                    compact = true)
+                                PocketButton("Copy", { open(controller.duplicate(workflow)) }, Modifier.weight(1f),
+                                    icon = R.drawable.ic_pocket_copy, compact = true)
+                                PocketButton("Delete", { remove = workflow }, Modifier.weight(1.1f),
+                                    icon = R.drawable.ic_pocket_delete, tone = PocketTone.DANGER, compact = true)
+                            }
                         }
-                        ActionRow {
-                            TextButton(onClick = { open(workflow) }) { Text("Edit") }
-                            TextButton(onClick = { open(controller.duplicate(workflow)) }) { Text("Duplicate") }
-                            TextButton(onClick = { remove = workflow }) { Text("Delete") }
-                        }
-                        if (!running && status?.workflowId == workflow.id) Text(status!!.message,
-                            Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.labelLarge)
-                        HorizontalDivider()
                     }
                 }
             }
@@ -171,7 +222,8 @@ internal fun ErrorLine(text: String) = Text(text, Modifier.semantics { liveRegio
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun ActionRow(content: @Composable FlowRowScope.() -> Unit) {
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), content = content)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
+        content = content)
 }
 
 @Composable

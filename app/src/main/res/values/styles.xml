@@ -1,8 +1,30 @@
 <resources>
-    <style name="Theme.MXPocket" parent="Theme.Material3.DayNight.NoActionBar">
-        <item name="colorPrimary">#245CB5</item>
-        <item name="colorOnPrimary">#FFFFFF</item>
-        <item name="colorSecondary">#485E80</item>
+    <!-- The Stitch redesign is dark-first; the same palette is used in light and dark system modes. -->
+    <style name="Theme.MXPocket" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="colorPrimary">@color/pocket_accent</item>
+        <item name="colorOnPrimary">@color/pocket_on_accent</item>
+        <item name="colorPrimaryContainer">@color/pocket_accent_container</item>
+        <item name="colorOnPrimaryContainer">@color/pocket_text_strong</item>
+        <item name="colorSecondary">@color/pocket_text_muted</item>
+        <item name="colorSecondaryContainer">@color/pocket_nav_indicator</item>
+        <item name="colorOnSecondaryContainer">@color/pocket_text_strong</item>
+        <item name="colorSurface">@color/pocket_background</item>
+        <item name="colorOnSurface">@color/pocket_text</item>
+        <item name="colorOnSurfaceVariant">@color/pocket_text_muted</item>
+        <item name="colorSurfaceContainerLowest">@color/pocket_inner</item>
+        <item name="colorSurfaceContainerLow">@color/pocket_inner</item>
+        <item name="colorSurfaceContainer">@color/pocket_card</item>
+        <item name="colorSurfaceContainerHigh">@color/pocket_chip</item>
+        <item name="colorSurfaceContainerHighest">@color/pocket_nav_indicator</item>
+        <item name="colorOutline">@color/pocket_button_stroke</item>
+        <item name="colorOutlineVariant">@color/pocket_card_stroke</item>
+        <item name="colorError">@color/pocket_danger</item>
+        <item name="colorErrorContainer">@color/pocket_danger_container</item>
+        <item name="colorOnErrorContainer">@color/pocket_danger</item>
+        <item name="android:colorBackground">@color/pocket_background</item>
+        <item name="android:statusBarColor">@color/pocket_background</item>
+        <item name="android:navigationBarColor">@color/pocket_nav</item>
+        <item name="android:windowLightStatusBar">false</item>
         <item name="android:fontFamily">sans</item>
         <item name="android:windowActionModeOverlay">true</item>
     </style>

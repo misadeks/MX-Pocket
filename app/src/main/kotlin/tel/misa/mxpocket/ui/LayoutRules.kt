@@ -7,8 +7,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
+import tel.misa.mxpocket.R
 import androidx.compose.ui.unit.dp
 import tel.misa.mxpocket.deck.*
 
@@ -18,7 +20,11 @@ internal fun RuleSection(profile: DeckProfile, signals: Map<String, String>, wri
     var editing by rememberSaveable { mutableStateOf<Int?>(null) }
     var removing by rememberSaveable { mutableStateOf<Int?>(null) }
     var showSignals by rememberSaveable { mutableStateOf(false) }
-    EditorHeading("Context rules")
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.weight(1f)) { EditorHeading("Context rules") }
+        if (writable && profile.rules.size < DeckLimits.RULES)
+            PocketTextLink("Add rule", { editing = -1 }, R.drawable.ic_pocket_plus)
+    }
     EditorNote("Matching rules add their weight to ${profile.name}’s score. A signal that isn’t observed adds nothing.")
     if (profile.rules.isEmpty()) {
         EditorNote("No rules for this profile.")
@@ -26,15 +32,17 @@ internal fun RuleSection(profile: DeckProfile, signals: Map<String, String>, wri
         for ((index, rule) in profile.rules.withIndex()) {
             val sample = signals[rule.signal]
             val matches = rule.matches(signals)
-            Column(Modifier.fillMaxWidth().padding(top = 4.dp)) {
-                Text("${rule.signal} = ${rule.value}", style = MaterialTheme.typography.titleMedium)
-                EditorNote(buildString {
-                    append("Weight ${rule.weight} · ")
-                    when {
-                        matches -> append("Matches now (+${rule.weight})")
-                        sample == null -> append("Not observed")
-                        else -> append("Does not match (now: $sample)")
-                    }
+            PocketInner {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PocketIcon(R.drawable.ic_pocket_bolt, PocketColors.accent, 14.dp)
+                    Text("${rule.signal} = ${rule.value}", Modifier.weight(1f), color = PocketColors.text,
+                        style = MaterialTheme.typography.bodyMedium)
+                    PocketTag("Weight ${rule.weight}")
+                }
+                EditorNote(when {
+                    matches -> "Matches now (+${rule.weight})"
+                    sample == null -> "Not observed"
+                    else -> "Does not match (now: $sample)"
                 })
                 EditorActions {
                     TextButton(onClick = { editing = index }, enabled = writable) { Text("Edit rule") }
@@ -43,10 +51,7 @@ internal fun RuleSection(profile: DeckProfile, signals: Map<String, String>, wri
             }
         }
     }
-    EditorActions {
-        OutlinedButton(onClick = { editing = -1 }, enabled = writable && profile.rules.size < DeckLimits.RULES) { Text("Add rule") }
-        TextButton(onClick = { showSignals = !showSignals }) { Text(if (showSignals) "Hide signals" else "Observed signals (${signals.size})") }
-    }
+    TextButton(onClick = { showSignals = !showSignals }) { Text(if (showSignals) "Hide signals" else "Observed signals (${signals.size})") }
     if (showSignals) {
         if (signals.isEmpty()) EditorNote("No signals observed yet.")
         else for ((signal, value) in signals.toSortedMap()) EditorNote("$signal: $value")

@@ -32,9 +32,11 @@ internal class DeckPlugin(id: String, title: String, capability: PluginCapabilit
         val current = page.coerceIn(0, pages - 1)
         return List(7) { index ->
             state.favorites.getOrNull(current * 7 + index)?.let { slot(C.OPEN, it.component) }
-                ?: Slot(KeyTile(if (index == 0) "No favorites" else "-", "Favorites", 0xff384674.toInt()))
+                ?: Slot(KeyTile(if (index == 0) "No favorites" else "-", "Favorites", 0xff384674.toInt(),
+                    icon = if (index == 0) "⭐" else ""))
         } + listOf(slot(C.EDIT), Slot(KeyTile(if (pages > 1) "Next apps" else "Favorites",
-            "${current + 1} / $pages", 0xff384674.toInt(), inputToken = "page:$current/$pages"), next = pages > 1))
+            "${current + 1} / $pages", 0xff384674.toInt(), inputToken = "page:$current/$pages",
+            icon = if (pages > 1) "➡️" else "⭐"), next = pages > 1))
     }
     private fun slots(): List<Slot> = when (descriptor.id) {
         "launcher" -> launcher()
@@ -45,7 +47,7 @@ internal class DeckPlugin(id: String, title: String, capability: PluginCapabilit
                 access.copy(tile = access.tile.copy(label = media.title.ifBlank { media.status },
                     footer = if (media.access) media.status else "Media access")),
                 slot(C.NEXT), slot(C.MUTE), Slot(KeyTile("${media.volume} / ${media.maximum}", "Volume",
-                    tel.misa.mxpocket.decks.AUDIO_BACKGROUND.toInt())),
+                    tel.misa.mxpocket.decks.AUDIO_BACKGROUND.toInt(), icon = "🎚️")),
                 slot(C.UNMUTE))
         }
         "studio" -> listOf(C.PHOTO,

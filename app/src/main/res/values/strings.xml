@@ -25,6 +25,13 @@
     <string name="diagnostics">USB diagnostics</string>
     <string name="log">Session log</string>
     <string name="not_connected">Not connected. USB permission and a compatible HID descriptor are required.</string>
+    <string name="state_not_connected">Not connected</string>
+    <string name="state_connecting">Connecting…</string>
+    <string name="state_connected">Connected: USB session active</string>
+    <string name="state_virtual">Virtual keypad: no USB messages</string>
+    <string name="profiles">Profiles</string>
+    <string name="keypad_shows_label">Keypad shows:</string>
+    <string name="blank_key">(blank)</string>
     <string name="preview_note">Virtual keypad connected. Keys perform real actions. No USB messages are sent.</string>
     <string name="profile_note">Source-supported profile: one 480x480 panel, nine 118x118 visible key regions. Physical behavior has not been verified on this phone.</string>
     <string name="focus">Focus</string>

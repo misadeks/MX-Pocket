@@ -11,6 +11,25 @@ import tel.misa.mxpocket.decks.*
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class BuiltInPluginsTest {
+    @Test fun builtInKeysCarryArtworkIconsExceptTheCountdownReadout() {
+        val focus = FocusPlugin("Focus").render(0).keys
+        assertEquals(listOf("▶️", "", "🔄", "➖", "⏱️", "➕", "🕒", "🕔", "🕙"), focus.map { it.icon })
+        assertEquals("Start", focus[0].label)
+        assertEquals("25:00", focus[1].label)
+        val phone = PhonePlugin("Phone").render(0).keys
+        assertTrue(phone.all { it.icon.isNotBlank() })
+        assertEquals("📷", phone[0].icon)
+    }
+
+    @Test fun deckCommandIconsFollowPlaybackAndRecordingState() {
+        assertEquals("▶️", DeckState().tile(DeckCommand.PLAY).icon)
+        assertEquals("⏸️", DeckState(media = MediaDeckState(playing = true)).tile(DeckCommand.PLAY).icon)
+        assertEquals("🔴", DeckState(studio = StudioState(recording = true)).tile(DeckCommand.RECORD).icon)
+        // Favorites keep the installed app's icon instead of an emoji.
+        assertEquals("", DeckState(favorites = listOf(Favorite("a/.B", "B"))).tile(DeckCommand.OPEN, "a/.B").icon)
+        DeckCommand.entries.filter { it != DeckCommand.OPEN }.forEach { assertTrue(it.name, it.emoji.isNotBlank()) }
+    }
+
     @Test fun focusActionsAndCountdownSurvivePageSwitchWithoutStaleTicks() = runTest {
         val actions = mutableListOf<PluginAction>()
         var updates = 0

@@ -1,9 +1,0 @@
-<resources>
-    <style name="Theme.MXPocket" parent="Theme.Material3.DayNight.NoActionBar">
-        <item name="colorPrimary">#AEC6FF</item>
-        <item name="colorOnPrimary">#002E69</item>
-        <item name="colorSecondary">#BBC7DB</item>
-        <item name="android:fontFamily">sans</item>
-        <item name="android:windowActionModeOverlay">true</item>
-    </style>
-</resources>

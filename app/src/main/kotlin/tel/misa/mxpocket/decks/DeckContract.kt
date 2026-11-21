@@ -2,7 +2,7 @@ package tel.misa.mxpocket.decks
 
 import tel.misa.mxpocket.plugins.KeyTile
 
-internal const val AUDIO_BACKGROUND = 0xff303438
+internal const val AUDIO_BACKGROUND = 0xff274740
 
 /** Persist IDs, never enum ordinals. A favorite is an Android flattened ComponentName, not an intent URI. */
 enum class DeckCommand(val id: String, val label: String, val deck: String) {
@@ -94,6 +94,47 @@ data class DeckState(
             DeckCommand.LOUDER, DeckCommand.QUIETER, DeckCommand.MUTE, DeckCommand.UNMUTE -> !media.fixedVolume
             else -> true
         }
-        return KeyTile(label, footer, color, favorite?.component, command.id + (component ?: ""), enabled = available)
+        // Favorites keep the installed app's own icon; other commands show an emoji above the label.
+        val icon = when (command) {
+            DeckCommand.OPEN -> ""
+            DeckCommand.PLAY -> if (media.playing == true) "⏸️" else "▶️"
+            DeckCommand.RECORD -> if (studio.recording) "🔴" else "⏺️"
+            else -> command.emoji
+        }
+        return KeyTile(label, footer, color, favorite?.component, command.id + (component ?: ""), icon = icon,
+            enabled = available)
     }
+}
+
+/** Default key icon for each command, shown on the keypad LCD and in the app's key previews. */
+internal val DeckCommand.emoji: String get() = when (this) {
+    DeckCommand.OPEN -> "📱"
+    DeckCommand.EDIT -> "✏️"
+    DeckCommand.PLAY -> "⏯️"
+    DeckCommand.PREVIOUS -> "⏮️"
+    DeckCommand.NEXT -> "⏭️"
+    DeckCommand.LOUDER -> "🔊"
+    DeckCommand.QUIETER -> "🔉"
+    DeckCommand.MUTE -> "🔇"
+    DeckCommand.UNMUTE -> "🔈"
+    DeckCommand.MEDIA_ACCESS -> "🎵"
+    DeckCommand.STUDIO -> "🎬"
+    DeckCommand.PHOTO -> "📷"
+    DeckCommand.RECORD -> "⏺️"
+    DeckCommand.STOP -> "⏹️"
+    DeckCommand.TIMER -> "⏲️"
+    DeckCommand.ZOOM_IN -> "➕"
+    DeckCommand.ZOOM_OUT -> "➖"
+    DeckCommand.FOCUS -> "🎯"
+    DeckCommand.TORCH -> "🔦"
+    DeckCommand.MARKER -> "📍"
+    DeckCommand.BACK -> "↩️"
+    DeckCommand.HOME -> "🏠"
+    DeckCommand.RECENTS -> "🗂️"
+    DeckCommand.UP -> "⬆️"
+    DeckCommand.DOWN -> "⬇️"
+    DeckCommand.FORWARD -> "➡️"
+    DeckCommand.REVERSE -> "⬅️"
+    DeckCommand.ACTIVATE -> "✅"
+    DeckCommand.NAV_ACCESS -> "🧭"
 }
