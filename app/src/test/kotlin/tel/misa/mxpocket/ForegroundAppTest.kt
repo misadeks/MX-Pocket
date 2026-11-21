@@ -13,6 +13,7 @@ import android.os.Looper
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import org.junit.Assert.*
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -41,6 +42,10 @@ class ForegroundAppTest {
     private val camera = "example.camera"
     private val other = "example.unmapped"
 
+    @Before fun grantReceiverPermission() {
+        shadowOf(app).grantPermissions("${app.packageName}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION")
+    }
+
     private fun event(pkg: String, type: Int, time: Long = System.currentTimeMillis(), activity: String = "Main") {
         shadowOf(usage).addEvent(EventBuilder.buildEvent().setPackage(pkg).setClass(activity)
             .setEventType(type).setTimeStamp(time).build())
@@ -53,7 +58,7 @@ class ForegroundAppTest {
 
     @Test fun twoMappingsChangeOnlyTheMenuAndLoseTheirSignalOnPinLockAndRevocation() {
         lateinit var key: (KeyEvent) -> Unit
-        val session = PocketSession(app, Dispatchers.Main.immediate) { _, _, emit, _, _ ->
+        val session = PocketSession(app, usageDispatcher = Dispatchers.Main.immediate) { _, _, emit, _, _ ->
             key = emit
             object : KeypadOutput {
                 override fun close() {}
@@ -156,7 +161,7 @@ class ForegroundAppTest {
     }
 
     @Test fun unlockedResumeBeforeFirstPollMatchesButRegrantDoesNotReplayThatInterval() {
-        val session = PocketSession(app, Dispatchers.Main.immediate)
+        val session = PocketSession(app, usageDispatcher = Dispatchers.Main.immediate)
         val screen = object : PocketSession.Screen {
             override fun render() {}
             override fun openApp(app: tel.misa.mxpocket.plugins.PhoneApp) = false
@@ -227,7 +232,7 @@ class ForegroundAppTest {
         val pausedReads = object : CoroutineDispatcher() {
             override fun dispatch(context: CoroutineContext, block: Runnable) { pending.addLast(block) }
         }
-        val session = PocketSession(app, pausedReads)
+        val session = PocketSession(app, usageDispatcher = pausedReads)
         val screen = object : PocketSession.Screen {
             override fun render() {}
             override fun openApp(app: tel.misa.mxpocket.plugins.PhoneApp) = false

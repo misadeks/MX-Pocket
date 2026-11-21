@@ -19,6 +19,31 @@ class DeckRepositoryTest {
     private val file: File get() = File(folder.root, "deck.json")
     private val repo by lazy { DeckRepository(file) }
 
+    @Test fun removingAnAppMappingLeavesNoPackageInTheSavedOrExportedReason() {
+        val pkg = "example.privateplayer"
+        val rule = DeckRule("foregroundApp", pkg, 5)
+        repo.setRules("studio", listOf(rule)).getOrThrow()
+        repo.setAutomatic(true).getOrThrow()
+        for (time in listOf(0L, 2000L)) repo.observe(mapOf(rule.signal to pkg), time).getOrThrow()
+        assertEquals("studio", repo.state.value.activeProfileId)
+        assertEquals(listOf(rule), repo.decision.value.matches["studio"])
+        assertFalse(repo.reason.value.contains(pkg))
+        repo.setAutomatic(false).getOrThrow()
+        repo.setRules("studio", emptyList()).getOrThrow()
+        assertFalse(repo.exportJson().contains(pkg))
+        assertFalse(file.readText().contains(pkg))
+        assertFalse(DeckRepository(file).exportJson().contains(pkg))
+
+        val legacy = JSONObject(file.readText()).put("selectionReason", "Automatic: score 5 — foregroundApp=$pkg (+5)").toString()
+        file.writeText(legacy)
+        val restarted = DeckRepository(file)
+        assertEquals("studio", restarted.state.value.activeProfileId)
+        assertFalse(file.readText().contains(pkg))
+        restarted.importJson(legacy).getOrThrow()
+        assertFalse(restarted.exportJson().contains(pkg))
+        assertFalse(file.readText().contains(pkg))
+    }
+
     @Test fun savesUnicodeBindingsRulesAndNavigationWithoutLeakingMutableReferences() {
         val id = repo.createProfile("Travail 🐈").getOrThrow()
         val page = repo.createPage(id, "🌿").getOrThrow()

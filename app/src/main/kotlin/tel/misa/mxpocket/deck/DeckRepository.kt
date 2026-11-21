@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import tel.misa.mxpocket.actions.ActionCall
+import tel.misa.mxpocket.FOREGROUND_APP
 
 /** Own one instance per app session. Successful edits replace the file before publishing the new snapshot. */
 class DeckRepository internal constructor(private val file: File) {
@@ -41,7 +42,10 @@ class DeckRepository internal constructor(private val file: File) {
                     require(it.read() == -1) { "Deck file changed while reading" }
                     Charsets.UTF_8.newDecoder().decode(ByteBuffer.wrap(bytes)).toString()
                 }
-                DeckJson.decode(text)
+                val decoded = DeckJson.decode(text)
+                decoded.withPrivateReason().also { clean ->
+                    if (clean !== decoded) write(DeckJson.encode(clean))
+                }
             }
         } catch (e: Exception) {
             loadError = "Saved deck unreadable; import a backup or restore defaults"
@@ -56,7 +60,7 @@ class DeckRepository internal constructor(private val file: File) {
     }
 
     fun exportJson(): String = DeckJson.encode(state.value)
-    fun importJson(text: String) = edit(recover = true, force = true) { DeckJson.decode(text) }
+    fun importJson(text: String) = edit(recover = true, force = true) { DeckJson.decode(text).withPrivateReason() }
     fun restoreDefaults() = edit(recover = true, force = true) { defaultDeck() }
     fun save() = edit(force = true) { it }
 
@@ -216,6 +220,7 @@ class DeckRepository internal constructor(private val file: File) {
         } else if (nowMillis - candidateSince >= DEBOUNCE_MS) {
             val rules = matches.getValue(target)
             val explanation = if (rules.isEmpty()) "Automatic: default profile (no matching rules)"
+                else if (rules.any { it.signal == FOREGROUND_APP }) APP_MATCH_REASON
                 else "Automatic: score ${scores[target]} — " + rules.take(4).joinToString { "${it.signal}=${it.value} (+${it.weight})" } +
                     if (rules.size > 4) " and ${rules.size - 4} more" else ""
             val result = edit { it.copy(activeProfileId = target, selectionReason = explanation) }
@@ -225,6 +230,10 @@ class DeckRepository internal constructor(private val file: File) {
         mutableDecision.value = DeckDecision(reason.value, scores.locked(), matches.locked(), candidate)
         return Result.success(Unit)
     }
+
+    private fun DeckState.withPrivateReason() =
+        if (selectionReason.startsWith("Automatic: score ") && "$FOREGROUND_APP=" in selectionReason)
+            copy(selectionReason = APP_MATCH_REASON) else this
 
     @Synchronized
     fun clearObservation() {
@@ -275,6 +284,7 @@ class DeckRepository internal constructor(private val file: File) {
     }
 
     companion object {
+        private const val APP_MATCH_REASON = "Automatic: matched an app mapping"
         const val DEBOUNCE_MS = 1500L
         const val SCORE_MARGIN = 2
     }
