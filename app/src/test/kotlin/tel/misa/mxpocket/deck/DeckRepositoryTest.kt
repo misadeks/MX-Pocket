@@ -86,9 +86,10 @@ class DeckRepositoryTest {
         val old = JSONObject(repo.exportJson()).put("version", 1).toString()
         fun play(deck: DeckRepository) = deck.state.value.profiles.single { it.id == "audio" }.pages.single().keys[1].action
         file.writeText(old)
-        assertEquals(ActionCall("media.play-pause"), play(DeckRepository(file)))
+        val expected = ActionCall("media.play-pause", mapOf(DeckActions.LEGACY_SLOT_OWNER to "audio"))
+        assertEquals(expected, play(DeckRepository(file)))
         repo.importJson(old).getOrThrow()
-        assertEquals(ActionCall("media.play-pause"), play(repo))
+        assertEquals(expected, play(repo))
     }
 
     @Test fun intermediateV2UpdatesNavigationWithoutReapplyingTheAudioMigration() {
