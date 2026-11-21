@@ -78,9 +78,6 @@ internal class ForegroundApps(private val usage: UsageStatsManager, since: Long,
         val event = Event()
         var pastUnlock = false
         while (events.getNextEvent(event)) {
-            // Usage timestamps have millisecond precision: a resume in the same millisecond
-            // as a new consent interval cannot establish that the app resumed after the grant.
-            if (freshInterval && event.timeStamp == firstUnlockedPoll && event.eventType == Event.MOVE_TO_FOREGROUND) continue
             // Before the first unlocked sample, require Android's unlock boundary. An activity
             // can resume over the lock screen, so a resume (or screen-on) alone is not enough.
             if (event.timeStamp < firstUnlockedPoll) {
@@ -112,7 +109,11 @@ internal class ForegroundApps(private val usage: UsageStatsManager, since: Long,
         // A second resumed package (e.g. split screen) is not evidence of input focus.
         val pkg = resumed.keys.firstOrNull()?.first ?: return null
         if (pkg !in configured || resumed.keys.any { it.first != pkg }) return null
-        return pkg.takeIf { resumed.values.any { now - it in 0..FRESH_MS } }
+        // Keep same-millisecond resumes for split-screen ambiguity, but not as proof of a
+        // post-consent resume: Android timestamps cannot order them against the grant.
+        return pkg.takeIf { resumed.values.any { stamp ->
+            (!freshInterval || stamp > firstUnlockedPoll) && now - stamp in 0..FRESH_MS
+        } }
     }
 
     companion object { const val FRESH_MS = 10 * 60_000L }

@@ -217,6 +217,8 @@ class ForegroundAppTest {
         assertNull(read(2)) // Same millisecond as the new permission interval.
         event(player, Event.MOVE_TO_FOREGROUND, 100)
         event(camera, Event.FOREGROUND_SERVICE_START, 101)
+        assertNull(read(105)) // Camera may still be resumed alongside Player.
+        event(camera, Event.MOVE_TO_BACKGROUND, 106)
         assertEquals(player, read(110))
         event(camera, Event.MOVE_TO_FOREGROUND, 120)
         assertNull(read(130))
