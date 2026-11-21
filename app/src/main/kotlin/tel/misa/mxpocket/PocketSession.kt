@@ -68,7 +68,7 @@ internal class PocketSession(
     sealed interface Target {
         data class Phone(val app: PhoneApp) : Target
         data class FavoriteApp(val component: String) : Target
-        data object Studio : Target
+        data class Studio(val mode: CameraMode) : Target
     }
     data class PhoneAction(val target: Target, val ticket: Request, val index: Int, val receipt: Long,
         val pressedAt: Long, val id: String = UUID.randomUUID().toString())
@@ -89,7 +89,7 @@ internal class PocketSession(
     private val _signals = MutableStateFlow(emptyMap<String,String>())
     val signals = _signals.asStateFlow()
     private var visibleKey = false
-    private var studio: StudioActivity? = null
+    private val cameraAccess = CameraControlsAccess(app)
     internal val favoriteApps = FavoriteApps(app)
     private val media = MediaDeck(app, ::canShowTrack)
     private val decks = MutableStateFlow(tel.misa.mxpocket.decks.DeckState())
@@ -206,7 +206,7 @@ internal class PocketSession(
     fun pluginSettings(id: String): Pair<String, () -> Unit>? {
         val command = when (id) {
             "launcher" -> DeckCommand.EDIT
-            "studio" -> DeckCommand.STUDIO
+            "studio" -> DeckCommand.CAMERA_ACCESS
             "audio" -> DeckCommand.MEDIA_ACCESS
             "navigation" -> DeckCommand.NAV_ACCESS
             else -> return null
@@ -237,7 +237,9 @@ internal class PocketSession(
                 else workflowTile(call) ?: platformTile(call)
             val registered = tile != null || call?.id in setOf(DeckActions.PAGE, DeckActions.PROFILE,
                 DeckActions.BACK, DeckActions.ROOT, "sound.play","phone.open","keypad.status")
+            val cameraControl = tile?.inputToken?.let(DeckCommand::fromId)?.takeIf { it.nativeControl }
             val available = registered && key.enabled && call != null && (plugin == null || plugin == plugins.selectedId) &&
+                (cameraControl == null || isStudioKey(index, cameraControl)) &&
                 ownerOf(call) !in disabled.value && (tile?.enabled != false)
             val label = key.label.ifBlank { tile?.label ?: actionLabel(call) }
             val footer = when {
@@ -266,7 +268,7 @@ internal class PocketSession(
         signalClock?.cancel()
         signalClock = null
         sampleContext()
-        if (screen != null || studio != null || request != null) signalClock = sessionScope.launch {
+        if (screen != null || request != null) signalClock = sessionScope.launch {
             while (true) { delay(1000); sampleContext() }
         } else deck.clearObservation()
     }
@@ -275,8 +277,8 @@ internal class PocketSession(
         val time = LocalDateTime.now()
         val connected = output != null && request != null
         val state = deck.state.value
-        val snapshot = mapOf("foreground" to (screen != null || studio != null).toString(),
-            "activity" to when { studio != null -> "Pocket Studio"; screen != null -> "MX Pocket"; else -> "Not observed" },
+        val snapshot = mapOf("foreground" to (screen != null).toString(),
+            "activity" to if (screen != null) "MX Pocket" else "Not observed",
             "mediaActive" to (audio.isMusicActive && "audio" !in disabled.value).toString(), "keypadConnected" to connected.toString(),
             "usbDevice" to if (connected) "046D:C354" else "None",
             "simulator" to preview.toString(), "hour" to time.hour.toString(),
@@ -679,6 +681,9 @@ internal class PocketSession(
             is PluginAction.Deck -> {
                 val result = runDeckAction(action.command.id, action.component?.let { mapOf("component" to it) }.orEmpty(),
                     fromPhysicalKey = physicalPressAt != null)
+                if (action.command.nativeControl) physicalIndex?.let {
+                    feedback[it] = if (result.success) "Requested" else "Not sent"
+                }
                 message(result.message)
             }
             is PluginAction.Volume -> message(runDeckAction(when (action.change) {
@@ -709,13 +714,6 @@ internal class PocketSession(
         }
     }
 
-    fun attachStudio(activity: StudioActivity) { studio = activity; updateObservation() }
-    fun updateStudio(activity: StudioActivity, state: StudioState) {
-        if (activity === studio) decks.value = decks.value.copy(studio = state)
-    }
-    fun detachStudio(activity: StudioActivity) {
-        if (activity === studio) { studio = null; decks.value = decks.value.copy(studio = StudioState()); updateObservation() }
-    }
     fun publishFavorites(apps: List<Favorite>) {
         val selected = favoriteApps.selected()
         decks.value = decks.value.copy(favorites = apps.filter { it.component in selected })
@@ -769,7 +767,8 @@ internal class PocketSession(
                     }
                     favoritesChanged()
                     while (true) {
-                        decks.value = decks.value.copy(navigationEnabled = NavigationService.connected != null)
+                        decks.value = decks.value.copy(navigationEnabled = NavigationService.connected != null,
+                            cameraControls = cameraAccess.enabled)
                         delay(1000)
                     }
                 } finally { app.unregisterReceiver(packages) }
@@ -788,8 +787,17 @@ internal class PocketSession(
         if (c.workflowSafe) return media.execute(c)
         if (!(visibleKey && screen != null) && !freshAuthorizedPress())
             return unavailable("Press a key on the unlocked phone or connected keypad.")
-        if (c.deck == "studio" && c != DeckCommand.STUDIO)
-            return studio?.press(c) ?: unavailable("Open Pocket Studio on the phone first.")
+        if (c.legacyCapture) return unavailable("This control belonged to the old in-app camera.")
+        if (c.nativeControl) {
+            val index = physicalIndex ?: return unavailable("Use the physical Studio keypad in the phone camera.")
+            if (!cameraAccess.enabled) return unavailable("On the phone, enable keypad camera controls in Plugins > Studio.")
+            val service = NavigationService.connected ?: return unavailable("Enable MX Pocket navigation in Accessibility for camera controls.")
+            fun authorized() = freshAuthorizedPress() && app.isUnlockedAndInteractive() && output != null &&
+                cameraAccess.enabled && NavigationService.connected === service && isStudioKey(index, c) &&
+                receipt != 0L && paintedLayout == layout() && lcd[index]?.tile?.inputToken == c.id
+            if (!authorized()) return unavailable("Enable Camera controls and press the matching Studio key on the unlocked phone.")
+            return service.cameraPress(c, ::authorized)
+        }
         if (c.deck == "navigation" && c != DeckCommand.NAV_ACCESS &&
             (screen == null || c in setOf(DeckCommand.HOME, DeckCommand.BACK, DeckCommand.RECENTS)))
             NavigationService.connected?.let { return it.press(c) }
@@ -799,10 +807,19 @@ internal class PocketSession(
                 if (favoriteApps.intentFor(component) == null) return unavailable("Favorite is no longer available.")
                 Target.FavoriteApp(component!!)
             }
-            DeckCommand.STUDIO -> if (studio != null) return ok("Studio is already open.") else Target.Studio
+            DeckCommand.STUDIO -> Target.Studio(CameraMode.PHOTO)
+            DeckCommand.VIDEO -> Target.Studio(CameraMode.VIDEO)
             else -> return unavailable("Open MX Pocket to use this control.")
         }
         return offerPhysicalShortcut(target)
+    }
+
+    private fun isStudioKey(index: Int, command: DeckCommand): Boolean {
+        val state = deck.state.value
+        val key = state.activePage.keys[index]
+        return state.activeProfileId == "studio" && state.activePage.id == state.activeProfile.rootPageId &&
+            key.enabled && (key.label.isBlank() || key.label == command.label) &&
+            key.action?.id == "plugin.key" && key.action.params["pluginId"] == "studio" && plugins.selectedId == "studio"
     }
 
     private fun freshAuthorizedPress() = physicalPressAt?.let { SystemClock.elapsedRealtime() - it in 0 until 2_000L } == true &&

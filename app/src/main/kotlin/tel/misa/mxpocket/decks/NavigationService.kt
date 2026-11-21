@@ -24,6 +24,19 @@ class NavigationService : AccessibilityService() {
         if (connected === this) connected = null
         super.onDestroy()
     }
+    internal fun cameraPress(command: DeckCommand, authorized: () -> Boolean): DeckResult {
+        val mode = when (command) {
+            DeckCommand.SHUTTER -> CameraMode.PHOTO
+            DeckCommand.START_VIDEO, DeckCommand.STOP_VIDEO -> CameraMode.VIDEO
+            else -> return unavailable("Not a camera control.")
+        }
+        val target = viewfinder(mode)?.component ?: return unavailable("Choose a default phone camera first.")
+        val accepted = clickCameraControl(target.packageName, command, { rootInActiveWindow }) {
+            authorized() && viewfinder(mode)?.component == target
+        }
+        return if (accepted) ok("${command.label} requested. Check the camera.")
+        else unavailable("No matching ${command.label} control. Check the camera mode or use its on-screen button.")
+    }
     internal fun press(command: DeckCommand): DeckResult {
         if (!isUnlockedAndInteractive()) return unavailable("Unlock the phone before navigating.")
         val accepted = when (command) {
