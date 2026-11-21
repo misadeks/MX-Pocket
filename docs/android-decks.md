@@ -87,7 +87,10 @@ independent of the selected page.
    playback state follow on the LCD. Try Spotify and a second player without
    skip. Change the cover without changing the title if possible. Check Audio
    paused/playing, including several Play presses: the cover should not flash
-   green. Pin a different profile: its keys should have no album art. Compare
+   green. Skip tracks on the handset, including a track without a cover,
+   then leave and reopen Audio: check for a temporary full gray panel before a
+   ready cover and for a definite neutral fallback when art stays missing.
+   Pin a different profile: its keys should have no album art. Compare
    rapid physical and handset volume changes against the on-key readout.
    Test locked and screen-off physical Play/Pause, skip, mute and volume;
    change tracks and verify the new title and cover appear on the keypad.

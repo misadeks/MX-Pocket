@@ -451,7 +451,7 @@ class MediaPanelTest {
             main.idleFor(Duration.ofMillis(400))
             assertSame(art,session.panelArt)
             releaseSecond.countDown()
-            settle { session.panelArt?.getPixel(4,4) == newColor }
+            settle { session.panelArt?.getPixel(240,240) == newColor }
             // Disabled keys dim the cover. Both source colors are saturated, unlike the plain gray Audio tiles.
             fun hasCover(image: Bitmap): Boolean {
                 val c = image.getPixel(4,4)
@@ -470,7 +470,7 @@ class MediaPanelTest {
             shadowOf(app.contentResolver).registerInputStreamSupplier(uri) { bytes.inputStream() }
             player.setMetadata(local); session.selectProfile("audio")
             main.idle()
-            settle { session.panelArt?.getPixel(4,4) == color }
+            settle { session.panelArt?.getPixel(240,240) == color }
             settle { writes.map { it.first }.distinct().size == 9 }
             assertTrue(writes.all { hasCover(it.second) })
         } finally { finishRead.countDown(); session.detach(screen); session.disconnect(); playerSession.release() }
