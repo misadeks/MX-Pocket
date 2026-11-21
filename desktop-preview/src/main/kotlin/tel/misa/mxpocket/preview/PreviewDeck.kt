@@ -36,12 +36,12 @@ class PreviewDeck {
         "phone" -> listOf("Camera", "Settings", "Dialer", "Web", "Phone", "Alarm", "Focus", "Audio", "Repaint")
         "launcher" -> listOf("No favorites", "-", "-", "-", "-", "-", "-", "Edit favorites", "Favorites")
         "studio" -> listOf("Shutter", "Record", "Stop", "-", "-", "-", "Open Video", "Open Camera", "Camera controls")
-        "navigation" -> listOf("Back", "Home", "Recents", "Scroll up", "Activate", "Scroll down",
-            "Prior item", "Navigation access", "Next item")
+        "navigation" -> listOf("Back", "Home", "Recents", "Scroll up", "Select", "Scroll down",
+            "Prev focus", "Access info", "Next focus")
         else -> emptyList()
     }
 
-    data class Tile(val label: String, val enabled: Boolean)
+    data class Tile(val label: String, val enabled: Boolean, val footer: String = "")
     private data class Binding(val plugin: String, val index: Int)
 
     private fun binding(slot: Int): Binding? {
@@ -53,7 +53,11 @@ class PreviewDeck {
     fun tiles(now: Long): List<Tile> = deck.activePage.keys.indices.map { slot ->
         val action = binding(slot)
         val label = action?.let { labels(it.plugin, now).getOrNull(it.index) }
-        Tile(label ?: "-", label != null && label != "-")
+        when {
+            action?.plugin == "navigation" && action.index == 2 -> Tile("Recents", false, "Needs access")
+            action?.plugin == "navigation" && action.index == 7 -> Tile("Access info", true, "System nav off")
+            else -> Tile(label ?: "-", label != null && label != "-")
+        }
     }
 
     fun press(slot: Int, now: Long): String {
@@ -77,6 +81,11 @@ class PreviewDeck {
                 6, 8 -> muted = index == 6
                 7 -> return "Simulated volume: ${if (muted) 0 else volume} / 15."
                 else -> return "$label is simulated. No media command sent."
+            }
+            "navigation" -> return when (index) {
+                2 -> "Recents needs Android navigation access. No system action sent."
+                7 -> "Access info: system navigation is off in this desktop preview. No settings opened."
+                else -> "$label is simulated. No system action sent."
             }
             "phone" -> if (index == 6 || index == 7) {
                 val target = if (index == 6) "focus" else "audio"
