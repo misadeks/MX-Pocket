@@ -16,6 +16,11 @@ object KeypadProtocol {
 
     data class Region(val x: Int, val y: Int, val width: Int, val height: Int)
 
+    val keyGrid = keyRegion(0).let { first ->
+        val last = keyRegion(8)
+        Region(first.x, first.y, last.x + last.width - first.x, last.y + last.height - first.y)
+    }
+
     fun keyRegion(index: Int): Region {
         require(index in 0..8) { "LCD key index must be 0..8" }
         return Region(23 + index % 3 * 158, 6 + index / 3 * 158, 118, 118)

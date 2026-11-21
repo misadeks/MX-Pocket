@@ -121,6 +121,8 @@ internal class PocketSession(
     private var paintedLayout: Layout? = null
     private var scanLayout: Layout? = null
     private var nextKey = 0
+    private var gridRevision = -1L
+    private var gridHasArt = false
     private var painting: Job? = null
     private var scheduled = false
     private var simulator: SimulatedKeypad? = null
@@ -491,6 +493,8 @@ internal class PocketSession(
         simulator = null
         receipt = 0
         lcd.fill(null)
+        gridRevision = -1L
+        gridHasArt = false
         watchDecks()
         media.refreshDisplay()
         painting = null
@@ -586,6 +590,40 @@ internal class PocketSession(
         if (!preview && decks.value.media.awaitingCover && layout.profile == "audio" &&
             lcd.none { it?.hasTrackDetails == true }) return
         val epoch = repaintEpoch
+        val art = images.artwork
+        val artRevision = images.artworkRevision
+        if (connected is GridOutput && gridRevision != artRevision && (art != null || gridHasArt)) {
+            val tiles = frame.keys.mapIndexed(images::image)
+            val hasTrackDetails = art != null || decks.value.media.title.isNotEmpty()
+            painting = scope.launch {
+                try {
+                    val result = connected.writeGrid(art, tiles, gridHasArt) {
+                        val latest = frame()
+                        output === connected && this@PocketSession.layout() == layout &&
+                            repaintEpoch == epoch && images.artworkRevision == artRevision &&
+                            latest.keys.indices.all { sameBinding(frame.keys[it], latest.keys[it]) }
+                    }
+                    if (output === connected && result != GridWrite.SUPERSEDED) {
+                        gridRevision = artRevision
+                        when (result) {
+                            GridWrite.ACKNOWLEDGED -> {
+                                gridHasArt = art != null
+                                for (i in tiles.indices) lcd[i] = Acknowledged(frame.keys[i], tiles[i], epoch, hasTrackDetails)
+                            }
+                            GridWrite.CLEARED -> { gridHasArt = false; lcd.fill(null); receipt = 0 }
+                            else -> Unit // Too large: use the existing serial per-key path.
+                        }
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    if (output === connected) stopWithError("LCD grid upload failed", e)
+                } finally {
+                    if (output === connected) main.post(::paint)
+                }
+            }
+            return
+        }
         // One transaction at a time. Re-read desired state after its ACK, continuing around the panel
         // rather than repeatedly starting at a rapidly changing first key.
         for (offset in lcd.indices) {

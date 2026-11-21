@@ -57,9 +57,31 @@ class MxKeypad private constructor(
     }
 
     suspend fun setKeyJpeg(index: Int, jpeg: ByteArray) {
+        uploadJpeg(KeypadProtocol.keyRegion(index), jpeg, "LCD ${index + 1}")
+    }
+
+    /** Preserve native rectangle geometry and text resolution. Null means split before writing. */
+    suspend fun encodeRegionJpeg(region: KeypadProtocol.Region, bitmap: Bitmap): ByteArray? {
+        require(region.width == bitmap.width && region.height == bitmap.height)
+        require(region.width in 1..480 && region.height in 1..480 &&
+            region.x in 0..(480 - region.width) && region.y in 0..(480 - region.height))
+        return withContext(Dispatchers.Default) {
+            for (quality in intArrayOf(86, 72, 60)) {
+                val stream = ByteArrayOutputStream()
+                if (!bitmap.compress(Bitmap.CompressFormat.JPEG, quality, stream)) throw IOException("Android JPEG encoding failed")
+                if (stream.size() <= KeypadProtocol.MAX_JPEG_BYTES) return@withContext stream.toByteArray()
+            }
+            null
+        }
+    }
+
+    suspend fun setRegionJpeg(region: KeypadProtocol.Region, jpeg: ByteArray) =
+        uploadJpeg(region, jpeg, "LCD region")
+
+    private suspend fun uploadJpeg(region: KeypadProtocol.Region, jpeg: ByteArray, label: String) {
         val start = System.nanoTime()
-        session.upload(KeypadProtocol.keyRegion(index), jpeg)
-        log("LCD ${index + 1}: ${jpeg.size} JPEG bytes acknowledged in ${(System.nanoTime() - start) / 1_000} us " +
+        session.upload(region, jpeg)
+        log("$label: ${jpeg.size} JPEG bytes acknowledged in ${(System.nanoTime() - start) / 1_000} us " +
             "(upload including ACKs; visibility not verified)")
     }
 
