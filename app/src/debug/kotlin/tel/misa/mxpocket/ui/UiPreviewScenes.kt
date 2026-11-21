@@ -20,7 +20,12 @@ class UiPreviewScenes(context: Context) {
         val plugin = if (id == "disconnected") plugins.first() else plugins.single { it.descriptor.id == id }
         val frame = plugin.render(0)
         val displayFrame = if (id == "audio") PluginFrame(frame.keys.mapIndexed { index, tile ->
-            if (index == 7) tile.copy(label = "6 / 15") else tile
+            when (index) {
+                1 -> tile.copy(footer = "6 / 15", volumeLevel = tel.misa.mxpocket.plugins.VolumeLevel(6,15,false))
+                7 -> tile.copy(label = "Night train", footer = "Paused")
+                4 -> tile.copy(label = "Play", glyph = tel.misa.mxpocket.plugins.PlayerGlyph.PLAY)
+                else -> tile
+            }
         }) else frame
         return PocketScreenState(
             status = if (id == "disconnected") "$note\n$disconnectedNote" else "$note\n${plugin.descriptor.title} fixture",

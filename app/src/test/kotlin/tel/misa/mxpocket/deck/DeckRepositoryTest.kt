@@ -54,18 +54,41 @@ class DeckRepositoryTest {
         old.getJSONObject("histories").put("copy", old.getJSONObject("histories").getJSONArray("navigation"))
         val pages = profile.getJSONArray("pages")
         pages.put(JSONObject(pages.getJSONObject(0).toString()).put("id", "copy"))
-        for (version in setOf(1, DeckLimits.VERSION)) {
-            file.writeText(old.put("version", version).toString())
-            val loaded = DeckRepository(file)
-            val state = loaded.state.value
-            val originalKeys = (0..8).map { pluginKey("navigation", it) }
-            assertEquals(listOf(0, 3, 1, 6, 4, 8, 2, 5, 7).map(originalKeys::get), state.activePage.keys)
-            assertEquals(originalKeys, state.activeProfile.pages.last().keys)
-            assertEquals(originalKeys, state.profiles.last().pages.single().keys)
-            assertEquals(state, DeckRepository(file).state.value) // retry before a save
-            loaded.save().getOrThrow()
-            assertEquals(state, DeckRepository(file).state.value) // no second permutation
-        }
+        file.writeText(old.toString())
+        val loaded = DeckRepository(file)
+        val state = loaded.state.value
+        val originalKeys = (0..8).map { pluginKey("navigation", it) }
+        assertEquals(listOf(0, 3, 1, 6, 4, 8, 2, 5, 7).map(originalKeys::get), state.activePage.keys)
+        assertEquals(originalKeys, state.activeProfile.pages.last().keys)
+        assertEquals(originalKeys, state.profiles.last().pages.single().keys)
+        assertEquals(state, DeckRepository(file).state.value) // retry before a save
+        loaded.save().getOrThrow()
+        assertEquals(state, DeckRepository(file).state.value) // no second permutation
+    }
+
+    @Test fun intentionallyRestoredNavigationOrderSurvivesColdStartAndExportImport() {
+        file.writeText(historicalNavigation().toString())
+        val current = DeckRepository(file)
+        val chosen = (0..8).map { pluginKey("navigation", it) }
+        chosen.forEachIndexed { index, key -> current.setKey("navigation", "root", index, key).getOrThrow() }
+        val exported = current.exportJson()
+        assertEquals(DeckLimits.VERSION, JSONObject(exported).getInt("version"))
+        val reopened = DeckRepository(file)
+        assertEquals(chosen, reopened.state.value.activePage.keys)
+        reopened.restoreDefaults().getOrThrow()
+        reopened.importJson(exported).getOrThrow()
+        assertEquals(chosen, reopened.state.value.activePage.keys)
+        assertEquals(chosen, DeckRepository(file).state.value.activePage.keys)
+    }
+
+    @Test fun renamedV1AudioRootRetainsItsLegacyCommandsOnLoadAndImport() {
+        repo.renamePage("audio", "root", "My transport").getOrThrow()
+        val old = JSONObject(repo.exportJson()).put("version", 1).toString()
+        fun play(deck: DeckRepository) = deck.state.value.profiles.single { it.id == "audio" }.pages.single().keys[1].action
+        file.writeText(old)
+        assertEquals(ActionCall("media.play-pause"), play(DeckRepository(file)))
+        repo.importJson(old).getOrThrow()
+        assertEquals(ActionCall("media.play-pause"), play(repo))
     }
 
     @Test fun anyEditToTheHistoricalNavigationRootPreservesAllNineBindingsOnLoadAndImport() {
@@ -124,8 +147,8 @@ class DeckRepositoryTest {
         val original = repo.exportJson()
         fun edit(f: (JSONObject) -> Unit) = JSONObject(original).apply(f).toString()
         val bad = listOf(
-            original.replaceFirst("\"version\":1", "\"version\":2"),
-            original.replaceFirst("\"version\":1", "\"version\":1,\"version\":1"),
+            original.replaceFirst("\"version\":2", "\"version\":3"),
+            original.replaceFirst("\"version\":2", "\"version\":2,\"version\":2"),
             edit { it.put("automatic", "true") }, edit { it.put("activeProfileId", "missing") },
             edit { it.getJSONArray("profiles").getJSONObject(0).put("id", "audio") },
             edit { it.getJSONObject("histories").getJSONArray("focus").put("missing") },
@@ -142,6 +165,20 @@ class DeckRepositoryTest {
             assertSame(before, repo.state.value)
             assertEquals(original, file.readText())
         }
+    }
+
+    @Test fun upgradeOnlyReordersStockAudioAndPreservesEditedSlotBindings() {
+        val copy = repo.duplicateProfile("audio", "My player").getOrThrow()
+        val custom = DeckKey("X", "Custom action", action = ActionCall("media.unmute"))
+        repo.setKey(copy, "root", 2, custom).getOrThrow()
+        repo.importJson(JSONObject(repo.exportJson()).put("version", 1).toString()).getOrThrow()
+        val stock = repo.state.value.profiles.single { it.id == "audio" }.pages.single().keys
+        assertTrue(stock.all { it.action!!.id == "plugin.key" })
+        val saved = repo.state.value.profiles.single { it.id == copy }.pages.single().keys
+        assertEquals(custom, saved[2])
+        assertEquals(listOf("media.volume-down","media.play-pause","media.unmute","media.previous","media.access",
+            "media.next","media.mute","media.volume-level","media.unmute"), saved.map { it.action!!.id })
+        assertEquals(repo.state.value, DeckRepository(file).state.value)
     }
 
     @Test fun failedWritesAndCorruptStartupDoNotClobberLastData() {

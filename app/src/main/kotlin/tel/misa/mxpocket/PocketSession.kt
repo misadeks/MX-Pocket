@@ -254,6 +254,7 @@ internal class PocketSession(
             (tile ?: KeyTile(label, footer, key.color)).copy(label = label, footer = footer,
                 background = if (!available) 0xff494c51.toInt() else if (key.color == DeckKey().color)
                     tile?.background ?: key.color else key.color,
+                showLabel = key.label.isNotBlank() || tile?.showLabel != false,
                 icon = key.icon.ifBlank { tile?.icon.orEmpty() }, enabled = available)
         })
     }
@@ -542,7 +543,8 @@ internal class PocketSession(
                 val call = page.keys[index].action ?: return
                 if (event.pressed && !virtual && (epoch == 0L || epoch != receipt || paintedLayout != layout() ||
                     !sameBinding(lcd[index]?.tile, frame().keys[index]))) return
-                if (!frame().keys[index].enabled) return
+                val tile = frame().keys[index]
+                if (!tile.enabled || tile.readOnly) return
                 physicalPressAt = arrivedAt.takeIf { !virtual && event.pressed && !event.synthetic && request != null }
                 physicalIndex = index.takeIf { physicalPressAt != null }
                 visibleKey = virtual && event.pressed && !event.synthetic
@@ -782,7 +784,8 @@ internal class PocketSession(
         val component = params["component"]
         if ((c == DeckCommand.OPEN && (component.isNullOrBlank() || params.size != 1)) ||
             (c != DeckCommand.OPEN && params.isNotEmpty())) return unavailable("Invalid action parameters.")
-        if (!app.isUnlockedAndInteractive() && !(c.workflowSafe && fromPhysicalKey && freshAuthorizedPress()))
+        if (c == DeckCommand.VOLUME_LEVEL) return unavailable("Volume level is a display, not a control.")
+        if (!app.isUnlockedAndInteractive() && !(c.lockedMediaKey && fromPhysicalKey && freshAuthorizedPress()))
             return unavailable("Unlock the phone or use a connected keypad media key.")
         if (c.workflowSafe) return media.execute(c)
         if (!(visibleKey && screen != null) && !freshAuthorizedPress())

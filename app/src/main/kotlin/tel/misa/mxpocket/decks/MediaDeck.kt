@@ -21,6 +21,7 @@ import android.provider.Settings
 import android.service.notification.NotificationListenerService
 import android.view.KeyEvent
 import androidx.core.content.ContextCompat
+import tel.misa.mxpocket.isUnlockedAndInteractive
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -49,7 +50,8 @@ internal class MediaDeck(private val app: Context, private val canShowTrack: () 
     private val token = ComponentName(app, MediaSessionAccess::class.java)
     private val access get() = app.hasMediaSessionAccess()
     private fun basic() = MediaDeckState(volume = audio.getStreamVolume(AudioManager.STREAM_MUSIC),
-        maximum = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC), fixedVolume = audio.isVolumeFixed)
+        maximum = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC), fixedVolume = audio.isVolumeFixed,
+        muted = audio.isStreamMute(AudioManager.STREAM_MUSIC))
 
     /** Main-thread scoped to an enabled Audio deck with a visible screen or a hardware session. */
     suspend fun observe(publish: (MediaDeckState) -> Unit): Unit = coroutineScope {
@@ -179,7 +181,8 @@ internal class MediaDeck(private val app: Context, private val canShowTrack: () 
                 if (source?.readable(app) == false) clearLoad()
                 else load(source, fresh)
                 publish(basic.copy(access = true, status = if (player == null) "No session" else status(state?.state),
-                    title = title, playing = playing(state?.state), supported = supported(state), artwork = artwork,
+                    title = title, playing = playing(state?.state), supported = supported(state, app.isUnlockedAndInteractive()),
+                    artwork = artwork,
                     awaitingCover = transition != null && artwork == null))
             } catch (_: SecurityException) {
                 reset()
@@ -270,7 +273,8 @@ internal class MediaDeck(private val app: Context, private val canShowTrack: () 
                 val controller = sessions.firstOrNull { it.playbackState?.state == P.STATE_PLAYING }
                     ?: sessions.firstOrNull() ?: return unavailable("Start a media player first.")
                 val state = controller.playbackState
-                if (command !in supported(state)) return unavailable("The active player does not offer this control.")
+                if (command !in supported(state, app.isUnlockedAndInteractive()))
+                    return unavailable("The active player does not offer this control.")
                 when (command) {
                     DeckCommand.PLAY -> {
                         val pause = playing(state?.state) == true
@@ -286,6 +290,12 @@ internal class MediaDeck(private val app: Context, private val canShowTrack: () 
                     }
                     DeckCommand.PREVIOUS -> controller.transportControls.skipToPrevious()
                     DeckCommand.NEXT -> controller.transportControls.skipToNext()
+                    DeckCommand.BACK_10, DeckCommand.FORWARD_10 -> {
+                        val duration = controller.metadata?.takeIf { it.containsKey(MediaMetadata.METADATA_KEY_DURATION) }
+                            ?.getLong(MediaMetadata.METADATA_KEY_DURATION)
+                        controller.transportControls.seekTo(seekTarget(checkNotNull(state), SystemClock.elapsedRealtime(),
+                            if (command == DeckCommand.BACK_10) -10_000L else 10_000L, duration))
+                    }
                     else -> return unavailable("Unsupported transport control.")
                 }
                 ok("Requested ${command.label} from the active player.")
@@ -324,13 +334,26 @@ internal class MediaDeck(private val app: Context, private val canShowTrack: () 
             P.STATE_ERROR -> "Player error"
             else -> "State unknown"
         }
-        internal fun supported(state: P?): Set<DeckCommand> {
+        internal fun seekTarget(state: P, now: Long, offset: Long, duration: Long?): Long {
+            // Android reports position at lastPositionUpdateTime, in elapsedRealtime's clock domain.
+            val age = if (playing(state.state) == true && state.lastPositionUpdateTime in 1..now)
+                now - state.lastPositionUpdateTime else 0L
+            val end = duration?.takeIf { it >= 0 } ?: Long.MAX_VALUE
+            val position = (state.position + age * state.playbackSpeed.toDouble()).coerceIn(0.0, end.toDouble())
+            return (position + offset).toLong().coerceIn(0, end)
+        }
+
+        internal fun supported(state: P?, unlocked: Boolean = true): Set<DeckCommand> {
             val actions = state?.actions ?: return emptySet()
             val toggle = if (playing(state.state) == true) P.ACTION_PAUSE else P.ACTION_PLAY
             return buildSet {
                 if (actions and (toggle or P.ACTION_PLAY_PAUSE) != 0L) add(DeckCommand.PLAY)
                 if (actions and P.ACTION_SKIP_TO_PREVIOUS != 0L) add(DeckCommand.PREVIOUS)
                 if (actions and P.ACTION_SKIP_TO_NEXT != 0L) add(DeckCommand.NEXT)
+                if (unlocked && actions and P.ACTION_SEEK_TO != 0L && state.position >= 0 &&
+                    state.playbackSpeed.isFinite()) {
+                    add(DeckCommand.BACK_10); add(DeckCommand.FORWARD_10)
+                }
             }
         }
     }

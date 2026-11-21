@@ -18,8 +18,11 @@ It deliberately uses logical state rather than Bitmaps or USB reports:
 | `onKey(event, host)` | LCD key index 0..8, press/release and synthetic release flag |
 | `onDeactivate()` | Synchronous cleanup; scope is already cancelled and host effects disabled |
 
-A `KeyTile` contains a label, footer and ARGB background color. The app draws
-the key number, label and footer and overlays any user-selected background image.
+A `KeyTile` contains a label, footer and ARGB background color. Ordinary keys
+keep their key number unless an icon is supplied. The built-in Audio page uses
+monochrome player symbols instead. Labels remain available to accessibility
+even on icon-only controls. Read-only tiles display state without dispatching input.
+The phone mirrors the same composed tiles as the keypad, including user backgrounds.
 The independent driver scales, JPEG-encodes and uploads it. Plugins must not
 allocate/recycle host images or import `MxKeypad`/raw USB.
 

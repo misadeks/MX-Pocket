@@ -45,22 +45,35 @@ class BuiltInPluginsTest {
 
     @Test fun audioAndPhoneKeepExistingControlsAndNavigation() = runTest {
         val actions = mutableListOf<PluginAction>()
+        val states = MutableStateFlow(DeckState(media = MediaDeckState(volume = 6, maximum = 15)))
         val engine = PluginEngine(BuiltInPlugins.create("Focus", "Audio", "Phone"), this,
             { testScheduler.currentTime }, { AudioSnapshot(6, 15) },
             { action, _ -> actions += action }, {}, { _, error -> throw AssertionError(error) },
-            MutableStateFlow(DeckState(media = MediaDeckState(volume = 6, maximum = 15))))
+            states)
         fun tap(index: Int) {
             engine.key(PluginKeyEvent(index, true))
             engine.key(PluginKeyEvent(index, false))
         }
         engine.setEnabled(true)
         engine.next(1)
-        assertEquals("6 / 15", engine.render().keys[7].label)
-        for (index in listOf(0, 1, 2, 3, 5, 6, 8)) tap(index)
+        assertEquals("6 / 15", engine.render().keys[1].footer)
+        assertEquals("Media keys", engine.render().keys[7].label)
+        for (index in 0..8) tap(index)
         assertEquals(listOf(
-            DeckCommand.QUIETER, DeckCommand.PLAY, DeckCommand.LOUDER, DeckCommand.PREVIOUS,
-            DeckCommand.NEXT, DeckCommand.MUTE, DeckCommand.UNMUTE,
+            DeckCommand.QUIETER, DeckCommand.MUTE, DeckCommand.LOUDER, DeckCommand.PREVIOUS,
+            DeckCommand.PLAY, DeckCommand.NEXT,
         ), actions.filterIsInstance<PluginAction.Deck>().map { it.command })
+        actions.clear()
+        states.value = DeckState(media = MediaDeckState(access = true, playing = true, muted = true,
+            supported = setOf(DeckCommand.BACK_10, DeckCommand.FORWARD_10)))
+        runCurrent()
+        val frame = engine.render()
+        assertEquals(PlayerGlyph.PAUSE, frame.keys[4].glyph)
+        assertEquals(PlayerGlyph.UNMUTE, frame.keys[1].glyph)
+        assertFalse(frame.keys[4].enabled)
+        listOf(1,4,6,7,8).forEach(::tap)
+        assertEquals(listOf(DeckCommand.UNMUTE, DeckCommand.BACK_10, DeckCommand.FORWARD_10),
+            actions.filterIsInstance<PluginAction.Deck>().map { it.command })
         actions.clear()
         engine.next(1)
         for (index in listOf(0, 1, 2, 3, 5, 8)) tap(index)
