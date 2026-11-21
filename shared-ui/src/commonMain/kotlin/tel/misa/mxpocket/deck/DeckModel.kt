@@ -115,6 +115,7 @@ fun defaultDeck(): DeckState {
         plugin("studio", "Studio"),
         plugin("navigation", "Navigation", slots = navigationFactorySlots),
         plugin("game.xo", tel.misa.mxpocket.plugins.TIC_TAC_TOE_TITLE),
+        plugin("onenote", "OneNote"),
     )
     return DeckState(
         DeckLimits.VERSION, profiles, "focus", "focus", null, false,
