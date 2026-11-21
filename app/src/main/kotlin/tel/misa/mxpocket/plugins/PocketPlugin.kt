@@ -1,8 +1,11 @@
 package tel.misa.mxpocket.plugins
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.StateFlow
+import tel.misa.mxpocket.decks.DeckCommand
+import tel.misa.mxpocket.decks.DeckState
 
-enum class PluginCapability { AUDIO, OPEN_APPS, NAVIGATION, TONE }
+enum class PluginCapability { AUDIO, OPEN_APPS, NAVIGATION, TONE, STUDIO, SYSTEM_NAVIGATION }
 
 data class PluginDescriptor(
     val id: String,
@@ -15,7 +18,8 @@ data class PluginDescriptor(
     }
 }
 
-data class KeyTile(val label: String, val footer: String, val background: Int)
+data class KeyTile(val label: String, val footer: String, val background: Int,
+    val iconComponent: String? = null, val inputToken: String? = null)
 
 data class PluginFrame(val keys: List<KeyTile>) {
     init { require(keys.size == 9) { "A plugin frame must contain exactly nine keys" } }
@@ -32,6 +36,7 @@ enum class MediaCommand { PLAY_PAUSE, PREVIOUS, NEXT }
 enum class PhoneApp { CAMERA, SETTINGS, DIALER, WEB, ALARMS }
 
 sealed interface PluginAction {
+    data class Deck(val command: DeckCommand, val component: String? = null) : PluginAction
     data class Volume(val change: VolumeChange) : PluginAction
     data class Media(val command: MediaCommand) : PluginAction
     data class OpenApp(val app: PhoneApp) : PluginAction
@@ -46,6 +51,8 @@ interface PluginHost {
     fun nowMillis(): Long
     fun invalidate()
     fun audioSnapshot(): AudioSnapshot
+    val deckState: StateFlow<DeckState>
+        get() = error("No Android deck state installed")
     fun dispatch(action: PluginAction)
 }
 

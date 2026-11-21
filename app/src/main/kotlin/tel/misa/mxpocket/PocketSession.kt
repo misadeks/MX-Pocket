@@ -2,6 +2,9 @@ package tel.misa.mxpocket
 
 import android.app.Application
 import android.content.Context
+import android.content.BroadcastReceiver
+import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -24,6 +27,12 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.withContext
+import androidx.core.content.ContextCompat
+import tel.misa.mxpocket.decks.*
 import tel.misa.mxpocket.driver.KeyEvent
 import tel.misa.mxpocket.driver.MxKeypad
 import tel.misa.mxpocket.plugins.*
@@ -54,9 +63,15 @@ internal class PocketSession(
     interface Screen {
         fun render()
         fun openApp(app: PhoneApp): Boolean
+        fun deckAction(command: DeckCommand, component: String?): DeckResult = unavailable("Open MX Pocket to use this control.")
     }
     data class Request(val name: String, val token: String = UUID.randomUUID().toString())
-    data class PhoneAction(val app: PhoneApp, val ticket: Request, val generation: Int,
+    sealed interface Target {
+        data class Phone(val app: PhoneApp) : Target
+        data class FavoriteApp(val component: String) : Target
+        data object Studio : Target
+    }
+    data class PhoneAction(val target: Target, val ticket: Request, val generation: Int,
         val pressedAt: Long, val id: String = UUID.randomUUID().toString())
     companion object { const val PHONE_ACTION_TTL = 60_000L }
     private data class Stamp(val generation: Int, val frame: PluginFrame, val revision: Int)
@@ -65,12 +80,20 @@ internal class PocketSession(
     private val audio = app.getSystemService(AudioManager::class.java)
     private val logs = ArrayDeque<String>()
     private var screen: Screen? = null
+    private var visibleKey = false
+    private var studio: StudioActivity? = null
+    internal val favoriteApps = FavoriteApps(app)
+    private val media = MediaDeck(app)
+    private val decks = MutableStateFlow(DeckState())
+    val deckState = decks.asStateFlow()
+    private var deckWatch: Job? = null
     val plugins = PluginEngine(
         BuiltInPlugins.create(app.getString(R.string.focus), app.getString(R.string.audio), app.getString(R.string.phone)),
         CoroutineScope(Dispatchers.Main.immediate), SystemClock::elapsedRealtime,
         readAudio = { AudioSnapshot(audio.getStreamVolume(AudioManager.STREAM_MUSIC),
             audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)) },
         perform = ::perform, invalidateUi = ::invalidate, reportError = { id, error -> fail("Plugin $id failed", error) },
+        observeDecks = deckState,
     )
     var request: Request? = null
         private set
@@ -87,12 +110,15 @@ internal class PocketSession(
     private var custom: Bitmap? = null
     private var revision = 0
     private var painted: Stamp? = null
+    private val paintedBindings = arrayOfNulls<String>(9)
+    private var changingBinding: Int? = null
     private var painting: Job? = null
     private var scheduled = false
 
     fun attach(screen: Screen) {
         this.screen = screen
         if (preview) plugins.setEnabled(true)
+        watchDecks()
         screen.render()
     }
 
@@ -100,12 +126,14 @@ internal class PocketSession(
         if (this.screen !== screen) return
         this.screen = null
         if (preview) plugins.setEnabled(false)
+        watchDecks()
     }
 
     fun startPreview() {
         disconnect()
         preview = true
         plugins.setEnabled(screen != null)
+        watchDecks()
         message(app.getString(R.string.preview_note))
     }
 
@@ -139,6 +167,7 @@ internal class PocketSession(
                 if (request != ticket) { connected.close(); return@launch }
                 output = connected
                 plugins.setEnabled(true)
+                watchDecks()
                 message("Protocol initialized. Uploading nine LCD images; check the physical keys.")
                 invalidate()
             } catch (e: CancellationException) {
@@ -157,8 +186,11 @@ internal class PocketSession(
         hardwareScope = null
         output?.close()
         output = null
+        watchDecks()
         painting = null
         painted = null
+        paintedBindings.fill(null)
+        changingBinding = null
         onHandoff = null
         pendingAction = null
         val end = onEnd
@@ -168,8 +200,9 @@ internal class PocketSession(
     }
 
     fun phoneKey(index: Int): Boolean {
-        if (!preview && output == null) return false
-        plugins.key(PluginKeyEvent(index, true))
+        if (screen == null || visibleKey || (!preview && output == null)) return false
+        visibleKey = true
+        try { plugins.key(PluginKeyEvent(index, true)) } finally { visibleKey = false }
         plugins.key(PluginKeyEvent(index, false))
         log("${if (preview) "PREVIEW" else "ACTION"} plugin=${plugins.selectedId} key=${index + 1}")
         invalidate()
@@ -185,6 +218,9 @@ internal class PocketSession(
             in 1..9 -> {
                 // Old labels can still be visible while a new page is uploading. Never replay a skipped press.
                 if (event.pressed && painted?.generation != plugins.generation) return
+                val index = event.controlId - 1
+                if (event.pressed && (changingBinding == index ||
+                    paintedBindings[index] != plugins.render().keys[index].inputToken)) return
                 physicalPressAt = arrivedAt.takeIf { event.pressed && !event.synthetic && output != null }
                 try {
                     plugins.key(PluginKeyEvent(event.controlId - 1, event.pressed, event.synthetic))
@@ -230,7 +266,15 @@ internal class PocketSession(
                     if (stamp.generation != plugins.generation || stamp.revision != revision || output !== connected) break
                     if (same && previous?.frame?.keys?.get(index) == frame.keys[index]) continue
                     val bitmap = renderKey(index, frame.keys[index])
-                    try { connected.setKeyImage(index, bitmap) } finally { bitmap.recycle() }
+                    val binding = frame.keys[index].inputToken
+                    if (paintedBindings[index] != binding) changingBinding = index
+                    try {
+                        connected.setKeyImage(index, bitmap)
+                        if (output === connected) paintedBindings[index] = binding
+                    } finally {
+                        if (output === connected) changingBinding = null
+                        bitmap.recycle()
+                    }
                 }
                 if (stamp.generation == plugins.generation && stamp.revision == revision && output === connected) {
                     painted = stamp
@@ -259,6 +303,9 @@ internal class PocketSession(
         }
         paint.textSize = 14f
         canvas.drawText("${index + 1}", 59f, 23f, paint)
+        tile.iconComponent?.let { id -> favoriteApps.icon(id)?.let { icon ->
+            canvas.drawBitmap(icon, null, android.graphics.Rect(36, 5, 82, 51), Paint(Paint.FILTER_BITMAP_FLAG))
+        } }
         paint.textSize = 18f
         while (paint.measureText(tile.label) > 106 && paint.textSize > 10) paint.textSize -= 1
         canvas.drawText(tile.label, 59f, 66f, paint)
@@ -270,6 +317,10 @@ internal class PocketSession(
 
     private fun perform(action: PluginAction, scope: CoroutineScope) {
         when (action) {
+            is PluginAction.Deck -> {
+                val result = runDeckAction(action.command.id, action.component?.let { mapOf("component" to it) }.orEmpty())
+                message(result.message)
+            }
             is PluginAction.Volume -> audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, when (action.change) {
                 VolumeChange.LOWER -> AudioManager.ADJUST_LOWER
                 VolumeChange.RAISE -> AudioManager.ADJUST_RAISE
@@ -289,7 +340,7 @@ internal class PocketSession(
             is PluginAction.OpenApp -> if (screen?.openApp(action.app) != true) {
                 val time = physicalPressAt ?: return
                 val ticket = request ?: return
-                val handoff = PhoneAction(action.app, ticket, plugins.generation, time)
+                val handoff = PhoneAction(Target.Phone(action.app), ticket, plugins.generation, time)
                 pendingAction = handoff
                 onHandoff?.invoke(handoff)
             } else Unit
@@ -301,6 +352,88 @@ internal class PocketSession(
             PluginAction.Repaint -> repaint()
             is PluginAction.SelectPlugin -> error("Navigation is handled by PluginEngine")
         }
+    }
+
+    fun attachStudio(activity: StudioActivity) { studio = activity }
+    fun updateStudio(activity: StudioActivity, state: StudioState) {
+        if (activity === studio) decks.value = decks.value.copy(studio = state)
+    }
+    fun detachStudio(activity: StudioActivity) {
+        if (activity === studio) { studio = null; decks.value = decks.value.copy(studio = StudioState()) }
+    }
+    fun publishFavorites(apps: List<Favorite>) {
+        val selected = favoriteApps.selected()
+        decks.value = decks.value.copy(favorites = apps.filter { it.component in selected })
+    }
+    /** Observe until both the physical session and visible screen release their ownership. */
+    private fun watchDecks() {
+        if (screen == null && output == null) {
+            deckWatch?.cancel(); deckWatch = null
+            decks.value = decks.value.copy(media = MediaDeckState(), navigationEnabled = false)
+            return
+        }
+        if (deckWatch?.isActive == true) return
+        deckWatch = CoroutineScope(Dispatchers.Main.immediate).launch {
+            coroutineScope {
+                var reload: Job? = null
+                fun favoritesChanged() {
+                    reload?.cancel()
+                    reload = launch {
+                        val installed = withContext(Dispatchers.IO) { favoriteApps.discover() }
+                        val hadIcons = decks.value.favorites.isNotEmpty()
+                        favoriteApps.invalidateIcons()
+                        publishFavorites(installed)
+                        if (hadIcons) repaint()
+                    }
+                }
+                val packages = object : BroadcastReceiver() {
+                    override fun onReceive(context: Context, intent: Intent) { favoritesChanged() }
+                }
+                val filter = IntentFilter().apply {
+                    addAction(Intent.ACTION_PACKAGE_ADDED); addAction(Intent.ACTION_PACKAGE_REMOVED)
+                    addAction(Intent.ACTION_PACKAGE_CHANGED); addDataScheme("package")
+                }
+                ContextCompat.registerReceiver(app, packages, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+                try {
+                    favoritesChanged()
+                    while (true) {
+                        decks.value = decks.value.copy(media = media.snapshot(), navigationEnabled = NavigationService.connected != null)
+                        delay(1000)
+                    }
+                } finally { app.unregisterReceiver(packages) }
+            }
+        }
+    }
+    /** Main thread. User authority is synchronous input, never a parameter a saved workflow can forge. */
+    fun runDeckAction(id: String, params: Map<String, String> = emptyMap()): DeckResult {
+        val c = DeckCommand.fromId(id) ?: return unavailable("Unknown deck action.")
+        val component = params["component"]
+        if ((c == DeckCommand.OPEN && (component.isNullOrBlank() || params.size != 1)) ||
+            (c != DeckCommand.OPEN && params.isNotEmpty())) return unavailable("Invalid action parameters.")
+        if (!app.isUnlockedAndInteractive()) return unavailable("Unlock the phone before using this control.")
+        if (c.workflowSafe) return media.execute(c)
+        val now = SystemClock.elapsedRealtime()
+        val press = physicalPressAt?.takeIf { now - it in 0 until 2_000L && request?.let(app::hasKeypadAccess) == true }
+        if (!(visibleKey && screen != null) && press == null) return unavailable("Press a key on the unlocked phone or connected keypad.")
+        if (c.deck == "studio" && c != DeckCommand.STUDIO)
+            return studio?.press(c) ?: unavailable("Open Pocket Studio on the phone first.")
+        if (c.deck == "navigation" && c != DeckCommand.NAV_ACCESS &&
+            (screen == null || c in setOf(DeckCommand.HOME, DeckCommand.BACK, DeckCommand.RECENTS)))
+            NavigationService.connected?.let { return it.press(c) }
+        screen?.let { return it.deckAction(c, component) }
+        val target = when (c) {
+            DeckCommand.OPEN -> {
+                if (favoriteApps.intentFor(component) == null) return unavailable("Favorite is no longer available.")
+                Target.FavoriteApp(component!!)
+            }
+            DeckCommand.STUDIO -> if (studio != null) return ok("Studio is already open.") else Target.Studio
+            else -> return unavailable("Open MX Pocket to use this control.")
+        }
+        val ticket = request ?: return unavailable("Keypad disconnected.")
+        val handoff = PhoneAction(target, ticket, plugins.generation, press ?: return unavailable("Press a keypad key."))
+        pendingAction = handoff
+        onHandoff?.invoke(handoff)
+        return ok("Shortcut offered. Tap its notification to open.")
     }
 
     fun logText(limit: Int = 250) = logs.takeLast(limit).joinToString("\n")

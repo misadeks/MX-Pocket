@@ -7,6 +7,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import tel.misa.mxpocket.decks.DeckState
 
 /** Call every method on the owner's UI thread; plugin scope inherits that same dispatcher. */
 class PluginEngine(
@@ -17,6 +20,7 @@ class PluginEngine(
     private val perform: (PluginAction, CoroutineScope) -> Unit,
     private val invalidateUi: () -> Unit,
     private val reportError: (String, Throwable) -> Unit,
+    private val observeDecks: StateFlow<DeckState> = MutableStateFlow(DeckState()),
 ) : Closeable {
     private val entries = plugins.toList()
     val descriptors: List<PluginDescriptor> = entries.map { it.descriptor }
@@ -147,6 +151,10 @@ class PluginEngine(
 
         fun current(): Boolean = !closed && !failed && host === this && generation == epoch
         override fun nowMillis(): Long = nowMillis.invoke()
+        override val deckState: StateFlow<DeckState> get() {
+            check(current()) { "Plugin activation expired" }
+            return observeDecks
+        }
         override fun invalidate() { if (current()) invalidateUi() }
         override fun audioSnapshot(): AudioSnapshot {
             check(current()) { "Plugin activation expired" }
@@ -156,6 +164,7 @@ class PluginEngine(
         override fun dispatch(action: PluginAction) {
             if (!current()) return // Old coroutine continuations and cleanup hooks may not dispatch actions.
             val capability = when (action) {
+                is PluginAction.Deck -> action.command.capability()
                 is PluginAction.Volume, is PluginAction.Media -> PluginCapability.AUDIO
                 is PluginAction.OpenApp -> PluginCapability.OPEN_APPS
                 is PluginAction.SelectPlugin -> PluginCapability.NAVIGATION

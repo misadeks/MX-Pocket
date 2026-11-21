@@ -30,6 +30,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tel.misa.mxpocket.driver.UsbDiagnostics
 import tel.misa.mxpocket.plugins.PhoneApp
+import tel.misa.mxpocket.decks.*
+import android.view.View
 import tel.misa.mxpocket.ui.PocketScreen
 import tel.misa.mxpocket.ui.PocketScreenEvent
 import tel.misa.mxpocket.ui.PocketScreenState
@@ -318,13 +320,50 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             frame = session.plugins.render(),
             connectionActive = target != null || session.request != null,
             diagnostics = diagnostics, log = session.logText(60), automatic = access.automatic, directShortcuts = direct.enabled,
-        ))
+        ), session.favoriteApps::icon)
     }
 
     override fun openApp(app: PhoneApp): Boolean {
         if (!resumed || !isUnlockedAndInteractive()) return false
         launchPhoneApp(app)?.let(session::message)
         return true
+    }
+
+    override fun deckAction(command: DeckCommand, component: String?): DeckResult {
+        if (!resumed || !isUnlockedAndInteractive()) return unavailable("Open MX Pocket on the unlocked phone.")
+        val intent = when (command) {
+            DeckCommand.OPEN -> session.favoriteApps.intentFor(component) ?: return unavailable("Favorite no longer available.")
+            DeckCommand.EDIT -> Intent(this, FavoritesActivity::class.java)
+            DeckCommand.STUDIO -> Intent(this, StudioActivity::class.java)
+            DeckCommand.MEDIA_ACCESS, DeckCommand.NAV_ACCESS -> DeckAccessActivity.intent(this, command)
+            DeckCommand.HOME -> Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+            DeckCommand.BACK -> { onBackPressedDispatcher.onBackPressed(); return ok("Back in MX Pocket.") }
+            DeckCommand.UP, DeckCommand.DOWN -> {
+                val view = screen.view
+                val moved = view.pageScroll(if (command == DeckCommand.DOWN) View.FOCUS_DOWN else View.FOCUS_UP)
+                return if (moved) ok("Scrolled MX Pocket.") else unavailable("End of this screen.")
+            }
+            DeckCommand.FORWARD, DeckCommand.REVERSE -> {
+                val target = android.view.FocusFinder.getInstance().findNextFocus(screen.view, currentFocus,
+                    if (command == DeckCommand.FORWARD) View.FOCUS_FORWARD else View.FOCUS_BACKWARD)
+                val moved = target?.requestFocusFromTouch() == true
+                return if (moved) ok("Moved focus.") else unavailable("No more focusable items.")
+            }
+            DeckCommand.ACTIVATE -> {
+                val view = currentFocus ?: return unavailable("Focus an item first.")
+                // A tap on a keypad tile is already dispatching this input; never re-enter the engine.
+                if (view.id in setOf(R.id.pocket_key_1, R.id.pocket_key_2, R.id.pocket_key_3, R.id.pocket_key_4,
+                        R.id.pocket_key_5, R.id.pocket_key_6, R.id.pocket_key_7, R.id.pocket_key_8, R.id.pocket_key_9))
+                    return unavailable("Press the corresponding keypad key instead.")
+                return if (view.isEnabled && view.isClickable && view.performClick()) ok("Activated focused item.")
+                    else unavailable("Focused item cannot be activated.")
+            }
+            DeckCommand.RECENTS -> return unavailable("Recent apps needs navigation access. Choose Navigation access to learn more.")
+            else -> return unavailable("Not a visible screen action.")
+        }
+        return try { startActivity(intent); ok("Opened ${command.label}.") }
+        catch (_: ActivityNotFoundException) { unavailable("No app handles this action.") }
+        catch (_: SecurityException) { unavailable("Android restricted this action.") }
     }
 
     private fun refreshDiagnostics() {

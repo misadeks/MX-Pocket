@@ -6,6 +6,8 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import org.junit.Test
+import kotlinx.coroutines.flow.MutableStateFlow
+import tel.misa.mxpocket.decks.*
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class BuiltInPluginsTest {
@@ -45,7 +47,8 @@ class BuiltInPluginsTest {
         val actions = mutableListOf<PluginAction>()
         val engine = PluginEngine(BuiltInPlugins.create("Focus", "Audio", "Phone"), this,
             { testScheduler.currentTime }, { AudioSnapshot(6, 15) },
-            { action, _ -> actions += action }, {}, { _, error -> throw AssertionError(error) })
+            { action, _ -> actions += action }, {}, { _, error -> throw AssertionError(error) },
+            MutableStateFlow(DeckState(media = MediaDeckState(volume = 6, maximum = 15))))
         fun tap(index: Int) {
             engine.key(PluginKeyEvent(index, true))
             engine.key(PluginKeyEvent(index, false))
@@ -55,11 +58,9 @@ class BuiltInPluginsTest {
         assertEquals("6 / 15", engine.render().keys[7].label)
         for (index in listOf(0, 1, 2, 3, 5, 6, 8)) tap(index)
         assertEquals(listOf(
-            PluginAction.Volume(VolumeChange.LOWER), PluginAction.Media(MediaCommand.PLAY_PAUSE),
-            PluginAction.Volume(VolumeChange.RAISE), PluginAction.Media(MediaCommand.PREVIOUS),
-            PluginAction.Media(MediaCommand.NEXT), PluginAction.Volume(VolumeChange.MUTE),
-            PluginAction.Volume(VolumeChange.UNMUTE),
-        ), actions)
+            DeckCommand.QUIETER, DeckCommand.PLAY, DeckCommand.LOUDER, DeckCommand.PREVIOUS,
+            DeckCommand.NEXT, DeckCommand.MUTE, DeckCommand.UNMUTE,
+        ), actions.filterIsInstance<PluginAction.Deck>().map { it.command })
         actions.clear()
         engine.next(1)
         for (index in listOf(0, 1, 2, 3, 5, 8)) tap(index)
@@ -68,7 +69,7 @@ class BuiltInPluginsTest {
         assertEquals(PluginAction.Repaint, actions.last())
         tap(6)
         assertEquals("focus", engine.selectedId)
-        engine.next(-1)
+        engine.next(2)
         assertEquals("phone", engine.selectedId)
         tap(7)
         assertEquals("audio", engine.selectedId)
