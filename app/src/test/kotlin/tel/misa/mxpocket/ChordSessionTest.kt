@@ -9,6 +9,7 @@ import android.os.Looper
 import android.os.SystemClock
 import java.time.Duration
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -18,6 +19,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 import org.robolectric.annotation.LooperMode
 import org.robolectric.util.ReflectionHelpers
 import tel.misa.mxpocket.actions.ActionCall
@@ -32,6 +34,7 @@ import tel.misa.mxpocket.plugins.*
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 @LooperMode(LooperMode.Mode.PAUSED)
 class ChordSessionTest {
     private val app get() = RuntimeEnvironment.getApplication() as PocketApplication
@@ -45,14 +48,18 @@ class ChordSessionTest {
     }
     private val events = mutableListOf<String>()
     private var token = "initial"
+    private var readOnly = false
+    private lateinit var probeHost: PluginHost
     private var effect: PluginAction? = null
     private var launches = 0
     private var captures = 0
     private val probe = object : PocketPlugin {
         override val descriptor = PluginDescriptor("probe", "Probe", setOf(PluginCapability.OPEN_APPS, PluginCapability.STUDIO),
             chords = setOf(KeyChord(0, 8), KeyChord(1, 8)))
+        override fun onActivate(host: PluginHost) { probeHost = host }
         override fun render(nowMillis: Long) = PluginFrame(List(9) {
-            KeyTile("Key $it", "", 0xff222222.toInt(), inputToken = if (it == 0) token else null)
+            KeyTile("Key $it", "", 0xff222222.toInt(), inputToken = if (it == 0) token else null,
+                readOnly = it == 0 && readOnly)
         })
         override fun onKey(event: PluginKeyEvent, host: PluginHost) {
             events += "${event.index}${if (event.pressed) "+" else "-"}"
@@ -66,6 +73,7 @@ class ChordSessionTest {
     private lateinit var emit: (KeyEvent) -> Unit
     private lateinit var session: PocketSession
     private var uploadGate: CompletableDeferred<Unit>? = null
+    private val writes = mutableListOf<String>()
     private val decoder = KeyInput(0x0b)
     private fun report(vararg keys: Int) {
         val grid = ByteArray(32).apply {
@@ -80,6 +88,12 @@ class ChordSessionTest {
         main.idle()
     }
     private fun waitWindow() = main.idleFor(Duration.ofMillis(150))
+    private fun status(index: Int, text: String) {
+        assertTrue(runBlocking {
+            session.actions.dispatch(ActionCall("keypad.status", mapOf("key" to "$index", "text" to text))).success
+        })
+        main.idle()
+    }
     private fun connect() {
         session.connect(session.reserve(device)!!, usb, device, {}, { error("Unexpected shortcut") })
         main.idle()
@@ -97,9 +111,19 @@ class ChordSessionTest {
         }
         session = PocketSession(app, listOf(probe, chordStudio)) { _, _, event, _, _ ->
             emit = event
-            object : KeypadOutput {
+            object : GridOutput {
                 override fun close() {}
-                override suspend fun setKeyImage(index: Int, bitmap: Bitmap) { uploadGate?.await() }
+                override suspend fun setKeyImage(index: Int, bitmap: Bitmap) {
+                    writes += "key $index"
+                    uploadGate?.await()
+                }
+                override suspend fun writeGrid(art: Bitmap?, tiles: List<Bitmap>, clearOldGaps: Boolean,
+                    current: () -> Boolean): GridWrite {
+                    check(current())
+                    writes += "grid"
+                    uploadGate?.await()
+                    return GridWrite.ACKNOWLEDGED
+                }
             }
         }
         for (i in 0..8) session.deck.setKey("focus", "root", i,
@@ -142,6 +166,48 @@ class ChordSessionTest {
         assertEquals(listOf("0+", "1+"), events)
     }
 
+    @Test fun chordNeedsBothOriginalReceiptsButMayCompleteDuringAnUnrelatedSparseWrite() {
+        val gate = CompletableDeferred<Unit>()
+        uploadGate = gate
+        report(1)
+        status(4, "Updating")
+        report(1, 9); report()
+        assertEquals(listOf("grid", "key 4"), writes)
+        assertEquals(listOf("0&8"), events)
+        gate.complete(Unit); main.idle()
+
+        events.clear()
+        report(1)
+        status(8, "New partner label") // Same action, new receipt for the partner.
+        report(1, 9); waitWindow(); report()
+        assertEquals(listOf("0+", "8+", "0-", "8-"), events)
+        assertEquals("key 8", writes.last())
+        events.clear()
+        report(1, 9); report()
+        assertEquals(listOf("0&8"), events)
+    }
+
+    @Test fun lateSparseAckCannotReplayBufferedOrHeldDownAcrossAPageSwitch() {
+        val gate = CompletableDeferred<Unit>()
+        uploadGate = gate
+        report(1)
+        status(0, "Changing")
+        waitWindow(); report()
+        assertTrue(events.isEmpty()) // Deferred single no longer matches the original pixels.
+        report(1)
+        session.selectProfile("studio"); session.selectProfile("focus"); main.idle()
+        val nextGrid = CompletableDeferred<Unit>()
+        uploadGate = nextGrid
+        gate.complete(Unit); main.idle()
+        event(1, true); report(1, 9)
+        nextGrid.complete(Unit); main.idle()
+        event(9, true); report()
+        assertEquals(listOf("grid", "key 0", "grid"), writes)
+        assertTrue(events.isEmpty())
+        report(1, 9); report()
+        assertEquals(listOf("0&8"), events)
+    }
+
     @Test fun staleBindingsSyntheticCleanupAndReconnectNeverReplayPendingDowns() {
         event(1, true)
         token = "rebound" // Not yet painted or ACKed; logical identity changed under the first key.
@@ -175,6 +241,29 @@ class ChordSessionTest {
         assertNull(session.workflows.status.value)
         report(9)
         assertEquals("keypad-check", session.workflows.status.value?.workflowId)
+    }
+
+    @Test fun changingOnlyReadOnlyRevokesBufferedInputAndRequiresAcknowledgmentBeforeRearming() {
+        for (viaTimeout in listOf(false, true)) {
+            report(1)
+            val disarm = CompletableDeferred<Unit>()
+            uploadGate = disarm
+            readOnly = true; probeHost.invalidate(); main.idle()
+            if (viaTimeout) waitWindow()
+            report()
+            assertTrue(events.isEmpty())
+            disarm.complete(Unit); main.idle()
+
+            val rearm = CompletableDeferred<Unit>()
+            uploadGate = rearm
+            readOnly = false; probeHost.invalidate(); main.idle()
+            report(1) // Identical pixels, but the actionable role has not been acknowledged.
+            rearm.complete(Unit); main.idle()
+            event(1, true); waitWindow(); report()
+            assertTrue(events.isEmpty())
+        }
+        report(1); waitWindow(); report()
+        assertEquals(listOf("0+", "0-"), events)
     }
 
     @Test fun chordAndDeferredSingleCannotBorrowLaunchCaptureOrPhoneTapAuthority() {
@@ -217,7 +306,17 @@ class ChordSessionTest {
             assertEquals(0, clicks)
 
             session.deck.setKey("studio", "root", 8, DeckKey()).getOrThrow()
-            main.idle(); report(1); report()
+            main.idle()
+            val gate = CompletableDeferred<Unit>()
+            uploadGate = gate
+            status(0, "Updating shutter")
+            report(1)
+            gate.complete(Unit); main.idle(); event(1, true); report()
+            assertEquals("A held shutter must not acquire authority from a late ACK", 0, clicks)
+            val lock = shadowOf(app.getSystemService(KeyguardManager::class.java))
+            lock.setKeyguardLocked(true); report(1); report(); lock.setKeyguardLocked(false)
+            assertEquals(0, clicks)
+            report(1); report()
             assertEquals(1, clicks) // Same grant, camera, binding and key; now an immediate single.
         } finally { session.disconnect(); service.destroy() }
     }

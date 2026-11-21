@@ -22,6 +22,9 @@ internal fun ActionCall.slotOwner(): String? = when {
     else -> null
 }
 
+internal fun ActionCall.commandBinding() =
+    if (id.startsWith("media.") && slotOwner() == "audio") copy(params = params - DeckActions.LEGACY_SLOT_OWNER) else this
+
 enum class SelectionSource { USER, AUTOMATIC }
 
 data class DeckKey(

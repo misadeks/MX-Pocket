@@ -41,7 +41,7 @@ data class KeyTile(val label: String, val footer: String, val background: Int,
     val readOnly: Boolean = false, val showLabel: Boolean = true, val showFooter: Boolean = true,
     val primary: Boolean = false, val volumeLevel: VolumeLevel? = null)
 
-data class PluginFrame(val keys: List<KeyTile>) {
+data class PluginFrame(val keys: List<KeyTile>, val page: Int = 0) {
     init { require(keys.size == 9) { "A plugin frame must contain exactly nine keys" } }
 }
 
