@@ -1,7 +1,7 @@
 # Android keypad decks
 
-Select **Phone-only preview** or connect an authorized keypad, then select a
-deck. Preview runs real phone actions. The debug-only UI fixture does not.
+Select **Connect virtual keypad** or connect an authorized keypad, then select a
+profile. Virtual keys run real phone actions. The debug-only UI fixture does not.
 
 | Deck | How to use it | If access is missing |
 | --- | --- | --- |
@@ -16,9 +16,13 @@ grant. Recording and capture are never triggered by opening Studio, USB attach,
 Activity recreation, a delayed workflow, or a locked-screen shortcut. No
 background camera, microphone or storage permission is used. If background
 launches are restricted, a fresh authorized physical press for a favorite or
-Studio offers a one-shot notification; tapping rechecks page, connection,
-grant, expiry and unlock. The legacy Phone page's direct-launch opt-in does
-not extend to arbitrary favorites.
+Studio offers a one-shot notification; tapping rechecks binding, connection,
+grant, expiry and unlock. Direct shortcuts can instead request **Open Studio**
+or the default camera immediately on an unlocked phone, including from custom
+pages. For a camera favorite, Android must resolve the default still-camera
+handler to the favorite's package; MX Pocket starts that viewfinder, not the
+favorite's arbitrary launcher activity. Other favorites always require a tap.
+After a direct request the notification is a quiet retry, not proof of launch.
 
 Android requires a notification-listener grant to inspect active media
 sessions. It is broad at the OS level. This app uses the component solely as
@@ -35,7 +39,9 @@ parameter: `component` is the exact flattened component of a current favorite.
 Unknown actions, unexpected parameters and stale favorites fail closed.
 Use `DeckCommand.workflowSafe` to restrict workflow steps to volume/transport.
 Navigation, captures, permission setup and launching need an immediate user
-press; dispatch must not carry that authority into asynchronous work.
+press; dispatch must not carry that authority into asynchronous work. The Flows
+screen separately supports opening a current favorite or Android Home after
+foreground confirmation; it does not use the keypad's launch authority.
 `PocketSession.runDeckAction(id, params)` returns `DeckResult(success, message)`.
 An accepted transport or capture request is not proof playback or capture
 succeeded. `PocketSession.deckState` supplies the confirmed live state,

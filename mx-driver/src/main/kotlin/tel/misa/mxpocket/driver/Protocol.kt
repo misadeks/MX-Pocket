@@ -10,6 +10,7 @@ object KeypadProtocol {
     const val MAX_JPEG_BYTES = 65535
     const val LCD_FEATURE = 0x02
     const val SOFTWARE_ID = 0x0b
+    internal val reportSizes = mapOf(0x11 to 20, 0x13 to 32, 0x14 to REPORT_BYTES)
 
     data class Region(val x: Int, val y: Int, val width: Int, val height: Int)
 
@@ -37,8 +38,8 @@ object KeypadProtocol {
             jpeg.u8(jpeg.lastIndex - 1) == 0xff && jpeg.u8(jpeg.lastIndex) == 0xd9) {
             "Expected a complete JPEG bitstream"
         }
-        require(region.x >= 0 && region.y >= 0 && region.width > 0 && region.height > 0 &&
-            region.x + region.width <= 480 && region.y + region.height <= 480) {
+        require(region.width in 1..480 && region.height in 1..480 &&
+            region.x in 0..(480 - region.width) && region.y in 0..(480 - region.height)) {
             "Region must fit the 480x480 panel"
         }
         val reports = mutableListOf<ByteArray>()
@@ -74,8 +75,11 @@ object KeypadProtocol {
         return reports
     }
 
-    fun imageStatus(report: ByteArray): Int {
-        if (report.size < 6 || report.u8(1) != 0xff || report.u8(2) != LCD_FEATURE ||
+    fun imageStatus(report: ByteArray): Int = imageStatus(report, reportSizes)
+
+    internal fun imageStatus(report: ByteArray, inputSizes: Map<Int, Int>): Int {
+        if (!report.isComplete(inputSizes) || report.size < 6 ||
+            report.u8(1) != 0xff || report.u8(2) != LCD_FEATURE ||
             report.u8(3) != 0x2b) {
             throw IOException("Malformed image acknowledgement")
         }
@@ -85,6 +89,9 @@ object KeypadProtocol {
         }
     }
 }
+
+internal fun ByteArray.isComplete(sizes: Map<Int, Int> = KeypadProtocol.reportSizes): Boolean =
+    isNotEmpty() && sizes[u8(0)] == size
 
 internal fun ByteArray.u8(index: Int): Int = this[index].toInt() and 255
 internal fun ByteArray.u16(index: Int): Int = (u8(index) shl 8) or u8(index + 1)

@@ -19,7 +19,8 @@ data class PluginDescriptor(
 }
 
 data class KeyTile(val label: String, val footer: String, val background: Int,
-    val iconComponent: String? = null, val inputToken: String? = null)
+    val iconComponent: String? = null, val inputToken: String? = null,
+    val icon: String = "", val enabled: Boolean = true)
 
 data class PluginFrame(val keys: List<KeyTile>) {
     init { require(keys.size == 9) { "A plugin frame must contain exactly nine keys" } }

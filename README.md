@@ -2,8 +2,9 @@
 
 Native Android USB Host driver and companion app for the Logitech MX Creative
 Keypad (046D:C354). Application ID: `tel.misa.mxpocket`. Android 9/API 28 or newer.
-An experimental, source-supported MVP. Automated tests do not establish complete
-physical USB/LCD compatibility.
+The app supports saved layouts, context rules, workflows and an executable
+virtual keypad. Start with the [workspace walkthrough and acceptance checklist](docs/workspace.md).
+Automated tests do not establish physical USB/LCD compatibility.
 
 This repository is private: invited collaborators can work through feature
 branches and pull requests. Start with [CONTRIBUTING.md](CONTRIBUTING.md).
@@ -21,20 +22,23 @@ There is no hosted CI; validation runs locally.
   USB attach handling and a foreground service for an active keypad, device
   and endpoint diagnostics, connection/cancellation/detach handling, bounded
   event log with user-selected file export, custom image picker, and dynamic
-  Focus, Media Deck, Phone, App Launcher, Pocket Studio and Android Navigation
-  pages. The two physical page buttons switch plugins.
+  Focus, Audio, Phone, Launcher, Studio and Navigation controls. See the
+  [Android deck walkthrough](docs/android-decks.md) and [workflow guide](docs/workflows.md).
+- The Material 3 workspace includes Home, Keypad, Plugins, Flows and Settings.
+  Profiles, page history, pins, rules and individual key bindings are saved
+  locally. Layouts support JSON export/import and restoring factory defaults.
+  The workflow editor saves, tests and runs bounded sequences with conditions,
+  confirmations, daily schedules, context triggers and execution history.
 - Focus starts/pauses/resets a real monotonic countdown, changes duration, and
   plays a completion tone. Audio changes the music stream volume/mute and
-  sends media keys by default; optional media-session access adds track titles,
-  playback state and player-specific transport. Phone keeps its original
-  camera/settings/dialer/browser/alarm shortcuts. App Launcher opens selected
-  favorites; Pocket Studio operates its own foreground camera; Navigation
-  works in the app or, with a user-enabled service, across supported screens.
-  [Deck usage and hardware checks](docs/android-decks.md). No dependency on
-  Options+, the official Actions SDK, Node, WebHID,
-  root, a custom kernel, or BLE Dialpad.
-- Phone-only preview exercises app actions without pretending to connect or
-  sending any USB reports.
+  dispatches media keys to an existing Android media session. Phone opens
+  installed camera/settings/dialer/browser/alarm apps. Launcher opens saved
+  favorites; Audio shows permitted media-session state; Studio controls its
+  own CameraX still/video capture. Navigation has an optional user-enabled
+  accessibility service for supported cross-app actions. No dependency on
+  Options+, the official Actions SDK, Node, WebHID, root or BLE Dialpad.
+- The virtual keypad accepts presses/releases and models connection loss without
+  sending USB reports. It executes real actions, unlike the debug UI fixture.
 - Compile-time Kotlin plugin engine with stable registration IDs, exactly nine
   key tiles per frame, physical press/release handling, scoped contextual updates
   and host-mediated Android actions. Focus, Audio and Phone all use this API.
@@ -44,12 +48,14 @@ There is no hosted CI; validation runs locally.
 ## Architecture
 
 ```text
-app/ui/PocketScreen               phone Views, screen state and tap events
+app/ui/Workspace + PocketScreen   Compose navigation/editors and keypad Views
   -> MainActivity                 visible USB/notification consent, screen adapter
 KeypadService                     foreground notification, detach and disconnect
   -> PocketSession                one plugin/input/LCD owner; Activity optional
+       -> deck/DeckRepository     verified layouts, page history, context selection
+       -> workflow                stored definitions, progress, restricted host actions
   -> plugins/PluginEngine         selection, key ownership, scopes, errors
-       -> PocketPlugin            built-in decks, optional Counter
+       -> PocketPlugin            Focus, Audio, Phone, optional Counter
        -> PluginHost              bounded Android actions + invalidate
   -> mx-driver/MxKeypad            independent reusable USB Host API
        -> HidSession              serialized command/acknowledgement protocol
@@ -63,11 +69,10 @@ module never imports plugin/app code.
 
 The phone layout/theme and safe debug-only UI fixtures are described in
 [Contributing: phone UI](CONTRIBUTING.md#phone-ui-layout-and-safe-preview).
-This is separate from the live Phone-only preview, which executes phone actions.
+This is separate from **Connect virtual keypad**, which executes phone actions.
 
-The registry is `BuiltInPlugins.create()`. Adding an instance there adds a page
-to the scrollable plugin selector and physical page-button rotation. Keep
-stable IDs across versions so navigation targets continue to work.
+The registry is `BuiltInPlugins.create()`. Saved profiles reference stable
+actions rather than registry positions. See [plugin authoring](docs/plugins.md).
 
 ## Display/protocol caveat
 
@@ -92,8 +97,9 @@ The host waits for a protocol answer after **every** fragment. The answer flags
 are not required to echo the outbound data-frame flags. Busy 0xfb resends the
 whole image within a bounded retry window; other errors and missing
 acknowledgements fail explicitly. Timeouts/cancellation close the transport to
-avoid misattributing a late answer. Only changed LCD labels are repainted during
-the timer; page changes and explicit repaint refresh all nine.
+avoid misattributing a late answer. Each completed tile is tracked separately;
+identical tiles can be reused across pages. Explicit repaint and reconnect send
+the full layout. Input from a superseded or not-yet-acknowledged page is dropped.
 
 No speculative keepalive, firmware commands, captured startup replay, display
 ownership guesses, or undocumented reset are sent. Protocol acceptance in the
@@ -213,16 +219,20 @@ polling while detached or silent service restart is used.
 select **Open apps directly from keypad**, read the explanation and grant
 **Display over other apps** to MX Pocket in Android settings. This optional
 special access is broader than launching apps: it also permits drawing over
-other apps. MX Pocket creates no overlay windows. Direct shortcuts apply only
-to fresh Phone-page presses from the active authorized keypad on an unlocked
-phone. Turn the option off in MX Pocket or revoke special access in Settings.
+other apps. MX Pocket creates no overlay windows. A fresh physical press on the
+active, authorized keypad can open a built-in Phone shortcut, **Phone: Camera**
+on any saved layout, or **Open Studio**. A favorite from the app Android resolves
+as its default still camera can open that app's viewfinder; all other favorites
+still need a notification tap. No opening action takes a photo or starts
+recording. Turn the option off in MX Pocket or revoke special access in Settings.
 
-With the option off, access denied/unavailable, or the phone locked, press a
+With the option off or special access denied/unavailable, press a
 shortcut and tap its **Open Camera**, **Open Dialer**, etc. notification. No second keypad
 press or visit to the MX Pocket screen is needed. Allow the **Keypad app shortcuts**
 notification channel; Android controls whether it appears as a banner or in the
 shade. Only the latest request is usable, for one minute on the same connected
-keypad and plugin page. Unlock normally before opening the shortcut. In the
+keypad and binding. Direct launches require an unlocked, interactive phone.
+If the phone was locked, unlock normally and press again. In the
 foreground the same key still launches the app immediately. Android does not
 confirm that an external app appeared; a quiet tap-to-retry shortcut remains
 available if an OEM suppresses an otherwise permitted direct launch.
@@ -259,7 +269,9 @@ uses Android's documented user-granted `SYSTEM_ALERT_WINDOW` exception
    should disappear and another manual or permitted attach should work. Try an
    unrelated USB device; it must not start a keypad session.
 
-Session state and custom images are in memory, not restored after process death.
+Profiles, page histories, pins, context rules, favorites, workflow definitions
+and bounded execution history persist after process death. The active USB
+connection, running timer, global background image and in-flight run do not.
 Android may kill the service; reconnect manually or reattach. Preview never
 starts a service and pauses its plugin when the screen leaves the foreground.
 Switching plugins or disconnecting still cancels the old activation and releases

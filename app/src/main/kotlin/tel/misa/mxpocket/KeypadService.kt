@@ -16,6 +16,10 @@ import android.os.Build
 import android.os.IBinder
 import android.os.SystemClock
 import androidx.core.content.ContextCompat
+import tel.misa.mxpocket.decks.DeckResult
+import tel.misa.mxpocket.decks.ok
+import tel.misa.mxpocket.decks.unavailable
+import tel.misa.mxpocket.plugins.PhoneApp
 
 class KeypadService : Service() {
     private val session get() = (application as PocketApplication).session
@@ -78,30 +82,33 @@ class KeypadService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun offerShortcut(action: PocketSession.PhoneAction) {
+    private fun offerShortcut(action: PocketSession.PhoneAction): DeckResult {
         if (owner != action.ticket || !hasKeypadAccess(action.ticket)) {
             session.disconnect(getString(R.string.phone_action_stale))
-            return
+            return unavailable(getString(R.string.phone_action_stale))
         }
         val age = SystemClock.elapsedRealtime() - action.pressedAt
-        if (age >= PocketSession.PHONE_ACTION_TTL) return
+        if (!session.isCurrentShortcut(action) || age !in 0 until PocketSession.PHONE_ACTION_TTL)
+            return unavailable(getString(R.string.phone_action_stale))
         // Android provides no launch-success callback: retain a quiet tap-to-retry on OEM builds.
-        val direct = age < 2_000 && session.plugins.selectedId == "phone" &&
-            DirectShortcuts(this).enabled && isUnlockedAndInteractive()
-        val attempted = direct && action.target is PocketSession.Target.Phone && launchPhoneApp(action.target.app).let { error ->
-            if (error != null) session.log(error)
-            error == null
+        val direct = age < 2_000 && DirectShortcuts(this).enabled && isUnlockedAndInteractive()
+        val attempted = direct && when (val target = action.target) {
+            is PocketSession.Target.Phone -> (target.app == PhoneApp.CAMERA || session.isPhoneShortcutPage) &&
+                requested(launchPhoneApp(target.app))
+            PocketSession.Target.Studio -> requested(launchShortcut(target))
+            is PocketSession.Target.FavoriteApp -> cameraIntentForFavorite(target.component, session.favoriteApps)?.let {
+                requested(startShortcut(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)))
+            } == true
         }
         notifications.createNotificationChannel(NotificationChannel(PHONE_CHANNEL,
             getString(R.string.phone_action_title), NotificationManager.IMPORTANCE_HIGH))
         if (!notifications.areNotificationsEnabled() ||
             notifications.getNotificationChannel(PHONE_CHANNEL).importance == NotificationManager.IMPORTANCE_NONE) {
             session.takePhoneAction(action.id)
-            if (attempted) return
+            if (attempted) return ok("Direct launch requested.")
             val message = "Enable Keypad app shortcuts notifications in Android settings to open this shortcut."
-            session.message(message)
             if (notificationsVisible(this)) notifications.notify(NOTICE, notification(action.ticket, message))
-            return
+            return unavailable(message)
         }
         val open = Intent(this, PhoneActionActivity::class.java)
             .setData(Uri.parse("mxpocket://shortcut/${action.id}"))
@@ -121,10 +128,14 @@ class KeypadService : Service() {
             .setTimeoutAfter(PocketSession.PHONE_ACTION_TTL - age).setAutoCancel(true).setContentIntent(tap)
             .build()
         notifications.notify(PHONE_NOTICE, note)
-        session.message(if (attempted) "Requested $title. If nothing opened, tap the shortcut notification."
+        return ok(if (attempted) "Direct launch requested: $label. Tap the notification only if it did not open."
             else "Tap the \"$title\" notification within one minute.")
     }
 
+    private fun requested(error: String?): Boolean {
+        if (error != null) session.log(error)
+        return error == null
+    }
     private fun notification(ticket: PocketSession.Request, text: String): Notification {
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_IMMUTABLE)

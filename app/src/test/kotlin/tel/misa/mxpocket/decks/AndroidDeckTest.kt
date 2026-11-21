@@ -55,11 +55,11 @@ class AndroidDeckTest {
         assertFalse(session.runDeckAction("navigation.activate").success)
         Robolectric.buildActivity(MainActivity::class.java).setup().use { controller ->
             val activity = controller.get()
-            session.startPreview(); session.plugins.select("audio")
+            session.startPreview(); session.selectProfile("audio")
             assertFalse(session.runDeckAction("media.access").success)
             session.phoneKey(4)
             assertEquals(DeckAccessActivity::class.java.name, shadowOf(activity).nextStartedActivity.component?.className)
-            session.plugins.select("studio")
+            session.selectProfile("studio")
             session.phoneKey(1)
             assertFalse(session.deckState.value.studio.recording)
             assertNull(shadowOf(activity).nextStartedActivity)

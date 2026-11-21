@@ -22,6 +22,11 @@ android {
     buildFeatures { compose = true }
     testOptions { unitTests.isIncludeAndroidResources = true }
 }
+tasks.withType<Test>().configureEach {
+    // Robolectric loads multiple Android SDKs and Compose native resources in each worker.
+    maxHeapSize = "1536m"
+    forkEvery = 4
+}
 dependencies {
     val cameraX = "1.4.2"
     implementation("androidx.camera:camera-camera2:$cameraX")

@@ -36,9 +36,11 @@ class KeyInputTest {
     @Test fun ignoresAcknowledgementsAndTruncatedReports() {
         val decoder = KeyInput(0x0b)
         decoder.accept(grid(1))
-        assertTrue(decoder.accept(byteArrayOf(0x13, -1, 2, 0x2b, -63, 0, 1)).isEmpty())
-        assertTrue(decoder.accept(grid().copyOf(6)).isEmpty())
-        assertTrue(decoder.accept(page().copyOf(5)).isEmpty())
+        decoder.accept(page(0x01a2))
+        assertTrue(decoder.accept(grid().apply { this[3] = 0x2b }).isEmpty())
+        for (length in 0 until 32) assertTrue(decoder.accept(grid(7).copyOf(length)).isEmpty())
+        for (length in 0 until 20) assertTrue(decoder.accept(page(0x01a1).copyOf(length)).isEmpty())
+        assertEquals(listOf(KeyEvent(0x01a2, false)), decoder.accept(page()))
         assertEquals(listOf(KeyEvent(1, false)), decoder.accept(grid()))
     }
 }

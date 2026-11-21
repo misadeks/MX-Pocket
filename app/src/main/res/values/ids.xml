@@ -1,5 +1,7 @@
 <resources>
     <item name="pocket_status" type="id" />
+    <item name="workspace_panel" type="id" />
+    <item name="workspace_navigation" type="id" />
     <item name="pocket_connect" type="id" />
     <item name="pocket_plugin_title" type="id" />
     <item name="pocket_diagnostics" type="id" />

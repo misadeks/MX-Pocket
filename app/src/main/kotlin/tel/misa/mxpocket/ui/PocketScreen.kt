@@ -1,6 +1,8 @@
 package tel.misa.mxpocket.ui
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.Typeface
 import android.util.TypedValue
 import android.view.View
@@ -26,6 +28,12 @@ data class PocketScreenState(
     val log: String = "",
     val automatic: Boolean = false,
     val directShortcuts: Boolean = false,
+    val profiles: List<Pair<String,String>> = emptyList(),
+    val activeId: String = "",
+    val reason: String = "",
+    val canRunKeys: Boolean = true,
+    val simulating: Boolean = false,
+    val rendered: List<Bitmap> = emptyList(),
 )
 
 sealed interface PocketScreenEvent {
@@ -33,6 +41,7 @@ sealed interface PocketScreenEvent {
     data class SetAutomatic(val enabled: Boolean) : PocketScreenEvent
     data class SetDirectShortcuts(val enabled: Boolean) : PocketScreenEvent
     data object EnterPreview : PocketScreenEvent
+    data object StopPreview : PocketScreenEvent
     data class SelectPlugin(val id: String) : PocketScreenEvent
     data class TapKey(val index: Int) : PocketScreenEvent
     data class ChangePage(val delta: Int) : PocketScreenEvent
@@ -47,6 +56,7 @@ class PocketScreen(
     private val context: Context,
     plugins: List<PluginDescriptor>,
     private val onEvent: (PocketScreenEvent) -> Unit,
+    private val live: Boolean = false,
 ) {
     private val content = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
@@ -71,10 +81,16 @@ class PocketScreen(
     private val keys = mutableListOf<MaterialButton>()
     private val diagnostics: TextView
     private val log: TextView
+    private val tabs = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
+    private val why: TextView
+    private var profileOptions = emptyList<Pair<String,String>>()
+    private val simulated: MaterialButton
+    private val lastImages = arrayOfNulls<Bitmap>(9)
+    private var simulatorActive = false
 
     init {
         text(context.getString(R.string.app_name), R.dimen.screen_title_size, heading = true)
-        text(context.getString(R.string.subtitle), R.dimen.screen_body_size)
+        if (!live) text(context.getString(R.string.subtitle), R.dimen.screen_body_size)
         status = text(context.getString(R.string.not_connected), R.dimen.screen_body_size).apply {
             id = R.id.pocket_status
             accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
@@ -83,32 +99,32 @@ class PocketScreen(
             id = R.id.pocket_connect
         }
         automatic = CheckBox(context).apply {
+            if (live) visibility = View.GONE
             setText(R.string.auto_connect)
             minHeight = dimension(R.dimen.screen_control_min_height)
             setOnClickListener { onEvent(PocketScreenEvent.SetAutomatic(isChecked)) }
             content.addView(this)
         }
         directShortcuts = CheckBox(context).apply {
+            if (live) visibility = View.GONE
             setText(R.string.direct_shortcuts)
             minHeight = dimension(R.dimen.screen_control_min_height)
             setOnClickListener { onEvent(PocketScreenEvent.SetDirectShortcuts(isChecked)) }
             content.addView(this)
         }
-        button(context.getString(R.string.preview), outlined = true, event = PocketScreenEvent.EnterPreview)
+        simulated = button(context.getString(R.string.preview), outlined = true, event = PocketScreenEvent.EnterPreview)
+        if (live) simulated.setOnClickListener {
+            onEvent(if (simulatorActive) PocketScreenEvent.StopPreview else PocketScreenEvent.EnterPreview)
+        }
         pageTitle = text(context.getString(R.string.focus), R.dimen.screen_heading_size, heading = true).apply {
             id = R.id.pocket_plugin_title
         }
-        val tabs = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
+        why = text("", R.dimen.screen_body_size).apply { if (!live) visibility = View.GONE }
         content.addView(HorizontalScrollView(context).apply {
             isHorizontalScrollBarEnabled = false
             addView(tabs)
         }, LinearLayout.LayoutParams(-1, -2))
-        for (plugin in plugins) {
-            button(plugin.title, parent = tabs, outlined = true, event = PocketScreenEvent.SelectPlugin(plugin.id)).apply {
-                tag = "plugin:${plugin.id}"
-                layoutParams = margins(LinearLayout.LayoutParams(-2, -2))
-            }
-        }
+        updateOptions(plugins.map { it.id to it.title })
         val keyIds = listOf(R.id.pocket_key_1, R.id.pocket_key_2, R.id.pocket_key_3,
             R.id.pocket_key_4, R.id.pocket_key_5, R.id.pocket_key_6,
             R.id.pocket_key_7, R.id.pocket_key_8, R.id.pocket_key_9)
@@ -120,6 +136,13 @@ class PocketScreen(
                     id = keyIds[index]
                     minHeight = dimension(R.dimen.screen_key_min_height)
                     maxLines = 3
+                    if (live) {
+                        iconGravity = MaterialButton.ICON_GRAVITY_TEXT_TOP
+                        iconSize = (58 * context.resources.displayMetrics.density).toInt()
+                        iconTint = null
+                        val inset = dimension(R.dimen.screen_control_margin)
+                        setPadding(inset, inset, inset, inset)
+                    }
                 }
             }
         }
@@ -128,40 +151,71 @@ class PocketScreen(
             event = PocketScreenEvent.ChangePage(-1))
         button(context.getString(R.string.next), parent = arrows, outlined = true,
             event = PocketScreenEvent.ChangePage(1))
-        button(context.getString(R.string.repaint), outlined = true, event = PocketScreenEvent.Repaint)
-        button(context.getString(R.string.import_image), outlined = true, event = PocketScreenEvent.ChooseImage)
-        text(context.getString(R.string.profile_note), R.dimen.screen_note_size)
-        text(context.getString(R.string.diagnostics), R.dimen.screen_heading_size, heading = true)
-        button(context.getString(R.string.refresh), outlined = true, event = PocketScreenEvent.RefreshDiagnostics)
+        if (!live) {
+            button(context.getString(R.string.repaint), outlined = true, event = PocketScreenEvent.Repaint)
+            button(context.getString(R.string.import_image), outlined = true, event = PocketScreenEvent.ChooseImage)
+            text(context.getString(R.string.profile_note), R.dimen.screen_note_size)
+            text(context.getString(R.string.diagnostics), R.dimen.screen_heading_size, heading = true)
+            button(context.getString(R.string.refresh), outlined = true, event = PocketScreenEvent.RefreshDiagnostics)
+        }
         diagnostics = text("", R.dimen.screen_note_size).apply {
+            if (live) visibility = View.GONE
             id = R.id.pocket_diagnostics
             setTextIsSelectable(true)
             typeface = Typeface.MONOSPACE
         }
-        button(context.getString(R.string.export_log), outlined = true, event = PocketScreenEvent.SaveLog)
-        text(context.getString(R.string.log), R.dimen.screen_heading_size, heading = true)
+        if (!live) {
+            button(context.getString(R.string.export_log), outlined = true, event = PocketScreenEvent.SaveLog)
+            text(context.getString(R.string.log), R.dimen.screen_heading_size, heading = true)
+        }
         log = text("", R.dimen.screen_log_size).apply {
             id = R.id.pocket_log
             setTextIsSelectable(true)
             typeface = Typeface.MONOSPACE
+            if (live) visibility = View.GONE
         }
     }
 
-    fun render(state: PocketScreenState, iconFor: ((String) -> android.graphics.Bitmap?)? = null) {
+    private fun updateOptions(options: List<Pair<String,String>>) {
+        if (options == profileOptions) return
+        profileOptions = options
+        tabs.removeAllViews()
+        options.forEach { (id,name) ->
+            button(name,parent = tabs,outlined = true,event = PocketScreenEvent.SelectPlugin(id)).apply {
+                tag = "plugin:$id"
+                layoutParams = margins(LinearLayout.LayoutParams(-2,-2))
+            }
+        }
+    }
+
+    fun render(state: PocketScreenState) {
         status.updateText(state.status)
         automatic.isChecked = state.automatic
         directShortcuts.isChecked = state.directShortcuts
         connectButton.updateText(context.getString(if (state.connectionActive) R.string.disconnect else R.string.connect))
         pageTitle.updateText(state.pluginTitle)
+        if (live) {
+            updateOptions(state.profiles)
+            why.updateText(state.reason)
+            simulatorActive = state.simulating
+            simulated.updateText(context.getString(if (state.simulating) R.string.stop_simulator else R.string.preview))
+            simulated.isEnabled = !state.connectionActive
+            for (i in 0 until tabs.childCount) {
+                tabs.getChildAt(i).isSelected = profileOptions[i].first == state.activeId
+            }
+        }
         keys.forEachIndexed { index, button ->
             val tile = state.frame.keys[index]
             button.updateText(tile.label)
-            button.contentDescription = "${tile.label}, ${tile.footer}"
-            val bitmap = tile.iconComponent?.let { iconFor?.invoke(it) }
-            if ((button.icon as? android.graphics.drawable.BitmapDrawable)?.bitmap !== bitmap) {
-                button.icon = bitmap?.let { android.graphics.drawable.BitmapDrawable(context.resources, it) }
-                button.iconTint = null
-                button.iconSize = dimension(R.dimen.screen_control_min_height) / 2
+            if (live) {
+                button.isEnabled = tile.enabled && state.canRunKeys
+                button.contentDescription = listOf("Key ${index+1}",tile.label,tile.footer).filter { it.isNotBlank() }.joinToString(", ")
+                state.rendered.getOrNull(index)?.let { image ->
+                    if (image !== lastImages[index]) {
+                        lastImages[index] = image
+                        button.icon = BitmapDrawable(context.resources,image)
+                    }
+                }
             }
         }
         diagnostics.updateText(state.diagnostics)
