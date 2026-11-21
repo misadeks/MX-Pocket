@@ -65,6 +65,7 @@ data class DeckState(
         val footer = when (command) {
             DeckCommand.LOUDER, DeckCommand.QUIETER, DeckCommand.MUTE, DeckCommand.UNMUTE -> "${media.volume} / ${media.maximum}"
             DeckCommand.PLAY -> media.title.ifBlank { media.status }
+            DeckCommand.PREVIOUS, DeckCommand.NEXT -> if (media.access && command !in media.supported) "Unavailable" else media.status
             DeckCommand.MEDIA_ACCESS -> if (media.access) "Manage access" else "Optional access"
             DeckCommand.RECORD, DeckCommand.STOP -> if (studio.recording) "REC ${studio.elapsed}" else studio.status
             DeckCommand.MARKER -> "${studio.markers} marks"

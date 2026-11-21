@@ -37,19 +37,13 @@ Its ticking coroutine is cancelled by the engine.
 
 Add the import and instance to `BuiltInPlugins.kt`:
 
-```kotlin
-import tel.misa.mxpocket.plugins.examples.CounterPlugin
-
-object BuiltInPlugins {
-    fun create(focusTitle: String, audioTitle: String, phoneTitle: String): List<PocketPlugin> =
-        listOf(FocusPlugin(focusTitle), AudioPlugin(audioTitle), PhonePlugin(phoneTitle), CounterPlugin())
-}
-```
+Import `tel.misa.mxpocket.plugins.examples.CounterPlugin` and append
+`CounterPlugin()` to the list returned by `BuiltInPlugins.create()`.
 
 No Activity edit, USB protocol knowledge or new framework is needed. Rebuild,
 select Phone-only preview, then choose Counter or cycle with the page buttons
 on hardware. The example is compiled for tests but **not enabled in the default
-registry**, so the original three-page rotation remains intact.
+registry**.
 
 To author another plugin, copy the example into a named feature package, change
 its ID/title and implement its state, frame and input. Add a registry instance
@@ -66,6 +60,8 @@ and focused tests, then open a PR.
 | `OPEN_APPS` | Open supported PhoneApp CAMERA/SETTINGS/DIALER/WEB/ALARMS |
 | `NAVIGATION` | Select another registered plugin by ID |
 | `TONE` | Play the short completion tone |
+| `STUDIO` | Foreground Pocket Studio capture and camera controls on an explicit user press |
+| `SYSTEM_NAVIGATION` | Basic local navigation; global/element actions only through the user-enabled service |
 | None | Repaint current frame and invalidate changed state |
 
 For example:
@@ -86,6 +82,15 @@ permissions or isolate trusted compiled-in code. New Android privileges or
 actions require an explicit host/API/manifest change and review, not direct
 Context/USB access from a plugin. The adapter owns Intent handling, media keys,
 audio stream behavior and tone resource cleanup in one place.
+
+For the Android decks use `PluginAction.Deck(DeckCommand, component?)`.
+Each command declares its fixed namespace and belongs to one capability.
+`PocketSession.deckState` exposes immutable, observable selection, media,
+camera and navigation state to the shell and profile editor; `DeckState.tile()`
+uses the same data for saved bindings and built-in pages. `KeyTile.iconComponent`
+names an app icon, not a path or URI. `inputToken` identifies the logical binding
+when state or a favorites page changes. See [deck usage](android-decks.md) for
+action persistence, authority, media access and device checks.
 
 ## Lifecycle, concurrency and input ownership
 

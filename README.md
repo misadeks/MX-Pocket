@@ -21,12 +21,17 @@ There is no hosted CI; validation runs locally.
   USB attach handling and a foreground service for an active keypad, device
   and endpoint diagnostics, connection/cancellation/detach handling, bounded
   event log with user-selected file export, custom image picker, and dynamic
-  Focus/Audio/Phone plugins. The two physical page buttons switch plugins.
+  Focus, Media Deck, Phone, App Launcher, Pocket Studio and Android Navigation
+  pages. The two physical page buttons switch plugins.
 - Focus starts/pauses/resets a real monotonic countdown, changes duration, and
   plays a completion tone. Audio changes the music stream volume/mute and
-  dispatches media keys to an existing Android media session. Phone opens
-  installed camera/settings/dialer/browser/alarm apps. There is no accessibility
-  service or dependency on Options+, the official Actions SDK, Node, WebHID,
+  sends media keys by default; optional media-session access adds track titles,
+  playback state and player-specific transport. Phone keeps its original
+  camera/settings/dialer/browser/alarm shortcuts. App Launcher opens selected
+  favorites; Pocket Studio operates its own foreground camera; Navigation
+  works in the app or, with a user-enabled service, across supported screens.
+  [Deck usage and hardware checks](docs/android-decks.md). No dependency on
+  Options+, the official Actions SDK, Node, WebHID,
   root, a custom kernel, or BLE Dialpad.
 - Phone-only preview exercises app actions without pretending to connect or
   sending any USB reports.
@@ -44,7 +49,7 @@ app/ui/PocketScreen               phone Views, screen state and tap events
 KeypadService                     foreground notification, detach and disconnect
   -> PocketSession                one plugin/input/LCD owner; Activity optional
   -> plugins/PluginEngine         selection, key ownership, scopes, errors
-       -> PocketPlugin            Focus, Audio, Phone, optional Counter
+       -> PocketPlugin            built-in decks, optional Counter
        -> PluginHost              bounded Android actions + invalidate
   -> mx-driver/MxKeypad            independent reusable USB Host API
        -> HidSession              serialized command/acknowledgement protocol

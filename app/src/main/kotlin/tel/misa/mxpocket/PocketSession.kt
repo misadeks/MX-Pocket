@@ -110,6 +110,8 @@ internal class PocketSession(
     private var custom: Bitmap? = null
     private var revision = 0
     private var painted: Stamp? = null
+    private val paintedBindings = arrayOfNulls<String>(9)
+    private var changingBinding: Int? = null
     private var painting: Job? = null
     private var scheduled = false
 
@@ -187,6 +189,8 @@ internal class PocketSession(
         watchDecks()
         painting = null
         painted = null
+        paintedBindings.fill(null)
+        changingBinding = null
         onHandoff = null
         pendingAction = null
         val end = onEnd
@@ -214,8 +218,9 @@ internal class PocketSession(
             in 1..9 -> {
                 // Old labels can still be visible while a new page is uploading. Never replay a skipped press.
                 if (event.pressed && painted?.generation != plugins.generation) return
-                if (event.pressed && painted?.frame?.keys?.get(event.controlId - 1)?.inputToken !=
-                    plugins.render().keys[event.controlId - 1].inputToken) return
+                val index = event.controlId - 1
+                if (event.pressed && (changingBinding == index ||
+                    paintedBindings[index] != plugins.render().keys[index].inputToken)) return
                 physicalPressAt = arrivedAt.takeIf { event.pressed && !event.synthetic && output != null }
                 try {
                     plugins.key(PluginKeyEvent(event.controlId - 1, event.pressed, event.synthetic))
@@ -261,7 +266,15 @@ internal class PocketSession(
                     if (stamp.generation != plugins.generation || stamp.revision != revision || output !== connected) break
                     if (same && previous?.frame?.keys?.get(index) == frame.keys[index]) continue
                     val bitmap = renderKey(index, frame.keys[index])
-                    try { connected.setKeyImage(index, bitmap) } finally { bitmap.recycle() }
+                    val binding = frame.keys[index].inputToken
+                    if (paintedBindings[index] != binding) changingBinding = index
+                    try {
+                        connected.setKeyImage(index, bitmap)
+                        if (output === connected) paintedBindings[index] = binding
+                    } finally {
+                        if (output === connected) changingBinding = null
+                        bitmap.recycle()
+                    }
                 }
                 if (stamp.generation == plugins.generation && stamp.revision == revision && output === connected) {
                     painted = stamp

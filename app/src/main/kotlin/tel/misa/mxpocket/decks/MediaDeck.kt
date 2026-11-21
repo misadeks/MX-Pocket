@@ -60,8 +60,18 @@ internal class MediaDeck(private val app: Context) {
                 val state = controller.playbackState
                 if (command !in supported(state)) return unavailable("The active player does not offer this control.")
                 when (command) {
-                    DeckCommand.PLAY -> if (playing(state?.state) == true) controller.transportControls.pause()
-                        else controller.transportControls.play()
+                    DeckCommand.PLAY -> {
+                        val pause = playing(state?.state) == true
+                        val explicit = if (pause) P.ACTION_PAUSE else P.ACTION_PLAY
+                        if ((state?.actions ?: 0L) and explicit != 0L) {
+                            if (pause) controller.transportControls.pause() else controller.transportControls.play()
+                        } else {
+                            val key = KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
+                            val down = controller.dispatchMediaButtonEvent(KeyEvent(KeyEvent.ACTION_DOWN, key))
+                            val up = controller.dispatchMediaButtonEvent(KeyEvent(KeyEvent.ACTION_UP, key))
+                            if (!down || !up) return unavailable("The active player declined the media key.")
+                        }
+                    }
                     DeckCommand.PREVIOUS -> controller.transportControls.skipToPrevious()
                     DeckCommand.NEXT -> controller.transportControls.skipToNext()
                     else -> return unavailable("Unsupported transport control.")

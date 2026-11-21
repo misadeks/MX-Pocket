@@ -147,13 +147,23 @@ class PocketScreen(
         }
     }
 
-    fun render(state: PocketScreenState) {
+    fun render(state: PocketScreenState, iconFor: ((String) -> android.graphics.Bitmap?)? = null) {
         status.updateText(state.status)
         automatic.isChecked = state.automatic
         directShortcuts.isChecked = state.directShortcuts
         connectButton.updateText(context.getString(if (state.connectionActive) R.string.disconnect else R.string.connect))
         pageTitle.updateText(state.pluginTitle)
-        keys.forEachIndexed { index, button -> button.updateText(state.frame.keys[index].label) }
+        keys.forEachIndexed { index, button ->
+            val tile = state.frame.keys[index]
+            button.updateText(tile.label)
+            button.contentDescription = "${tile.label}, ${tile.footer}"
+            val bitmap = tile.iconComponent?.let { iconFor?.invoke(it) }
+            if ((button.icon as? android.graphics.drawable.BitmapDrawable)?.bitmap !== bitmap) {
+                button.icon = bitmap?.let { android.graphics.drawable.BitmapDrawable(context.resources, it) }
+                button.iconTint = null
+                button.iconSize = dimension(R.dimen.screen_control_min_height) / 2
+            }
+        }
         diagnostics.updateText(state.diagnostics)
         log.updateText(state.log)
     }

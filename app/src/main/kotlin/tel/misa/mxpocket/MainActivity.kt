@@ -320,7 +320,7 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             frame = session.plugins.render(),
             connectionActive = target != null || session.request != null,
             diagnostics = diagnostics, log = session.logText(60), automatic = access.automatic, directShortcuts = direct.enabled,
-        ))
+        ), session.favoriteApps::icon)
     }
 
     override fun openApp(app: PhoneApp): Boolean {
@@ -344,8 +344,8 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
                 return if (moved) ok("Scrolled MX Pocket.") else unavailable("End of this screen.")
             }
             DeckCommand.FORWARD, DeckCommand.REVERSE -> {
-                val from = currentFocus ?: screen.view
-                val target = from.focusSearch(if (command == DeckCommand.FORWARD) View.FOCUS_FORWARD else View.FOCUS_BACKWARD)
+                val target = android.view.FocusFinder.getInstance().findNextFocus(screen.view, currentFocus,
+                    if (command == DeckCommand.FORWARD) View.FOCUS_FORWARD else View.FOCUS_BACKWARD)
                 val moved = target?.requestFocusFromTouch() == true
                 return if (moved) ok("Moved focus.") else unavailable("No more focusable items.")
             }
