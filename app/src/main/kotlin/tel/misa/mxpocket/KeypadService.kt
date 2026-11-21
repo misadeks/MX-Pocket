@@ -159,7 +159,7 @@ class KeypadService : Service() {
 
     companion object {
         private const val STOP = "tel.misa.mxpocket.STOP"
-        private const val CHANNEL = "keypad-session"
+        internal const val CHANNEL = "keypad-session"
         private const val PHONE_CHANNEL = "keypad-shortcuts"
         private const val NOTICE = 1
         internal fun command(context: Context, ticket: PocketSession.Request): Intent =
@@ -169,7 +169,10 @@ class KeypadService : Service() {
             val manager = context.getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(NotificationChannel(CHANNEL, context.getString(R.string.session_title),
                 NotificationManager.IMPORTANCE_LOW))
-            return manager.areNotificationsEnabled() && manager.getNotificationChannel(CHANNEL).importance != NotificationManager.IMPORTANCE_NONE
+            return manager.areNotificationsEnabled() && !sessionChannelBlocked(manager)
         }
+
+        internal fun sessionChannelBlocked(manager: NotificationManager) =
+            manager.getNotificationChannel(CHANNEL)?.importance == NotificationManager.IMPORTANCE_NONE
     }
 }

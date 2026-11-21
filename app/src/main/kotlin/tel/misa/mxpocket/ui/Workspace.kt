@@ -51,7 +51,7 @@ internal enum class WorkspaceTab(val label: String,val glyph: String) {
 }
 
 @Composable internal fun WorkspacePanel(tab: WorkspaceTab, session: PocketSession, state: PocketScreenState?,
-    event: (PocketScreenEvent) -> Unit, onExport: () -> Unit, onImport: () -> Unit) {
+    event: (PocketScreenEvent) -> Unit, onSetup: () -> Unit, onExport: () -> Unit, onImport: () -> Unit) {
     if (tab == WorkspaceTab.HOME || state == null) return
     val deck by session.deck.state.collectAsStateWithLifecycle()
     val signals by session.signals.collectAsStateWithLifecycle()
@@ -87,6 +87,7 @@ internal enum class WorkspaceTab(val label: String,val glyph: String) {
                 }
             }
             WorkspaceTab.SETTINGS -> Section("Settings") {
+                OutlinedButton(onClick = onSetup) { Text("Feature setup") }
                 Text(state.status)
                 Button(onClick = { event(PocketScreenEvent.ToggleConnection) }) {
                     Text(if (state.connectionActive) "Disconnect keypad" else "Connect keypad")

@@ -187,10 +187,14 @@ finishes. Close on detach, cancellation or your chosen lifecycle boundary.
    retried with `force=true` to take the selected HID interface from the kernel.
    No interrupt endpoint is passed to `bulkTransfer`; no root or kernel patch
    is attempted. Claim failure is an actionable OEM/kernel compatibility limit.
-4. Confirm custom text appears on **all nine physical LCD buttons**, remains
-   visible for at least 60 seconds without logo fallback, and changes between
-   Focus/Audio/Phone pages. Choose a custom image, return to the app, then
-   verify the image plus labels on every key without reconnecting.
+4. Confirm text appears on **all nine physical LCD buttons** and remains
+   visible for at least 60 seconds without logo fallback. On factory layouts,
+   press Next from Focus: verify Audio, Phone, Launcher, Studio, Navigation,
+   then Focus again. Press Previous to wrap back to Navigation. On saved
+   layouts, single-page profiles cycle in workspace order; in a multi-page
+   profile the buttons navigate its pages, with Previous retracing page history
+   first. Choose a custom image and verify it appears with the labels on every
+   key without reconnecting.
 5. Press/release each LCD key and both page buttons. Verify their identities in
    the session log; hold multiple keys and verify independent releases. Use the
    physical controls to change music volume and start/pause the focus timer.

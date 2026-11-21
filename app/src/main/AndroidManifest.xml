@@ -25,6 +25,7 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.MXPocket">
+        <activity android:name=".setup.SetupActivity" android:exported="false" />
         <activity android:name=".decks.FavoritesActivity" android:exported="false" />
         <activity android:name=".decks.StudioActivity" android:exported="false" />
         <activity android:name=".decks.DeckAccessActivity" android:exported="false" />

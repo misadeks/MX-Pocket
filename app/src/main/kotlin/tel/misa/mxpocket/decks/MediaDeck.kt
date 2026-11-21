@@ -39,13 +39,15 @@ class MediaSessionAccess : NotificationListenerService() {
     companion object { internal val changes = MutableStateFlow(0L) }
 }
 
+internal fun Context.hasMediaSessionAccess(): Boolean = getSystemService(NotificationManager::class.java)
+    .isNotificationListenerAccessGranted(ComponentName(this, MediaSessionAccess::class.java))
+
 internal class MediaDeck(private val app: Context) {
     private val audio = app.getSystemService(AudioManager::class.java)
     private val manager = app.getSystemService(MediaSessionManager::class.java)
     private var activeWatch: Watch? = null
     private val token = ComponentName(app, MediaSessionAccess::class.java)
-    private val access get() = app.getSystemService(NotificationManager::class.java)
-        .isNotificationListenerAccessGranted(token)
+    private val access get() = app.hasMediaSessionAccess()
     private fun basic() = MediaDeckState(volume = audio.getStreamVolume(AudioManager.STREAM_MUSIC),
         maximum = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC), fixedVolume = audio.isVolumeFixed)
 

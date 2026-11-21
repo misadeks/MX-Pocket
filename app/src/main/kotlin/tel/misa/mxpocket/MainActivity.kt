@@ -2,7 +2,6 @@ package tel.misa.mxpocket
 
 import android.Manifest
 import android.app.KeyguardManager
-import android.app.PendingIntent
 import android.content.ActivityNotFoundException
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -36,6 +35,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tel.misa.mxpocket.driver.UsbDiagnostics
 import tel.misa.mxpocket.plugins.PhoneApp
+import tel.misa.mxpocket.setup.SetupActivity
+import tel.misa.mxpocket.setup.SetupChoices
 import tel.misa.mxpocket.decks.*
 import tel.misa.mxpocket.ui.PocketScreen
 import tel.misa.mxpocket.ui.PocketScreenEvent
@@ -176,6 +177,13 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
         }
     }
 
+    private val setup = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        if (it.resultCode == SetupActivity.TRY_VIRTUAL && target == null && session.request == null) {
+            showTab(WorkspaceTab.HOME)
+            if (!session.preview) session.startPreview()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         tab = savedInstanceState?.getString("tab")?.let { name -> WorkspaceTab.entries.find { it.name == name } } ?: WorkspaceTab.HOME
@@ -185,6 +193,7 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             setContent {
                 WorkspaceTheme {
                     WorkspacePanel(tab,session,presentation,::handleScreenEvent,
+                        onSetup = { openSetup(firstRun = false) },
                         onExport = { layoutSaver.launch("mx-pocket-layouts.json") },
                         onImport = { layoutPicker.launch(arrayOf("application/json","text/*","application/octet-stream")) })
                 }
@@ -213,6 +222,12 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             usbToken = savedInstanceState.getString("usbToken")
             waitingForNotifications = savedInstanceState.getBoolean("notificationPrompt")
         }
+        if (savedInstanceState == null && target == null && session.request == null && !session.preview &&
+            SetupChoices(this).takeLauncherWelcome(intent)) openSetup(firstRun = true)
+    }
+
+    private fun openSetup(firstRun: Boolean) {
+        setup.launch(SetupActivity.intent(this, firstRun))
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -313,12 +328,9 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             if (usbToken != null) return
             val token = UUID.randomUUID().toString()
             usbToken = token
-            val callback = Intent(permissionAction).setPackage(packageName).putExtra("token", token)
-            val permission = PendingIntent.getBroadcast(this, token.hashCode(), callback,
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_ONE_SHOT)
             session.message("Waiting for Android USB permission...")
             try {
-                usb.requestPermission(device, permission)
+                usb.requestKeypadAccess(this, device, permissionAction, token)
             } catch (e: RuntimeException) {
                 cancelAttempt("Could not request USB permission: ${e.message}. Tap Connect to retry.")
             }
