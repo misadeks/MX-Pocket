@@ -81,22 +81,23 @@ class NavigationService : AccessibilityService() {
             root.recycle()
         }
 
-        /** Only on an explicit key press, and only when Android cannot identify a focus anchor. */
-        @Suppress("DEPRECATION")
-        private fun firstMatch(root: Node, reverse: Boolean = false, act: (Node) -> Boolean): Boolean {
-            var remaining = 64
-            fun visit(node: Node, depth: Int): Boolean {
-                if (--remaining < 0 || depth > 12 || node.isPassword || !node.isVisibleToUser) return false
-                if (node.isEnabled && act(node)) return true
-                val count = node.childCount
-                for (i in 0 until minOf(count, remaining.coerceAtLeast(0))) {
-                    val child = node.getChild(if (reverse) count - 1 - i else i) ?: continue
-                    try { if (visit(child, depth + 1)) return true } finally { child.recycle() }
-                    if (remaining <= 0) break
-                }
-                return false
+    }
+
+    /** Only on an explicit key press, and only when Android cannot identify a focus anchor. */
+    @Suppress("DEPRECATION")
+    private fun firstMatch(root: Node, reverse: Boolean = false, act: (Node) -> Boolean): Boolean {
+        var remaining = 64
+        fun visit(node: Node, depth: Int): Boolean {
+            if (--remaining < 0 || depth > 12 || node.isPassword || !node.isVisibleToUser) return false
+            if (node.isEnabled && act(node)) return true
+            val count = node.childCount
+            for (i in 0 until minOf(count, remaining.coerceAtLeast(0))) {
+                val child = node.getChild(if (reverse) count - 1 - i else i) ?: continue
+                try { if (visit(child, depth + 1)) return true } finally { child.recycle() }
+                if (remaining <= 0) break
             }
-            return visit(root, 0)
+            return false
         }
+        return visit(root, 0)
     }
 }
