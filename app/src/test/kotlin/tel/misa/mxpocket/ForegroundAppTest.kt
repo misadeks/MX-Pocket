@@ -4,11 +4,13 @@ import android.app.AppOpsManager
 import android.app.KeyguardManager
 import android.app.usage.UsageEvents.Event
 import android.app.usage.UsageStatsManager
+import android.content.Intent
 import android.graphics.Bitmap
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.media.AudioManager
 import android.os.Looper
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import org.junit.Assert.*
 import org.junit.Test
@@ -25,6 +27,7 @@ import tel.misa.mxpocket.deck.DeckKey
 import tel.misa.mxpocket.deck.DeckRule
 import tel.misa.mxpocket.driver.KeyEvent
 import java.time.Duration
+import kotlin.coroutines.CoroutineContext
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28, 35])
@@ -136,6 +139,8 @@ class ForegroundAppTest {
             tick()
             assertNull(signal())
             assertEquals("focus", deck.state.value.activeProfileId)
+            event("android", Event.KEYGUARD_HIDDEN)
+            event(camera, Event.MOVE_TO_FOREGROUND)
             grant(true)
             tick()
             assertNull(signal()) // Don't resurrect pre-revocation events.
@@ -148,6 +153,51 @@ class ForegroundAppTest {
             assertNull(session.workflows.status.value)
         } finally { session.disconnect() }
         assertNull(signal())
+    }
+
+    @Test fun unlockedResumeBeforeFirstPollMatchesButRegrantDoesNotReplayThatInterval() {
+        val session = PocketSession(app, Dispatchers.Main.immediate)
+        val screen = object : PocketSession.Screen {
+            override fun render() {}
+            override fun openApp(app: tel.misa.mxpocket.plugins.PhoneApp) = false
+        }
+        val deck = session.deck
+        val lock = shadowOf(app.getSystemService(KeyguardManager::class.java))
+        fun advance(ms: Long) = main.idleFor(Duration.ofMillis(ms))
+        deck.setRules("studio", listOf(DeckRule(FOREGROUND_APP, camera, APP_RULE_WEIGHT))).getOrThrow()
+        deck.setAutomatic(true).getOrThrow()
+        session.setDetectForegroundApps(true)
+        grant(true)
+        lock.setKeyguardLocked(true)
+        session.attach(screen)
+        try {
+            advance(1_100) // A locked poll, then unlock and resume strictly before the next poll.
+            event(camera, Event.MOVE_TO_FOREGROUND) // Must not survive the unlock.
+            advance(100)
+            lock.setKeyguardLocked(false)
+            event("android", Event.KEYGUARD_HIDDEN)
+            app.sendBroadcast(Intent(Intent.ACTION_USER_PRESENT))
+            advance(100)
+            event(camera, Event.MOVE_TO_FOREGROUND)
+            advance(4_000)
+            assertEquals(camera, session.signals.value[FOREGROUND_APP])
+            assertEquals("studio", deck.state.value.activeProfileId)
+
+            lock.setKeyguardLocked(true)
+            advance(1_000)
+            grant(false)
+            advance(1_000) // A denied poll while locked invalidates the recovery interval.
+            lock.setKeyguardLocked(false)
+            event("android", Event.KEYGUARD_HIDDEN)
+            app.sendBroadcast(Intent(Intent.ACTION_USER_PRESENT))
+            advance(100)
+            event(camera, Event.MOVE_TO_FOREGROUND)
+            advance(100)
+            grant(true)
+            advance(4_000)
+            assertNull(session.signals.value[FOREGROUND_APP])
+            assertEquals("focus", deck.state.value.activeProfileId)
+        } finally { session.detach(screen) }
     }
 
     @Test fun onlyAnUnambiguousFreshResumedActivityCounts() {
@@ -170,5 +220,52 @@ class ForegroundAppTest {
         assertEquals(camera, read(220))
         assertNull(read(220 + ForegroundApps.FRESH_MS))
         assertNull(read(221 + ForegroundApps.FRESH_MS))
+    }
+
+    @Test fun aLatePollCannotRestoreThePreviousMatchAfterALockOrGrantCycle() {
+        val pending = ArrayDeque<Runnable>()
+        val pausedReads = object : CoroutineDispatcher() {
+            override fun dispatch(context: CoroutineContext, block: Runnable) { pending.addLast(block) }
+        }
+        val session = PocketSession(app, pausedReads)
+        val screen = object : PocketSession.Screen {
+            override fun render() {}
+            override fun openApp(app: tel.misa.mxpocket.plugins.PhoneApp) = false
+        }
+        val lock = shadowOf(app.getSystemService(KeyguardManager::class.java))
+        session.deck.setRules("studio", listOf(DeckRule(FOREGROUND_APP, camera, APP_RULE_WEIGHT))).getOrThrow()
+        session.deck.setAutomatic(true).getOrThrow()
+        session.setDetectForegroundApps(true)
+        grant(true)
+        session.attach(screen)
+        fun finishPoll() { pending.removeFirst().run(); main.idle() }
+        fun advance(ms: Long) = main.idleFor(Duration.ofMillis(ms))
+        try {
+            for (boundary in listOf("screen", "grant")) {
+                main.idle()
+                advance(10)
+                event(camera, Event.MOVE_TO_FOREGROUND)
+                advance(10)
+                finishPoll()
+                assertEquals(camera, session.signals.value[FOREGROUND_APP])
+                advance(1_000) // Next read is already dispatched with the old reader.
+                if (boundary == "screen") {
+                    lock.setKeyguardLocked(true)
+                    app.sendBroadcast(Intent(Intent.ACTION_SCREEN_OFF))
+                    main.idle()
+                    lock.setKeyguardLocked(false)
+                    app.sendBroadcast(Intent(Intent.ACTION_USER_PRESENT))
+                } else {
+                    grant(false)
+                    main.idle()
+                    grant(true)
+                }
+                main.idle()
+                assertNull(session.signals.value[FOREGROUND_APP])
+                finishPoll()
+                assertNull(session.signals.value[FOREGROUND_APP])
+                advance(1_000)
+            }
+        } finally { session.detach(screen) }
     }
 }

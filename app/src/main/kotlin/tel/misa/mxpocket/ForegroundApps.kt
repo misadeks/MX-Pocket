@@ -3,8 +3,12 @@ package tel.misa.mxpocket
 import android.app.AppOpsManager
 import android.app.usage.UsageEvents.Event
 import android.app.usage.UsageStatsManager
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.os.Build
+import androidx.core.content.ContextCompat
 
 internal const val FOREGROUND_APP = "foregroundApp"
 internal const val APP_RULE_WEIGHT = 5 // Stock media scores 3; changing a positive incumbent needs a lead of 2.
@@ -20,11 +24,43 @@ internal fun Context.hasUsageAccess(): Boolean {
     } catch (_: SecurityException) { false }
 }
 
-/** One unlocked, granted observation interval. Keep only currently resumed activities, never a usage log. */
-internal class ForegroundApps(private val usage: UsageStatsManager, private val since: Long) {
+internal enum class ForegroundBoundary { SCREEN, UNLOCK, ACCESS }
+
+/** Registered only for a live, eligible mapping. Deliver all invalidations on the session thread. */
+internal fun Context.watchForegroundBoundaries(reset: (ForegroundBoundary) -> Unit): AutoCloseable {
+    var active = true
+    val receiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (active) reset(if (intent.action == Intent.ACTION_USER_PRESENT) ForegroundBoundary.UNLOCK else ForegroundBoundary.SCREEN)
+        }
+    }
+    val ops = getSystemService(AppOpsManager::class.java)
+    val listener = AppOpsManager.OnOpChangedListener { _, _ ->
+        // Even a revoke/regrant wholly between two polls starts a new permission interval.
+        mainExecutor.execute { if (active) reset(ForegroundBoundary.ACCESS) }
+    }
+    ops.startWatchingMode(AppOpsManager.OPSTR_GET_USAGE_STATS, packageName, listener)
+    try {
+        ContextCompat.registerReceiver(this, receiver, IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_USER_PRESENT)
+        }, ContextCompat.RECEIVER_NOT_EXPORTED)
+    } catch (e: RuntimeException) {
+        ops.stopWatchingMode(listener)
+        throw e
+    }
+    return AutoCloseable {
+        active = false
+        ops.stopWatchingMode(listener)
+        unregisterReceiver(receiver)
+    }
+}
+
+/** Only an uninterrupted grant can recover events between a locked poll and the first unlocked one. */
+internal class ForegroundApps(private val usage: UsageStatsManager, since: Long, lastLockedPoll: Long? = null) {
     private val resumed = mutableMapOf<Pair<String, String?>, Long>()
     private var lastPoll = since
-    private var earliest = since
+    private var earliest = lastLockedPoll?.coerceIn((since - 5_000L)..since) ?: since
+    private val firstUnlockedPoll = since
 
     @Suppress("DEPRECATION") // MOVE_TO_FOREGROUND/BACKGROUND are the API 28 names for RESUMED/PAUSED.
     fun match(configured: Set<String>, now: Long): String? {
@@ -42,7 +78,18 @@ internal class ForegroundApps(private val usage: UsageStatsManager, private val 
             return null
         }
         val event = Event()
+        var pastUnlock = false
         while (events.getNextEvent(event)) {
+            // Before the first unlocked sample, require Android's unlock boundary. An activity
+            // can resume over the lock screen, so a resume (or screen-on) alone is not enough.
+            if (event.timeStamp < firstUnlockedPoll) {
+                when (event.eventType) {
+                    Event.KEYGUARD_HIDDEN -> pastUnlock = true
+                    Event.KEYGUARD_SHOWN, Event.SCREEN_NON_INTERACTIVE,
+                    Event.DEVICE_SHUTDOWN, Event.DEVICE_STARTUP -> pastUnlock = false
+                }
+                if (!pastUnlock && event.eventType == Event.MOVE_TO_FOREGROUND) continue
+            }
             when (event.eventType) {
                 Event.MOVE_TO_FOREGROUND -> {
                     val pkg = event.packageName

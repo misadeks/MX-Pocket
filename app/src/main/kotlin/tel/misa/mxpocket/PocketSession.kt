@@ -290,20 +290,48 @@ internal class PocketSession(
         }
         signalClock = sessionScope.launch {
             combine(deck.state, detectApps, ::configuredApps).distinctUntilChanged().collectLatest { configured ->
-                var reader: ForegroundApps? = null
-                while (true) {
-                    var match: String? = null
-                    if (configured.isNotEmpty() && app.isUnlockedAndInteractive() && app.hasUsageAccess()) {
-                        val source = reader ?: ForegroundApps(app.getSystemService(UsageStatsManager::class.java),
-                            System.currentTimeMillis()).also { reader = it }
-                        match = withContext(usageDispatcher) { source.match(configured, System.currentTimeMillis()) }
-                        if (!app.isUnlockedAndInteractive() || !app.hasUsageAccess()) { match = null; reader = null }
-                    } else reader = null
-                    sampleContext(match)
-                    delay(1000)
-                }
+                sampleWhileEligible(configured)
             }
         }
+    }
+
+    private suspend fun sampleWhileEligible(configured: Set<String>) {
+        var reader: ForegroundApps? = null
+        var lastLockedPoll: Long? = null
+        var unlockedSince: Long? = null
+        var generation = 0L
+        val watcher = if (configured.isEmpty()) null else app.watchForegroundBoundaries { boundary ->
+            generation++
+            reader = null
+            val now = System.currentTimeMillis()
+            val granted = app.hasUsageAccess()
+            unlockedSince = now.takeIf { granted && boundary == ForegroundBoundary.UNLOCK }
+            if (boundary == ForegroundBoundary.ACCESS || !granted) lastLockedPoll = null
+            else if (boundary == ForegroundBoundary.SCREEN) lastLockedPoll = now
+            sampleContext(null)
+        }
+        try {
+            while (true) {
+                var match: String? = null
+                val granted = configured.isNotEmpty() && app.hasUsageAccess()
+                if (granted && app.isUnlockedAndInteractive()) {
+                    val source = reader ?: ForegroundApps(app.getSystemService(UsageStatsManager::class.java),
+                        unlockedSince ?: System.currentTimeMillis(), lastLockedPoll).also { reader = it }
+                    val started = generation
+                    val result = withContext(usageDispatcher) { source.match(configured, System.currentTimeMillis()) }
+                    if (started == generation) {
+                        if (app.isUnlockedAndInteractive() && app.hasUsageAccess()) match = result
+                        else { reader = null; lastLockedPoll = null; unlockedSince = null }
+                    }
+                } else {
+                    reader = null
+                    unlockedSince = null
+                    lastLockedPoll = if (granted) System.currentTimeMillis() else null
+                }
+                sampleContext(match)
+                delay(1000)
+            }
+        } finally { watcher?.close() }
     }
 
     private fun sampleContext(foregroundApp: String? = _signals.value[FOREGROUND_APP]) {
