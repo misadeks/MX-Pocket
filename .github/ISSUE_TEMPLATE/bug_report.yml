@@ -1,0 +1,43 @@
+name: Bug report
+description: Report a reproducible app, plugin or USB behavior problem
+title: "[Bug] "
+body:
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and observed behavior
+      description: What should happen and what happens instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Include selected plugin/page and whether this is phone preview or physical USB.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: App or commit version
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Android API/version, phone model (not serial), cable/hub, keypad firmware revision if accessible.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Redacted diagnostics and physical checks
+      description: Include the first relevant failure and checks actually performed. Remove serials, USB paths, usernames, private paths, images and personal comments. Do not paste a full exported log.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy
+      options:
+        - label: I removed secrets, private device identifiers and personal content.
+          required: true
