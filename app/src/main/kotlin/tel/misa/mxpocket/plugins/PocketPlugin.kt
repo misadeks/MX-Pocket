@@ -33,7 +33,7 @@ data class PluginKeyEvent(val index: Int, val pressed: Boolean, val synthetic: B
 data class AudioSnapshot(val volume: Int, val maximum: Int)
 enum class VolumeChange { LOWER, RAISE, MUTE, UNMUTE }
 enum class MediaCommand { PLAY_PAUSE, PREVIOUS, NEXT }
-enum class PhoneApp { CAMERA, SETTINGS, DIALER, WEB, ALARMS, ONENOTE, ACCESSIBILITY }
+enum class PhoneApp { CAMERA, SETTINGS, DIALER, WEB, ALARMS, ONENOTE }
 
 sealed interface PluginAction {
     data class Deck(val command: DeckCommand, val component: String? = null) : PluginAction
@@ -59,6 +59,9 @@ interface PluginHost {
     fun audioSnapshot(): AudioSnapshot
     val deckState: StateFlow<DeckState>
         get() = error("No Android deck state installed")
+    /** Text of the checked control in the foreground app, via the opt-in accessibility service. */
+    val activeTool: String?
+        get() = error("No accessibility state installed")
     fun dispatch(action: PluginAction)
 }
 

@@ -95,14 +95,18 @@ class BuiltInPluginsTest {
         val engine = PluginEngine(BuiltInPlugins.create("Focus", "Audio", "Phone", oneNoteTitle = "OneNote"), this,
             { testScheduler.currentTime }, { AudioSnapshot(0, 15) },
             { action, _ -> actions += action }, {}, { _, error -> throw AssertionError(error) },
-            MutableStateFlow(DeckState()))
+            MutableStateFlow(DeckState()), readActiveTool = { "Pen" })
         fun tap(index: Int) {
             engine.key(PluginKeyEvent(index, true))
             engine.key(PluginKeyEvent(index, false))
         }
         engine.setEnabled(true)
         engine.select("onenote")
+        runCurrent()
         assertEquals(9, engine.render().keys.size)
+        val tiles = engine.render().keys
+        assertEquals(0xffa56eff.toInt(), tiles[1].background) // active tool is highlighted
+        assertEquals(0xff7719aa.toInt(), tiles[2].background)
         for (index in listOf(0, 1, 2, 3, 4, 5, 6, 7, 8)) tap(index)
         assertEquals(listOf(
             PluginAction.OpenApp(PhoneApp.ONENOTE),
@@ -111,7 +115,7 @@ class BuiltInPluginsTest {
             PluginAction.AccessibilityClick("Highlighter"),
             PluginAction.AccessibilityClick("Lasso"),
             PluginAction.AccessibilityClick("More"),
-            PluginAction.OpenApp(PhoneApp.ACCESSIBILITY),
+            PluginAction.AccessibilityClick("Draw"),
             PluginAction.ShareText("MX Pocket quick note ${testScheduler.currentTime}"),
             PluginAction.Repaint,
         ), actions)

@@ -51,4 +51,42 @@ class OneNoteAccessService : AccessibilityService() {
             root.recycle()
         }
     }
+
+    /**
+     * Select a draw tool. In OneNote's home view the draw toolbar is hidden, so open the Draw
+     * tab first when the tool is not visible. Re-tapping the active tool is OneNote's native
+     * gesture for opening that tool's settings.
+     */
+    internal fun selectTool(text: String): Boolean =
+        clickText(text) || (clickText("Draw") && clickText(text))
+
+    /** Text of the currently checked toolbar control, for the keypad display. */
+    @Suppress("DEPRECATION")
+    internal fun activeTool(): String? {
+        val root = rootInActiveWindow ?: return null
+        try {
+            if (root.packageName?.toString() != ONENOTE_PACKAGE) return null
+            return firstChecked(root)?.text?.toString()
+        } finally {
+            root.recycle()
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun firstChecked(root: Node): Node? {
+        var remaining = 64
+        fun visit(node: Node, depth: Int): Node? {
+            if (--remaining < 0 || depth > 12 || !node.isVisibleToUser) return null
+            val text = node.text?.toString()
+            if (node.isChecked && !text.isNullOrBlank()) return node
+            val count = node.childCount
+            for (i in 0 until minOf(count, remaining.coerceAtLeast(0))) {
+                val child = node.getChild(i) ?: continue
+                try { visit(child, depth + 1)?.let { return it } } finally { child.recycle() }
+                if (remaining <= 0) break
+            }
+            return null
+        }
+        return visit(root, 0)
+    }
 }

@@ -128,6 +128,7 @@ internal class PocketSession(
             audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)) },
         perform = ::perform, invalidateUi = ::invalidate, reportError = { id, error -> fail("Plugin $id failed", error) },
         observeDecks = deckState,
+        readActiveTool = { OneNoteAccessService.connected?.activeTool() },
     )
     var request: Request? = null
         private set
@@ -900,7 +901,7 @@ internal class PocketSession(
                 val service = OneNoteAccessService.connected
                 message(when {
                     service == null -> "Enable MX Pocket OneNote tools in Android Accessibility settings."
-                    service.clickText(action.text) -> "Requested ${action.text} in OneNote."
+                    service.selectTool(action.text) -> "Requested ${action.text} in OneNote."
                     else -> "Open OneNote and show the ${action.text} control first."
                 })
             }
