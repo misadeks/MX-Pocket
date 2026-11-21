@@ -73,7 +73,7 @@ ARM64. Running the packaged JAR does not require the Android SDK.
 Start in the [Android UI sources](app/src/main/kotlin/tel/misa/mxpocket/ui)
 for the live workspace and in [`:desktop-preview`](desktop-preview) for the
 Windows simulator. The simulator shares the factory layouts, Focus timer and
-X-O game, not the Android services. Keep safe-area insets, accessible touch
+Tic Tac Toe game, not the Android services. Keep safe-area insets, accessible touch
 targets, selectable diagnostics and live status announcements when changing
 the phone layout.
 

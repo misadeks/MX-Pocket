@@ -13,12 +13,9 @@ drive hardware.
 
 ## Quick start
 
-These instructions build from source; no prebuilt download is needed. Clone
-the repository and open a terminal in its root. Set `JAVA_HOME` to a JDK 17
-or 21, and install Android SDK Platform 35 and Build Tools 35.0.0 using SDK
-Manager. Set `ANDROID_HOME` to that SDK or open the project in Android Studio
-to configure it. Commands below use the included Gradle wrapper in
-PowerShell; for Android builds on Linux/macOS, substitute
+Clone the repository and open a terminal in its root. Set `JAVA_HOME` to a
+JDK 17 or 21. Commands below use the included Gradle wrapper in PowerShell;
+for Android builds on Linux/macOS, substitute
 `./gradlew` for `.\gradlew.bat`.
 
 ### Try it on Windows without hardware
@@ -27,16 +24,20 @@ PowerShell; for Android builds on Linux/macOS, substitute
 .\gradlew.bat :desktop-preview:run
 ```
 
-On Windows ARM64, use an **x64 JDK** for the desktop runtime. On **Focus**,
+No Android SDK is needed for this simulator. On Windows ARM64, use an
+**x64 JDK** for the desktop runtime. On **Focus**,
 click **Start** to see the countdown. Choose **Next profile** for **Audio**:
-changing tracks or volume changes only the simulation. Nothing is saved, no
-Windows apps are launched, and no phone or keypad is needed.
+changing tracks or volume changes only the simulation. You can also play
+**Tic Tac Toe** by clicking the nine keys as board squares. Nothing is saved,
+no Windows apps are launched, and no phone or keypad is needed.
 
 ### Run it on Android
 
-Use an Android 9 (API 28) or newer phone. Enable USB debugging, connect the
-phone to your computer and accept its debugging prompt. From the repository
-root, install the debug app, then open **MX Pocket** on the phone:
+Install Android SDK Platform 35, Build Tools 35.0.0 and Platform-Tools using
+SDK Manager. Set `ANDROID_HOME` to that SDK or open the project in Android
+Studio to configure it. On an Android 9 (API 28) or newer phone, enable USB
+debugging, connect it to your computer and accept its debugging prompt.
+Install the debug app, then open **MX Pocket** on the phone:
 
 ```powershell
 .\gradlew.bat :app:installDebug
