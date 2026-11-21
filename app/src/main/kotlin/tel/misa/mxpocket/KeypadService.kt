@@ -92,21 +92,16 @@ class KeypadService : Service() {
             return unavailable(getString(R.string.phone_action_stale))
         // Android provides no launch-success callback: retain a quiet tap-to-retry on OEM builds.
         val direct = age < 2_000 && DirectShortcuts(this).enabled && isUnlockedAndInteractive()
-        val attempted = direct && when (val target = action.target) {
-            is PocketSession.Target.Phone -> (target.app == PhoneApp.CAMERA || session.isPhoneShortcutPage) &&
-                requested(launchPhoneApp(target.app))
-            PocketSession.Target.Studio -> requested(launchShortcut(target))
-            is PocketSession.Target.FavoriteApp -> cameraIntentForFavorite(target.component, session.favoriteApps)?.let {
-                requested(startShortcut(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)))
-            } == true
-        }
+        val launch = if (direct) requestDirectLaunch(action.target) else null
+        launch?.let { session.log(it.message) }
         notifications.createNotificationChannel(NotificationChannel(PHONE_CHANNEL,
             getString(R.string.phone_action_title), NotificationManager.IMPORTANCE_HIGH))
         if (!notifications.areNotificationsEnabled() ||
             notifications.getNotificationChannel(PHONE_CHANNEL).importance == NotificationManager.IMPORTANCE_NONE) {
             session.takePhoneAction(action.id)
-            if (attempted) return ok("Direct launch requested.")
-            val message = "Enable Keypad app shortcuts notifications in Android settings to open this shortcut."
+            if (launch?.success == true) return launch
+            val message = (launch?.let { "${it.message} " } ?: "") +
+                "Enable Keypad app shortcuts notifications in Android settings to open this shortcut."
             if (notificationsVisible(this)) notifications.notify(NOTICE, notification(action.ticket, message))
             return unavailable(message)
         }
@@ -121,20 +116,32 @@ class KeypadService : Service() {
         }
         val title = getString(R.string.phone_action_open, label)
         val note = Notification.Builder(this, PHONE_CHANNEL)
-            .apply { if (attempted) setGroup("shortcut-retry").setGroupAlertBehavior(Notification.GROUP_ALERT_SUMMARY) }
+            .apply { if (launch?.success == true) setGroup("shortcut-retry").setGroupAlertBehavior(Notification.GROUP_ALERT_SUMMARY) }
             .setSmallIcon(R.drawable.icon_foreground).setContentTitle(title)
-            .setContentText(getString(if (attempted) R.string.phone_action_retry else R.string.phone_action_note))
+            .setContentText(getString(when (launch?.success) {
+                true -> R.string.phone_action_retry
+                false -> R.string.phone_action_failed
+                null -> R.string.phone_action_note
+            }))
             .setVisibility(Notification.VISIBILITY_PRIVATE)
             .setTimeoutAfter(PocketSession.PHONE_ACTION_TTL - age).setAutoCancel(true).setContentIntent(tap)
             .build()
         notifications.notify(PHONE_NOTICE, note)
-        return ok(if (attempted) "Direct launch requested: $label. Tap the notification only if it did not open."
-            else "Tap the \"$title\" notification within one minute.")
+        val tapMessage = "Tap the \"$title\" notification within one minute."
+        return ok(when (launch?.success) {
+            true -> "Direct launch requested: $label. Tap the notification only if it did not open."
+            false -> "${launch.message} $tapMessage"
+            null -> tapMessage
+        })
     }
 
-    private fun requested(error: String?): Boolean {
-        if (error != null) session.log(error)
-        return error == null
+    private fun requestDirectLaunch(target: PocketSession.Target): DeckResult? {
+        val eligible = when (target) {
+            is PocketSession.Target.Phone -> target.app == PhoneApp.CAMERA || session.isPhoneShortcutPage
+            is PocketSession.Target.FavoriteApp, PocketSession.Target.Studio -> true
+        }
+        if (!eligible) return null
+        return launchShortcut(target)?.let(::unavailable) ?: ok("Direct launch requested.")
     }
     private fun notification(ticket: PocketSession.Request, text: String): Notification {
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java)
