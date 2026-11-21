@@ -10,8 +10,9 @@
     <string name="phone_action_open">Open %1$s</string>
     <string name="phone_action_note">Tap to open the app selected on your keypad.</string>
     <string name="phone_action_retry">If the app did not open, tap to try again.</string>
+    <string name="phone_action_failed">Could not open the shortcut directly. Tap to try again.</string>
     <string name="direct_shortcuts">Open apps directly from keypad</string>
-    <string name="direct_shortcuts_rationale">On an unlocked phone, a physical key can open a Phone shortcut, the default camera, or Pocket Studio without a notification tap. Camera keys open the viewfinder; they do not take a photo or record. Other favorites still need a tap. Android requires “Display over other apps”, which also allows drawing over other apps. MX Pocket does not draw overlays. Leave this off to use notifications, or revoke access in Android settings at any time.</string>
+    <string name="direct_shortcuts_rationale">On an unlocked phone, each physical keypad press can open a saved favorite, a Phone shortcut, or a camera viewfinder without a notification tap. Opening the viewfinder does not take a photo or record. Android requires “Display over other apps”, which also allows drawing over other apps. MX Pocket does not draw overlays. Leave this off to use notifications, or revoke access in Android settings at any time.</string>
     <string name="open_settings">Open Android settings</string>
     <string name="enable_shortcuts">Enable shortcuts</string>
     <string name="phone_action_locked">Unlock the phone and press the keypad shortcut again.</string>
@@ -30,7 +31,7 @@
     <string name="audio">Media Deck</string>
     <string name="media_access">MX Pocket media sessions</string>
     <string name="navigation_access">MX Pocket navigation</string>
-    <string name="navigation_description">Responds to your navigation key presses. Uses the current app’s focused element for scrolling, focus movement and activation. Does not record screen text, keystrokes or notifications.</string>
+    <string name="navigation_description">Responds to navigation keys for scrolling, focus and activation. With the separate Studio camera-controls option, a physical Studio key can click a labeled shutter, record or stop button in your default camera. Does not record screen content, keystrokes or notifications.</string>
     <string name="phone">Phone</string>
     <string name="previous">Previous page</string>
     <string name="next">Next page</string>

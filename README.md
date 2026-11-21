@@ -33,8 +33,9 @@ There is no hosted CI; validation runs locally.
   plays a completion tone. Audio changes the music stream volume/mute and
   dispatches media keys to an existing Android media session. Phone opens
   installed camera/settings/dialer/browser/alarm apps. Launcher opens saved
-  favorites; Audio shows permitted media-session state; Studio controls its
-  own CameraX still/video capture. Navigation has an optional user-enabled
+  favorites; Audio shows permitted media-session state. Studio opens the
+  phone's default photo/video viewfinder. With separate opt-in, physical Studio
+  keys can press a supported shutter, record or stop button. Navigation has an optional user-enabled
   accessibility service for supported cross-app actions. No dependency on
   Options+, the official Actions SDK, Node, WebHID, root or BLE Dialpad.
 - The virtual keypad accepts presses/releases and models connection loss without
@@ -240,10 +241,13 @@ select **Open apps directly from keypad**, read the explanation and grant
 special access is broader than launching apps: it also permits drawing over
 other apps. MX Pocket creates no overlay windows. A fresh physical press on the
 active, authorized keypad can open a built-in Phone shortcut, **Phone: Camera**
-on any saved layout, or **Open Studio**. A favorite from the app Android resolves
-as its default still camera can open that app's viewfinder; all other favorites
-still need a notification tap. No opening action takes a photo or starts
-recording. Turn the option off in MX Pocket or revoke special access in Settings.
+on any saved layout, Studio's **Open Camera** / **Open Video**, or a saved favorite. Each new press can
+request the same or a different favorite without returning to MX Pocket. The
+service rechecks the selected launcher component; for Android's resolved default
+still camera it requests the viewfinder instead. Opening a shortcut does not
+take a photo or start recording. If you enabled direct shortcuts before they
+included ordinary favorites, enable the option again to opt in to this scope.
+Turn it off in MX Pocket or revoke special access in Settings.
 
 With the option off or special access denied/unavailable, press a
 shortcut and tap its **Open Camera**, **Open Dialer**, etc. notification. No second keypad

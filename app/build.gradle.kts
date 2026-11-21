@@ -28,11 +28,6 @@ tasks.withType<Test>().configureEach {
     forkEvery = 4
 }
 dependencies {
-    val cameraX = "1.4.2"
-    implementation("androidx.camera:camera-camera2:$cameraX")
-    implementation("androidx.camera:camera-lifecycle:$cameraX")
-    implementation("androidx.camera:camera-view:$cameraX")
-    implementation("androidx.camera:camera-video:$cameraX")
     implementation(project(":mx-driver"))
     implementation(platform("androidx.compose:compose-bom:2025.06.01"))
     implementation("androidx.compose.material3:material3")

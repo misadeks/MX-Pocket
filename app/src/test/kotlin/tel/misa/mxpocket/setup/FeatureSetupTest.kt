@@ -82,7 +82,7 @@ class FeatureSetupTest {
         }
     }
 
-    @Test fun cameraChoiceSurvivesRotationAndOnlyRequestsCameraOnTap() {
+    @Test fun cameraChoiceSurvivesRotationAndOnlyOpensTheSeparateOptIn() {
         ActivityScenario.launch<SetupActivity>(SetupActivity.intent(app, false)).use { wizard ->
             tap(Feature.STUDIO.title)
             wizard.recreate()
@@ -91,29 +91,15 @@ class FeatureSetupTest {
             wizard.recreate()
             ui.onNodeWithText("Session notification").assertDoesNotExist()
             wizard.onActivity { assertNull(shadowOf(it).lastRequestedPermission) }
-            tap("Allow Studio camera")
+            tap("Manage camera controls")
             wizard.onActivity {
-                assertArrayEquals(arrayOf(Manifest.permission.CAMERA), shadowOf(it).lastRequestedPermission.requestedPermissions)
-                assertEquals("android.content.pm.action.REQUEST_PERMISSIONS", shadowOf(it).nextStartedActivity.action)
+                assertNull(shadowOf(it).lastRequestedPermission)
+                assertEquals(tel.misa.mxpocket.decks.CameraControlsActivity::class.java.name,
+                    shadowOf(it).nextStartedActivity.component?.className)
                 assertNull(shadowOf(it).nextStartedActivity)
             }
         }
-        // Process-independent selection, not a cached grant. Android can revoke a one-time grant.
-        shadowOf(app).grantPermissions(Manifest.permission.CAMERA)
-        ActivityScenario.launch<SetupActivity>(SetupActivity.intent(app, false)).use { wizard ->
-            ui.onNodeWithText("Review setup steps").performClick()
-            ui.onNodeWithText("Camera permission allowed").assertExists()
-            wizard.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
-            shadowOf(app).denyPermissions(Manifest.permission.CAMERA)
-            SetupChoices(app).markAsked(Manifest.permission.CAMERA)
-            wizard.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
-            tap("Open app settings")
-            wizard.onActivity {
-                val intent = shadowOf(it).nextStartedActivity
-                assertEquals(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, intent.action)
-                assertEquals("package:${app.packageName}", intent.dataString)
-            }
-        }
+        assertFalse(tel.misa.mxpocket.decks.CameraControlsAccess(app).enabled)
     }
 
     @Test @Config(shadows = [KeypadSessionTest.ConsentUsb::class])

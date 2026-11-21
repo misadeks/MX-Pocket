@@ -7,21 +7,32 @@ profile. Virtual keys run real phone actions. The debug-only UI fixture does not
 | --- | --- | --- |
 | App Launcher | Choose **Edit favorites**, check apps, then **Done**. Up to seven alphabetical favorites, an edit key and a page key fit on each keypad page. **Next apps** wraps. Real launcher icons appear on both the phone and LCD keys. | No permission prompt. Only exported, currently available `MAIN`/`LAUNCHER` activities in this Android profile are eligible. Removed/deselected targets do not launch. |
 | Media Deck (`audio`) | Top: volume down, mute/unmute, volume up. Middle: previous, play/pause, next. Bottom: back 10 seconds, Now playing, forward 10 seconds. The title is a readout, not a shortcut. Open **Plugins → Audio → Media access** on the phone for optional session access. | Without access, the center transport shows a combined play/pause symbol and sends a standard media key. Volume and mute follow Android's local music stream, not a cast device. Unsupported controls are dimmed. |
-| Pocket Studio | **Open Studio**, then **Allow camera**. Use the foreground viewfinder or physical keys. Shutter takes a photo; Photo timer cycles off/3/10 seconds. **Record**, **Stop**, **Marker**, center focus, zoom and torch act on this camera only. LCD recording state and elapsed time come from CameraX events, not the Record button. | No camera grant, unavailable hardware, and unsupported use cases do not trigger fallback camera apps. No microphone permission: video is silent. Leaving the Activity stops recording, cancels the shutter timer and releases the camera. |
+| Pocket Studio | **Open Camera** requests the default photo viewfinder; **Open Video** requests video mode. Neither captures. For keypad input choose **Plugins > Studio > Camera controls** on the phone, enable keypad camera controls and enable **MX Pocket navigation** in Android Accessibility. | With the unlocked camera visible, press **Shutter**, **Record** or **Stop** on the physical Studio deck. Unsupported modes, labels or layouts do nothing. Use the camera's own controls instead. MX Pocket never confirms a saved photo or a recording state. |
 | Android Navigation | Home opens the system launcher. Back, scrolling, focus movement and activation work in the visible MX Pocket screen. Select **Navigation access** to read the disclosure and optionally enable the service in system settings. | Recents and navigation of other apps require that service. It uses the focused element or scrollable ancestors; when there is no focus it looks for a visible focus/scroll target, with a bounded search. Screens without suitable targets may reject actions. Password elements, Android settings and system permission surfaces are not navigation targets. |
 
-**Saved captures** opens private photos, videos and per-video text markers
-(milliseconds from recording start) using a viewer with a single-file read
-grant. Recording and capture are never triggered by opening Studio, USB attach,
-Activity recreation, a delayed workflow, or a locked-screen shortcut. No
-background camera, microphone or storage permission is used. If background
+The native camera owns its files, audio, recording lifecycle and permissions.
+MX Pocket needs no camera, microphone or storage permission. Files from the old
+in-app camera remain accessible under **Camera controls > Open previous Studio
+captures** with a single-file read grant. Saved `studio.open` keys open the
+native camera; old explicit capture/timer/zoom/focus/torch/marker bindings stay
+unavailable, not silently remapped. Only the built-in Studio root page can send
+camera clicks, never virtual keys, imported capture actions or workflows.
+
+The camera-control service reads the active window only on demand. It requires
+the resolved camera package and a unique visible, enabled button with an exact
+mode-specific accessibility description. English labels are supported; unknown
+labels, multiple controls and permission screens are not. A button request is
+not proof of capture. To revoke just camera controls, turn off the Studio
+option; navigation can remain enabled.
+
+If background
 launches are restricted, a fresh authorized physical press for a favorite or
 Studio offers a one-shot notification; tapping rechecks binding, connection,
-grant, expiry and unlock. Direct shortcuts can instead request **Open Studio**
-or the default camera immediately on an unlocked phone, including from custom
-pages. For a camera favorite, Android must resolve the default still-camera
-handler to the favorite's package; MX Pocket starts that viewfinder, not the
-favorite's arbitrary launcher activity. Other favorites always require a tap.
+grant, expiry and unlock. Direct shortcuts can instead request **Open Camera** / **Open Video**,
+the default camera, or a saved favorite on an unlocked phone, including from
+custom pages. For a favorite in the resolved default still-camera package,
+MX Pocket requests the verified viewfinder. For other favorites it requests
+only the exact selected, still-exported `MAIN`/`LAUNCHER` component.
 After a direct request the notification is a quiet retry, not proof of launch.
 
 Android requires a notification-listener grant to inspect active media
@@ -107,11 +118,10 @@ independent of the selected page.
    Settings/launch keys must not open anything while locked.
    Unlock, end the session, remove media access and test missing art. Check all
    nine regions redraw on each change. No title or URI should appear in logs.
-3. In Studio deny, then grant camera. Capture immediate and timed photos, zoom
-   both ways, test center focus and torch where supported. Record a silent
-   video, mark twice, confirm elapsed/recording LCDs, stop and open the video
-   and corresponding timestamp file. Leave/lock during a timer and once during
-   recording; no delayed shutter, continuing recording or camera use afterward.
+3. Choose Studio and open photo and video modes. Confirm the default native
+   viewfinder appears without a capture. Check disabled access, another app,
+   lock, and detach. Physical compatibility depends on the camera build and
+   language; fixture clicks do not verify Samsung Camera or a saved file.
 4. Test local navigation with the service off, then enable it manually. In a
    normal scrollable app test Back/Home/Recents, focus, activation and scrolling.
    Confirm locked, unsupported, password and permission screens do not permit

@@ -63,7 +63,7 @@ and focused tests, then open a PR.
 | `OPEN_APPS` | Open supported PhoneApp CAMERA/SETTINGS/DIALER/WEB/ALARMS |
 | `NAVIGATION` | Select another registered plugin by ID |
 | `TONE` | Play the short completion tone |
-| `STUDIO` | Foreground Pocket Studio capture and camera controls on an explicit user press |
+| `STUDIO` | Open the default photo/video viewfinder. Only the physical Studio deck may request a matching camera button with separate consent. |
 | `SYSTEM_NAVIGATION` | Basic local navigation; global/element actions only through the user-enabled service |
 | None | Repaint current frame and invalidate changed state |
 
@@ -89,7 +89,7 @@ audio stream behavior and tone resource cleanup in one place.
 For the Android decks use `PluginAction.Deck(DeckCommand, component?)`.
 Each command declares its fixed namespace and belongs to one capability.
 `PocketSession.deckState` exposes immutable, observable selection, media,
-camera and navigation state to the shell and profile editor; `DeckState.tile()`
+camera-control opt-in and navigation access to the shell and profile editor; `DeckState.tile()`
 uses the same data for saved bindings and built-in pages. `KeyTile.iconComponent`
 names an app icon, not a path or URI. `inputToken` identifies the logical binding
 when state or a favorites page changes. See [deck usage](android-decks.md) for
@@ -132,9 +132,9 @@ definitions are independent of the activation. A background `OpenApp` dispatched
 synchronously for a real LCD key press offers a one-tap notification for that
 app. The tap requires a current request, USB grant and plugin page on an unlocked
 phone. With direct shortcuts explicitly enabled and Android special access
-granted, a fresh physical press can request a legacy Phone shortcut or open a
-camera viewfinder (Phone: Camera, Pocket Studio, or the default camera favorite).
-Opening a viewfinder does not authorize capture; other favorites still require a tap.
+granted, a fresh physical press can request a legacy Phone shortcut, a saved
+favorite's launcher activity, or a camera viewfinder (Phone: Camera, Pocket
+Studio, or the default camera favorite). Opening a viewfinder does not authorize capture.
 Plugin timers, releases and synthetic events cannot issue a background shortcut
 or dismiss the lock screen.
 
