@@ -36,18 +36,24 @@ class OneNoteAccessService : AccessibilityService() {
      * hidden, so open the Draw tab first when the tool is not visible.
      */
     internal fun selectTool(keyword: String): Boolean = withRoot { root ->
-        val selected = findNode(root) { it.isSelected && !it.contentDescription.isNullOrBlank() }
+        val selected = findNode(root, ::isActiveTool)
         if (selected != null && label(selected).contains(keyword, ignoreCase = true)) {
             longClick(selected)
         } else {
-            clickDesc(root, keyword) || (clickDesc(root, "draw") && clickDesc(root, keyword))
+            clickDesc(root, keyword) || (clickTab(root, "draw") && clickDesc(root, keyword))
         }
     } ?: false
 
-    /** Content description of the currently selected toolbar control, for the keypad display. */
+    /** Content description of the currently selected draw tool, for the keypad display. */
     internal fun activeTool(): String? = withRoot { root ->
-        findNode(root) { it.isSelected && !it.contentDescription.isNullOrBlank() }
-            ?.contentDescription?.toString()
+        findNode(root, ::isActiveTool)?.contentDescription?.toString()
+    }
+
+    /** The active ribbon tab is also selected=true; only tool previews carry a tool description. */
+    private fun isActiveTool(node: Node): Boolean {
+        if (!node.isSelected) return false
+        val d = node.contentDescription?.toString()?.lowercase().orEmpty()
+        return "options" in d || "eraser" in d || "lasso" in d || "shape" in d
     }
 
     @Suppress("DEPRECATION")
@@ -66,6 +72,17 @@ class OneNoteAccessService : AccessibilityService() {
 
     private fun clickDesc(root: Node, keyword: String): Boolean {
         val found = findNode(root) { label(it).contains(keyword, ignoreCase = true) } ?: return false
+        val target = clickableAncestor(found) ?: return false
+        val clicked = target.performAction(Node.ACTION_CLICK)
+        target.recycle()
+        return clicked
+    }
+
+    /** Exact tab match: a keyword like "draw" would also hit "Stop Drawing Button". */
+    private fun clickTab(root: Node, name: String): Boolean {
+        val found = findNode(root) {
+            (it.contentDescription?.toString() ?: it.text?.toString())?.equals(name, ignoreCase = true) == true
+        } ?: return false
         val target = clickableAncestor(found) ?: return false
         val clicked = target.performAction(Node.ACTION_CLICK)
         target.recycle()
