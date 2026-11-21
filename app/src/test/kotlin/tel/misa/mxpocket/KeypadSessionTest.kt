@@ -2,6 +2,7 @@ package tel.misa.mxpocket
 
 import android.Manifest
 import android.app.KeyguardManager
+import android.app.Notification
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
@@ -12,6 +13,7 @@ import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.os.Build
 import android.os.Looper
+import android.os.SystemClock
 import android.view.View
 import android.widget.TextView
 import kotlinx.coroutines.CompletableDeferred
@@ -27,6 +29,7 @@ import org.robolectric.annotation.Implementation
 import org.robolectric.annotation.Implements
 import org.robolectric.annotation.LooperMode
 import org.robolectric.shadows.ShadowUsbManager
+import org.robolectric.shadows.ShadowSettings
 import org.robolectric.util.ReflectionHelpers
 import tel.misa.mxpocket.driver.KeyEvent
 import tel.misa.mxpocket.plugins.PhoneApp
@@ -38,7 +41,9 @@ class KeypadSessionTest {
     class FakeApp : PocketApplication() {
         var claims = 0
         var closes = 0
-        override fun createSession() = PocketSession(this) { _, _, _, _, _ ->
+        lateinit var emit: (KeyEvent) -> Unit
+        override fun createSession() = PocketSession(this) { _, _, event, _, _ ->
+            emit = event
             claims++
             object : KeypadOutput {
                 override fun close() { closes++ }
@@ -249,7 +254,7 @@ class KeypadSessionTest {
         }
         session.attach(screen)
         val ticket = session.reserve(real)!!
-        session.connect(ticket, usb, real, { stops++ }, { handoff = it })
+        session.connect(ticket, usb, real, { stops++ }, { handoff = it.app })
         main.idle()
         session.detach(screen)
         event(KeyEvent(1, true))
@@ -282,5 +287,94 @@ class KeypadSessionTest {
         main.idle()
         assertEquals(nextTicket, session.request)
         assertEquals("phone", session.plugins.selectedId)
+    }
+
+    @Test fun backgroundPhoneKeyOffersExactSingleTapTargetAndRejectsStaleTaps() {
+        val real = device("test-keypad")
+        shadowOf(usb).addOrUpdateUsbDevice(real, true)
+        val ticket = app.session.reserve(real)!!
+        val service = Robolectric.buildService(KeypadService::class.java).create()
+        service.get().onStartCommand(KeypadService.command(app, ticket), 0, 1)
+        val manager = shadowOf(app.getSystemService(NotificationManager::class.java))
+        Robolectric.buildActivity(MainActivity::class.java).setup().use { controller ->
+            fun press(key: Int) {
+                app.emit(KeyEvent(key, true))
+                app.emit(KeyEvent(key, false))
+                main.idle()
+            }
+            fun shortcut(): Intent = shadowOf(manager.getNotification(PHONE_NOTICE).contentIntent).savedIntent
+            fun tap(intent: Intent): Intent? =
+                Robolectric.buildActivity(PhoneActionActivity::class.java, intent).setup().use {
+                    shadowOf(it.get()).nextStartedActivity
+                }
+            press(0x01a1) // Focus -> Phone
+            press(1)
+            assertEquals("android.media.action.STILL_IMAGE_CAMERA", shadowOf(controller.get()).nextStartedActivity?.action)
+            controller.pause().stop()
+            press(1)
+            assertNull(shadowOf(app).nextStartedActivity)
+            val camera = shortcut()
+            assertEquals(PhoneActionActivity::class.java.name, camera.component?.className)
+            assertEquals("Open Camera", manager.getNotification(PHONE_NOTICE).extras.getString(Notification.EXTRA_TITLE))
+            press(3)
+            val dialer = shortcut()
+            assertNull(tap(camera))
+            val target = tap(dialer)
+            assertEquals(Intent.ACTION_DIAL, target?.action)
+            assertEquals("tel:", target?.dataString)
+            assertNull(tap(dialer))
+            press(1)
+            val missing = shortcut()
+            shadowOf(app).checkActivities(true)
+            try {
+                assertNull(tap(missing))
+                assertEquals("No app can handle CAMERA.", app.session.status)
+            } finally {
+                shadowOf(app).checkActivities(false)
+            }
+            // A system grant alone is not consent to the feature. Revocation takes effect at the next press.
+            ShadowSettings.setCanDrawOverlays(true)
+            press(1)
+            assertNull(shadowOf(app).nextStartedActivity)
+            DirectShortcuts(app).enabled = true
+            press(3)
+            val direct = shadowOf(app).nextStartedActivity
+            assertEquals(Intent.ACTION_DIAL, direct?.action)
+            assertEquals("tel:", direct?.dataString)
+            app.emit(KeyEvent(1, true))
+            app.emit(KeyEvent(1, false))
+            SystemClock.sleep(2_001) // Backlogged input must not interrupt an unrelated Activity.
+            main.idle()
+            assertNull(shadowOf(app).nextStartedActivity)
+            ShadowSettings.setCanDrawOverlays(false)
+            press(1)
+            assertNull(shadowOf(app).nextStartedActivity)
+            val locked = shortcut()
+            val lock = shadowOf(app.getSystemService(KeyguardManager::class.java))
+            lock.setKeyguardLocked(true)
+            ShadowSettings.setCanDrawOverlays(true)
+            press(1)
+            assertNull(shadowOf(app).nextStartedActivity)
+            assertNull(tap(locked))
+            assertNull(tap(shortcut()))
+            lock.setKeyguardLocked(false)
+            DirectShortcuts(app).enabled = false
+            press(1)
+            val expired = shortcut()
+            SystemClock.sleep(PocketSession.PHONE_ACTION_TTL + 1)
+            assertNull(tap(expired))
+            press(1)
+            val revoked = shortcut()
+            shadowOf(usb).revokePermission(real, app.packageName)
+            assertNull(tap(revoked))
+            shadowOf(usb).addOrUpdateUsbDevice(real, true)
+            press(1)
+            val disconnected = shortcut()
+            app.session.disconnect()
+            assertNull(manager.getNotification(PHONE_NOTICE))
+            assertNull(tap(disconnected))
+            controller.start().resume()
+        }
+        service.destroy()
     }
 }

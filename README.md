@@ -204,6 +204,35 @@ manual Connect if attach is not delivered. Turning the option off unregisters
 the attach handler; it does not end the current session. No boot receiver, USB
 polling while detached or silent service restart is used.
 
+**Opening apps while another app is visible:** to use a single physical keypress,
+select **Open apps directly from keypad**, read the explanation and grant
+**Display over other apps** to MX Pocket in Android settings. This optional
+special access is broader than launching apps: it also permits drawing over
+other apps. MX Pocket creates no overlay windows. Direct shortcuts apply only
+to fresh Phone-page presses from the active authorized keypad on an unlocked
+phone. Turn the option off in MX Pocket or revoke special access in Settings.
+
+With the option off, access denied/unavailable, or the phone locked, press a
+shortcut and tap its **Open Camera**, **Open Dialer**, etc. notification. No second keypad
+press or visit to the MX Pocket screen is needed. Allow the **Keypad app shortcuts**
+notification channel; Android controls whether it appears as a banner or in the
+shade. Only the latest request is usable, for one minute on the same connected
+keypad and plugin page. Unlock normally before opening the shortcut. In the
+foreground the same key still launches the app immediately. Android does not
+confirm that an external app appeared; a quiet tap-to-retry shortcut remains
+available if an OEM suppresses an otherwise permitted direct launch.
+
+USB access and a foreground service don't grant [background activity launch
+privileges](https://developer.android.com/guide/components/activities/background-starts).
+Android's [companion device pairing](https://developer.android.com/develop/connectivity/bluetooth/companion-device-pairing)
+scans Bluetooth or Wi-Fi, not USB. On Android 13–16 the self-managed association
+alternative requires `REQUEST_COMPANION_SELF_MANAGED`, a platform
+[signature/privileged permission](https://android.googlesource.com/platform/frameworks/base/+/android-16.0.0_r1/core/res/AndroidManifest.xml)
+that [the companion service enforces](https://android.googlesource.com/platform/frameworks/base/+/android-16.0.0_r1/services/companion/java/com/android/server/companion/utils/PermissionsUtils.java).
+It is not a user-grantable switch for this APK. The optional direct mode instead
+uses Android's documented user-granted `SYSTEM_ALERT_WINDOW` exception
+([AOSP BAL check](https://android.googlesource.com/platform/frameworks/base/+/android-16.0.0_r1/services/core/java/com/android/server/wm/BackgroundActivityStartController.java)).
+
 **Physical acceptance checklist** (not proven by JVM tests):
 
 1. With opt-in off, replug and verify the app does not connect until tapped.
@@ -211,9 +240,14 @@ polling while detached or silent service restart is used.
 2. Start Focus, press Home and use the physical page buttons and Audio controls.
    Verify timer/LCD labels update, volume changes, the image picker and rotation
    leave the connection intact, and returning shows the same page.
-3. On Phone, press Camera while MX Pocket is in the background or locked.
-   No app should launch or unlock the screen. Unlock, tap the session notification
-   and tap Camera in MX Pocket. Media controls need an active Android media session.
+3. With direct shortcuts off and another app in front, press Camera on the Phone page. The current app
+   should remain visible until you tap **Open Camera**; the tap should open the
+   camera without another press. Repeat with Dialer and verify the dialer, not
+   the previous camera request, opens. Try a tap after unplugging or after a
+   minute: it must not launch. Enable direct shortcuts as described above and
+   repeat: one Camera press should open the camera. Revoke special access and
+   repeat: it must require a tap again. Verify a shortcut never unlocks the phone.
+   Media controls need an active Android media session.
 4. With auto-connect enabled and Android's handler selected, replug. Verify
    one session; stop via notification. Reopening the app must not reconnect the
    same attachment. Replug again, then detach during an upload: the notification

@@ -119,9 +119,13 @@ do not. The Focus timer retains its monotonic deadline, but completion alerts
 wait until Focus is selected again. A physical session keeps its active plugin
 and LCD painter across Activity recreation or backgrounding; the app's
 connected-device foreground service, not the plugin, owns that lifetime.
-All state may be lost on process death. Background `OpenApp` actions ask the
-user to return via the notification and tap the key; they cannot launch other
-apps or dismiss the lock screen from a service.
+All state may be lost on process death. A background `OpenApp` dispatched
+synchronously for a real LCD key press offers a one-tap notification for that
+app. The tap requires a current request, USB grant and plugin page on an unlocked
+phone. Only the built-in Phone page, with direct shortcuts explicitly enabled and
+Android special access granted, can request an immediate launch on a fresh press.
+Plugin timers, releases and synthetic events cannot issue a background shortcut
+or dismiss the lock screen.
 
 USB upload is not a plugin task. On a switch the app lets the one in-flight JPEG
 transaction finish so it does not corrupt the report stream, skips any remaining

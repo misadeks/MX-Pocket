@@ -25,11 +25,13 @@ data class PocketScreenState(
     val diagnostics: String = "",
     val log: String = "",
     val automatic: Boolean = false,
+    val directShortcuts: Boolean = false,
 )
 
 sealed interface PocketScreenEvent {
     data object ToggleConnection : PocketScreenEvent
     data class SetAutomatic(val enabled: Boolean) : PocketScreenEvent
+    data class SetDirectShortcuts(val enabled: Boolean) : PocketScreenEvent
     data object EnterPreview : PocketScreenEvent
     data class SelectPlugin(val id: String) : PocketScreenEvent
     data class TapKey(val index: Int) : PocketScreenEvent
@@ -64,6 +66,7 @@ class PocketScreen(
     private val status: TextView
     private val connectButton: MaterialButton
     private val automatic: CheckBox
+    private val directShortcuts: CheckBox
     private val pageTitle: TextView
     private val keys = mutableListOf<MaterialButton>()
     private val diagnostics: TextView
@@ -83,6 +86,12 @@ class PocketScreen(
             setText(R.string.auto_connect)
             minHeight = dimension(R.dimen.screen_control_min_height)
             setOnClickListener { onEvent(PocketScreenEvent.SetAutomatic(isChecked)) }
+            content.addView(this)
+        }
+        directShortcuts = CheckBox(context).apply {
+            setText(R.string.direct_shortcuts)
+            minHeight = dimension(R.dimen.screen_control_min_height)
+            setOnClickListener { onEvent(PocketScreenEvent.SetDirectShortcuts(isChecked)) }
             content.addView(this)
         }
         button(context.getString(R.string.preview), outlined = true, event = PocketScreenEvent.EnterPreview)
@@ -141,6 +150,7 @@ class PocketScreen(
     fun render(state: PocketScreenState) {
         status.updateText(state.status)
         automatic.isChecked = state.automatic
+        directShortcuts.isChecked = state.directShortcuts
         connectButton.updateText(context.getString(if (state.connectionActive) R.string.disconnect else R.string.connect))
         pageTitle.updateText(state.pluginTitle)
         keys.forEachIndexed { index, button -> button.updateText(state.frame.keys[index].label) }

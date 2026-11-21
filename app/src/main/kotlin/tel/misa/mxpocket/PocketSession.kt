@@ -56,6 +56,9 @@ internal class PocketSession(
         fun openApp(app: PhoneApp): Boolean
     }
     data class Request(val name: String, val token: String = UUID.randomUUID().toString())
+    data class PhoneAction(val app: PhoneApp, val ticket: Request, val generation: Int,
+        val pressedAt: Long, val id: String = UUID.randomUUID().toString())
+    companion object { const val PHONE_ACTION_TTL = 60_000L }
     private data class Stamp(val generation: Int, val frame: PluginFrame, val revision: Int)
 
     private val main = Handler(Looper.getMainLooper())
@@ -78,7 +81,9 @@ internal class PocketSession(
     private var hardwareScope: CoroutineScope? = null
     private var output: KeypadOutput? = null
     private var onEnd: (() -> Unit)? = null
-    private var onHandoff: ((PhoneApp) -> Unit)? = null
+    private var onHandoff: ((PhoneAction) -> Unit)? = null
+    private var physicalPressAt: Long? = null
+    private var pendingAction: PhoneAction? = null
     private var custom: Bitmap? = null
     private var revision = 0
     private var painted: Stamp? = null
@@ -115,7 +120,7 @@ internal class PocketSession(
     }
 
     /** Called only after revalidation and successful foreground promotion. */
-    fun connect(ticket: Request, manager: UsbManager, device: UsbDevice, end: () -> Unit, handoff: (PhoneApp) -> Unit) {
+    fun connect(ticket: Request, manager: UsbManager, device: UsbDevice, end: () -> Unit, handoff: (PhoneAction) -> Unit) {
         if (request != ticket || hardwareScope != null) return
         val scope = CoroutineScope(Dispatchers.Main.immediate + SupervisorJob())
         hardwareScope = scope
@@ -125,7 +130,10 @@ internal class PocketSession(
         scope.launch {
             try {
                 val connected = open(manager, device,
-                    { event -> main.post { if (request == ticket) handleKey(event) } },
+                    { event ->
+                        val arrivedAt = SystemClock.elapsedRealtime()
+                        main.post { if (request == ticket) handleKey(event, arrivedAt) }
+                    },
                     { line -> main.post { if (request == ticket) log(line) } },
                     { error -> main.post { if (request == ticket) stopWithError("USB connection failed", error) } })
                 if (request != ticket) { connected.close(); return@launch }
@@ -152,6 +160,7 @@ internal class PocketSession(
         painting = null
         painted = null
         onHandoff = null
+        pendingAction = null
         val end = onEnd
         onEnd = null
         end?.invoke()
@@ -167,7 +176,7 @@ internal class PocketSession(
         return true
     }
 
-    private fun handleKey(event: KeyEvent) {
+    private fun handleKey(event: KeyEvent, arrivedAt: Long) {
         log("${if (event.synthetic) "CANCEL" else "KEY"} 0x${event.controlId.toString(16)} " +
             if (event.pressed) "press" else "release")
         when (event.controlId) {
@@ -176,7 +185,12 @@ internal class PocketSession(
             in 1..9 -> {
                 // Old labels can still be visible while a new page is uploading. Never replay a skipped press.
                 if (event.pressed && painted?.generation != plugins.generation) return
-                plugins.key(PluginKeyEvent(event.controlId - 1, event.pressed, event.synthetic))
+                physicalPressAt = arrivedAt.takeIf { event.pressed && !event.synthetic && output != null }
+                try {
+                    plugins.key(PluginKeyEvent(event.controlId - 1, event.pressed, event.synthetic))
+                } finally {
+                    physicalPressAt = null
+                }
             }
         }
     }
@@ -273,8 +287,11 @@ internal class PocketSession(
                 log("Media command sent; an active media session is required")
             }
             is PluginAction.OpenApp -> if (screen?.openApp(action.app) != true) {
-                onHandoff?.invoke(action.app)
-                message("Unlock and open MX Pocket, then tap the ${action.app.name} key.")
+                val time = physicalPressAt ?: return
+                val ticket = request ?: return
+                val handoff = PhoneAction(action.app, ticket, plugins.generation, time)
+                pendingAction = handoff
+                onHandoff?.invoke(handoff)
             } else Unit
             PluginAction.CompletionTone -> scope.launch {
                 val tone = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 50)
@@ -287,6 +304,13 @@ internal class PocketSession(
     }
 
     fun logText(limit: Int = 250) = logs.takeLast(limit).joinToString("\n")
+    fun takePhoneAction(id: String?): PhoneAction? {
+        val pending = pendingAction ?: return null
+        if (id != pending.id) return null // An older tap must not consume the replacement.
+        pendingAction = null
+        return pending.takeIf { it.ticket == request && output != null && it.generation == plugins.generation &&
+            SystemClock.elapsedRealtime() - it.pressedAt < PHONE_ACTION_TTL }
+    }
     fun log(line: String) {
         logs.addLast("${SystemClock.elapsedRealtime()} $line")
         while (logs.size > 250) logs.removeFirst()

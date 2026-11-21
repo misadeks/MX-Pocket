@@ -6,6 +6,16 @@
     <string name="auto_connect">Connect automatically when this keypad is attached</string>
     <string name="session_title">MX Pocket keypad session</string>
     <string name="session_note">Physical keys and LCD updates stay active. Tap to return to MX Pocket.</string>
+    <string name="phone_action_title">Keypad app shortcuts</string>
+    <string name="phone_action_open">Open %1$s</string>
+    <string name="phone_action_note">Tap to open the app selected on your keypad.</string>
+    <string name="phone_action_retry">If the app did not open, tap to try again.</string>
+    <string name="direct_shortcuts">Open apps directly from keypad</string>
+    <string name="direct_shortcuts_rationale">On an unlocked phone, a key on the Phone page can open another app without a notification tap. Android requires “Display over other apps”, a broad permission that also allows drawing over other apps. MX Pocket does not draw overlays. Turn this option off anytime, or revoke access in Android settings. Leave it off to use notifications instead.</string>
+    <string name="open_settings">Open Android settings</string>
+    <string name="enable_shortcuts">Enable shortcuts</string>
+    <string name="phone_action_locked">Unlock the phone and press the keypad shortcut again.</string>
+    <string name="phone_action_stale">Shortcut no longer available. Press the key on the connected keypad again.</string>
     <string name="refresh">Refresh USB diagnostics</string>
     <string name="preview">Phone-only preview</string>
     <string name="import_image">Choose custom image for all nine keys</string>

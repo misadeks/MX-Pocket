@@ -18,6 +18,7 @@ import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.snackbar.Snackbar
@@ -37,6 +38,7 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
     private val session get() = (application as PocketApplication).session
     private val usb by lazy { getSystemService(UsbManager::class.java) }
     private val access by lazy { UsbAccess(this) }
+    private val direct by lazy { DirectShortcuts(this) }
     private lateinit var screen: PocketScreen
     private var diagnostics = ""
     private var refreshJob: Job? = null
@@ -45,6 +47,11 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
     private var fromAttach = false
     private var usbToken: String? = null
     private var waitingForNotifications = false
+    private val specialAccess = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        direct.enabled = Settings.canDrawOverlays(this)
+        if (!direct.enabled) session.message("Direct shortcuts are off. Tap a keypad shortcut notification instead.")
+        render()
+    }
 
     private val permissionAction get() = "$packageName.USB_PERMISSION"
     private val permissionReceiver = object : BroadcastReceiver() {
@@ -269,6 +276,24 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
                 access.automatic = event.enabled
                 if (!event.enabled && fromAttach && target != null) cancelAttempt(getString(R.string.not_connected))
             }
+            is PocketScreenEvent.SetDirectShortcuts -> if (!event.enabled) {
+                direct.enabled = false
+                session.message("Direct shortcuts are off. You can revoke Display over other apps in Android settings.")
+            } else {
+                val hasAccess = Settings.canDrawOverlays(this)
+                AlertDialog.Builder(this).setTitle(R.string.direct_shortcuts).setMessage(R.string.direct_shortcuts_rationale)
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .setPositiveButton(if (hasAccess) R.string.enable_shortcuts else R.string.open_settings) { _, _ ->
+                        if (hasAccess) { direct.enabled = true; render() }
+                        else try {
+                            specialAccess.launch(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+                        } catch (_: ActivityNotFoundException) {
+                            session.message("Special access is unavailable. Use keypad shortcut notifications instead.")
+                        } catch (_: SecurityException) {
+                            session.message("Android restricted special access. Use keypad shortcut notifications instead.")
+                        }
+                    }.show()
+            }
             PocketScreenEvent.EnterPreview -> {
                 target = null
                 usbToken = null
@@ -292,20 +317,13 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             pluginTitle = session.plugins.descriptors.single { it.id == session.plugins.selectedId }.title,
             frame = session.plugins.render(),
             connectionActive = target != null || session.request != null,
-            diagnostics = diagnostics, log = session.logText(60), automatic = access.automatic,
+            diagnostics = diagnostics, log = session.logText(60), automatic = access.automatic, directShortcuts = direct.enabled,
         ))
     }
 
     override fun openApp(app: PhoneApp): Boolean {
-        if (!resumed || getSystemService(KeyguardManager::class.java).isKeyguardLocked) return false
-        val intent = when (app) {
-            PhoneApp.CAMERA -> Intent("android.media.action.STILL_IMAGE_CAMERA")
-            PhoneApp.SETTINGS -> Intent(Settings.ACTION_SETTINGS)
-            PhoneApp.DIALER -> Intent(Intent.ACTION_DIAL, Uri.parse("tel:"))
-            PhoneApp.WEB -> Intent(Intent.ACTION_VIEW, Uri.parse("https://www.logitech.com/"))
-            PhoneApp.ALARMS -> Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS)
-        }
-        try { startActivity(intent) } catch (e: ActivityNotFoundException) { session.fail("No app can handle this action", e) }
+        if (!resumed || !isUnlockedAndInteractive()) return false
+        launchPhoneApp(app)?.let(session::message)
         return true
     }
 
