@@ -45,6 +45,7 @@ class ChordSessionTest {
     }
     private val events = mutableListOf<String>()
     private var token = "initial"
+    private var readOnly = false
     private var effect: PluginAction? = null
     private var launches = 0
     private var captures = 0
@@ -52,7 +53,8 @@ class ChordSessionTest {
         override val descriptor = PluginDescriptor("probe", "Probe", setOf(PluginCapability.OPEN_APPS, PluginCapability.STUDIO),
             chords = setOf(KeyChord(0, 8), KeyChord(1, 8)))
         override fun render(nowMillis: Long) = PluginFrame(List(9) {
-            KeyTile("Key $it", "", 0xff222222.toInt(), inputToken = if (it == 0) token else null)
+            KeyTile("Key $it", "", 0xff222222.toInt(), inputToken = if (it == 0) token else null,
+                readOnly = it == 0 && readOnly)
         })
         override fun onKey(event: PluginKeyEvent, host: PluginHost) {
             events += "${event.index}${if (event.pressed) "+" else "-"}"
@@ -175,6 +177,20 @@ class ChordSessionTest {
         assertNull(session.workflows.status.value)
         report(9)
         assertEquals("keypad-check", session.workflows.status.value?.workflowId)
+    }
+
+    @Test fun changingOnlyReadOnlyRevokesBufferedInputAndRequiresAcknowledgmentBeforeRearming() {
+        report(1) // Chord prefix; no action taken yet.
+        readOnly = true
+        waitWindow(); report()
+        assertTrue(events.isEmpty())
+        session.repaint(); main.idle()
+        readOnly = false // Identical pixels and token, but LCD still represents a readout.
+        report(1); waitWindow(); report()
+        assertTrue(events.isEmpty())
+        session.repaint(); main.idle()
+        report(1); waitWindow(); report()
+        assertEquals(listOf("0+", "0-"), events)
     }
 
     @Test fun chordAndDeferredSingleCannotBorrowLaunchCaptureOrPhoneTapAuthority() {

@@ -753,7 +753,7 @@ internal class PocketSession(
 
     private var receiptSequence = 0L
     private fun sameBinding(a: KeyTile?, b: KeyTile): Boolean =
-        a != null && a.enabled == b.enabled && a.inputToken == b.inputToken
+        a != null && a.enabled == b.enabled && a.readOnly == b.readOnly && a.inputToken == b.inputToken
 
     private fun perform(action: PluginAction, scope: CoroutineScope) {
         when (action) {
