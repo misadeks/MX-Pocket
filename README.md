@@ -30,7 +30,8 @@ enabled key to try it. Compose Multiplatform draws the keypad from `:shared-ui`
 on both supported targets. The preview uses the app's factory
 profiles, nine-key bindings and Focus timer. Other tile labels and media state
 are preview fixtures: they do not access USB, change Windows volume, launch
-apps, operate a camera or invoke accessibility actions. Nothing is saved.
+apps, operate a camera or invoke accessibility actions. X-O uses the same solo
+and local two-player game as Android. Nothing is saved.
 
 ## What is implemented
 
@@ -44,7 +45,7 @@ apps, operate a camera or invoke accessibility actions. Nothing is saved.
   USB attach handling and a foreground service for an active keypad, device
   and endpoint diagnostics, connection/cancellation/detach handling, bounded
   event log with user-selected file export, custom image picker, and dynamic
-  Focus, Audio, Phone, Launcher, Studio and Navigation controls. See the
+  Focus, Audio, Phone, Launcher, Studio, Navigation and X-O game controls. See the
   [Android deck walkthrough](docs/android-decks.md) and [workflow guide](docs/workflows.md).
 - The Material 3 workspace includes Home, Keypad, Plugins, Flows and Settings.
   Profiles, page history, pins, rules and individual key bindings are saved
@@ -95,7 +96,13 @@ The phone layout/theme and safe debug-only UI fixtures are described in
 [Contributing: phone UI](CONTRIBUTING.md#phone-ui-layout-and-safe-preview).
 This is separate from **Connect virtual keypad**, which executes phone actions.
 
-The registry is `BuiltInPlugins.create()`. Saved profiles reference stable
+The registry is `BuiltInPlugins.create()`. It includes a nine-key X-O game with
+single-player against a simple computer opponent and local 1v1 modes. Choose a
+mode on the keypad; each key then becomes a board square. After a win or draw,
+tap any key to choose a mode again.
+The X-O profile is added to older layouts only when both the profile count and
+the 512 KiB file limit allow it, without changing the selection or bindings.
+Deleting the profile keeps it out of saved layouts and exported backups. Saved profiles reference stable
 actions rather than registry positions. See [plugin authoring](docs/plugins.md).
 
 ## Display/protocol caveat
@@ -232,7 +239,8 @@ finishes. Close on detach, cancellation or your chosen lifecycle boundary.
 4. Confirm text appears on **all nine physical LCD buttons** and remains
    visible for at least 60 seconds without logo fallback. On factory layouts,
    press Next from Focus: verify Audio, Phone, Launcher, Studio, Navigation,
-   then Focus again. Press Previous to wrap back to Navigation. On saved
+   X-O, then Focus again. Press Previous to wrap back to X-O. Choose each X-O
+   mode and play several moves using only the keypad. On saved
    layouts, single-page profiles cycle in workspace order; in a multi-page
    profile the buttons navigate its pages, with Previous retracing page history
    first. Choose a custom image and verify it appears with the labels on every

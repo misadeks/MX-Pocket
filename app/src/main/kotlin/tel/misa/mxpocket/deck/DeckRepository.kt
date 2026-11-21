@@ -35,7 +35,7 @@ class DeckRepository internal constructor(private val file: File) {
     private var lastSample = -1L
 
     init {
-        val initial = try {
+        val loaded = try {
             if (!file.exists()) defaultDeck() else {
                 val text = file.inputStream().use {
                     val length = it.channel.size()
@@ -58,6 +58,7 @@ class DeckRepository internal constructor(private val file: File) {
             loadError = "Saved deck unreadable; import a backup or restore defaults"
             defaultDeck()
         }
+        val initial = loaded.withBuiltInXo()
         mutable = MutableStateFlow(initial.snapshot())
         state = mutable.asStateFlow()
         mutableReason = MutableStateFlow(initial.selectionReason)
@@ -67,7 +68,9 @@ class DeckRepository internal constructor(private val file: File) {
     }
 
     fun exportJson(): String = DeckJson.encode(state.value)
-    fun importJson(text: String) = edit(recover = true, force = true) { DeckJson.decode(text).withPrivateReason() }
+    fun importJson(text: String) = edit(recover = true, force = true) {
+        DeckJson.decode(text).withPrivateReason().withBuiltInXo()
+    }
     fun restoreDefaults() = edit(recover = true, force = true) { defaultDeck() }
     fun save() = edit(force = true) { it }
 
@@ -147,6 +150,7 @@ class DeckRepository internal constructor(private val file: File) {
         }
         val defaultId = if (id == old.defaultProfileId) remaining.first().id else old.defaultProfileId
         old.copy(profiles = remaining, defaultProfileId = defaultId, histories = old.histories - id,
+            xoProfileRemoved = old.xoProfileRemoved || id == "game.xo",
             activeProfileId = if (id == old.activeProfileId) defaultId else old.activeProfileId,
             pinnedProfileId = old.pinnedProfileId?.takeUnless { it == id },
             selectionReason = if (id == old.activeProfileId) "Default selected after profile deletion" else old.selectionReason)
@@ -298,6 +302,13 @@ class DeckRepository internal constructor(private val file: File) {
         const val DEBOUNCE_MS = 1500L
         const val SCORE_MARGIN = 2
     }
+}
+
+private fun DeckState.withBuiltInXo(): DeckState {
+    if (xoProfileRemoved || profiles.size >= DeckLimits.PROFILES || profiles.any { it.id == "game.xo" }) return this
+    val xo = defaultDeck().profile("game.xo")
+    val augmented = copy(profiles = profiles + xo, histories = histories + (xo.id to listOf(xo.rootPageId)))
+    return if (DeckJson.fits(augmented)) augmented else this
 }
 
 private fun DeckState.profile(id: String) = profiles.firstOrNull { it.id == id } ?: error("Unknown profile")

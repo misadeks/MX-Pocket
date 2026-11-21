@@ -26,6 +26,7 @@ internal fun PocketSession.pluginDetails(id: String): String {
         "studio" -> "Phone camera viewfinder. Keypad camera controls: ${state.cameraStatus}."
         "audio" -> if (state.media.access) "Media access on. ${state.media.status}" else "Media access off. Basic media keys available."
         "navigation" -> if (state.navigationEnabled) "System navigation enabled." else "Basic in-app navigation; system access off."
+        "game.xo" -> "Choose single player against the computer or local 1v1. Play and change modes on the keypad."
         "focus" -> "Timer, pause, reset, and duration presets. No permission required."
         "phone" -> "Camera, settings, dialer, browser and alarms. Direct shortcuts are optional."
         else -> ""

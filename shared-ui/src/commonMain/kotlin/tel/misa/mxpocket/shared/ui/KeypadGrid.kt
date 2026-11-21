@@ -42,6 +42,8 @@ data class KeypadTile(
     val color: Color,
     val enabled: Boolean = true,
     val image: ImageBitmap? = null,
+    val readOnly: Boolean = false,
+    val showNumber: Boolean = true,
 )
 
 /** A completed touch, mouse, keyboard or accessibility click emits one logical down/up pair. */
@@ -111,9 +113,10 @@ private fun PlainPanel(tiles: List<KeypadTile>, onKey: (Int, Boolean) -> Unit, m
 }
 
 private fun Modifier.keyAction(i: Int, tile: KeypadTile, onKey: (Int, Boolean) -> Unit): Modifier {
-    val description = listOf("Key ${i + 1}", tile.label, tile.footer).filter { it.isNotBlank() }.joinToString(", ")
-    return clickable(enabled = tile.enabled, role = Role.Button) { onKey(i, true); onKey(i, false) }
-        .semantics { contentDescription = description }
+    val description = listOfNotNull("Key ${i + 1}".takeIf { tile.showNumber }, tile.label, tile.footer)
+        .filter { it.isNotBlank() }.joinToString(", ")
+    val control = if (tile.readOnly) this else clickable(enabled = tile.enabled, role = Role.Button) { onKey(i, true); onKey(i, false) }
+    return control.semantics { contentDescription = description }
 }
 
 @Composable
@@ -122,7 +125,7 @@ private fun TileLabel(i: Int, tile: KeypadTile, textDirection: LayoutDirection) 
     CompositionLocalProvider(LocalLayoutDirection provides textDirection) {
         Column(Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("${i + 1}", color = foreground, style = MaterialTheme.typography.labelSmall)
+                if (tile.showNumber) Text("${i + 1}", color = foreground, style = MaterialTheme.typography.labelSmall)
                 Text(tile.label, color = foreground, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
                     maxLines = 2, overflow = TextOverflow.Ellipsis)
                 if (tile.footer.isNotBlank()) Text(tile.footer, color = foreground,

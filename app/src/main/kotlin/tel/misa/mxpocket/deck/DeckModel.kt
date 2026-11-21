@@ -11,7 +11,20 @@ object DeckActions {
     const val PROFILE = "profile.switch"
     const val PAGE_ID = "pageId"
     const val PROFILE_ID = "profileId"
+    // The longest migrated media action, including this field, must not exceed the v1 slot's UTF-8 size.
+    const val LEGACY_SLOT_OWNER = "slot"
 }
+
+// A migrated Audio slot still participates in the original page's single-plugin selection.
+// An explicitly bound media command has no such constraint.
+internal fun ActionCall.slotOwner(): String? = when {
+    id == "plugin.key" -> params["pluginId"]
+    id.startsWith("media.") && params[DeckActions.LEGACY_SLOT_OWNER] == "audio" -> "audio"
+    else -> null
+}
+
+internal fun ActionCall.commandBinding() =
+    if (id.startsWith("media.") && slotOwner() == "audio") copy(params = params - DeckActions.LEGACY_SLOT_OWNER) else this
 
 enum class SelectionSource { USER, AUTOMATIC }
 
@@ -50,13 +63,14 @@ data class DeckState(
     val automatic: Boolean,
     val histories: Map<String, List<String>>,
     val selectionReason: String = "Default profile",
+    val xoProfileRemoved: Boolean = false,
 ) {
     val activeProfile: DeckProfile get() = profiles.first { it.id == activeProfileId }
     val activePage: DeckPage get() = activeProfile.pages.first { it.id == histories.getValue(activeProfileId).last() }
 }
 
 object DeckLimits {
-    const val VERSION = 1
+    const val VERSION = 3
     const val MAX_BYTES = 512 * 1024
     const val PROFILES = 16
     const val PAGES = 32
@@ -88,19 +102,37 @@ internal fun DeckState.snapshot() = copy(
     histories = histories.mapValues { it.value.locked() }.locked(),
 )
 
+// plugin.key indices are persisted action identities; only their physical placement changes.
+internal val navigationFactorySlots = listOf(
+    0, 3, 1, // Back, Scroll up, Home
+    6, 4, 8, // Previous, Select, Next
+    2, 5, 7, // Recents, Scroll down, Access
+).locked()
+
+private fun pluginRoot(id: String, name: String, slots: Iterable<Int> = 0..8) = DeckPage("root", name, slots.map { index ->
+    DeckKey(action = ActionCall("plugin.key", mapOf("pluginId" to id, "index" to index.toString())))
+})
+
+internal fun DeckState.upgradeStockNavigationRoot(): DeckState {
+    val legacy = pluginRoot("navigation", "Navigation")
+    val owner = profiles.find { it.id == "navigation" && it.rootPageId == legacy.id && legacy in it.pages } ?: return this
+    val updated = owner.copy(pages = owner.pages.map { page ->
+        if (page == legacy) page.copy(keys = navigationFactorySlots.map(page.keys::get)) else page
+    })
+    return copy(profiles = profiles.map { if (it.id == owner.id) updated else it })
+}
+
 internal fun defaultDeck(): DeckState {
-    fun plugin(id: String, name: String, rules: List<DeckRule> = emptyList()) = DeckProfile(
-        id, name, "root", listOf(DeckPage("root", name, List(9) {
-            DeckKey(action = ActionCall("plugin.key", mapOf("pluginId" to id, "index" to it.toString())))
-        })), rules = rules,
-    )
+    fun plugin(id: String, name: String, rules: List<DeckRule> = emptyList(), slots: Iterable<Int> = 0..8) =
+        DeckProfile(id, name, "root", listOf(pluginRoot(id, name, slots)), rules = rules)
     val profiles = listOf(
         plugin("focus", "Focus"),
         plugin("audio", "Audio", listOf(DeckRule("mediaActive", "true", 3))),
         plugin("phone", "Phone"),
         plugin("launcher", "Launcher"),
         plugin("studio", "Studio"),
-        plugin("navigation", "Navigation"),
+        plugin("navigation", "Navigation", slots = navigationFactorySlots),
+        plugin("game.xo", "X-O"),
     )
     return DeckState(
         DeckLimits.VERSION, profiles, "focus", "focus", null, false,

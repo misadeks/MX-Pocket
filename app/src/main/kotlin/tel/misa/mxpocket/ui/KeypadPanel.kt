@@ -15,14 +15,11 @@ internal class KeypadPanel(context: Context) : ViewGroup(context) {
     private val filter = Paint(Paint.FILTER_BITMAP_FLAG)
     private var art: Bitmap? = null
     private var images = emptyList<Bitmap>()
-    private val margin = resources.getDimensionPixelSize(R.dimen.screen_control_margin)
     private val minKeyHeight = resources.getDimensionPixelSize(R.dimen.screen_key_min_height)
-    private var rowHeight = 0
     init { setWillNotDraw(false) }
 
     fun show(art: Bitmap?, images: List<Bitmap>) {
         if (this.art === art && this.images == images) return
-        if ((this.art == null) != (art == null)) requestLayout()
         this.art = art
         this.images = images
         invalidate()
@@ -34,17 +31,7 @@ internal class KeypadPanel(context: Context) : ViewGroup(context) {
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val side = MeasureSpec.getSize(widthMeasureSpec)
-        if (art == null) {
-            // Keep the original wrapping, full-width button grid when there's no cover.
-            rowHeight = minKeyHeight
-            for (i in 0 until childCount) {
-                val w = (side / 3 - 2 * margin).coerceAtLeast(0)
-                getChildAt(i).measure(MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY),
-                    MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED))
-                rowHeight = maxOf(rowHeight, getChildAt(i).measuredHeight)
-            }
-        }
-        setMeasuredDimension(side, if (art == null) 3 * (rowHeight + 2 * margin) else maxOf(side, 3 * minKeyHeight))
+        setMeasuredDimension(side, maxOf(side, 3 * minKeyHeight))
         for (i in 0 until childCount) {
             val r = bounds(i, side, measuredHeight)
             getChildAt(i).measure(MeasureSpec.makeMeasureSpec(r.width(), MeasureSpec.EXACTLY),
@@ -53,12 +40,7 @@ internal class KeypadPanel(context: Context) : ViewGroup(context) {
     }
 
     private fun bounds(i: Int, side: Int, height: Int): Rect {
-        val col = i % 3
         val row = i / 3
-        if (art == null) {
-            val y = margin + row * (rowHeight + 2 * margin)
-            return Rect(side * col / 3 + margin, y, maxOf(side * col / 3 + margin, side * (col + 1) / 3 - margin), y + rowHeight)
-        }
         val r = region(i, side)
         // The painted square matches the LCD; use the surrounding gap for the native touch target.
         val h = maxOf(r.height(), minKeyHeight)
@@ -72,10 +54,11 @@ internal class KeypadPanel(context: Context) : ViewGroup(context) {
     }
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        val image = art ?: return
         canvas.save()
         canvas.translate(0f, (height - width) / 2f)
-        canvas.drawBitmap(image, null, Rect(0,0,width,width), filter)
+        val panel = Rect(0,0,width,width)
+        canvas.drawRect(panel, filter)
+        art?.let { canvas.drawBitmap(it, null, panel, filter) }
         images.forEachIndexed { i, tile -> canvas.drawBitmap(tile, null, region(i, width), filter) }
         canvas.restore()
     }
