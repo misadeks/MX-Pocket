@@ -90,7 +90,7 @@ class OneNotePlugin(title: String) : PocketPlugin {
             while (true) {
                 active = host.activeTool
                 host.invalidate()
-                delay(1000)
+                delay(250)
             }
         }
     }
@@ -117,5 +117,10 @@ class OneNotePlugin(title: String) : PocketPlugin {
             else -> null
         }
         action?.let(host::dispatch)
+        if (action is PluginAction.AccessibilityClick) host.scope.launch {
+            delay(300) // OneNote updates its accessibility tree shortly after the click.
+            active = host.activeTool
+            host.invalidate()
+        }
     }
 }
