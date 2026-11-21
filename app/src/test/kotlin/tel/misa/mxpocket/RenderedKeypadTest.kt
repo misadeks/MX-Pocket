@@ -17,7 +17,7 @@ class RenderedKeypadTest {
         val images = KeyImages { null }
         var encodes = 0
         val uploads = mutableListOf<Pair<Int, ByteArray>>()
-        val keypad = RenderedKeypad({ _, _ -> byteArrayOf((++encodes).toByte()) },
+        val keypad = RenderedKeypad({ _, _, _ -> byteArrayOf((++encodes).toByte()) },
             { index, bytes -> uploads += index to bytes }, {})
         suspend fun page(label: String) {
             for (i in 0..8) keypad.setKeyImage(i, images.image(i, KeyTile(label, "", Color.BLUE)))
@@ -48,13 +48,30 @@ class RenderedKeypadTest {
     @Test fun bytePressureEvictsOldKeysEvenIfTheRendererStillHasThem() = runBlocking {
         var encodes = 0
         // Each entry costs 55,696 pixel bytes plus 65,000 encoded bytes.
-        val keypad = RenderedKeypad({ _, _ -> encodes++; ByteArray(65_000) }, { _, _ -> }, {})
+        val keypad = RenderedKeypad({ _, _, _ -> encodes++; ByteArray(65_000) }, { _, _ -> }, {})
         val keys = List(18) { Bitmap.createBitmap(118, 118, Bitmap.Config.ARGB_8888) }
         for ((i, key) in keys.withIndex()) keypad.setKeyImage(i % 9, key)
         keypad.setKeyImage(8, keys.last())
         assertEquals(18, encodes)
         keypad.setKeyImage(0, keys.first())
         assertEquals(19, encodes)
+        keypad.close()
+    }
+
+    @Test fun sameRenderCachesOrdinaryAndCoverEncodingsSeparately() = runBlocking {
+        val encodedModes = mutableListOf<Boolean>()
+        val writes = mutableListOf<Byte>()
+        val keypad = RenderedKeypad({ _, _, cover ->
+            encodedModes += cover
+            byteArrayOf(if (cover) 1 else 0)
+        }, { _, jpeg -> writes += jpeg.single() }, {})
+        val image = Bitmap.createBitmap(118, 118, Bitmap.Config.ARGB_8888)
+        repeat(2) {
+            keypad.setKeyImage(0, image, coverArt = true)
+            keypad.setKeyImage(0, image)
+        }
+        assertEquals(listOf(true, false), encodedModes)
+        assertEquals(listOf<Byte>(1, 0, 1, 0), writes)
         keypad.close()
     }
 }

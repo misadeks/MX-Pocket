@@ -586,7 +586,10 @@ internal class PocketSession(
                 for (index in 0..8) {
                     if (stamp.layout != layout() || stamp.revision != revision || output !== connected) break
                     if (!force && lcd[index] == frame.keys[index]) continue
-                    connected.setKeyImage(index, images.image(index, frame.keys[index]))
+                    val image = images.image(index, frame.keys[index])
+                    if (connected is RenderedKeypad && images.artwork != null)
+                        connected.setKeyImage(index, image, coverArt = true)
+                    else connected.setKeyImage(index, image)
                     if (output === connected) lcd[index] = frame.keys[index]
                 }
                 if (stamp.layout == layout() && stamp.revision == revision && output === connected) {

@@ -101,7 +101,10 @@ avoid misattributing a late answer. Each completed tile is tracked separately;
 identical tiles can be reused across pages. When a physical key needs rewriting,
 the app reuses the JPEG if the same rendered bitmap is still cached. The cache
 is per connection and capped at 2 MiB including retained bitmap pixels. It never
-skips an upload or its ACKs. Explicit repaint and reconnect send the full layout.
+skips an upload or its ACKs. For music-cover tiles, the encoder keeps the
+ordinary JPEG when it already fits one report. Otherwise it tries a lower
+quality and uses it only if that saves at least one report, without resizing
+the key or its labels. Explicit repaint and reconnect send the full layout.
 The log records JPEG preparation on misses and upload time through the last ACK
 on each completed key; neither measures when the pixels became visible. Input
 from a superseded or not-yet-acknowledged page is dropped.

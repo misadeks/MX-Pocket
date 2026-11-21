@@ -2,8 +2,13 @@ package tel.misa.mxpocket.driver
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Typeface
+import java.util.Random
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -16,6 +21,55 @@ import org.robolectric.annotation.GraphicsMode
 @Config(sdk = [28], manifest = Config.NONE)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class MxKeypadTest {
+    private fun keypad(session: HidSession) = MxKeypad::class.java
+        .getDeclaredConstructor(HidSession::class.java, Function1::class.java)
+        .apply { isAccessible = true }.newInstance(session, { _: String -> })
+
+    @Test fun compactPhotosSaveReportsWithoutResizingOrBlurringTheLabel() = runBlocking {
+        val keypad = keypad(HidSession(object : ReportTransport {
+            override suspend fun send(report: ByteArray) = error("Encoding must not upload")
+            override fun close() {}
+        }) {})
+        for (detail in listOf(false, true)) {
+            val bitmap = Bitmap.createBitmap(118, 118, Bitmap.Config.ARGB_8888)
+            bitmap.eraseColor(Color.DKGRAY)
+            if (detail) {
+                val random = Random(42)
+                for (y in 0 until 88) for (x in 0 until 118) {
+                    val grain = random.nextInt(96)
+                    bitmap.setPixel(x, y, Color.rgb(x + grain, y + grain, (x + y) / 2 + grain))
+                }
+            }
+            Canvas(bitmap).drawText("PLAY", 30f, 110f, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.WHITE
+                textSize = 21f
+                typeface = Typeface.DEFAULT_BOLD
+            })
+            val normal = keypad.encodeKeyJpeg(0, bitmap)
+            val compact = keypad.encodeKeyJpeg(0, bitmap, preferFewerReports = true)
+            fun reports(jpeg: ByteArray) = KeypadProtocol.imageReports(KeypadProtocol.keyRegion(0), jpeg).size
+            println("detail=$detail normal=${normal.size}/${reports(normal)} compact=${compact.size}/${reports(compact)}")
+            if (detail) assertTrue(reports(compact) < reports(normal)) else {
+                assertEquals(1, reports(normal))
+                assertArrayEquals(normal, compact)
+            }
+            val decoded = BitmapFactory.decodeByteArray(compact, 0, compact.size)
+            assertEquals(118, decoded.width)
+            assertEquals(118, decoded.height)
+            var strokePixels = 0
+            for (y in 88 until 118) for (x in 0 until 118) {
+                val original = Color.red(bitmap.getPixel(x, y))
+                val result = Color.red(decoded.getPixel(x, y))
+                if (original >= 224) {
+                    strokePixels++
+                    assertTrue("Lost a light letter stroke", result > 160)
+                } else if (original <= 96) assertTrue("Filled a dark label gap", result < 160)
+            }
+            assertTrue(strokePixels > 100)
+        }
+        keypad.close()
+    }
+
     @Test fun callerCanRedrawTheSameBitmapBetweenAcknowledgedUploads() = runBlocking {
         val colors = mutableListOf<Int>()
         lateinit var session: HidSession
@@ -29,8 +83,7 @@ class MxKeypadTest {
             }
             override fun close() {}
         }) {}
-        val keypad = MxKeypad::class.java.getDeclaredConstructor(HidSession::class.java, Function1::class.java)
-            .apply { isAccessible = true }.newInstance(session, { _: String -> })
+        val keypad = keypad(session)
         val bitmap = Bitmap.createBitmap(40, 40, Bitmap.Config.ARGB_8888)
         for (color in listOf(Color.RED, Color.BLUE)) {
             bitmap.eraseColor(color)

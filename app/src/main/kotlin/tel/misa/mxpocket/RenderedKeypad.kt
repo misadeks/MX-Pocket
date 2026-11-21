@@ -7,15 +7,16 @@ import tel.misa.mxpocket.driver.MxKeypad
 
 /** Physical sink for KeyImages bitmaps, which are never modified after drawing. */
 internal class RenderedKeypad(
-    private val encode: suspend (Int, Bitmap) -> ByteArray,
+    private val encode: suspend (Int, Bitmap, Boolean) -> ByteArray,
     private val upload: suspend (Int, ByteArray) -> Unit,
     private val disconnect: () -> Unit,
 ) : KeypadSink {
     constructor(keypad: MxKeypad) : this(keypad::encodeKeyJpeg, keypad::setKeyJpeg, keypad::close)
 
-    private val jpegs = object : LruCache<Bitmap, ByteArray>(2 * 1024 * 1024) {
+    private data class JpegKey(val bitmap: Bitmap, val coverArt: Boolean)
+    private val jpegs = object : LruCache<JpegKey, ByteArray>(2 * 1024 * 1024) {
         // Strong identity keys can outlive the renderer's LRU; budget their pixels as well.
-        override fun sizeOf(key: Bitmap, value: ByteArray) = key.allocationByteCount + value.size
+        override fun sizeOf(key: JpegKey, value: ByteArray) = key.bitmap.allocationByteCount + value.size
     }
 
     private var generation = 0L
@@ -24,9 +25,12 @@ internal class RenderedKeypad(
         jpegs.evictAll()
     }
 
-    override suspend fun setKeyImage(index: Int, bitmap: Bitmap) {
+    override suspend fun setKeyImage(index: Int, bitmap: Bitmap) = setKeyImage(index, bitmap, coverArt = false)
+
+    suspend fun setKeyImage(index: Int, bitmap: Bitmap, coverArt: Boolean) {
+        val key = JpegKey(bitmap, coverArt)
         val epoch = generation
-        val jpeg = jpegs.get(bitmap) ?: encode(index, bitmap).also { if (epoch == generation) jpegs.put(bitmap, it) }
+        val jpeg = jpegs.get(key) ?: encode(index, bitmap, coverArt).also { if (epoch == generation) jpegs.put(key, it) }
         if (epoch != generation) return
         upload(index, jpeg)
     }
