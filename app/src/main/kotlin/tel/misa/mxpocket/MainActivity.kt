@@ -15,18 +15,17 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
-import android.view.View
-import android.widget.LinearLayout
+import android.view.KeyEvent
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.setContent
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.ComposeView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import com.google.android.material.snackbar.Snackbar
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -38,10 +37,8 @@ import tel.misa.mxpocket.plugins.PhoneApp
 import tel.misa.mxpocket.setup.SetupActivity
 import tel.misa.mxpocket.setup.SetupChoices
 import tel.misa.mxpocket.decks.*
-import tel.misa.mxpocket.ui.PocketScreen
-import tel.misa.mxpocket.ui.PocketScreenEvent
-import tel.misa.mxpocket.ui.PocketScreenState
-import tel.misa.mxpocket.ui.*
+import tel.misa.mxpocket.shared.ui.*
+import tel.misa.mxpocket.ui.AndroidWorkspace
 import tel.misa.mxpocket.deck.DeckLimits
 import java.io.ByteArrayOutputStream
 
@@ -50,11 +47,11 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
     private val usb by lazy { getSystemService(UsbManager::class.java) }
     private val access by lazy { UsbAccess(this) }
     private val direct by lazy { DirectShortcuts(this) }
-    private lateinit var screen: PocketScreen
     private var diagnostics = ""
     private var tab by mutableStateOf(WorkspaceTab.HOME)
     private var presentation by mutableStateOf<PocketScreenState?>(null)
-    private lateinit var workspace: ComposeView
+    private var shortcutDisclosure by mutableStateOf(false)
+    private var navigating = false
     private var refreshJob: Job? = null
     private var resumed = false
     private var target: String? = null
@@ -131,7 +128,7 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
                     output.bufferedWriter().use { it.write(text) }
                 }
 
-                Snackbar.make(screen.view, "Diagnostic log saved", Snackbar.LENGTH_SHORT).show()
+                session.message("Diagnostic log saved")
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -187,29 +184,19 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         tab = savedInstanceState?.getString("tab")?.let { name -> WorkspaceTab.entries.find { it.name == name } } ?: WorkspaceTab.HOME
-        screen = PocketScreen(this, session.plugins.descriptors, ::handleScreenEvent, live = true)
-        workspace = ComposeView(this).apply {
-            id = R.id.workspace_panel
-            setContent {
-                WorkspaceTheme {
-                    WorkspacePanel(tab,session,presentation,::handleScreenEvent,
-                        onSetup = { openSetup(firstRun = false) },
+        shortcutDisclosure = savedInstanceState?.getBoolean("shortcutDisclosure") == true
+        setContent {
+            PocketTheme {
+                presentation?.let { state ->
+                    BackHandler(tab != WorkspaceTab.HOME) { showTab(WorkspaceTab.HOME) }
+                    AndroidWorkspace(tab, ::showTab, session, state, ::handleScreenEvent,
                         onExport = { layoutSaver.launch("mx-pocket-layouts.json") },
                         onImport = { layoutPicker.launch(arrayOf("application/json","text/*","application/octet-stream")) })
                 }
+                if (shortcutDisclosure) DirectShortcutConsentDialog(Settings.canDrawOverlays(this),
+                    onConfirm = ::confirmDirectShortcuts, onDismiss = { shortcutDisclosure = false })
             }
         }
-        val navigation = ComposeView(this).apply {
-            id = R.id.workspace_navigation
-            setContent { WorkspaceTheme { WorkspaceNav(tab,::showTab) } }
-        }
-        setContentView(LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            addView(screen.view,LinearLayout.LayoutParams(-1,0,1f))
-            addView(workspace,LinearLayout.LayoutParams(-1,0,1f))
-            addView(navigation,LinearLayout.LayoutParams(-1,-2))
-        })
-        showTab(tab)
         ContextCompat.registerReceiver(this, permissionReceiver, IntentFilter(permissionAction), ContextCompat.RECEIVER_NOT_EXPORTED)
         ContextCompat.registerReceiver(this, attachReceiver, IntentFilter().apply {
             addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
@@ -237,12 +224,11 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
         outState.putString("usbToken", usbToken)
         outState.putBoolean("notificationPrompt", waitingForNotifications)
         outState.putString("tab",tab.name)
+        outState.putBoolean("shortcutDisclosure", shortcutDisclosure)
     }
 
     private fun showTab(value: WorkspaceTab) {
         tab = value
-        screen.view.visibility = if (value == WorkspaceTab.HOME) View.VISIBLE else View.GONE
-        workspace.visibility = if (value == WorkspaceTab.HOME) View.GONE else View.VISIBLE
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -359,7 +345,21 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
         }
     }
 
-    private fun handleScreenEvent(event: PocketScreenEvent) {
+    private fun confirmDirectShortcuts() {
+        shortcutDisclosure = false
+        if (Settings.canDrawOverlays(this)) {
+            direct.enabled = true
+            render()
+        } else try {
+            specialAccess.launch(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+        } catch (_: ActivityNotFoundException) {
+            session.message("Special access is unavailable. Use keypad shortcut notifications instead.")
+        } catch (_: SecurityException) {
+            session.message("Android restricted special access. Use keypad shortcut notifications instead.")
+        }
+    }
+
+    internal fun handleScreenEvent(event: PocketScreenEvent) {
         when (event) {
             PocketScreenEvent.ToggleConnection -> if (target != null) cancelAttempt(getString(R.string.not_connected))
                 else if (session.request != null) session.disconnect() else requestConnect()
@@ -370,21 +370,7 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             is PocketScreenEvent.SetDirectShortcuts -> if (!event.enabled) {
                 direct.enabled = false
                 session.message("Direct shortcuts are off. You can revoke Display over other apps in Android settings.")
-            } else {
-                val hasAccess = Settings.canDrawOverlays(this)
-                AlertDialog.Builder(this).setTitle(R.string.direct_shortcuts).setMessage(R.string.direct_shortcuts_rationale)
-                    .setNegativeButton(android.R.string.cancel, null)
-                    .setPositiveButton(if (hasAccess) R.string.enable_shortcuts else R.string.open_settings) { _, _ ->
-                        if (hasAccess) { direct.enabled = true; render() }
-                        else try {
-                            specialAccess.launch(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
-                        } catch (_: ActivityNotFoundException) {
-                            session.message("Special access is unavailable. Use keypad shortcut notifications instead.")
-                        } catch (_: SecurityException) {
-                            session.message("Android restricted special access. Use keypad shortcut notifications instead.")
-                        }
-                    }.show()
-            }
+            } else shortcutDisclosure = true
             PocketScreenEvent.EnterPreview -> {
                 target = null
                 usbToken = null
@@ -392,13 +378,17 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             }
             PocketScreenEvent.StopPreview -> session.disconnect("Virtual keypad disconnected. Reconnect to resume this layout.")
             is PocketScreenEvent.SelectPlugin -> session.selectProfile(event.id)
-            is PocketScreenEvent.TapKey -> if (!session.phoneKey(event.index))
-                Snackbar.make(screen.view, "Connect a keypad or select Phone-only preview first", Snackbar.LENGTH_SHORT).show()
+            is PocketScreenEvent.TapKey -> if (!navigating && !session.phoneKey(event.index))
+                session.message("Connect a keypad or select virtual keypad first.")
             is PocketScreenEvent.ChangePage -> session.changePage(event.delta)
             PocketScreenEvent.Repaint -> session.repaint()
             PocketScreenEvent.ChooseImage -> imagePicker.launch(arrayOf("image/*"))
             PocketScreenEvent.RefreshDiagnostics -> refreshDiagnostics()
             PocketScreenEvent.SaveLog -> logSaver.launch("mx-pocket-diagnostics.txt")
+            PocketScreenEvent.FeatureSetup -> openSetup(firstRun = false)
+            is PocketScreenEvent.DefaultProfile -> session.deck.setDefault(event.id).onFailure { session.fail("Cannot change default", it) }
+            is PocketScreenEvent.EnablePlugin -> session.setPluginEnabled(event.id, event.enabled)
+            is PocketScreenEvent.PluginSettings -> session.pluginSettings(event.id)?.second?.invoke()
         }
         render()
     }
@@ -410,15 +400,15 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             status = session.status,
             pluginTitle = if (deck.activePage.name == deck.activeProfile.name) deck.activeProfile.name
                 else "${deck.activeProfile.name} / ${deck.activePage.name}",
-            frame = frame, profiles = deck.profiles.map { it.id to it.name },
+            tiles = frame.keys.mapIndexed { i, key -> key.toGridTile(session.ready, session.keyImage(i, key).asImageBitmap()) },
+            profiles = deck.profiles.map { ProfileChoice(it.id, it.name) },
             activeId = deck.activeProfileId, reason = session.deck.reason.value,
-            simulating = session.preview, canRunKeys = session.ready,
-            rendered = frame.keys.mapIndexed(session::keyImage), panelArt = session.panelArt,
+            simulating = session.preview, panelArt = session.panelArt?.asImageBitmap(),
+            connectionLabel = session.connectionLabel,
             connectionActive = target != null || session.request != null,
             diagnostics = diagnostics, log = session.logText(60), automatic = access.automatic, directShortcuts = direct.enabled,
         )
         presentation = state
-        screen.render(state)
     }
 
     override fun openApp(app: PhoneApp): Boolean {
@@ -438,29 +428,12 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             DeckCommand.MEDIA_ACCESS, DeckCommand.NAV_ACCESS -> DeckAccessActivity.intent(this, command)
             DeckCommand.HOME -> Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
             DeckCommand.BACK -> { onBackPressedDispatcher.onBackPressed(); return ok("Back in MX Pocket.") }
-            DeckCommand.UP, DeckCommand.DOWN -> {
-                val view = screen.view
-                val moved = view.pageScroll(if (command == DeckCommand.DOWN) View.FOCUS_DOWN else View.FOCUS_UP)
-                return if (moved) ok("Scrolled MX Pocket.") else unavailable("End of this screen.")
-            }
-            DeckCommand.FORWARD, DeckCommand.REVERSE -> {
-                val target = android.view.FocusFinder.getInstance().findNextFocus(window.decorView as android.view.ViewGroup,
-                    currentFocus, if (command == DeckCommand.FORWARD) View.FOCUS_FORWARD else View.FOCUS_BACKWARD)
-                val moved = target?.requestFocusFromTouch() == true
-                return if (moved) ok("Moved focus.") else unavailable("No more focusable items.")
-            }
-            DeckCommand.ACTIVATE -> {
-                val view = currentFocus ?: return unavailable("Focus an item first.")
-                // A tap on a keypad tile is already dispatching this input; never re-enter the engine.
-                if (view.id in setOf(R.id.pocket_key_1, R.id.pocket_key_2, R.id.pocket_key_3, R.id.pocket_key_4,
-                        R.id.pocket_key_5, R.id.pocket_key_6, R.id.pocket_key_7, R.id.pocket_key_8, R.id.pocket_key_9))
-                    return unavailable("Press the corresponding keypad key instead.")
-                return if (view.isEnabled && view.isClickable && view.performClick()) ok("Activated focused item.")
-                    else unavailable("Focused item cannot be activated.")
-            }
+            DeckCommand.UP, DeckCommand.DOWN, DeckCommand.FORWARD, DeckCommand.REVERSE, DeckCommand.ACTIVATE ->
+                return navigateVisibleWorkspace(command)
             DeckCommand.RECENTS -> return unavailable("Recent apps needs navigation access. Choose Navigation access to learn more.")
             else -> return unavailable("Not a visible screen action.")
         }
+
         return try { startActivity(intent); ok("Opened ${command.label}.") }
         catch (_: ActivityNotFoundException) { unavailable("No app handles this action.") }
         catch (_: SecurityException) { unavailable("Android restricted this action.") }
@@ -478,5 +451,26 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             session.observeUsb(devices)
             render()
         }
+    }
+
+    /** Only our focused activity receives these keys; never send input to a permission dialog or another app. */
+    private fun navigateVisibleWorkspace(command: DeckCommand): DeckResult {
+        if (!hasWindowFocus() || navigating || shortcutDisclosure) return unavailable("Focus the workspace first.")
+        val code = when (command) {
+            DeckCommand.UP -> KeyEvent.KEYCODE_PAGE_UP
+            DeckCommand.DOWN -> KeyEvent.KEYCODE_PAGE_DOWN
+            DeckCommand.REVERSE, DeckCommand.FORWARD -> KeyEvent.KEYCODE_TAB
+            DeckCommand.ACTIVATE -> KeyEvent.KEYCODE_ENTER
+            else -> return unavailable("Unsupported navigation command.")
+        }
+        val meta = if (command == DeckCommand.REVERSE) KeyEvent.META_SHIFT_ON else 0
+        val now = android.os.SystemClock.uptimeMillis()
+        navigating = true
+        return try {
+            fun send(action: Int) = window.decorView.dispatchKeyEvent(KeyEvent(now, now, action, code, 0, meta))
+            val down = send(KeyEvent.ACTION_DOWN)
+            val up = send(KeyEvent.ACTION_UP)
+            if (down || up) ok("Requested ${command.label}.") else unavailable("No matching workspace control.")
+        } finally { navigating = false }
     }
 }

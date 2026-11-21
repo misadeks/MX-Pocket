@@ -7,6 +7,9 @@ import org.junit.Test
 import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.DeckActions
 import tel.misa.mxpocket.deck.DeckPage
+import tel.misa.mxpocket.shared.ui.BindingOption
+import tel.misa.mxpocket.shared.ui.localBindings
+import tel.misa.mxpocket.shared.ui.parseTileColor
 
 class LayoutKeyEditorTest {
     @Test fun pageBindingsUseEditedProfilesPagesAndLeaveOtherParametersUntouched() {

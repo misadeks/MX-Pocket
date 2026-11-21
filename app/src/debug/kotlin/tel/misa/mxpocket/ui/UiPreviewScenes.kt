@@ -4,6 +4,8 @@ import android.content.Context
 import tel.misa.mxpocket.R
 import tel.misa.mxpocket.plugins.BuiltInPlugins
 import tel.misa.mxpocket.plugins.PluginFrame
+import androidx.compose.ui.graphics.Color
+import tel.misa.mxpocket.shared.ui.*
 
 /** Deterministic display fixtures. No activation callbacks, host, timers or platform services. */
 class UiPreviewScenes(context: Context) {
@@ -24,7 +26,9 @@ class UiPreviewScenes(context: Context) {
         return PocketScreenState(
             status = if (id == "disconnected") "$note\n$disconnectedNote" else "$note\n${plugin.descriptor.title} fixture",
             pluginTitle = plugin.descriptor.title,
-            frame = displayFrame,
+            tiles = displayFrame.keys.map { KeypadTile(it.label, it.footer, Color(it.background), it.enabled) },
+            profiles = descriptors.map { ProfileChoice(it.id, it.title) },
+            activeId = plugin.descriptor.id,
             diagnostics = "UI fixture: no USB enumeration has been performed.",
             log = "Static scene: $id. Controls only emit UI preview events.",
         )

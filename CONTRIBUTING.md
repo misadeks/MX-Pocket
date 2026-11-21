@@ -57,13 +57,10 @@ failed USB/plugin operations to make checks pass.
 
 ## Phone UI layout and safe preview
 
-Phone presentation is in `app/src/main/kotlin/tel/misa/mxpocket/ui/PocketScreen.kt`.
-It builds the existing Material Views and renders `PocketScreenState`; taps emit
-typed `PocketScreenEvent` values. Change layout/composition there, shared spacing
-and type sizes in `res/values/dimens.xml`, copy in `res/values/strings.xml`, and
-the Material 3 DayNight colors/theme in `res/values/styles.xml` and
-`res/values-night/styles.xml`. Stable `pocket_*` IDs support tests and future
-layout refactoring. Rendering does not activate plugins or execute actions.
+Android and Windows render `PocketScreenState` using `PocketWorkspace` in
+`shared-ui/src/commonMain`. Taps emit typed `PocketScreenEvent` values.
+Use `PocketTheme` for appearance and Compose semantics for UI tests.
+Rendering does not activate plugins or execute actions.
 Keep the safe-area insets, 48dp control/84dp key minimum heights, selectable
 diagnostics/logs and polite live status announcements.
 
@@ -81,8 +78,8 @@ adb -e shell am start -n tel.misa.mxpocket/.ui.UiPreviewActivity --es scene disc
 adb -e shell am start -n tel.misa.mxpocket/.ui.UiPreviewActivity --es scene audio
 ```
 
-Scene IDs are `disconnected`, `focus`, `audio` and `phone`. Tabs/page arrows change
-fixtures; key/connection/image/export taps only log UI events. This host does not
+Scene IDs include `disconnected`, `focus`, `audio` and `phone`. Profile controls change
+fixtures; key and connection taps only display UI events. This host does not
 construct the live Activity/engine, register USB receivers, activate plugins,
 query USB/audio state or launch phone actions. It and its fixture data/manifest
 entry exist only in `src/debug`, not release builds. The ordinary **Phone-only
@@ -153,3 +150,16 @@ plans or repository visibility; documentation does not enforce the rule.
 After inspecting the PR and its local validation evidence, a maintainer may
 explicitly merge it. Do not bypass the PR policy for a broken build: submit a
 focused fix PR.
+
+## Shared application UI
+
+Make UI changes once in `shared-ui/src/commonMain`. Both entry points use the
+production composables; do not add Swing/AWT widgets, native Android layouts,
+platform-only Compose screens, or wrappers around an alternate toolkit.
+Keep host permissions, camera/document intents, service lifetimes and LCD pixel
+generation outside presentation. Pass typed display data and callbacks.
+Exercise compact and wide constraints, keyboard input and screen-reader actions.
+Run `gradlew.bat checkSharedUi` (`./gradlew checkSharedUi` on Unix); builds also
+run the guard. `testSharedUiBoundary` checks sample violations and permitted
+platform glue. Update those samples if a new legitimate platform API is needed.
+

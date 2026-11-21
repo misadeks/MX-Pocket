@@ -1,6 +1,5 @@
 package tel.misa.mxpocket.deck
 
-import android.content.Context
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.file.Files
@@ -12,8 +11,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import tel.misa.mxpocket.actions.ActionCall
 
 /** Own one instance per app session. Successful edits replace the file before publishing the new snapshot. */
-class DeckRepository internal constructor(private val file: File) {
-    constructor(context: Context) : this(File(context.applicationContext.filesDir, "deck.json"))
+class DeckRepository(private val file: File) {
 
     private val mutable: MutableStateFlow<DeckState>
     val state: StateFlow<DeckState>

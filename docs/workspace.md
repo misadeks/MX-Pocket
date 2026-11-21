@@ -5,6 +5,30 @@ anything. Plugins controls availability and optional Android access. Flows
 edits and runs workflows. Settings contains USB consent preferences, repaint,
 the session-only image picker and diagnostic log export.
 
+On a phone (including a narrow split-screen window), selecting a key in
+**Keypad** opens its editor; Back returns without firing the key. A wider
+window keeps profile/page navigation and the board alongside the detail pane.
+Controls on **Home** execute runtime actions; controls in **Keypad** edit only.
+
+### Integrating pending keypad and context work
+
+- [Audio #18](https://github.com/misadeks/MX-Pocket/pull/18) and
+  [Navigation #19](https://github.com/misadeks/MX-Pocket/pull/19): keep glyphs,
+  media state and LCD artwork in `KeyImages`/the plugin frame. The Android host
+  passes each final tile image, enabled flag, accessible label/footer and
+  optional panel art to the shared grid. Do not bring back `KeypadPanel`
+  or add a separate Android renderer when rebasing those branches. Carry
+  Audio's read-only state through the shared presenter and include it in the
+  acknowledged key's identity: a buffered press must not run after the key
+  becomes read-only, and re-enabling it requires a fresh LCD acknowledgement.
+  Keep that regression alongside the per-key receipt tests.
+- [Foreground mappings #22](https://github.com/misadeks/MX-Pocket/pull/22):
+  observed signals and the repository decision feed the common rules editor.
+  Keep installed-app discovery and Usage Access in the Android host. Port the
+  mapping selector and opt-in disclosure into common Compose as typed data and
+  callbacks; a desktop host must not advertise another process's foreground
+  identity as an observed signal.
+
 ## Choose features on first launch
 
 Choose the features you want help setting up, or tap **Skip and try virtual

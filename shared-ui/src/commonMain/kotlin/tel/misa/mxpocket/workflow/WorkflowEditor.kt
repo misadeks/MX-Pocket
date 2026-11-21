@@ -33,7 +33,7 @@ internal fun <T> Choice(label: String, value: String, choices: List<T>, title: (
 @Composable
 internal fun WorkflowEditor(
     draft: WorkflowDefinition, actions: List<WorkflowActionSpec>, saved: List<WorkflowDefinition>,
-    endpoints: List<WorkflowEndpoint>, edit: (WorkflowDefinition) -> Unit,
+    endpoints: List<WorkflowEndpoint>, canApproveEndpoints: Boolean, edit: (WorkflowDefinition) -> Unit,
 ) {
     Field("Workflow name", draft.name) { edit(draft.copy(name = it.take(60))) }
     Choice("Trigger", draft.trigger.kind.label, TriggerKind.entries, { it.label }) {
@@ -47,12 +47,13 @@ internal fun WorkflowEditor(
     }
     HorizontalDivider()
     Text("Sequence", style = MaterialTheme.typography.titleLarge)
-    val options = EditorOptions(actions, saved.filterNot { it.id == draft.id }, endpoints)
+    val options = EditorOptions(actions, saved.filterNot { it.id == draft.id }, endpoints, canApproveEndpoints)
     StepList(draft.steps, options, 1) { edit(draft.copy(steps = it)) }
 }
 
 private data class EditorOptions(
     val actions: List<WorkflowActionSpec>, val workflows: List<WorkflowDefinition>, val endpoints: List<WorkflowEndpoint>,
+    val canApproveEndpoints: Boolean,
 )
 
 private fun StepKind.make(options: EditorOptions): WorkflowStep = when (this) {
@@ -175,7 +176,8 @@ private fun StepSettings(step: WorkflowStep, opts: EditorOptions, depth: Int, ed
             Choice("Endpoint", endpoint?.name.orEmpty(), opts.endpoints, { "${it.method} · ${it.name}" }) {
                 edit(step.copy(target = it.id, retries = 0))
             }
-            if (opts.endpoints.isEmpty()) Text("Approve an address in Workflows → Endpoints first.")
+            if (opts.endpoints.isEmpty()) Text(if (opts.canApproveEndpoints) "Approve an address in Workflows → Endpoints first."
+                else "No approved endpoints. This host cannot grant endpoint access.")
             if (endpoint?.method == "GET") Choice("Retries", "${step.retries}", listOf(0, 1, 2), { "$it" }) {
                 edit(step.copy(retries = it))
             }

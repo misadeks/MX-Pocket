@@ -1,4 +1,4 @@
-package tel.misa.mxpocket.ui
+package tel.misa.mxpocket.shared.ui
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -14,9 +14,7 @@ import tel.misa.mxpocket.deck.*
 
 @Composable
 internal fun RuleSection(profile: DeckProfile, signals: Map<String, String>, writable: Boolean,
-                         save: (List<DeckRule>, () -> Unit) -> Unit) {
-    var editing by rememberSaveable { mutableStateOf<Int?>(null) }
-    var removing by rememberSaveable { mutableStateOf<Int?>(null) }
+                         edit: (Int) -> Unit, remove: (Int) -> Unit) {
     var showSignals by rememberSaveable { mutableStateOf(false) }
     EditorHeading("Context rules")
     EditorNote("Matching rules add their weight to ${profile.name}’s score. A signal that isn’t observed adds nothing.")
@@ -37,40 +35,24 @@ internal fun RuleSection(profile: DeckProfile, signals: Map<String, String>, wri
                     }
                 })
                 EditorActions {
-                    TextButton(onClick = { editing = index }, enabled = writable) { Text("Edit rule") }
-                    TextButton(onClick = { removing = index }, enabled = writable) { Text("Remove rule") }
+                    TextButton(onClick = { edit(index) }, enabled = writable) { Text("Edit rule") }
+                    TextButton(onClick = { remove(index) }, enabled = writable) { Text("Remove rule") }
                 }
             }
         }
     }
     EditorActions {
-        OutlinedButton(onClick = { editing = -1 }, enabled = writable && profile.rules.size < DeckLimits.RULES) { Text("Add rule") }
+        OutlinedButton(onClick = { edit(-1) }, enabled = writable && profile.rules.size < DeckLimits.RULES) { Text("Add rule") }
         TextButton(onClick = { showSignals = !showSignals }) { Text(if (showSignals) "Hide signals" else "Observed signals (${signals.size})") }
     }
     if (showSignals) {
         if (signals.isEmpty()) EditorNote("No signals observed yet.")
-        else for ((signal, value) in signals.toSortedMap()) EditorNote("$signal: $value")
-    }
-    editing?.let { index ->
-        val original = profile.rules.getOrNull(index)
-        if (index == -1 || original != null) RuleDialog(original, signals, writable, close = { editing = null }) { rule ->
-            val next = profile.rules.toMutableList()
-            if (index == -1) next.add(rule) else next[index] = rule
-            save(next) { editing = null }
-        }
-    }
-    removing?.let { index ->
-        profile.rules.getOrNull(index)?.let { rule ->
-            EditorConfirm("Remove rule?", "${rule.signal} = ${rule.value} will no longer contribute to ${profile.name}’s score.",
-                "Remove", writable, { removing = null }) {
-                save(profile.rules.filterIndexed { i, _ -> i != index }) { removing = null }
-            }
-        }
+        else for ((signal, value) in signals.entries.sortedBy { it.key }) EditorNote("$signal: $value")
     }
 }
 
 @Composable
-private fun RuleDialog(initial: DeckRule?, signals: Map<String, String>, writable: Boolean, close: () -> Unit, save: (DeckRule) -> Unit) {
+internal fun RuleDialog(initial: DeckRule?, signals: Map<String, String>, writable: Boolean, close: () -> Unit, save: (DeckRule) -> Unit) {
     val first = signals.keys.sorted().firstOrNull().orEmpty()
     var signal by rememberSaveable { mutableStateOf(initial?.signal ?: first) }
     var value by rememberSaveable { mutableStateOf(initial?.value ?: signals[first].orEmpty()) }
@@ -91,7 +73,7 @@ private fun RuleDialog(initial: DeckRule?, signals: Map<String, String>, writabl
                     var open by remember { mutableStateOf(false) }
                     OutlinedButton(onClick = { open = true }, enabled = signals.isNotEmpty()) { Text("Choose observed signal") }
                     DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-                        signals.toSortedMap().forEach { (key, sample) ->
+                        signals.entries.sortedBy { it.key }.forEach { (key, sample) ->
                             DropdownMenuItem(text = { Text("$key: $sample") }, onClick = { signal = key; value = sample; open = false })
                         }
                     }

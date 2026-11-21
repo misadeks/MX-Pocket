@@ -24,13 +24,12 @@ for the packaged Windows x64 Compose/Skiko runtime. The standalone JAR is in
 `desktop-preview\build\compose\jars`; run it using `java -jar <path-to-jar>`
 with a matching desktop JVM. Running the JAR needs no Android SDK or keypad.
 
-Click **Next profile** to go from Focus to Audio. Wider windows also show a
-profile list alongside the keypad; narrow windows show one pane. Click any
-enabled key to try it. Compose Multiplatform draws the keypad from `:shared-ui`
-on both supported targets. The preview uses the app's factory
-profiles, nine-key bindings and Focus timer. Other tile labels and media state
-are preview fixtures: they do not access USB, change Windows volume, launch
-apps, operate a camera or invoke accessibility actions. Nothing is saved.
+Choose **Audio** on Home or use **Next page**. The same shared Compose screens
+run on Android and Windows: **Home** operates the keys; **Keypad** edits the
+saved layout. Resize the editor to switch between the single-pane phone layout
+and the wide navigation/preview/editor layout. Windows stores its own layouts
+under the user's local application data. Its Focus timer runs locally, media
+is simulated, and no USB, Android camera, accessibility or permission actions run.
 
 ## What is implemented
 
@@ -72,7 +71,7 @@ apps, operate a camera or invoke accessibility actions. Nothing is saved.
 ## Architecture
 
 ```text
-app/ui/Workspace + PocketScreen   Compose navigation/editors and keypad Views
+shared-ui/commonMain              Compose workspace, keypad and editors for both hosts
   -> MainActivity                 visible USB/notification consent, screen adapter
 KeypadService                     foreground notification, detach and disconnect
   -> PocketSession                one plugin/input/LCD owner; Activity optional

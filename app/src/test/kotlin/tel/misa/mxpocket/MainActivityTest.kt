@@ -1,77 +1,52 @@
 package tel.misa.mxpocket
 
-import android.os.Looper
-import android.view.View
-import android.view.ViewGroup
-import android.widget.TextView
-import com.google.android.material.button.MaterialButton
-import org.junit.Assert.*
+import androidx.compose.ui.test.*
+import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.test.core.app.ActivityScenario
+import androidx.lifecycle.Lifecycle
+import org.junit.Assert.assertNull
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.robolectric.Robolectric
+import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
-import org.robolectric.annotation.LooperMode
 
-@RunWith(org.robolectric.RobolectricTestRunner::class)
-@Config(sdk = [28, 35])
-@LooperMode(LooperMode.Mode.PAUSED)
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [28, 35], qualifiers = "w400dp-h800dp")
 class MainActivityTest {
+    @get:Rule val ui = createEmptyComposeRule()
+    private val app get() = RuntimeEnvironment.getApplication() as PocketApplication
     @Before fun grantAppOwnedBroadcastPermission() {
-        // Android grants the app its own merged signature permission; Robolectric API 28 does not.
-        shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(
-            "tel.misa.mxpocket.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION")
+        shadowOf(app).grantPermissions("tel.misa.mxpocket.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION")
     }
-
     @Test fun startsWithoutUsbDeviceAndConnectReportsMissingHardware() {
-        Robolectric.buildActivity(MainActivity::class.java).setup().use { controller ->
-            val activity = controller.get()
-            assertEquals("tel.misa.mxpocket", activity.packageName)
-            val button = views(activity.window.decorView).filterIsInstance<MaterialButton>()
-                .single { it.text == activity.getString(R.string.connect) }
-            button.performClick()
-            assertTrue(views(activity.window.decorView).filterIsInstance<TextView>()
-                .any { it.text.toString().startsWith("No MX Creative Keypad") })
+        ActivityScenario.launch(MainActivity::class.java).use {
+            ui.onNodeWithText("Connect keypad").performClick()
+            ui.onNodeWithText("No MX Creative Keypad", substring = true).assertExists()
         }
     }
-
     @Test fun previewRunsTimerAndChangesPageWithoutClaimingUsbSuccess() {
-        Robolectric.buildActivity(MainActivity::class.java).setup().use { controller ->
-            val activity = controller.get()
-            fun click(label: String) {
-                views(activity.window.decorView).filterIsInstance<MaterialButton>()
-                    .first { it.text.toString() == label }.performClick()
-            }
-            click(activity.getString(R.string.preview))
-            click("Start")
-            assertTrue(views(activity.window.decorView).filterIsInstance<MaterialButton>().any { it.text == "Pause" })
-            click(activity.getString(R.string.next))
-            assertTrue(views(activity.window.decorView).filterIsInstance<MaterialButton>().any { it.text == "Play/Pause" })
-            click(activity.getString(R.string.next))
-            assertTrue(views(activity.window.decorView).filterIsInstance<MaterialButton>().any { it.text == "Camera" })
-            assertTrue(views(activity.window.decorView).filterIsInstance<TextView>()
-                .any { it.text.toString().contains("No USB messages are sent") })
-            assertFalse(views(activity.window.decorView).filterIsInstance<TextView>()
-                .any { it.text.toString().startsWith("Nine LCD image uploads acknowledged") })
-            shadowOf(Looper.getMainLooper()).idle()
+        ActivityScenario.launch(MainActivity::class.java).use {
+            ui.onNodeWithText("Connect virtual keypad").performClick()
+            ui.onNodeWithContentDescription("Key 1, Start", substring = true).performClick()
+            ui.onNodeWithContentDescription("Key 1, Pause", substring = true).assertExists()
+            ui.onNodeWithText("Next page").performClick()
+            ui.onNodeWithContentDescription("Play/Pause", substring = true).assertExists()
+            ui.onNodeWithText("Next page").performClick()
+            ui.onNodeWithContentDescription("Key 1, Camera", substring = true).assertExists()
+            ui.onNodeWithText("No USB messages are sent", substring = true).assertExists()
+            ui.onNodeWithText("Nine LCD image uploads acknowledged", substring = true).assertDoesNotExist()
         }
     }
-
     @Test fun backgroundLifecycleNeverStartsServiceForAnIdleScreen() {
-        Robolectric.buildActivity(MainActivity::class.java).setup().use { controller ->
-            controller.pause().stop()
-            controller.start().resume()
-            val activity = controller.get()
-            assertTrue(views(activity.window.decorView).filterIsInstance<TextView>()
-                .any { it.text == activity.getString(R.string.not_connected) })
-            assertNull(shadowOf(activity.application).nextStartedService)
+        ActivityScenario.launch(MainActivity::class.java).use {
+            it.moveToState(Lifecycle.State.CREATED)
+            it.moveToState(Lifecycle.State.RESUMED)
+            ui.onNodeWithText(app.getString(R.string.not_connected)).assertExists()
+            assertNull(shadowOf(app).nextStartedService)
         }
-    }
-
-    private fun views(view: View): Sequence<View> = sequence {
-        yield(view)
-        if (view is ViewGroup) for (i in 0 until view.childCount) yieldAll(views(view.getChildAt(i)))
     }
 }

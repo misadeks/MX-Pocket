@@ -2,6 +2,7 @@ package tel.misa.mxpocket.deck
 
 import android.app.Application
 import java.io.File
+import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Rule
@@ -18,6 +19,21 @@ class DeckRepositoryTest {
     @get:Rule val folder = TemporaryFolder()
     private val file: File get() = File(folder.root, "deck.json")
     private val repo by lazy { DeckRepository(file) }
+
+    @Test fun editorCannotSaveOverAChangedKeyRulesOrActiveHistory() = runBlocking {
+        val editor = repo.asEditorStore()
+        val original = repo.state.value.activePage.keys[0]
+        val concurrent = original.copy(label = "New assignment")
+        repo.setKey("focus", "root", 0, concurrent).getOrThrow()
+        repo.setRules("focus", listOf(DeckRule("dock", "studio"))).getOrThrow()
+        repo.selectProfile("audio").getOrThrow()
+        val snapshot = repo.state.value
+        assertTrue(editor.edit(DeckEdit.UpdateKey("focus", "root", 0, original, original.copy(label = "Old draft"))).isFailure)
+        assertTrue(editor.edit(DeckEdit.Rules("focus", emptyList(), listOf(DeckRule("hour", "10")))).isFailure)
+        assertTrue(editor.edit(DeckEdit.Root("focus")).isFailure)
+        assertSame(snapshot, editor.state.value)
+        assertEquals(snapshot, DeckRepository(file).state.value)
+    }
 
     @Test fun savesUnicodeBindingsRulesAndNavigationWithoutLeakingMutableReferences() {
         val id = repo.createProfile("Travail 🐈").getOrThrow()

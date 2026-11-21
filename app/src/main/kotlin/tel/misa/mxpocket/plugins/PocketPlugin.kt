@@ -25,14 +25,6 @@ data class PluginDescriptor(
     }
 }
 
-data class KeyTile(val label: String, val footer: String, val background: Int,
-    val iconComponent: String? = null, val inputToken: String? = null,
-    val icon: String = "", val enabled: Boolean = true)
-
-data class PluginFrame(val keys: List<KeyTile>, val page: Int = 0) {
-    init { require(keys.size == 9) { "A plugin frame must contain exactly nine keys" } }
-}
-
 /** LCD indices are 0..8. The host reserves the two physical page buttons for navigation. */
 data class PluginKeyEvent(val index: Int, val pressed: Boolean, val synthetic: Boolean = false) {
     init { require(index in 0..8) }
@@ -75,5 +67,3 @@ interface PocketPlugin {
     fun onDeactivate() {}
 }
 
-internal fun frame(labels: List<String>, footer: String, background: Int): PluginFrame =
-    PluginFrame(labels.map { KeyTile(it, footer, background) })

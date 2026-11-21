@@ -1,18 +1,20 @@
 package tel.misa.mxpocket.deck
 
-import android.util.JsonReader
-import android.util.JsonToken
+import com.google.gson.Strictness
+import com.google.gson.stream.JsonReader
+import com.google.gson.stream.JsonToken
 import java.io.StringReader
 import org.json.JSONArray
 import org.json.JSONObject
 import tel.misa.mxpocket.actions.ActionCall
 
 /** Strict token types, bounded depth and collections, and duplicate/unknown field rejection for v1. */
-internal object DeckJson {
+object DeckJson {
     fun decode(text: String): DeckState {
         checkSize(text)
         checkLexemes(text)
         val obj = JsonReader(StringReader(text)).use { reader ->
+            reader.strictness = Strictness.STRICT
             val root = read(reader, 0) as? JSONObject ?: error("Expected deck object")
             require(reader.peek() == JsonToken.END_DOCUMENT) { "Trailing JSON" }
             root

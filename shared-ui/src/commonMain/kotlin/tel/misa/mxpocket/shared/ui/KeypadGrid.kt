@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import tel.misa.mxpocket.plugins.KeyTile
 import androidx.compose.ui.unit.LayoutDirection
 
 @Composable
@@ -32,7 +33,7 @@ fun PocketTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable
     MaterialTheme(
         colorScheme = if (darkTheme) darkColorScheme(primary = Color(0xFFAEC6FF))
             else lightColorScheme(primary = Color(0xFF245CA0)),
-        content = content,
+        content = { Surface(content = content) },
     )
 }
 
@@ -42,7 +43,11 @@ data class KeypadTile(
     val color: Color,
     val enabled: Boolean = true,
     val image: ImageBitmap? = null,
+    val icon: String = "",
 )
+
+fun KeyTile.toGridTile(inputEnabled: Boolean, image: ImageBitmap? = null) =
+    KeypadTile(label, footer, Color(background), enabled && inputEnabled, image, icon)
 
 /** A completed touch, mouse, keyboard or accessibility click emits one logical down/up pair. */
 @Composable
@@ -122,7 +127,7 @@ private fun TileLabel(i: Int, tile: KeypadTile, textDirection: LayoutDirection) 
     CompositionLocalProvider(LocalLayoutDirection provides textDirection) {
         Column(Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("${i + 1}", color = foreground, style = MaterialTheme.typography.labelSmall)
+                Text(tile.icon.ifBlank { "${i + 1}" }, color = foreground, style = MaterialTheme.typography.labelSmall)
                 Text(tile.label, color = foreground, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
                     maxLines = 2, overflow = TextOverflow.Ellipsis)
                 if (tile.footer.isNotBlank()) Text(tile.footer, color = foreground,

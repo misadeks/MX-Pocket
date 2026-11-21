@@ -1,10 +1,15 @@
 package tel.misa.mxpocket.preview
 
 import kotlin.test.Test
+import org.junit.Rule
+import org.junit.rules.TemporaryFolder
+import tel.misa.mxpocket.deck.DeckRepository
+import java.io.File
 
 class PreviewDeckTest {
+    @get:Rule val folder = TemporaryFolder()
     @Test fun factoryNavigationTimerAndSimulatedAudio() {
-    val deck = PreviewDeck()
+    val deck = PreviewDeck(DeckRepository(File(folder.root, "deck.json")))
     fun label(key: Int, now: Long = 0) = deck.tiles(now)[key - 1].label
     check(deck.profileName == "Focus")
     deck.press(6, 0) // 15-minute preset

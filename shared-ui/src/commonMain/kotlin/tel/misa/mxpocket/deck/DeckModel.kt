@@ -1,6 +1,5 @@
 package tel.misa.mxpocket.deck
 
-import java.util.Collections
 import tel.misa.mxpocket.actions.ActionCall
 
 /** Stable IDs for host-dispatched navigation. Page IDs are local to a profile. */
@@ -71,24 +70,7 @@ object DeckLimits {
     const val MAX_WEIGHT = 100
 }
 
-internal fun <T> List<T>.locked(): List<T> = Collections.unmodifiableList(ArrayList(this))
-internal fun <K, V> Map<K, V>.locked(): Map<K, V> = Collections.unmodifiableMap(LinkedHashMap(this))
-
-internal fun DeckState.snapshot() = copy(
-    profiles = profiles.map { profile ->
-        profile.copy(
-            rules = profile.rules.locked(),
-            pages = profile.pages.map { page ->
-                page.copy(keys = page.keys.map { key ->
-                    key.copy(action = key.action?.let { it.copy(params = it.params.locked()) })
-                }.locked())
-            }.locked(),
-        )
-    }.locked(),
-    histories = histories.mapValues { it.value.locked() }.locked(),
-)
-
-internal fun defaultDeck(): DeckState {
+fun defaultDeck(): DeckState {
     fun plugin(id: String, name: String, rules: List<DeckRule> = emptyList()) = DeckProfile(
         id, name, "root", listOf(DeckPage("root", name, List(9) {
             DeckKey(action = ActionCall("plugin.key", mapOf("pluginId" to id, "index" to it.toString())))

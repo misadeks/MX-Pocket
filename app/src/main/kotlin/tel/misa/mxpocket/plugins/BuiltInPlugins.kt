@@ -27,11 +27,7 @@ class FocusPlugin(title: String) : PocketPlugin {
         }
     }
 
-    override fun render(nowMillis: Long) = frame(
-        listOf(if (timer.running) "Pause" else "Start", timer.label(nowMillis), "Reset",
-            "-5 min", "${timer.durationMillis / 60_000} min", "+5 min", "15 min", "25 min", "50 min"),
-        "FOCUS", 0xff194375.toInt(),
-    )
+    override fun render(nowMillis: Long) = timer.present(nowMillis)
 
     override fun onKey(event: PluginKeyEvent, host: PluginHost) {
         if (!event.pressed || event.synthetic) return
@@ -52,10 +48,7 @@ class PhonePlugin(title: String) : PocketPlugin {
     override val descriptor = PluginDescriptor("phone", title,
         setOf(PluginCapability.OPEN_APPS, PluginCapability.NAVIGATION))
 
-    override fun render(nowMillis: Long) = frame(
-        listOf("Camera", "Settings", "Dialer", "Web", "Phone", "Alarm", "Focus", "Audio", "Repaint"),
-        "PHONE", 0xff49345f.toInt(),
-    )
+    override fun render(nowMillis: Long) = phoneFrame()
 
     override fun onKey(event: PluginKeyEvent, host: PluginHost) {
         if (!event.pressed || event.synthetic) return

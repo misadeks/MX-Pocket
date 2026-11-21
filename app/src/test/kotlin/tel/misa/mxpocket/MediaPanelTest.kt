@@ -22,7 +22,15 @@ import android.net.Uri
 import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
-import android.view.View
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
@@ -39,7 +47,8 @@ import tel.misa.mxpocket.decks.SessionArtwork
 import tel.misa.mxpocket.driver.KeypadProtocol
 import tel.misa.mxpocket.driver.SimulatedKeypad
 import tel.misa.mxpocket.plugins.KeyTile
-import tel.misa.mxpocket.ui.KeypadPanel
+import tel.misa.mxpocket.shared.ui.KeypadGrid
+import tel.misa.mxpocket.shared.ui.KeypadTile
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -85,19 +94,26 @@ class MediaPanelTest {
         renderer.useArtwork(art)
         val sim = SimulatedKeypad()
         val tiles = colors.indices.map { i -> renderer.image(i,tile).also { sim.setKeyImage(i,it) } }
-        val panel = KeypadPanel(app)
-        panel.show(art, tiles)
-        val exact = View.MeasureSpec.makeMeasureSpec(480,View.MeasureSpec.EXACTLY)
-        panel.measure(exact,exact); panel.layout(0,0,480,480)
-        val mirrored = Bitmap.createBitmap(480,480,Bitmap.Config.ARGB_8888)
-        panel.draw(Canvas(mirrored))
+        // Sample the production Compose board at the same normalized panel coordinates.
+        val ui = createComposeRule()
+        var mirrored: Bitmap? = null
+        ui.apply(object : org.junit.runners.model.Statement() {
+            override fun evaluate() {
+                ui.setContent {
+                    KeypadGrid(tiles.map { KeypadTile("Play", color = androidx.compose.ui.graphics.Color.Black,
+                        image = it.asImageBitmap()) }, { _, _ -> }, Modifier.size(240.dp).testTag("panel"), art.asImageBitmap())
+                }
+                mirrored = ui.onNodeWithTag("panel").captureToImage().asAndroidBitmap()
+            }
+        }, org.junit.runner.Description.createTestDescription(javaClass, "panel")).evaluate()
         val samples = colors.indices.map { i ->
             val r = KeypadProtocol.keyRegion(i)
             assertEquals(colors[i],art.getPixel(r.x+59,r.y+45))
             val pixel = tiles[i].getPixel(59,45)
             assertEquals(colors[i],pixel)
             assertEquals(pixel,sim.renderedImage(i)!!.getPixel(59,45))
-            assertEquals(pixel,mirrored.getPixel(r.x+59,r.y+45))
+            val mirror = requireNotNull(mirrored)
+            assertEquals(pixel,mirror.getPixel((r.x+59)*mirror.width/480,(r.y+45)*mirror.height/480))
             pixel
         }
         assertEquals(9,samples.distinct().size)

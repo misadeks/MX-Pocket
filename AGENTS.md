@@ -31,10 +31,15 @@
 - `PluginEngine`: UI-thread-confined activation, coroutine scope ownership,
   held-key cleanup, generation guards and error reporting. Use activation-owned
   scopes; no GlobalScope, raw threads or unowned services in plugins.
-- `app/ui/PocketScreen`: phone Views and state/event rendering only; no USB,
-  platform actions or plugin activation. Keep the debug UI-only preview isolated
-  from the live Activity/engine and excluded from release builds. Preserve
-  accessible insets, minimum touch heights and selectable diagnostics.
+- All app-owned screens, dialogs, selectors and keypad presentation **must**
+  be Kotlin Compose Multiplatform in `shared-ui/src/commonMain`. Android and
+  Windows host adapters provide data and receive typed callbacks; never add
+  a native View/XML, Swing, web or platform-only Compose implementation.
+  System permissions, camera, document pickers, window hosting and offscreen
+  LCD bitmap rendering are platform work, not alternate app UI.
+  Use window constraints, not platform identity, for compact and wide layouts.
+  Keep key execution separate from editing, resize and preview fixtures.
+  Preserve accessible insets, touch targets and selectable diagnostics.
 - `MainActivity`: visible USB/notification permission and phone UI.
   `KeypadService` gates the hardware lifetime; `PocketSession` owns input,
   plugin actions and LCDs independently of Activity recreation. Preserve the
