@@ -12,6 +12,12 @@ internal class TicTacToeGame {
     private var turn = PLAYER
     private var result = Result.PLAYING
 
+    val interactionPage: Int get() = when {
+        mode == null -> 0
+        result == Result.PLAYING -> 1
+        else -> 2 // Any square now returns to the mode picker.
+    }
+
     fun cells(): List<Cell> {
         if (mode == null) return List(9) { index ->
             when (index) {

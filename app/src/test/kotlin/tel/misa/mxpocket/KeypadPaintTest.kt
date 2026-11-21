@@ -139,6 +139,7 @@ class KeypadPaintTest {
                 })
                 main.idle()
             }
+
             p.pause = true
             status("First"); status("Second")
             assertEquals(listOf(0), p.writes)
@@ -151,6 +152,28 @@ class KeypadPaintTest {
             status("Second")
             assertEquals(listOf(0, 0), p.writes)
             assertTrue(p.grids.isEmpty()); p.expectAll()
+        } finally { p.session.disconnect() }
+    }
+
+    @Test fun oneXoBindingStillSwitchesScreensAndRejectsInputUntilGridAck() {
+        val p = Panel(supportsGrid = true)
+        try {
+            val deck = p.session.deck
+            val custom = deck.createProfile("One game key").getOrThrow()
+            deck.setKey(custom, "root", 0, DeckKey(action = ActionCall("plugin.key",
+                mapOf("pluginId" to "game.xo", "index" to "0")))).getOrThrow()
+            p.session.selectProfile(custom); main.idle()
+            p.expectAll()
+            assertEquals("1 PLAYER", p.session.frame().keys[0].label)
+            p.grids.clear(); p.writes.clear(); p.pause = true
+            p.press(1)
+            assertEquals(listOf<Int?>(null), p.grids)
+            assertTrue(p.writes.isEmpty())
+            p.press(1)
+            assertEquals("1", p.session.frame().keys[0].label)
+            p.settle(); p.press(1)
+            assertEquals("X", p.session.frame().keys[0].label)
+            p.expectAll()
         } finally { p.session.disconnect() }
     }
 
