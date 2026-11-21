@@ -30,7 +30,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runInterruptible
-import tel.misa.mxpocket.isUnlockedAndInteractive
 
 /** A component token for getActiveSessions. No posted/removed callbacks, notification queries or exports. */
 class MediaSessionAccess : NotificationListenerService() {
@@ -42,10 +41,11 @@ class MediaSessionAccess : NotificationListenerService() {
 internal fun Context.hasMediaSessionAccess(): Boolean = getSystemService(NotificationManager::class.java)
     .isNotificationListenerAccessGranted(ComponentName(this, MediaSessionAccess::class.java))
 
-internal class MediaDeck(private val app: Context) {
+internal class MediaDeck(private val app: Context, private val canShowTrack: () -> Boolean) {
     private val audio = app.getSystemService(AudioManager::class.java)
     private val manager = app.getSystemService(MediaSessionManager::class.java)
     private var activeWatch: Watch? = null
+    fun refreshDisplay() { activeWatch?.refresh() }
     private val token = ComponentName(app, MediaSessionAccess::class.java)
     private val access get() = app.hasMediaSessionAccess()
     private fun basic() = MediaDeckState(volume = audio.getStreamVolume(AudioManager.STREAM_MUSIC),
@@ -155,7 +155,7 @@ internal class MediaDeck(private val app: Context) {
                 if (listener == null) subscribe() else if (roster != null) replace(roster)
                 val player = players.values.firstOrNull { it.playback?.state == P.STATE_PLAYING } ?: players.values.firstOrNull()
                 val state = player?.playback
-                val owner = player?.takeIf { app.isUnlockedAndInteractive() && state?.state in displayStates }
+                val owner = player?.takeIf { canShowTrack() && state?.state in displayStates }
                 val fresh = owner != null && owner === updated
                 if (owner !== metadataOwner || fresh || (probeMissing && owner != null && source == null)) {
                     val data = if (fresh) metadata else owner?.controller?.metadata
@@ -196,7 +196,7 @@ internal class MediaDeck(private val app: Context) {
                 if (image == null) {
                     retryAt = SystemClock.elapsedRealtime() + backoff
                     backoff = (backoff * 2).coerceAtMost(60_000L)
-                } else if (app.isUnlockedAndInteractive() && access && next.readable(app)) {
+                } else if (canShowTrack() && access && next.readable(app)) {
                     displayed = next
                     artwork = image
                     retryAt = 0; backoff = INITIAL_BACKOFF

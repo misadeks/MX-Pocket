@@ -91,7 +91,7 @@ internal class PocketSession(
     private var visibleKey = false
     private var studio: StudioActivity? = null
     internal val favoriteApps = FavoriteApps(app)
-    private val media = MediaDeck(app)
+    private val media = MediaDeck(app, ::canShowTrack)
     private val decks = MutableStateFlow(tel.misa.mxpocket.decks.DeckState())
     val deckState = decks.asStateFlow()
     private var deckWatch: Job? = null
@@ -179,6 +179,7 @@ internal class PocketSession(
             lastLayout = layout
             receipt = 0
             pendingAction = null
+            media.refreshDisplay()
         }
         if (feedbackPage != state.activePage || feedbackProfile != state.activeProfileId) {
             feedbackProfile = state.activeProfileId
@@ -211,11 +212,19 @@ internal class PocketSession(
         }
     }
 
-    private fun visibleArtwork(state: MediaDeckState) = state.artwork?.takeIf { "audio" !in disabled.value &&
-        deck.state.value.activeProfileId == "audio" && app.isUnlockedAndInteractive() }
+    private fun canShowTrack(): Boolean {
+        if ("audio" in disabled.value || deck.state.value.activeProfileId != "audio") return false
+        val ticket = request
+        if (ticket != null) return output != null && !preview && app.hasKeypadAccess(ticket)
+        return screen != null && app.isUnlockedAndInteractive()
+    }
+
+    private fun visibleArtwork(state: MediaDeckState) = state.artwork?.takeIf { canShowTrack() }
 
     fun frame(): PluginFrame {
-        if (images.useArtwork(visibleArtwork(deckState.value.media))) revision++
+        val mediaState = deckState.value.media
+        if ((mediaState.title.isNotEmpty() || mediaState.artwork != null) && !canShowTrack()) media.refreshDisplay()
+        if (images.useArtwork(deckState.value.media.artwork)) revision++
         val native = plugins.render()
         return PluginFrame(deck.state.value.activePage.keys.mapIndexed { index, key ->
             val call = key.action
@@ -398,6 +407,7 @@ internal class PocketSession(
         syncLayout()
         updateObservation()
         watchDecks()
+        media.refreshDisplay()
         screen.render()
     }
 
@@ -454,6 +464,7 @@ internal class PocketSession(
                     { error -> main.post { if (request == ticket) stopWithError("USB connection failed", error) } })
                 if (request != ticket) { connected.close(); return@launch }
                 output = connected
+                media.refreshDisplay()
                 syncLayout()
                 updateObservation()
                 watchDecks()
@@ -479,6 +490,7 @@ internal class PocketSession(
         receipt = 0
         lcd.fill(null)
         watchDecks()
+        media.refreshDisplay()
         painting = null
         painted = null
         onHandoff = null
@@ -658,7 +670,10 @@ internal class PocketSession(
                 fun publishMedia(next: MediaDeckState) {
                     val old = decks.value.media
                     if (old == next) return
-                    if (old.title.isNotEmpty() && old.title != next.title) images.clear()
+                    if (old.title != next.title || old.artwork !== next.artwork) {
+                        images.clear()
+                        (output as? RenderedKeypad)?.clearImages()
+                    }
                     decks.value = decks.value.copy(media = next)
                     // Advance the stamp even during an in-flight HID write; finish that key, not the stale frame.
                     if (images.useArtwork(visibleArtwork(next)) || old.title != next.title) revision++

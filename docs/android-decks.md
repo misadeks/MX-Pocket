@@ -41,8 +41,11 @@ them fall back to a two-second check.
 
 Only embedded bitmaps and bounded, read-granted `content://` images are used.
 Titles and cover images are display-only, never written to files or diagnostic
-logs. Screen-off or keyguard lock hides both; it does **not** mean the player
-is unavailable. One fresh press on the authorized USB keypad can change music
+logs. With Audio selected and media access granted, a connected, USB-authorized
+keypad keeps showing new titles and covers while the handset is locked or off.
+The app doesn't wake the handset or draw over its lock screen. Without that
+keypad, lock hides playback details. Leaving Audio, losing the session or
+revoking access clears them. One fresh press on the authorized keypad can change music
 volume, mute or request an advertised transport action without unlocking.
 Phone/simulator taps, workflow steps, settings and app launches do not get
 this exception. Player sessions can end or drop an action; MX Pocket does not
@@ -81,8 +84,10 @@ independent of the selected page.
    paused/playing, including several Play presses: the cover should not flash
    green. Pin a different profile: its keys should have no album art. Compare
    rapid physical and handset volume changes against the on-key readout.
-   Test locked and screen-off physical Play/Pause, skip, mute and volume; no
-   title/cover should remain, and settings/launch keys must not open anything.
+   Test locked and screen-off physical Play/Pause, skip, mute and volume;
+   change tracks and verify the new title and cover appear on the keypad.
+   Switch away from Audio or revoke access and check the private details clear.
+   Settings/launch keys must not open anything while locked.
    Unlock, end the session, remove media access and test missing art. Check all
    nine regions redraw on each change. No title or URI should appear in logs.
 3. In Studio deny, then grant camera. Capture immediate and timed photos, zoom

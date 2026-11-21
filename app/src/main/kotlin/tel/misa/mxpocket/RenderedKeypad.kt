@@ -18,13 +18,21 @@ internal class RenderedKeypad(
         override fun sizeOf(key: Bitmap, value: ByteArray) = key.allocationByteCount + value.size
     }
 
+    private var generation = 0L
+    fun clearImages() {
+        generation++
+        jpegs.evictAll()
+    }
+
     override suspend fun setKeyImage(index: Int, bitmap: Bitmap) {
-        val jpeg = jpegs.get(bitmap) ?: encode(index, bitmap).also { jpegs.put(bitmap, it) }
+        val epoch = generation
+        val jpeg = jpegs.get(bitmap) ?: encode(index, bitmap).also { if (epoch == generation) jpegs.put(bitmap, it) }
+        if (epoch != generation) return
         upload(index, jpeg)
     }
 
     override fun close() {
-        jpegs.evictAll()
+        clearImages()
         disconnect()
     }
 }

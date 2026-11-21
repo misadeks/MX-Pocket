@@ -1,6 +1,7 @@
 package tel.misa.mxpocket
 
 import android.app.NotificationManager
+import android.app.KeyguardManager
 import android.content.ComponentName
 import android.content.ContextWrapper
 import android.content.Intent
@@ -15,6 +16,7 @@ import android.media.session.MediaSession
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState as P
 import android.hardware.usb.UsbDevice
+import android.hardware.usb.UsbConfiguration
 import android.hardware.usb.UsbManager
 import android.net.Uri
 import android.os.Looper
@@ -50,6 +52,14 @@ import java.time.Duration
 class MediaPanelTest {
     private val app get() = RuntimeEnvironment.getApplication() as PocketApplication
     private val main get() = shadowOf(Looper.getMainLooper())
+
+    private fun authorizedDevice(): UsbDevice = ReflectionHelpers.newInstance(UsbDevice::class.java).also {
+        ReflectionHelpers.setField(it,"mName","virtual-usb")
+        ReflectionHelpers.setField(it,"mVendorId",0x046d)
+        ReflectionHelpers.setField(it,"mProductId",0xc354)
+        ReflectionHelpers.setField(it,"mConfigurations",emptyArray<UsbConfiguration>())
+        shadowOf(app.getSystemService(UsbManager::class.java)).addOrUpdateUsbDevice(it,true)
+    }
 
     @Test fun oneCenterCropSpansHardwareRegionsSimulatedKeysAndThePhonePanel() = runBlocking {
         val source = Bitmap.createBitmap(600,480,Bitmap.Config.ARGB_8888)
@@ -185,6 +195,7 @@ class MediaPanelTest {
         }
         val second = shadowOf(sessions[1].controller)
         Robolectric.buildActivity(MainActivity::class.java).setup().use {
+            session.selectProfile("audio")
             sessions.forEach { manager.addController(it.controller) }
             main.idle()
             assertEquals("First",session.deckState.value.media.title)
@@ -212,7 +223,7 @@ class MediaPanelTest {
         sessions.forEach { it.release() }
     }
 
-    @Test fun sinkRepaintsAllNineForArtAloneAndRemovesArtAfterLockOrUriRevocation() {
+    @Test fun sinkRepaintsAllNineWhileLockedAndClearsOnProfileExitOrRevocation() {
         val uri = Uri.parse("content://player/cover")
         var granted = true
         val context = object : ContextWrapper(app) {
@@ -244,8 +255,7 @@ class MediaPanelTest {
             fail("Expected keypad sink repaint")
         }
         player.setMetadata(cover(Color.RED))
-        val device = ReflectionHelpers.newInstance(UsbDevice::class.java)
-        ReflectionHelpers.setField(device,"mName","virtual-usb")
+        val device = authorizedDevice()
         session.connect(session.reserve(device)!!,context.getSystemService(UsbManager::class.java),device,{}, { error("Unexpected shortcut") })
         fun painted(color: Int) = session.panelArt?.getPixel(5,5) == color && writes.size == 9 &&
             writes.all { (i,image) -> image === session.keyImage(i,session.frame().keys[i]) }
@@ -283,15 +293,28 @@ class MediaPanelTest {
             writes.clear()
             shadowOf(app.getSystemService(PowerManager::class.java)).setIsInteractive(false)
             app.sendBroadcast(Intent(Intent.ACTION_SCREEN_OFF)); main.idle()
+            assertEquals(Color.RED,session.panelArt?.getPixel(5,5))
+            fun track(name: String, color: Int) = MediaMetadata.Builder().putString(MediaMetadata.METADATA_KEY_TITLE,name)
+                .putBitmap(MediaMetadata.METADATA_KEY_ART,square(color)).build()
+            player.executeOnMetadataChanged(track("Screen off",Color.BLUE))
+            awaitWrites { painted(Color.BLUE) }
+            assertEquals("Screen off",session.frame().keys[4].label)
+            shadowOf(app.getSystemService(PowerManager::class.java)).setIsInteractive(true)
+            shadowOf(app.getSystemService(KeyguardManager::class.java)).setKeyguardLocked(true)
+            app.sendBroadcast(Intent(Intent.ACTION_SCREEN_ON))
+            player.executeOnMetadataChanged(track("Still locked",Color.RED))
+            awaitWrites { painted(Color.RED) }
+            assertEquals("Still locked",session.frame().keys[4].label)
+            session.selectProfile("focus"); main.idle()
             assertNull(session.panelArt)
             assertEquals("",session.deckState.value.media.title)
-            assertEquals(9,writes.size)
-            val plain = writes.toMap()
-            assertTrue(plain.all { (i,image) -> image.getPixel(4,4) != first.getValue(i).getPixel(4,4) })
-            shadowOf(app.getSystemService(PowerManager::class.java)).setIsInteractive(true)
-            app.sendBroadcast(Intent(Intent.ACTION_USER_PRESENT))
+            session.selectProfile("audio")
             awaitWrites { painted(Color.RED) }
-            assertEquals("Same",session.deckState.value.media.title)
+            shadowOf(context.getSystemService(UsbManager::class.java)).revokePermission(device,app.packageName)
+            player.executeOnMetadataChanged(track("Not authorized",Color.BLUE)); main.idle()
+            assertNull(session.panelArt)
+            assertEquals("",session.deckState.value.media.title)
+            assertFalse(session.frame().keys.any { it.label == "Not authorized" })
         } finally { session.disconnect(); ext.release() }
     }
 
@@ -328,9 +351,17 @@ class MediaPanelTest {
             override suspend fun setKeyImage(index: Int, bitmap: Bitmap) { writes += index to bitmap }
         } }
         session.selectProfile("audio")
-        val device = ReflectionHelpers.newInstance(UsbDevice::class.java)
-        ReflectionHelpers.setField(device,"mName","virtual-usb")
+        val mirrors = mutableListOf<Bitmap>()
+        val screen = object : PocketSession.Screen {
+            override fun render() {
+                val frame = session.frame()
+                mirrors += session.keyImage(1,frame.keys[1])
+            }
+            override fun openApp(app: tel.misa.mxpocket.plugins.PhoneApp) = false
+        }
+        val device = authorizedDevice()
         session.connect(session.reserve(device)!!,context.getSystemService(UsbManager::class.java),device,{}, { error("Unexpected shortcut") })
+        session.attach(screen)
         val local = MediaMetadata.Builder().putString(MediaMetadata.METADATA_KEY_MEDIA_ID,"track-a")
             .putString(MediaMetadata.METADATA_KEY_TITLE,"First").putString(MediaMetadata.METADATA_KEY_ART_URI,uri.toString()).build()
         fun settle(advance: Boolean = false, test: () -> Boolean) {
@@ -357,8 +388,6 @@ class MediaPanelTest {
             // Both a phone-side change and repeated keypad commands must reach the actual volume tile without advancing time.
             val audio = app.getSystemService(AudioManager::class.java)
             val art = session.panelArt
-            audio.setStreamVolume(AudioManager.STREAM_MUSIC,2,0)
-            app.contentResolver.notifyChange(Settings.System.getUriFor("volume_music"),null)
             fun expectVolume() {
                 main.idle()
                 val actual = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
@@ -366,7 +395,11 @@ class MediaPanelTest {
                 assertEquals("$actual / ${audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)}",frame.keys[7].label)
                 assertSame(session.keyImage(7,frame.keys[7]),writes.last { it.first == 7 }.second)
             }
-            expectVolume()
+            for (v in listOf(2,4,1)) {
+                audio.setStreamVolume(AudioManager.STREAM_MUSIC,v,0)
+                app.contentResolver.notifyChange(Settings.System.getUriFor("volume_music"),null)
+                expectVolume()
+            }
             repeat(3) {
                 assertTrue(session.runDeckAction("media.volume-up").success)
                 expectVolume()
@@ -374,6 +407,7 @@ class MediaPanelTest {
             assertSame(art,session.panelArt)
             assertEquals(2,reads.get())
 
+            mirrors.clear()
             writes.clear()
             player.executeOnPlaybackStateChanged(playback(P.STATE_PLAYING))
             player.executeOnMetadataChanged(local)
@@ -383,8 +417,11 @@ class MediaPanelTest {
             assertSame(art,session.panelArt)
             assertTrue(writes.any { it.first == 1 })
             assertTrue(writes.filter { it.first == 1 }.all { it.second.getPixel(4,4) == color })
+            assertTrue(mirrors.isNotEmpty() && mirrors.all { it.getPixel(4,4) == color })
 
-            // A new track using the same URI must not borrow the previous pixels, even if that old read finishes late.
+            // A new track must not borrow previous pixels, even if the previous URI read finishes late.
+            shadowOf(app.getSystemService(KeyguardManager::class.java)).setKeyguardLocked(true)
+            app.sendBroadcast(Intent(Intent.ACTION_SCREEN_ON)); main.idle()
             player.executeOnMetadataChanged(MediaMetadata.Builder().putString(MediaMetadata.METADATA_KEY_MEDIA_ID,"track-b")
                 .putString(MediaMetadata.METADATA_KEY_TITLE,"Second").build())
             main.idle()
@@ -392,6 +429,30 @@ class MediaPanelTest {
             finishRead.countDown()
             main.idle()
             assertNull(session.deckState.value.media.artwork)
-        } finally { finishRead.countDown(); session.disconnect(); playerSession.release() }
+        } finally { finishRead.countDown(); session.detach(screen); session.disconnect(); playerSession.release() }
+    }
+
+    @Test fun lockedSimulatorDoesNotReceiveEvenLateTrackDetails() {
+        shadowOf(app).grantPermissions("tel.misa.mxpocket.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION")
+        shadowOf(app.getSystemService(NotificationManager::class.java)).setNotificationListenerAccessGranted(
+            ComponentName(app,MediaSessionAccess::class.java),true)
+        val external = MediaSession(app,"player")
+        val player = shadowOf(external.controller)
+        player.setPlaybackState(P.Builder().setState(P.STATE_PLAYING,0,1f).build())
+        shadowOf(app.getSystemService(MediaSessionManager::class.java)).addController(external.controller)
+        Robolectric.buildActivity(MainActivity::class.java).setup().use {
+            val session = app.session
+            session.startPreview(); session.selectProfile("audio")
+            shadowOf(app.getSystemService(KeyguardManager::class.java)).setKeyguardLocked(true)
+            app.sendBroadcast(Intent(Intent.ACTION_SCREEN_ON))
+            player.executeOnMetadataChanged(MediaMetadata.Builder().putString(MediaMetadata.METADATA_KEY_TITLE,"Private")
+                .putBitmap(MediaMetadata.METADATA_KEY_ART,Bitmap.createBitmap(32,32,Bitmap.Config.ARGB_8888)).build())
+            main.idle()
+            assertEquals("",session.deckState.value.media.title)
+            assertNull(session.panelArt)
+            assertFalse(session.frame().keys.any { it.label == "Private" || it.footer == "Private" })
+            session.disconnect()
+        }
+        external.release()
     }
 }

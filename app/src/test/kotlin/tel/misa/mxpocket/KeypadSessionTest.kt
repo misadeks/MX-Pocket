@@ -105,7 +105,7 @@ class KeypadSessionTest {
         Robolectric.buildActivity(MainActivity::class.java, intent).setup().use { /* no button press */ }
     }
 
-    @Test fun hardwareControlsThePlayerWithScreenOffOrKeyguardLockedWithoutExposingMetadata() {
+    @Test fun authorizedAudioDisplaysAndControlsThePlayerWithScreenOffOrKeyguardLocked() {
         val media = MediaSession(app,"external player")
         val player = media.controller
         val controller = shadowOf(player)
@@ -140,7 +140,7 @@ class KeypadSessionTest {
             app.sendBroadcast(Intent(if (screenOn) Intent.ACTION_SCREEN_ON else Intent.ACTION_SCREEN_OFF))
             state(true); tick()
             assertEquals("Pause",session.frame().keys[1].label)
-            assertEquals("",session.deckState.value.media.title)
+            assertEquals("Private track",session.deckState.value.media.title)
             assertFalse(session.runDeckAction("media.play-pause").success)
             assertFalse(session.runDeckAction("studio.open").success)
             assertFalse(session.actions.let { kotlinx.coroutines.runBlocking { it.dispatch(ActionCall("media.next")) } }.success)

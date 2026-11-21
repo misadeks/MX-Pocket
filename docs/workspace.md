@@ -92,9 +92,9 @@ keypad model and outcomes without identifiers or media metadata.
   corresponding playback-state redraw, then open a nested page. Run the saved
   workflow with a physical key. Compare progress and result on phone and LCD.
 - Lock the phone, then turn the screen off. Use the physical media keys without
-  waking the screen. State and supported controls should follow the player;
-  neither title nor artwork should remain on the LCD. Unlock and change player.
-  Confirm the new cover replaces the old one on all nine keys. See the
+  waking the screen. On authorized hardware, change tracks and check that
+  the Audio title and cover follow the player. Switch profiles, then revoke
+  access: private titles and covers should not linger. See the
   [media access and privacy checks](android-decks.md#physical-acceptance-gates-not-established-by-jvm-tests).
 - Detach during upload, reconnect and verify saved location and full repaint.
   Background, rotate and lock/unlock the phone. Recheck direct Phone shortcuts,
