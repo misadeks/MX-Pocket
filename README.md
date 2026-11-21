@@ -10,6 +10,25 @@ This repository is private: invited collaborators can work through feature
 branches and pull requests. Start with [CONTRIBUTING.md](CONTRIBUTING.md).
 There is no hosted CI; validation runs locally.
 
+## Try the keypad on Windows
+
+From the repository root, build and launch the standalone desktop preview:
+
+```powershell
+.\desktop-preview\build.ps1 -Test
+java -jar .\desktop-preview\build\mx-pocket-preview.jar
+```
+
+The build uses JDK 17 or 21 and `kotlinc.bat` (Kotlin 2.2) on PATH or bundled
+with a standard Android Studio installation. Once built, the JAR only needs
+Java 17+ with desktop support; no Android SDK, emulator or keypad is needed.
+
+Click **Next profile** to go from Focus to Audio, or use the left/right arrows.
+Click a key or press **1–9** in the window. The preview uses the app's factory
+profiles, nine-key bindings and Focus timer. Other tile labels and media state
+are preview fixtures: they do not access USB, change Windows volume, launch
+apps, operate a camera or invoke accessibility actions. Nothing is saved.
+
 ## What is implemented
 
 - `mx-driver`: Kotlin AAR independent of Activities, UI and application actions.
