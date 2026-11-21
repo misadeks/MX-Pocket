@@ -6,7 +6,7 @@ profile. Virtual keys run real phone actions. The debug-only UI fixture does not
 | Deck | How to use it | If access is missing |
 | --- | --- | --- |
 | App Launcher | Choose **Edit favorites**, check apps, then **Done**. Up to seven alphabetical favorites, an edit key and a page key fit on each keypad page. **Next apps** wraps. Real launcher icons appear on both the phone and LCD keys. | No permission prompt. Only exported, currently available `MAIN`/`LAUNCHER` activities in this Android profile are eligible. Removed/deselected targets do not launch. |
-| Media Deck (`audio`) | Volume, mute, play/pause and skip work with supported players. Press the middle status/title key to learn about optional session access. With access, MX Pocket selects a playing session first, otherwise the first session Android returns. | Without access, MX Pocket sends standard media keys without claiming playback is active. Volume uses the local music stream. With access, unsupported controls report why they cannot run. Remote-device/cast volume is not controlled. |
+| Media Deck (`audio`) | Top: volume down, mute/unmute, volume up. Middle: previous, play/pause, next. Bottom: back 10 seconds, Now playing, forward 10 seconds. The title is a readout, not a shortcut. Open **Plugins → Audio → Media access** on the phone for optional session access. | Without access, the center transport shows a combined play/pause symbol and sends a standard media key. Volume and mute follow Android's local music stream, not a cast device. Unsupported controls are dimmed. |
 | Pocket Studio | **Open Studio**, then **Allow camera**. Use the foreground viewfinder or physical keys. Shutter takes a photo; Photo timer cycles off/3/10 seconds. **Record**, **Stop**, **Marker**, center focus, zoom and torch act on this camera only. LCD recording state and elapsed time come from CameraX events, not the Record button. | No camera grant, unavailable hardware, and unsupported use cases do not trigger fallback camera apps. No microphone permission: video is silent. Leaving the Activity stops recording, cancels the shutter timer and releases the camera. |
 | Android Navigation | Home opens the system launcher. Back, scrolling, focus movement and activation work in the visible MX Pocket screen. Select **Navigation access** to read the disclosure and optionally enable the service in system settings. | Recents and navigation of other apps require that service. It uses the focused element or scrollable ancestors; when there is no focus it looks for a visible focus/scroll target, with a bounded search. Screens without suitable targets may reject actions. Password elements, Android settings and system permission surfaces are not navigation targets. |
 
@@ -44,6 +44,13 @@ Keypad volume changes read back Android's music-stream level right away.
 Phone-side volume notifications refresh the same readout; devices that omit
 them fall back to a two-second check.
 
+Transport targets a playing session first, otherwise Android's first session.
+Ten-second seek is available only while unlocked and only when this session
+reports an absolute position and supports seeking. Each press projects the
+reported position using playback speed and Android's monotonic timestamp,
+then clamps the target to zero and to the duration when known. The title and
+status update from session events; there is no ticking position display.
+
 Only embedded bitmaps and bounded, read-granted `content://` images are used.
 Titles and cover images are display-only, never written to files or diagnostic
 logs. With Audio selected and media access granted, a connected, USB-authorized
@@ -51,7 +58,7 @@ keypad keeps showing new titles and covers while the handset is locked or off.
 The app doesn't wake the handset or draw over its lock screen. Without that
 keypad, lock hides playback details. Leaving Audio, losing the session or
 revoking access clears them. One fresh press on the authorized keypad can change music
-volume, mute or request an advertised transport action without unlocking.
+volume, mute, play/pause or skip without unlocking. Seeking stays disabled.
 Phone/simulator taps, workflow steps, settings and app launches do not get
 this exception. Player sessions can end or drop an action; MX Pocket does not
 wake the phone or start a player to compensate.

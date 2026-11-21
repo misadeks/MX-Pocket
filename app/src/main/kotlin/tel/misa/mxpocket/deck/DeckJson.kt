@@ -6,8 +6,9 @@ import java.io.StringReader
 import org.json.JSONArray
 import org.json.JSONObject
 import tel.misa.mxpocket.actions.ActionCall
+import tel.misa.mxpocket.decks.DeckCommand
 
-/** Strict token types, bounded depth and collections, and duplicate/unknown field rejection for v1. */
+/** Strict token types, bounded depth and collections, and duplicate/unknown field rejection. */
 internal object DeckJson {
     fun decode(text: String): DeckState {
         checkSize(text)
@@ -33,8 +34,32 @@ internal object DeckJson {
             },
             selectionReason = obj.string("selectionReason"),
         )
+        if (state.version == 1) {
+            val validated = state.copy(version = DeckLimits.VERSION)
+            validateDeck(validated)
+            return upgradeAudioSlots(validated)
+        }
         validateDeck(state)
         return state
+    }
+
+    // v1 plugin.key identified a position, not a command. Upgrade the stock page; freeze the
+    // old meanings on edited pages and copies, including explicit mute versus unmute.
+    private fun upgradeAudioSlots(state: DeckState): DeckState {
+        val legacy = listOf(DeckCommand.QUIETER, DeckCommand.PLAY, DeckCommand.LOUDER, DeckCommand.PREVIOUS,
+            DeckCommand.MEDIA_ACCESS, DeckCommand.NEXT, DeckCommand.MUTE, DeckCommand.VOLUME_LEVEL, DeckCommand.UNMUTE)
+        val stock = defaultDeck().profiles.single { it.id == "audio" }.pages.single().keys
+        return state.copy(profiles = state.profiles.map { profile ->
+            profile.copy(pages = profile.pages.map { page ->
+                if (profile.id == "audio" && page.id == profile.rootPageId && page.keys == stock) page
+                else page.copy(keys = page.keys.map { key ->
+                    val call = key.action
+                    if (call?.id == "plugin.key" && call.params["pluginId"] == "audio")
+                        key.copy(action = ActionCall(legacy[call.params.getValue("index").toInt()].id))
+                    else key
+                })
+            })
+        })
     }
 
     private fun profile(obj: JSONObject): DeckProfile {

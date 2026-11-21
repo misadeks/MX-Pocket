@@ -150,6 +150,10 @@ class KeypadPaintTest {
             main.idle()
         }
         try {
+            // The factory player has a single volume readout. Exercise multi-key fairness on
+            // a saved layout with another explicit volume binding, not the old factory order.
+            p.session.deck.setKey("audio", "root", 8, tel.misa.mxpocket.deck.DeckKey(
+                action = tel.misa.mxpocket.actions.ActionCall("media.volume-level"))).getOrThrow()
             p.session.selectProfile("audio"); volume(1)
             val original = p.session.frame()
             p.writes.clear(); p.pause = true

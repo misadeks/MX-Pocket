@@ -57,8 +57,8 @@ class DeckRepositoryTest {
         val original = repo.exportJson()
         fun edit(f: (JSONObject) -> Unit) = JSONObject(original).apply(f).toString()
         val bad = listOf(
-            original.replaceFirst("\"version\":1", "\"version\":2"),
-            original.replaceFirst("\"version\":1", "\"version\":1,\"version\":1"),
+            original.replaceFirst("\"version\":2", "\"version\":3"),
+            original.replaceFirst("\"version\":2", "\"version\":2,\"version\":2"),
             edit { it.put("automatic", "true") }, edit { it.put("activeProfileId", "missing") },
             edit { it.getJSONArray("profiles").getJSONObject(0).put("id", "audio") },
             edit { it.getJSONObject("histories").getJSONArray("focus").put("missing") },
@@ -75,6 +75,20 @@ class DeckRepositoryTest {
             assertSame(before, repo.state.value)
             assertEquals(original, file.readText())
         }
+    }
+
+    @Test fun upgradeOnlyReordersStockAudioAndPreservesEditedSlotBindings() {
+        val copy = repo.duplicateProfile("audio", "My player").getOrThrow()
+        val custom = DeckKey("X", "Custom action", action = ActionCall("media.unmute"))
+        repo.setKey(copy, "root", 2, custom).getOrThrow()
+        repo.importJson(JSONObject(repo.exportJson()).put("version", 1).toString()).getOrThrow()
+        val stock = repo.state.value.profiles.single { it.id == "audio" }.pages.single().keys
+        assertTrue(stock.all { it.action!!.id == "plugin.key" })
+        val saved = repo.state.value.profiles.single { it.id == copy }.pages.single().keys
+        assertEquals(custom, saved[2])
+        assertEquals(listOf("media.volume-down","media.play-pause","media.unmute","media.previous","media.access",
+            "media.next","media.mute","media.volume-level","media.unmute"), saved.map { it.action!!.id })
+        assertEquals(repo.state.value, DeckRepository(file).state.value)
     }
 
     @Test fun failedWritesAndCorruptStartupDoNotClobberLastData() {

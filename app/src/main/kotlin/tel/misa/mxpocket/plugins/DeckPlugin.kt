@@ -27,6 +27,27 @@ internal class DeckPlugin(id: String, title: String, capability: PluginCapabilit
     override fun onDeactivate() { state = DeckState() }
     private fun slot(command: C, component: String? = null) =
         Slot(state.tile(command, component), PluginAction.Deck(command, component))
+    private fun player(): List<Slot> {
+        val media = state.media
+        fun control(command: C, glyph: PlayerGlyph, footer: String = "") = slot(command).let {
+            it.copy(tile = it.tile.copy(glyph = glyph, footer = footer, showLabel = false,
+                showFooter = footer.isNotEmpty() && it.tile.enabled, primary = command == C.PLAY))
+        }
+        val transport = when (media.playing) {
+            true -> PlayerGlyph.PAUSE
+            false -> PlayerGlyph.PLAY
+            null -> PlayerGlyph.PLAY_PAUSE
+        }
+        return listOf(control(C.QUIETER, PlayerGlyph.VOLUME_DOWN),
+            control(if (media.muted) C.UNMUTE else C.MUTE, if (media.muted) PlayerGlyph.UNMUTE else PlayerGlyph.MUTE,
+                if (media.maximum > 0) "${media.volume} / ${media.maximum}" else ""),
+            control(C.LOUDER, PlayerGlyph.VOLUME_UP),
+            control(C.PREVIOUS, PlayerGlyph.PREVIOUS), control(C.PLAY, transport), control(C.NEXT, PlayerGlyph.NEXT),
+            control(C.BACK_10, PlayerGlyph.BACK_10),
+            Slot(KeyTile(media.title.ifBlank { "Now playing" }, media.status, tel.misa.mxpocket.decks.AUDIO_BACKGROUND.toInt(),
+                glyph = PlayerGlyph.TRACK, readOnly = true)),
+            control(C.FORWARD_10, PlayerGlyph.FORWARD_10))
+    }
     private fun launcher(): List<Slot> {
         val pages = ((state.favorites.size + 6) / 7).coerceAtLeast(1)
         val current = page.coerceIn(0, pages - 1)
@@ -38,16 +59,7 @@ internal class DeckPlugin(id: String, title: String, capability: PluginCapabilit
     }
     private fun slots(): List<Slot> = when (descriptor.id) {
         "launcher" -> launcher()
-        "audio" -> {
-            val media = state.media
-            val access = slot(C.MEDIA_ACCESS)
-            listOf(slot(C.QUIETER), slot(C.PLAY), slot(C.LOUDER), slot(C.PREVIOUS),
-                access.copy(tile = access.tile.copy(label = media.title.ifBlank { media.status },
-                    footer = if (media.access) media.status else "Media access")),
-                slot(C.NEXT), slot(C.MUTE), Slot(KeyTile("${media.volume} / ${media.maximum}", "Volume",
-                    tel.misa.mxpocket.decks.AUDIO_BACKGROUND.toInt())),
-                slot(C.UNMUTE))
-        }
+        "audio" -> player()
         "studio" -> listOf(C.PHOTO,
             if (state.studio.recording) C.STOP else C.RECORD, C.MARKER, C.ZOOM_OUT, C.FOCUS, C.ZOOM_IN,
             C.TIMER, C.STUDIO, C.TORCH).map { slot(it) }
@@ -58,6 +70,7 @@ internal class DeckPlugin(id: String, title: String, capability: PluginCapabilit
     override fun onKey(event: PluginKeyEvent, host: PluginHost) {
         if (!event.pressed || event.synthetic) return
         val key = slots()[event.index]
+        if (!key.tile.enabled || key.tile.readOnly) return
         if (key.next) {
             val pages = ((state.favorites.size + 6) / 7).coerceAtLeast(1)
             page = (page.coerceIn(0, pages - 1) + 1) % pages

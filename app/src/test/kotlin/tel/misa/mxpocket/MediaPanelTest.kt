@@ -302,13 +302,13 @@ class MediaPanelTest {
                 .putBitmap(MediaMetadata.METADATA_KEY_ART,square(color)).build()
             player.executeOnMetadataChanged(track("Screen off",Color.BLUE))
             awaitWrites { painted(Color.BLUE) }
-            assertEquals("Screen off",session.frame().keys[4].label)
+            assertEquals("Screen off",session.frame().keys[7].label)
             shadowOf(app.getSystemService(PowerManager::class.java)).setIsInteractive(true)
             shadowOf(app.getSystemService(KeyguardManager::class.java)).setKeyguardLocked(true)
             app.sendBroadcast(Intent(Intent.ACTION_SCREEN_ON))
             player.executeOnMetadataChanged(track("Still locked",Color.RED))
             awaitWrites { painted(Color.RED) }
-            assertEquals("Still locked",session.frame().keys[4].label)
+            assertEquals("Still locked",session.frame().keys[7].label)
             session.selectProfile("focus"); main.idle()
             assertNull(session.panelArt)
             assertEquals("",session.deckState.value.media.title)
@@ -359,7 +359,7 @@ class MediaPanelTest {
         val screen = object : PocketSession.Screen {
             override fun render() {
                 val frame = session.frame()
-                mirrors += session.keyImage(1,frame.keys[1])
+                mirrors += session.keyImage(4,frame.keys[4])
             }
             override fun openApp(app: tel.misa.mxpocket.plugins.PhoneApp) = false
         }
@@ -397,8 +397,8 @@ class MediaPanelTest {
                 main.idle()
                 val actual = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
                 val frame = session.frame()
-                assertEquals("$actual / ${audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)}",frame.keys[7].label)
-                assertSame(session.keyImage(7,frame.keys[7]),writes.last { it.first == 7 }.second)
+                assertEquals("$actual / ${audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)}",frame.keys[1].footer)
+                assertSame(session.keyImage(1,frame.keys[1]),writes.last { it.first == 1 }.second)
             }
             for (v in listOf(2,4,1)) {
                 audio.setStreamVolume(AudioManager.STREAM_MUSIC,v,0)
@@ -418,10 +418,10 @@ class MediaPanelTest {
             player.executeOnMetadataChanged(local)
             main.idle()
             assertTrue(slowRead.await(3,TimeUnit.SECONDS))
-            assertEquals("Pause",session.frame().keys[1].label)
+            assertEquals("Pause",session.frame().keys[4].label)
             assertSame(art,session.panelArt)
-            assertTrue(writes.any { it.first == 1 })
-            assertTrue(writes.filter { it.first == 1 }.all { it.second.getPixel(4,4) == color })
+            assertTrue(writes.any { it.first == 4 })
+            assertTrue(writes.filter { it.first == 4 }.all { it.second.getPixel(4,4) == color })
             assertTrue(mirrors.isNotEmpty() && mirrors.all { it.getPixel(4,4) == color })
 
             // A temporary empty snapshot and delayed art from the same authorized player must not flash gray.
@@ -431,7 +431,7 @@ class MediaPanelTest {
             player.executeOnMetadataChanged(MediaMetadata.Builder().putString(MediaMetadata.METADATA_KEY_MEDIA_ID,"track-b")
                 .putString(MediaMetadata.METADATA_KEY_TITLE,"Second").build())
             main.idle()
-            assertEquals("Second",session.frame().keys[4].label)
+            assertEquals("Second",session.frame().keys[7].label)
             assertSame(art,session.panelArt)
             finishRead.countDown()
             val newColor = Color.rgb(80,144,246)
@@ -465,7 +465,7 @@ class MediaPanelTest {
             player.executeOnMetadataChanged(MediaMetadata.Builder().putString(MediaMetadata.METADATA_KEY_TITLE,"No art").build())
             main.idleFor(Duration.ofMillis(150))
             assertNull(session.panelArt)
-            assertEquals("No art",session.frame().keys[4].label)
+            assertEquals("No art",session.frame().keys[7].label)
             session.selectProfile("focus"); main.idle(); writes.clear()
             shadowOf(app.contentResolver).registerInputStreamSupplier(uri) { bytes.inputStream() }
             player.setMetadata(local); session.selectProfile("audio")

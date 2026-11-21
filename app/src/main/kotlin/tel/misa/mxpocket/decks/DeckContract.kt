@@ -11,6 +11,9 @@ enum class DeckCommand(val id: String, val label: String, val deck: String) {
     NEXT("media.next", "Next", "audio"), LOUDER("media.volume-up", "Volume +", "audio"),
     QUIETER("media.volume-down", "Volume -", "audio"), MUTE("media.mute", "Mute", "audio"),
     UNMUTE("media.unmute", "Unmute", "audio"), MEDIA_ACCESS("media.access", "Media access", "audio"),
+    BACK_10("media.seek-back-10", "Seek back 10 seconds", "audio"),
+    FORWARD_10("media.seek-forward-10", "Seek forward 10 seconds", "audio"),
+    VOLUME_LEVEL("media.volume-level", "Volume level", "audio"),
     STUDIO("studio.open", "Open Studio", "studio"), PHOTO("studio.photo", "Shutter", "studio"),
     RECORD("studio.record", "Record", "studio"), STOP("studio.stop", "Stop", "studio"),
     TIMER("studio.timer", "Photo timer", "studio"), ZOOM_IN("studio.zoom-in", "Zoom +", "studio"),
@@ -23,7 +26,11 @@ enum class DeckCommand(val id: String, val label: String, val deck: String) {
     REVERSE("navigation.focus-previous", "Prior item", "navigation"),
     ACTIVATE("navigation.activate", "Activate", "navigation"), NAV_ACCESS("navigation.access", "Navigation access", "navigation");
 
-    val workflowSafe get() = deck == "audio" && this != MEDIA_ACCESS
+    val workflowSafe get() = deck == "audio" && this != MEDIA_ACCESS && this != VOLUME_LEVEL
+    val lockedMediaKey get() = when (this) {
+        PLAY, PREVIOUS, NEXT, QUIETER, LOUDER, MUTE, UNMUTE -> true
+        else -> false
+    }
     companion object {
         private val byId = entries.associateBy { it.id }
         fun fromId(id: String) = byId[id]
@@ -40,7 +47,7 @@ data class MediaDeckState(
     val playing: Boolean? = null, val supported: Set<DeckCommand> = emptySet(),
     val volume: Int = 0, val maximum: Int = 0,
     val artwork: android.graphics.Bitmap? = null, val fixedVolume: Boolean = false,
-    val awaitingCover: Boolean = false,
+    val awaitingCover: Boolean = false, val muted: Boolean = false,
 )
 data class StudioState(
     val ready: Boolean = false, val recording: Boolean = false, val elapsedSeconds: Long = 0,
@@ -60,6 +67,7 @@ data class DeckState(
         val label = when (command) {
             DeckCommand.OPEN -> favorite?.label ?: "Missing app"
             DeckCommand.PLAY -> when (media.playing) { true -> "Pause"; false -> "Play"; null -> command.label }
+            DeckCommand.VOLUME_LEVEL -> "${media.volume} / ${media.maximum}"
             DeckCommand.RECORD -> if (studio.recording) "Recording" else command.label
             DeckCommand.STOP -> if (studio.recording) "Stop ${studio.elapsed}" else command.label
             DeckCommand.PHOTO -> if (studio.countdown > 0) "In ${studio.countdown}s" else command.label
@@ -71,6 +79,7 @@ data class DeckState(
             DeckCommand.PLAY -> if (media.access && command !in media.supported) media.status else media.title.ifBlank { media.status }
             DeckCommand.PREVIOUS, DeckCommand.NEXT -> if (media.access && command !in media.supported) "Unavailable" else media.status
             DeckCommand.MEDIA_ACCESS -> if (media.access) "Manage access" else "Optional access"
+            DeckCommand.VOLUME_LEVEL -> "Volume"
             DeckCommand.RECORD, DeckCommand.STOP -> if (studio.recording) "REC ${studio.elapsed}" else studio.status
             DeckCommand.MARKER -> "${studio.markers} marks"
             DeckCommand.TIMER -> if (studio.timerSeconds == 0) "Off" else "${studio.timerSeconds}s"
@@ -91,9 +100,11 @@ data class DeckState(
         }.toInt()
         val available = when (command) {
             DeckCommand.PLAY, DeckCommand.PREVIOUS, DeckCommand.NEXT -> !media.access || command in media.supported
+            DeckCommand.BACK_10, DeckCommand.FORWARD_10 -> media.access && command in media.supported
             DeckCommand.LOUDER, DeckCommand.QUIETER, DeckCommand.MUTE, DeckCommand.UNMUTE -> !media.fixedVolume
             else -> true
         }
-        return KeyTile(label, footer, color, favorite?.component, command.id + (component ?: ""), enabled = available)
+        return KeyTile(label, footer, color, favorite?.component, command.id + (component ?: ""), enabled = available,
+            readOnly = command == DeckCommand.VOLUME_LEVEL)
     }
 }
