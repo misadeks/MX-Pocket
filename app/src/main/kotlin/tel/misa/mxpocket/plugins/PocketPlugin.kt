@@ -5,7 +5,7 @@ import kotlinx.coroutines.flow.StateFlow
 import tel.misa.mxpocket.decks.DeckCommand
 import tel.misa.mxpocket.decks.DeckState
 
-enum class PluginCapability { AUDIO, OPEN_APPS, NAVIGATION, TONE, STUDIO, SYSTEM_NAVIGATION }
+enum class PluginCapability { AUDIO, OPEN_APPS, NAVIGATION, TONE, STUDIO, SYSTEM_NAVIGATION, ACCESSIBILITY }
 
 /** Two distinct logical plugin slots in ascending order (not press order). */
 data class KeyChord(val first: Int, val second: Int) {
@@ -33,7 +33,7 @@ data class PluginKeyEvent(val index: Int, val pressed: Boolean, val synthetic: B
 data class AudioSnapshot(val volume: Int, val maximum: Int)
 enum class VolumeChange { LOWER, RAISE, MUTE, UNMUTE }
 enum class MediaCommand { PLAY_PAUSE, PREVIOUS, NEXT }
-enum class PhoneApp { CAMERA, SETTINGS, DIALER, WEB, ALARMS, ONENOTE }
+enum class PhoneApp { CAMERA, SETTINGS, DIALER, WEB, ALARMS, ONENOTE, ACCESSIBILITY }
 
 sealed interface PluginAction {
     data class Deck(val command: DeckCommand, val component: String? = null) : PluginAction
@@ -44,6 +44,8 @@ sealed interface PluginAction {
     data class OpenUri(val uri: String) : PluginAction
     /** ACTION_SEND text/plain, e.g. OneNote's share target creating a quick note. */
     data class ShareText(val text: String) : PluginAction
+    /** Click the visible control with this text via the opt-in accessibility service. */
+    data class AccessibilityClick(val text: String) : PluginAction
     data class SelectPlugin(val id: String) : PluginAction
     data object CompletionTone : PluginAction
     data object Repaint : PluginAction

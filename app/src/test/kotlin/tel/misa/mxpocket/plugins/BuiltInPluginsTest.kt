@@ -103,20 +103,18 @@ class BuiltInPluginsTest {
         engine.setEnabled(true)
         engine.select("onenote")
         assertEquals(9, engine.render().keys.size)
-        for (index in listOf(0, 1, 2, 3, 8)) tap(index)
-        tap(4) // The centered OneNote tile is a filler, like the Phone page's center tile.
+        for (index in listOf(0, 1, 2, 3, 4, 5, 6, 7, 8)) tap(index)
         assertEquals(listOf(
             PluginAction.OpenApp(PhoneApp.ONENOTE),
+            PluginAction.AccessibilityClick("Pen"),
+            PluginAction.AccessibilityClick("Eraser"),
+            PluginAction.AccessibilityClick("Highlighter"),
+            PluginAction.AccessibilityClick("Lasso"),
+            PluginAction.AccessibilityClick("More"),
+            PluginAction.OpenApp(PhoneApp.ACCESSIBILITY),
             PluginAction.ShareText("MX Pocket quick note ${testScheduler.currentTime}"),
-            PluginAction.OpenUri("https://www.onenote.com"),
-            PluginAction.OpenUri("onenote:"),
             PluginAction.Repaint,
         ), actions)
-        for ((index, target) in listOf(5 to "focus", 6 to "audio", 7 to "phone")) {
-            engine.select("onenote")
-            tap(index)
-            assertEquals(target, engine.selectedId) // SelectPlugin is handled by the engine, not performed.
-        }
         engine.close()
     }
 }

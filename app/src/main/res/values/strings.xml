@@ -35,6 +35,8 @@
     <string name="phone">Phone</string>
     <string name="xo">Tic Tac Toe</string>
     <string name="onenote">OneNote</string>
+    <string name="onenote_access">MX Pocket OneNote tools</string>
+    <string name="onenote_access_description">Lets MX Pocket keypad keys tap OneNote draw tools such as Pen and Eraser while OneNote is on screen. MX Pocket never reads your notes.</string>
     <string name="previous">Previous page</string>
     <string name="next">Next page</string>
     <string name="repaint">Repaint all nine LCDs</string>

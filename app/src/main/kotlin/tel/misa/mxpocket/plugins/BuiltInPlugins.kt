@@ -70,15 +70,16 @@ class PhonePlugin(title: String) : PocketPlugin {
 
 /**
  * OneNote page. Logi Options/Options+ ships no native OneNote profile on PC (custom keystrokes only),
- * so these keys use the actions Android exposes for OneNote: launch the app, a `onenote:` deep link,
+ * so in-app tool keys click OneNote's visible toolbar controls through the opt-in accessibility
+ * service; the rest uses the actions Android exposes for OneNote: launch intent, deep link,
  * OneNote on the web and Send-to-OneNote (ACTION_SEND), which creates a quick note.
  */
 class OneNotePlugin(title: String) : PocketPlugin {
     override val descriptor = PluginDescriptor("onenote", title,
-        setOf(PluginCapability.OPEN_APPS, PluginCapability.NAVIGATION))
+        setOf(PluginCapability.OPEN_APPS, PluginCapability.NAVIGATION, PluginCapability.ACCESSIBILITY))
 
     override fun render(nowMillis: Long) = frame(
-        listOf("Open", "Quick note", "Web", "Deep link", "OneNote", "Focus", "Audio", "Phone", "Repaint"),
+        listOf("Open", "Pen", "Eraser", "Highlighter", "Lasso", "Tools", "Enable access", "Quick note", "Repaint"),
         "ONENOTE", 0xff7719aa.toInt(),
     )
 
@@ -86,12 +87,13 @@ class OneNotePlugin(title: String) : PocketPlugin {
         if (!event.pressed || event.synthetic) return
         val action = when (event.index) {
             0 -> PluginAction.OpenApp(PhoneApp.ONENOTE)
-            1 -> PluginAction.ShareText("MX Pocket quick note ${host.nowMillis()}")
-            2 -> PluginAction.OpenUri("https://www.onenote.com")
-            3 -> PluginAction.OpenUri("onenote:")
-            5 -> PluginAction.SelectPlugin("focus")
-            6 -> PluginAction.SelectPlugin("audio")
-            7 -> PluginAction.SelectPlugin("phone")
+            1 -> PluginAction.AccessibilityClick("Pen")
+            2 -> PluginAction.AccessibilityClick("Eraser")
+            3 -> PluginAction.AccessibilityClick("Highlighter")
+            4 -> PluginAction.AccessibilityClick("Lasso")
+            5 -> PluginAction.AccessibilityClick("More")
+            6 -> PluginAction.OpenApp(PhoneApp.ACCESSIBILITY)
+            7 -> PluginAction.ShareText("MX Pocket quick note ${host.nowMillis()}")
             8 -> PluginAction.Repaint
             else -> null
         }

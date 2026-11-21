@@ -896,6 +896,14 @@ internal class PocketSession(
                 try { tone.startTone(ToneGenerator.TONE_PROP_ACK, 500); delay(600) } finally { tone.release() }
                 log("Focus session complete")
             }
+            is PluginAction.AccessibilityClick -> {
+                val service = OneNoteAccessService.connected
+                message(when {
+                    service == null -> "Enable MX Pocket OneNote tools in Android Accessibility settings."
+                    service.clickText(action.text) -> "Requested ${action.text} in OneNote."
+                    else -> "Open OneNote and show the ${action.text} control first."
+                })
+            }
             PluginAction.Repaint -> repaint()
             is PluginAction.SelectPlugin -> error("Navigation is handled by PluginEngine")
         }

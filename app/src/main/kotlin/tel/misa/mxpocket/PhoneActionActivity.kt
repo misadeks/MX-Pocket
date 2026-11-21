@@ -125,6 +125,7 @@ internal fun Context.launchPhoneApp(app: PhoneApp): String? {
         PhoneApp.ALARMS -> Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS)
         PhoneApp.ONENOTE -> packageManager.getLaunchIntentForPackage("com.microsoft.office.onenote")
             ?: return "OneNote is not installed."
+        PhoneApp.ACCESSIBILITY -> Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
     }
     // Keep external apps out of the notification entry Activity's temporary task.
     if (this !is MainActivity) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

@@ -177,6 +177,7 @@ class PluginEngine(
                 is PluginAction.Volume, is PluginAction.Media -> PluginCapability.AUDIO
                 is PluginAction.OpenApp, is PluginAction.OpenUri, is PluginAction.ShareText ->
                     PluginCapability.OPEN_APPS
+                is PluginAction.AccessibilityClick -> PluginCapability.ACCESSIBILITY
                 is PluginAction.SelectPlugin -> PluginCapability.NAVIGATION
                 PluginAction.CompletionTone -> PluginCapability.TONE
                 PluginAction.Repaint -> null

@@ -61,6 +61,8 @@ to *show* the session notification. It is optional, as are Usage Access for
 app-based profile switching, accessibility for cross-app navigation or supported
 camera buttons, and **Display over other apps** for one-press background app
 shortcuts. Leave these off unless you want the corresponding feature.
+A separate optional OneNote accessibility service lets keypad keys select draw
+tools while OneNote is on screen.
 
 ## Guides
 
