@@ -186,7 +186,7 @@ internal class PocketSession(
         val state = deck.state.value
         if (lastLayout?.let { it.profile != state.activeProfileId || it.page != state.activePage } == true)
             plugins.setEnabled(false) // Release held keys before rebinding even if the plugin ID is unchanged.
-        val id = state.activePage.keys.mapNotNull { it.action?.slotOwner() }.firstOrNull(::hasPlugin)
+        val id = selectedPlugin(state.activePage)
         if (id != null && plugins.selectedId != id) plugins.select(id)
         plugins.setEnabled((output != null || preview && screen != null) && id != null && id !in disabled.value &&
             (!preview || screen != null))
@@ -208,6 +208,9 @@ internal class PocketSession(
     }
 
     private fun hasPlugin(id: String) = plugins.descriptors.any { it.id == id }
+    private fun selectedPlugin(page: DeckPage) = page.keys.firstNotNullOfOrNull { key ->
+        key.action?.slotOwner()?.takeIf(::hasPlugin)
+    }
     private fun layout() = deck.state.value.let { Layout(it.activeProfileId, it.activePage, plugins.generation, disabled.value) }
 
     fun setPluginEnabled(id: String, enabled: Boolean) {
@@ -305,7 +308,7 @@ internal class PocketSession(
             "usbDevice" to if (connected) "046D:C354" else "None",
             "simulator" to preview.toString(), "hour" to time.hour.toString(),
             "weekday" to time.dayOfWeek.name, "profile" to state.activeProfileId,
-            "plugin" to (state.activePage.keys.firstOrNull()?.action?.params?.get("pluginId") ?: "custom"),
+            "plugin" to (selectedPlugin(state.activePage) ?: "custom"),
             "workflow" to (workflows.status.value?.phase?.name ?: "IDLE")) +
             attachedUsb.associate { "usb.$it" to "true" } + platformSignals()
         _signals.value = snapshot
