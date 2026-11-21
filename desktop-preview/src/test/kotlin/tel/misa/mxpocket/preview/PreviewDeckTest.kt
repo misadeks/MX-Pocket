@@ -5,9 +5,36 @@ import org.junit.Rule
 import org.junit.rules.TemporaryFolder
 import tel.misa.mxpocket.deck.DeckRepository
 import java.io.File
+import kotlin.test.assertEquals
+import tel.misa.mxpocket.FocusTimer
+import tel.misa.mxpocket.plugins.present
 
 class PreviewDeckTest {
     @get:Rule val folder = TemporaryFolder()
+    @Test fun pageButtonsUseFolderHistoryBeforeCyclingProfiles() {
+        val repo = DeckRepository(File(folder.root, "deck.json"))
+        val deck = PreviewDeck(repo)
+        val page = repo.createPage("focus", "Projects").getOrThrow()
+        deck.cycle(1)
+        assertEquals(page, repo.state.value.activePage.id)
+        deck.cycle(-1)
+        assertEquals("root", repo.state.value.activePage.id)
+        assertEquals("focus", deck.profileId)
+    }
+
+    @Test fun focusUsesTheProductionFrameAndKeepsPerKeyVisualOverrides() {
+        val repo = DeckRepository(File(folder.root, "deck.json"))
+        val deck = PreviewDeck(repo)
+        val factory = FocusTimer().present(0).keys
+        assertEquals(factory, deck.tiles(0))
+        val state = repo.state.value
+        val custom = state.activePage.keys[2].copy(label = "Restart", icon = "R", color = 0xff7d3645.toInt())
+        repo.setKey(state.activeProfileId, state.activePage.id, 2, custom).getOrThrow()
+        assertEquals(factory.mapIndexed { i, tile ->
+            if (i == 2) tile.copy(label = "Restart", icon = "R", background = custom.color) else tile
+        }, deck.tiles(0))
+    }
+
     @Test fun factoryNavigationTimerAndSimulatedAudio() {
     val deck = PreviewDeck(DeckRepository(File(folder.root, "deck.json")))
     fun label(key: Int, now: Long = 0) = deck.tiles(now)[key - 1].label

@@ -4,7 +4,7 @@ val production = rootProject.fileTree(rootDir) {
     exclude("**/build/**", "**/.gradle/**", "**/src/test*/**", "**/src/*Test/**", "**/src/androidTest*/**")
 }
 val legacyToolkit = Regex(
-    """\b(?:javax\.swing|java\.awt\.(?:Component|Container|Window|Frame|Dialog|Panel|Button|Label|TextField|Menu|event|\*)|javafx\.|org\.eclipse\.swt|android\.widget\.|androidx\.appcompat\.widget\.|androidx\.appcompat\.app\.AlertDialog|android\.app\.(?:AlertDialog|Dialog|ProgressDialog)|android\.webkit\.WebView|com\.google\.android\.material\.|androidx\.compose\.ui\.viewinterop|androidx\.compose\.ui\.awt\.SwingPanel|android\.view\.(?:LayoutInflater|ViewGroup)|setContentView\s*\(|AndroidView(?:Binding)?\s*\()"""
+    """\b(?:javax\.swing|java\.awt\.(?!FileDialog\b)|javafx\.|org\.eclipse\.swt|android\.widget\.|androidx\.appcompat\.widget\.|androidx\.appcompat\.app\.AlertDialog|android\.app\.(?:AlertDialog|Dialog|ProgressDialog)|android\.webkit\.WebView|com\.google\.android\.material\.|androidx\.compose\.ui\.viewinterop|androidx\.compose\.ui\.awt\.SwingPanel|android\.view\.(?:LayoutInflater|ViewGroup)|extends\s+(?:android\.view\.)?View\b|setContentView\s*\(|AndroidView(?:Binding)?\s*\()|:\s*(?:android\.view\.)?View\s*\("""
 )
 val composeControls = Regex("""\bandroidx\.compose\.(?:material(?:3)?|foundation(?:\.|\b)(?!isSystemInDarkTheme))""")
 val commentsAndStrings = Regex("""(?s)/\*.*?\*/|//[^\r\n]*|""${'"'}.*?""${'"'}|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'""")
@@ -27,6 +27,7 @@ val testSharedUiBoundary = tasks.register("testSharedUiBoundary") {
     doLast {
         listOf(
             "app/src/main/kotlin/Regressed.kt" to "import android.widget.LinearLayout",
+            "app/src/main/kotlin/ParallelBoard.kt" to "class ParallelBoard(c: Context) : View(c)",
             "desktop-preview/src/main/kotlin/Legacy.kt" to "import javax.swing.JButton",
             "app/src/main/res/layout-land/screen.xml" to "<LinearLayout/>",
             "app/src/main/kotlin/PhoneOnly.kt" to "import androidx.compose.material3.Button",

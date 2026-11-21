@@ -316,14 +316,7 @@ internal class PocketSession(
     }
 
     fun changePage(delta: Int) {
-        val state = deck.state.value
-        val pages = state.activeProfile.pages
-        val result = when {
-            delta < 0 && state.histories.getValue(state.activeProfileId).size > 1 -> deck.back()
-            pages.size > 1 -> deck.openPage(pages[Math.floorMod(pages.indexOf(state.activePage) + delta, pages.size)].id)
-            else -> deck.cycleProfile(delta)
-        }
-        result.onFailure { fail("Cannot change page", it) }
+        deck.changePage(delta).onFailure { fail("Cannot change page", it) }
         syncLayout()
         invalidate()
     }

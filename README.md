@@ -39,7 +39,8 @@ is simulated, and no USB, Android camera, accessibility or permission actions ru
   interface has no interrupt OUT, serialized HID++ command/answer exchanges,
   page-button diversion, individual press/release snapshots, Android JPEG
   encoding, and acknowledged/fragmented image uploads to all nine key regions.
-- `app`: native Material Android UI with explicit USB permission request, opt-in
+- `shared-ui`: Compose Multiplatform screens, keypad and editors used by both hosts.
+- `app`: Android host with explicit USB permission request, opt-in
   USB attach handling and a foreground service for an active keypad, device
   and endpoint diagnostics, connection/cancellation/detach handling, bounded
   event log with user-selected file export, custom image picker, and dynamic

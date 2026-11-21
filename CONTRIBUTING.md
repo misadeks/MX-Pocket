@@ -162,4 +162,3 @@ Exercise compact and wide constraints, keyboard input and screen-reader actions.
 Run `gradlew.bat checkSharedUi` (`./gradlew checkSharedUi` on Unix); builds also
 run the guard. `testSharedUiBoundary` checks sample violations and permitted
 platform glue. Update those samples if a new legitimate platform API is needed.
-

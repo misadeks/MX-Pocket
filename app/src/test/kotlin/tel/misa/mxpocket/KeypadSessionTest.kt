@@ -25,7 +25,6 @@ import android.os.Build
 import android.os.Looper
 import android.os.SystemClock
 import android.provider.MediaStore
-import android.view.View
 import tel.misa.mxpocket.shared.ui.PocketScreenEvent
 import kotlinx.coroutines.CompletableDeferred
 import org.junit.Assert.*

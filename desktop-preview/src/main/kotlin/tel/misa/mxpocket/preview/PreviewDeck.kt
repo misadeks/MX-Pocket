@@ -23,7 +23,7 @@ class PreviewDeck(val repository: DeckRepository) {
     }
 
     fun cycle(delta: Int) {
-        repository.cycleProfile(delta).getOrThrow()
+        repository.changePage(delta).getOrThrow()
     }
 
     fun tick(now: Long) = focus.tick(now)

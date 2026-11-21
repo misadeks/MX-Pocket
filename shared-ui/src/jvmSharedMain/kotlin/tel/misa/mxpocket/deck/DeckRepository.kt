@@ -99,6 +99,16 @@ class DeckRepository(private val file: File) {
         if (history.size > 1) old.withHistory(history.dropLast(1)) else old
     }
 
+    fun changePage(delta: Int): Result<Unit> {
+        val deck = state.value
+        val pages = deck.activeProfile.pages
+        return when {
+            delta < 0 && deck.histories.getValue(deck.activeProfileId).size > 1 -> back()
+            pages.size > 1 -> openPage(pages[Math.floorMod(pages.indexOf(deck.activePage) + delta, pages.size)].id)
+            else -> cycleProfile(delta)
+        }
+    }
+
     fun cycleProfile(delta: Int) = edit { old ->
         val profiles = old.profiles
         val current = profiles.indexOfFirst { it.id == old.activeProfileId }

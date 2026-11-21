@@ -66,4 +66,3 @@ interface PocketPlugin {
     fun onChord(chord: KeyChord, host: PluginHost) {}
     fun onDeactivate() {}
 }
-

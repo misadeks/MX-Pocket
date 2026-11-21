@@ -25,14 +25,14 @@ import android.provider.Settings
 import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.test.captureToImage
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.activity.ComponentActivity
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.Robolectric
@@ -56,21 +56,13 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.time.Duration
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35])
+@Config(sdk = [35], qualifiers = "w400dp-h800dp")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-class MediaPanelTest {
-    private val app get() = RuntimeEnvironment.getApplication() as PocketApplication
-    private val main get() = shadowOf(Looper.getMainLooper())
+class MediaPanelRenderingTest {
+    @get:Rule val ui = createAndroidComposeRule<ComponentActivity>()
 
-    private fun authorizedDevice(): UsbDevice = ReflectionHelpers.newInstance(UsbDevice::class.java).also {
-        ReflectionHelpers.setField(it,"mName","virtual-usb")
-        ReflectionHelpers.setField(it,"mVendorId",0x046d)
-        ReflectionHelpers.setField(it,"mProductId",0xc354)
-        ReflectionHelpers.setField(it,"mConfigurations",emptyArray<UsbConfiguration>())
-        shadowOf(app.getSystemService(UsbManager::class.java)).addOrUpdateUsbDevice(it,true)
-    }
-
-    @Test fun oneCenterCropSpansHardwareRegionsSimulatedKeysAndThePhonePanel() = runBlocking {
+    @Test fun oneCenterCropSpansHardwareRegionsSimulatedKeysAndThePhonePanel() {
+        val app = RuntimeEnvironment.getApplication()
         val source = Bitmap.createBitmap(600,480,Bitmap.Config.ARGB_8888)
         val sourceEdge = Color.MAGENTA
         source.eraseColor(sourceEdge)
@@ -93,27 +85,25 @@ class MediaPanelTest {
         val tile = KeyTile("Play","Media",Color.BLACK)
         renderer.useArtwork(art)
         val sim = SimulatedKeypad()
-        val tiles = colors.indices.map { i -> renderer.image(i,tile).also { sim.setKeyImage(i,it) } }
-        // Sample the production Compose board at the same normalized panel coordinates.
-        val ui = createComposeRule()
-        var mirrored: Bitmap? = null
-        ui.apply(object : org.junit.runners.model.Statement() {
-            override fun evaluate() {
-                ui.setContent {
-                    KeypadGrid(tiles.map { KeypadTile("Play", color = androidx.compose.ui.graphics.Color.Black,
-                        image = it.asImageBitmap()) }, { _, _ -> }, Modifier.size(240.dp).testTag("panel"), art.asImageBitmap())
-                }
-                mirrored = ui.onNodeWithTag("panel").captureToImage().asAndroidBitmap()
-            }
-        }, org.junit.runner.Description.createTestDescription(javaClass, "panel")).evaluate()
+        val tiles = colors.indices.map { i -> renderer.image(i,tile).also { runBlocking { sim.setKeyImage(i,it) } } }
+        ui.setContent {
+            KeypadGrid(tiles.map { KeypadTile("Play", color = androidx.compose.ui.graphics.Color.Black,
+                image = it.asImageBitmap()) }, { _, _ -> }, Modifier.size(320.dp).testTag("panel"), art.asImageBitmap())
+        }
+        val bounds = ui.onNodeWithTag("panel").fetchSemanticsNode().boundsInWindow
+        // Robolectric does not complete PixelCopy's next-frame callback. Draw the actual window instead.
+        val mirrored = ui.runOnIdle {
+            val window = ui.activity.window.decorView
+            Bitmap.createBitmap(window.width, window.height, Bitmap.Config.ARGB_8888).also { window.draw(Canvas(it)) }
+        }
         val samples = colors.indices.map { i ->
             val r = KeypadProtocol.keyRegion(i)
             assertEquals(colors[i],art.getPixel(r.x+59,r.y+45))
             val pixel = tiles[i].getPixel(59,45)
             assertEquals(colors[i],pixel)
             assertEquals(pixel,sim.renderedImage(i)!!.getPixel(59,45))
-            val mirror = requireNotNull(mirrored)
-            assertEquals(pixel,mirror.getPixel((r.x+59)*mirror.width/480,(r.y+45)*mirror.height/480))
+            assertEquals(pixel,mirrored.getPixel((bounds.left + (r.x+59)*bounds.width/480).toInt(),
+                (bounds.top + (r.y+45)*bounds.height/480).toInt()))
             pixel
         }
         assertEquals(9,samples.distinct().size)
@@ -122,7 +112,22 @@ class MediaPanelTest {
         assertNotSame(previous,renderer.image(0,tile))
         sim.close()
     }
+}
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [35])
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+class MediaPanelTest {
+    private val app get() = RuntimeEnvironment.getApplication() as PocketApplication
+    private val main get() = shadowOf(Looper.getMainLooper())
+
+    private fun authorizedDevice(): UsbDevice = ReflectionHelpers.newInstance(UsbDevice::class.java).also {
+        ReflectionHelpers.setField(it,"mName","virtual-usb")
+        ReflectionHelpers.setField(it,"mVendorId",0x046d)
+        ReflectionHelpers.setField(it,"mProductId",0xc354)
+        ReflectionHelpers.setField(it,"mConfigurations",emptyArray<UsbConfiguration>())
+        shadowOf(app.getSystemService(UsbManager::class.java)).addOrUpdateUsbDevice(it,true)
+    }
     @Test fun coverOnlyAppearsOnAudioWhetherPausedOrPlaying() {
         val session = app.session
         val listener = shadowOf(app.getSystemService(NotificationManager::class.java))

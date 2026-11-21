@@ -92,7 +92,8 @@ class CameraControlsActivity : DeckActivity() {
     }
 
     private fun openCapture(id: String) {
-        if (state.captureChoices?.none { it.id == id } != false) return
+        val choices = state.captureChoices ?: return
+        if (choices.none { it.id == id }) return
         state = state.copy(captureChoices = null)
         val file = File(captures, id)
         val message = try {
