@@ -107,38 +107,6 @@ class KeypadPaintTest {
         }
     }
 
-    @Test fun navigationPhysicalWindowsAndPhoneTapsDispatchTheSameUnlockedLocalActions() {
-        val p = Panel()
-        val actions = mutableListOf<DeckCommand>()
-        val screen = object : PocketSession.Screen {
-            override fun render() {}
-            override fun openApp(app: PhoneApp) = false
-            override fun deckAction(command: DeckCommand, component: String?) = ok("Handled").also { actions += command }
-        }
-        val expected = listOf(DeckCommand.BACK, DeckCommand.UP, DeckCommand.HOME, DeckCommand.REVERSE,
-            DeckCommand.ACTIVATE, DeckCommand.FORWARD, DeckCommand.RECENTS, DeckCommand.DOWN, DeckCommand.NAV_ACCESS)
-        fun physical(i: Int) {
-            p.event(KeyEvent(i + 1, true)); p.event(KeyEvent(i + 1, false)); main.idle()
-        }
-        try {
-            p.session.attach(screen)
-            p.session.selectProfile("navigation"); main.idle()
-            p.expectAll()
-            for (i in expected.indices) {
-                actions.clear()
-                physical(i)
-                p.session.phoneKey(i)
-                assertEquals("Window ${i + 1}", if (i == 6) emptyList() else List(2) { expected[i] }, actions)
-            }
-            actions.clear()
-            // Showing a disclosure and sending Back are not exceptions to the lock guard.
-            val guard = app.getSystemService(android.app.KeyguardManager::class.java)
-            shadowOf(guard).setKeyguardLocked(true)
-            for (i in listOf(0, 8)) { physical(i); p.session.phoneKey(i) }
-            assertTrue(actions.isEmpty())
-        } finally { p.session.detach(screen); p.session.disconnect() }
-    }
-
     @Test fun initialProfileAndCustomPageNavigationAlwaysWriteOneGridEvenWithIdenticalTiles() {
         val p = Panel(supportsGrid = true)
         val deck = p.session.deck
@@ -173,6 +141,7 @@ class KeypadPaintTest {
                 })
                 main.idle()
             }
+
             p.pause = true
             status("First"); status("Second")
             assertEquals(listOf(0), p.writes)
@@ -185,6 +154,28 @@ class KeypadPaintTest {
             status("Second")
             assertEquals(listOf(0, 0), p.writes)
             assertTrue(p.grids.isEmpty()); p.expectAll()
+        } finally { p.session.disconnect() }
+    }
+
+    @Test fun oneXoBindingStillSwitchesScreensAndRejectsInputUntilGridAck() {
+        val p = Panel(supportsGrid = true)
+        try {
+            val deck = p.session.deck
+            val custom = deck.createProfile("One game key").getOrThrow()
+            deck.setKey(custom, "root", 0, DeckKey(action = ActionCall("plugin.key",
+                mapOf("pluginId" to "game.xo", "index" to "0")))).getOrThrow()
+            p.session.selectProfile(custom); main.idle()
+            p.expectAll()
+            assertEquals("1 PLAYER", p.session.frame().keys[0].label)
+            p.grids.clear(); p.writes.clear(); p.pause = true
+            p.press(1)
+            assertEquals(listOf<Int?>(null), p.grids)
+            assertTrue(p.writes.isEmpty())
+            p.press(1)
+            assertEquals("1", p.session.frame().keys[0].label)
+            p.settle(); p.press(1)
+            assertEquals("X", p.session.frame().keys[0].label)
+            p.expectAll()
         } finally { p.session.disconnect() }
     }
 
@@ -242,6 +233,38 @@ class KeypadPaintTest {
             p.press(1); assertEquals(child, deck.state.value.activePage.id)
             assertEquals(3, p.grids.size); assertTrue(p.writes.isEmpty()); p.expectAll()
         } finally { p.session.disconnect() }
+    }
+
+    @Test fun navigationPhysicalWindowsAndPhoneTapsDispatchTheSameUnlockedLocalActions() {
+        val p = Panel()
+        val actions = mutableListOf<DeckCommand>()
+        val screen = object : PocketSession.Screen {
+            override fun render() {}
+            override fun openApp(app: PhoneApp) = false
+            override fun deckAction(command: DeckCommand, component: String?) = ok("Handled").also { actions += command }
+        }
+        val expected = listOf(DeckCommand.BACK, DeckCommand.UP, DeckCommand.HOME, DeckCommand.REVERSE,
+            DeckCommand.ACTIVATE, DeckCommand.FORWARD, DeckCommand.RECENTS, DeckCommand.DOWN, DeckCommand.NAV_ACCESS)
+        fun physical(i: Int) {
+            p.event(KeyEvent(i + 1, true)); p.event(KeyEvent(i + 1, false)); main.idle()
+        }
+        try {
+            p.session.attach(screen)
+            p.session.selectProfile("navigation"); main.idle()
+            p.expectAll()
+            for (i in expected.indices) {
+                actions.clear()
+                physical(i)
+                p.session.phoneKey(i)
+                assertEquals("Window ${i + 1}", if (i == 6) emptyList() else List(2) { expected[i] }, actions)
+            }
+            actions.clear()
+            // Showing a disclosure and sending Back are not exceptions to the lock guard.
+            val guard = app.getSystemService(android.app.KeyguardManager::class.java)
+            shadowOf(guard).setKeyguardLocked(true)
+            for (i in listOf(0, 8)) { physical(i); p.session.phoneKey(i) }
+            assertTrue(actions.isEmpty())
+        } finally { p.session.detach(screen); p.session.disconnect() }
     }
 
     @Test fun interruptedBackdropRestoresOnlyKeysThatAcknowledgedDifferentPixels() {

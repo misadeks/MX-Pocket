@@ -63,6 +63,7 @@ data class DeckState(
     val automatic: Boolean,
     val histories: Map<String, List<String>>,
     val selectionReason: String = "Default profile",
+    val xoProfileRemoved: Boolean = false,
 ) {
     val activeProfile: DeckProfile get() = profiles.first { it.id == activeProfileId }
     val activePage: DeckPage get() = activeProfile.pages.first { it.id == histories.getValue(activeProfileId).last() }
@@ -131,6 +132,7 @@ internal fun defaultDeck(): DeckState {
         plugin("launcher", "Launcher"),
         plugin("studio", "Studio"),
         plugin("navigation", "Navigation", slots = navigationFactorySlots),
+        plugin("game.xo", "X-O"),
     )
     return DeckState(
         DeckLimits.VERSION, profiles, "focus", "focus", null, false,

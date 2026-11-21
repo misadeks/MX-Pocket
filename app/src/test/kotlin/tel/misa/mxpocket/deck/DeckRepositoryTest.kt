@@ -19,6 +19,25 @@ class DeckRepositoryTest {
     private val file: File get() = File(folder.root, "deck.json")
     private val repo by lazy { DeckRepository(file) }
 
+    @Test fun addsXoProfileToAnExistingLayoutWithoutChangingSelectionOrKeys() {
+        val factory = defaultDeck()
+        val oldLayout = factory.copy(
+            profiles = factory.profiles.filterNot { it.id == "game.xo" },
+            activeProfileId = "phone",
+            defaultProfileId = "audio",
+            histories = factory.histories - "game.xo",
+        )
+        file.writeText(DeckJson.encode(oldLayout))
+
+        val upgraded = DeckRepository(file).state.value
+        assertEquals("phone", upgraded.activeProfileId)
+        assertEquals("audio", upgraded.defaultProfileId)
+        assertEquals(ActionCall("plugin.key", mapOf("pluginId" to "phone", "index" to "0")),
+            upgraded.activePage.keys[0].action)
+        assertTrue(upgraded.profiles.any { it.id == "game.xo" })
+        assertTrue("game.xo" in upgraded.histories)
+    }
+
     private fun pluginKey(id: String, index: Int) =
         DeckKey(action = ActionCall("plugin.key", mapOf("pluginId" to id, "index" to index.toString())))
 
@@ -123,6 +142,55 @@ class DeckRepositoryTest {
         }
     }
 
+    @Test fun deletedXoStaysDeletedAcrossColdLoadAndBackupRestore() {
+        repo.selectProfile("phone").getOrThrow()
+        repo.deleteProfile("game.xo").getOrThrow()
+        val expected = repo.state.value
+        assertFalse(expected.profiles.any { it.id == "game.xo" })
+        val reloaded = DeckRepository(file)
+        assertEquals(expected, reloaded.state.value)
+        val backup = reloaded.exportJson()
+        repo.restoreDefaults().getOrThrow()
+        repo.importJson(backup).getOrThrow()
+        repo.save().getOrThrow()
+        assertEquals(expected, DeckRepository(file).state.value)
+    }
+
+    @Test fun optionalXoDoesNotMakeAnAtLimitLegacyDeckUnsavable() {
+        // Fill action text with multibyte UTF-8 to exercise the byte rather than character limit.
+        fun layout(payloadBytes: Int): DeckState {
+            var remaining = payloadBytes
+            val pages = List(2) { page ->
+                DeckPage("p$page", "Page $page", List(9) {
+                    val params = (1..10).associate { index ->
+                        val count = minOf(remaining, 3000)
+                        remaining -= count
+                        "p$index" to ("旅".repeat(count / 3) + "x".repeat(count % 3))
+                    }
+                    DeckKey(action = ActionCall("example.message", params))
+                })
+            }
+            check(remaining == 0)
+            val profile = DeckProfile("custom", "Custom", "p0", pages)
+            return defaultDeck().copy(profiles = listOf(profile), activeProfileId = profile.id,
+                defaultProfileId = profile.id, histories = mapOf(profile.id to listOf("p0", "p1")))
+        }
+        val expected = layout(DeckLimits.MAX_BYTES - DeckJson.encode(layout(0)).toByteArray().size)
+        val original = DeckJson.encode(expected)
+        assertEquals(DeckLimits.MAX_BYTES, original.toByteArray().size)
+        file.writeText(original)
+
+        val reloaded = DeckRepository(file)
+        assertNull(reloaded.loadError)
+        assertEquals(expected, reloaded.state.value)
+        val exported = reloaded.exportJson()
+        reloaded.save().getOrThrow()
+        reloaded.restoreDefaults().getOrThrow()
+        reloaded.importJson(exported).getOrThrow()
+        reloaded.save().getOrThrow()
+        assertEquals(expected, DeckRepository(file).state.value)
+    }
+
     @Test fun savesUnicodeBindingsRulesAndNavigationWithoutLeakingMutableReferences() {
         val id = repo.createProfile("Travail 🐈").getOrThrow()
         val page = repo.createPage(id, "🌿").getOrThrow()
@@ -164,6 +232,7 @@ class DeckRepositoryTest {
             edit { it.put("version", DeckLimits.VERSION + 1) },
             original.replaceFirst("\"version\":", "\"version\":${DeckLimits.VERSION},\"version\":"),
             edit { it.put("automatic", "true") }, edit { it.put("activeProfileId", "missing") },
+            edit { it.put("xoProfileRemoved", "true") },
             edit { it.getJSONArray("profiles").getJSONObject(0).put("id", "audio") },
             edit { it.getJSONObject("histories").getJSONArray("focus").put("missing") },
             edit { it.getJSONArray("profiles").getJSONObject(0).getJSONArray("pages").getJSONObject(0).getJSONArray("keys").remove(0) },

@@ -2,11 +2,13 @@ package tel.misa.mxpocket.preview
 
 import tel.misa.mxpocket.FocusTimer
 import tel.misa.mxpocket.deck.defaultDeck
+import tel.misa.mxpocket.plugins.TicTacToeGame
 
 /** Factory layouts and the Focus clock are shared with Android. All other state is window-local. */
 class PreviewDeck {
     private var deck = defaultDeck()
     private val focus = FocusTimer()
+    private val xo = TicTacToeGame()
     private var volume = 6
     private var muted = false
     private var playing = false
@@ -52,23 +54,35 @@ class PreviewDeck {
         return Binding(action.params.getValue("pluginId"), action.params.getValue("index").toInt())
     }
 
-    fun tiles(now: Long): List<Tile> = deck.activePage.keys.indices.map { slot ->
-        val action = binding(slot)
-        val label = action?.let { labels(it.plugin, now).getOrNull(it.index) }
-        if (action?.plugin == "audio" && label != null) when (action.index) {
-            1 -> Tile(label, true, "${if (muted) 0 else volume} / 15")
-            6, 8 -> Tile(label, false, "No seek position")
-            7 -> Tile(label, false, "Now playing · ${if (playing) "Playing" else "Paused"}", readOnly = true)
-            else -> Tile(label, true)
-        } else when {
-            action?.plugin == "navigation" && action.index == 2 -> Tile("Recents", false, "Needs access")
-            action?.plugin == "navigation" && action.index == 7 -> Tile("Access info", true, "System nav off")
-            else -> Tile(label ?: "-", label != null && label != "-")
+    fun tiles(now: Long): List<Tile> {
+        val cells = if (profileId == "game.xo") xo.cells() else emptyList()
+        return deck.activePage.keys.indices.map { slot ->
+            val action = binding(slot)
+            if (action?.plugin == "game.xo") {
+                val label = cells[action.index].label
+                return@map Tile(label.ifEmpty { "-" }, label.isNotEmpty() && label != "X-O")
+            }
+            val label = action?.let { labels(it.plugin, now).getOrNull(it.index) }
+            when {
+                action?.plugin == "audio" && label != null -> when (action.index) {
+                    1 -> Tile(label, true, "${if (muted) 0 else volume} / 15")
+                    6, 8 -> Tile(label, false, "No seek position")
+                    7 -> Tile(label, false, "Now playing · ${if (playing) "Playing" else "Paused"}", readOnly = true)
+                    else -> Tile(label, true)
+                }
+                action?.plugin == "navigation" && action.index == 2 -> Tile("Recents", false, "Needs access")
+                action?.plugin == "navigation" && action.index == 7 -> Tile("Access info", true, "System nav off")
+                else -> Tile(label ?: "-", label != null && label != "-")
+            }
         }
     }
 
     fun press(slot: Int, now: Long): String {
         val (plugin, index) = binding(slot) ?: return "Unassigned key."
+        if (plugin == "game.xo") {
+            xo.press(index)
+            return xo.cells()[4].footer
+        }
         val label = labels(plugin, now).getOrNull(index) ?: return "Unsupported binding."
         when (plugin) {
             "focus" -> when (index) {
