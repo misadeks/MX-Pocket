@@ -14,6 +14,12 @@ class PreviewDeck {
     val profileName get() = deck.activeProfile.name
     val profileIndex get() = deck.profiles.indexOf(deck.activeProfile)
     val profileCount get() = deck.profiles.size
+    val profileId get() = deck.activeProfileId
+    val profiles get() = deck.profiles.map { it.id to it.name }
+
+    fun select(id: String) {
+        deck = deck.copy(activeProfileId = deck.profiles.single { it.id == id }.id)
+    }
 
     fun cycle(delta: Int) {
         val index = Math.floorMod(profileIndex + delta, profileCount)

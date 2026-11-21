@@ -1,6 +1,9 @@
 package tel.misa.mxpocket.preview
 
-fun main() {
+import kotlin.test.Test
+
+class PreviewDeckTest {
+    @Test fun factoryNavigationTimerAndSimulatedAudio() {
     val deck = PreviewDeck()
     fun label(key: Int, now: Long = 0) = deck.tiles(now)[key - 1].label
     check(deck.profileName == "Focus")
@@ -29,5 +32,5 @@ fun main() {
         deck.cycle(1)
     }
     check(deck.profileName == "Audio")
-    println("Preview navigation, Focus clock and simulated actions passed.")
+    }
 }
