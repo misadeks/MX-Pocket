@@ -137,6 +137,7 @@ class DeckRepository internal constructor(private val file: File) {
         }
         val defaultId = if (id == old.defaultProfileId) remaining.first().id else old.defaultProfileId
         old.copy(profiles = remaining, defaultProfileId = defaultId, histories = old.histories - id,
+            xoProfileRemoved = old.xoProfileRemoved || id == "game.xo",
             activeProfileId = if (id == old.activeProfileId) defaultId else old.activeProfileId,
             pinnedProfileId = old.pinnedProfileId?.takeUnless { it == id },
             selectionReason = if (id == old.activeProfileId) "Default selected after profile deletion" else old.selectionReason)
@@ -279,6 +280,13 @@ class DeckRepository internal constructor(private val file: File) {
         const val DEBOUNCE_MS = 1500L
         const val SCORE_MARGIN = 2
     }
+}
+
+private fun DeckState.withBuiltInXo(): DeckState {
+    if (xoProfileRemoved || profiles.size >= DeckLimits.PROFILES || profiles.any { it.id == "game.xo" }) return this
+    val xo = defaultDeck().profile("game.xo")
+    val augmented = copy(profiles = profiles + xo, histories = histories + (xo.id to listOf(xo.rootPageId)))
+    return if (DeckJson.fits(augmented)) augmented else this
 }
 
 private fun DeckState.profile(id: String) = profiles.firstOrNull { it.id == id } ?: error("Unknown profile")

@@ -50,6 +50,7 @@ data class DeckState(
     val automatic: Boolean,
     val histories: Map<String, List<String>>,
     val selectionReason: String = "Default profile",
+    val xoProfileRemoved: Boolean = false,
 ) {
     val activeProfile: DeckProfile get() = profiles.first { it.id == activeProfileId }
     val activePage: DeckPage get() = activeProfile.pages.first { it.id == histories.getValue(activeProfileId).last() }
@@ -107,13 +108,4 @@ internal fun defaultDeck(): DeckState {
         DeckLimits.VERSION, profiles, "focus", "focus", null, false,
         profiles.associate { it.id to listOf(it.rootPageId) },
     )
-}
-
-/** Add the built-in game to existing saved layouts without changing their selection or bindings. */
-internal fun DeckState.withBuiltInXo(): DeckState {
-    if (profiles.any { it.id == "game.xo" } || profiles.size >= DeckLimits.PROFILES) return this
-    val profile = DeckProfile("game.xo", "X-O", "root", listOf(DeckPage("root", "X-O", List(9) { index ->
-        DeckKey(action = ActionCall("plugin.key", mapOf("pluginId" to "game.xo", "index" to index.toString())))
-    })))
-    return copy(profiles = profiles + profile, histories = histories + (profile.id to listOf(profile.rootPageId)))
 }

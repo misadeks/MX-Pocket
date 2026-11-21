@@ -100,8 +100,9 @@ The registry is `BuiltInPlugins.create()`. It includes a nine-key X-O game with
 single-player against a simple computer opponent and local 1v1 modes. Choose a
 mode on the keypad; each key then becomes a board square. After a win or draw,
 tap any key to choose a mode again.
-The X-O profile is added to existing saved layouts when there is room, without
-changing their selected profile or key bindings. Saved profiles reference stable
+The X-O profile is added to older layouts only when both the profile count and
+the 512 KiB file limit allow it, without changing the selection or bindings.
+Deleting the profile keeps it out of saved layouts and exported backups. Saved profiles reference stable
 actions rather than registry positions. See [plugin authoring](docs/plugins.md).
 
 ## Display/protocol caveat
