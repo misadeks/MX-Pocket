@@ -26,6 +26,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.*
+import tel.misa.mxpocket.decks.Favorite
 
 internal data class BindingOption(val label: String, val call: ActionCall)
 
@@ -66,6 +67,8 @@ internal fun LayoutEditor(
     signals: Map<String, String>,
     onExport: () -> Unit,
     onImport: () -> Unit,
+    discoverApps: () -> List<Favorite>,
+    detectionControls: @Composable () -> Unit,
 ) {
     val deck by repo.state.collectAsStateWithLifecycle()
     val decision by repo.decision.collectAsStateWithLifecycle()
@@ -217,7 +220,7 @@ internal fun LayoutEditor(
                     deck.profiles.find { it.id == id }?.let { EditorNote("Waiting for a stable match: ${it.name}") }
                 }
                 decision.scores[profile.id]?.let { EditorNote("${profile.name}’s current score: $it") }
-                RuleSection(profile, signals, writable) { rules, done ->
+                RuleSection(profile, deck.profiles, signals, writable, discoverApps, detectionControls) { rules, done ->
                     writer.run({
                         synchronized(repo) {
                             if (repo.state.value.profiles.find { it.id == profile.id }?.rules != profile.rules)
