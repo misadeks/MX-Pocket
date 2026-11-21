@@ -12,6 +12,12 @@ kotlin {
         api(compose.foundation)
         api(compose.material3)
     }
+    sourceSets.named("desktopTest") {
+        dependencies {
+            implementation(compose.desktop.currentOs)
+            implementation(compose.desktop.uiTestJUnit4)
+        }
+    }
 }
 
 android {
