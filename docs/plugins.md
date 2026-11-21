@@ -24,6 +24,10 @@ the key number, label and footer and overlays any user-selected background image
 The independent driver scales, JPEG-encodes and uploads it. Plugins must not
 allocate/recycle host images or import `MxKeypad`/raw USB.
 
+For a plugin with internal navigation, set `PluginFrame.page` to the current
+page index (default `0`). A change of page requests a whole-grid redraw even
+if the new page happens to reuse most or all of the same tiles.
+
 `PluginEngine` validates nonempty/unique registration, frame size and navigation
 targets. Identifiers match `[a-z][a-z0-9.-]{2,63}`. Use an ID such as `weather.local`;
 do not reuse or rename a published ID casually. The saved layout determines
@@ -81,6 +85,8 @@ There is no factory shortcut or change to the layout JSON.
 - Pending input is discarded on synthetic cleanup, layout edits or activation
   changes, disconnect and lock/screen transitions. Both keys' original
   binding/ACK, session, unlocked state and USB grant must still be valid.
+  A redraw of an unrelated single key does not invalidate the pair. Repainting
+  either member requires a fresh pair of presses; a late ACK never replays a held key.
   A chord or buffered single can update plugin state and use ordinary host
   capabilities, but does **not** convey direct-launch, capture or workflow
   authority. Keep actions requiring a fresh physical press on unchorded slots.

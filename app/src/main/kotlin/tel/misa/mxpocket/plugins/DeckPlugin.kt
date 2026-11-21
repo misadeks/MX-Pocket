@@ -27,9 +27,9 @@ internal class DeckPlugin(id: String, title: String, capability: PluginCapabilit
     override fun onDeactivate() { state = DeckState() }
     private fun slot(command: C, component: String? = null) =
         Slot(state.tile(command, component), PluginAction.Deck(command, component))
+    private val pages get() = ((state.favorites.size + 6) / 7).coerceAtLeast(1)
+    private val current get() = page.coerceIn(0, pages - 1)
     private fun launcher(): List<Slot> {
-        val pages = ((state.favorites.size + 6) / 7).coerceAtLeast(1)
-        val current = page.coerceIn(0, pages - 1)
         return List(7) { index ->
             state.favorites.getOrNull(current * 7 + index)?.let { slot(C.OPEN, it.component) }
                 ?: Slot(KeyTile(if (index == 0) "No favorites" else "-", "Favorites", 0xff384674.toInt()))
@@ -55,13 +55,12 @@ internal class DeckPlugin(id: String, title: String, capability: PluginCapabilit
         "navigation" -> listOf(C.BACK, C.HOME, C.RECENTS, C.UP, C.ACTIVATE, C.DOWN, C.REVERSE, C.NAV_ACCESS, C.FORWARD).map { slot(it) }
         else -> error("Unknown page")
     }
-    override fun render(nowMillis: Long) = PluginFrame(slots().map { it.tile })
+    override fun render(nowMillis: Long) = PluginFrame(slots().map { it.tile }, current)
     override fun onKey(event: PluginKeyEvent, host: PluginHost) {
         if (!event.pressed || event.synthetic) return
         val key = slots()[event.index]
         if (key.next) {
-            val pages = ((state.favorites.size + 6) / 7).coerceAtLeast(1)
-            page = (page.coerceIn(0, pages - 1) + 1) % pages
+            page = (current + 1) % pages
             host.invalidate()
         } else key.action?.let(host::dispatch)
     }

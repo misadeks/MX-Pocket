@@ -20,7 +20,9 @@ class DeckPluginTest {
         engine.setEnabled(true)
         fun tap(i: Int) { engine.key(PluginKeyEvent(i, true)); engine.key(PluginKeyEvent(i, false)) }
         assertEquals(apps[0].component, engine.render().keys[0].iconComponent)
+        assertEquals(0, engine.render().page)
         tap(8)
+        assertEquals(1, engine.render().page)
         val tile = engine.render().keys.first()
         assertEquals("App 8", tile.label)
         assertNotEquals(states.value.tile(DeckCommand.OPEN, apps[0].component).inputToken, tile.inputToken)
@@ -31,6 +33,7 @@ class DeckPluginTest {
         tap(0)
         assertEquals(1, actions.size)
         assertEquals("No favorites", engine.render().keys.first().label)
+        assertEquals(0, engine.render().page)
         tap(7)
         assertEquals(PluginAction.Deck(DeckCommand.EDIT), actions.last())
         engine.close()

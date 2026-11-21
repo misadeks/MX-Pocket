@@ -36,6 +36,7 @@ import org.robolectric.Robolectric
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 import org.robolectric.annotation.Implementation
 import org.robolectric.annotation.Implements
 import org.robolectric.annotation.LooperMode
@@ -392,7 +393,8 @@ class KeypadSessionTest {
         app.session.disconnect()
     }
 
-    @Test fun screenReplacementAndBackgroundKeepOneInputOwnerAndFinishInFlightLcdBeforeSwitch() {
+    @Test @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun screenReplacementAndBackgroundKeepOneInputOwnerAndFinishInFlightLcdBeforeSwitch() {
         val real = device("test-keypad")
         val uploads = mutableListOf<Int>()
         val nextPageImage = CompletableDeferred<Unit>()
