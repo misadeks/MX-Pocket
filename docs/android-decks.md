@@ -29,11 +29,15 @@ sessions. It is broad at the OS level. This app uses the component solely as
 authorization for `MediaSessionManager`; it does not retrieve, log, or act
 on notifications. Spotify and other players use the same Android interface:
 there is no Spotify sign-in, SDK, playlist browser or downloaded artwork.
-While unlocked, a local cover spans the keypad panel on Home and the nine
-visible LCD regions. A paused cover appears only on Audio. Playing artwork
-can appear behind another profile, including a pinned one; it does not change
-bindings or selection rules. Without usable cover art, the normal key design
-(or the user's selected backdrop) remains.
+While unlocked on **Audio**, the local cover spans Home's keypad and all nine
+LCD regions, paused or playing. Its narrow border picks up the cover's edge
+colors; each label uses black or white against its own part of the picture.
+Other profiles keep their normal keys even during playback. Without usable
+art, the keys keep a neutral background (or the user's selected backdrop).
+A temporary read failure is retried with increasing delays, without changing tracks.
+Keypad volume changes read back Android's music-stream level right away.
+Phone-side volume notifications refresh the same readout; devices that omit
+them fall back to a two-second check.
 
 Only embedded bitmaps and bounded, read-granted `content://` images are used.
 Titles and cover images are display-only, never written to files or diagnostic
@@ -74,7 +78,9 @@ independent of the selected page.
    grant access, change tracks and pause from the player. Confirm title and
    playback state follow on the LCD. Try Spotify and a second player without
    skip. Change the cover without changing the title if possible. Check Audio
-   paused/playing, then pin a different profile: its own keys should remain.
+   paused/playing, including several Play presses: the cover should not flash
+   green. Pin a different profile: its keys should have no album art. Compare
+   rapid physical and handset volume changes against the on-key readout.
    Test locked and screen-off physical Play/Pause, skip, mute and volume; no
    title/cover should remain, and settings/launch keys must not open anything.
    Unlock, end the session, remove media access and test missing art. Check all

@@ -152,7 +152,13 @@ class KeypadSessionTest {
             press(6); assertEquals(P.ACTION_SKIP_TO_NEXT,controls.lastPerformedAction)
             press(4); assertEquals(P.ACTION_SKIP_TO_NEXT,controls.lastPerformedAction)
             audio.setStreamVolume(AudioManager.STREAM_MUSIC,3,0)
-            press(3); assertTrue(audio.getStreamVolume(AudioManager.STREAM_MUSIC) > 3)
+            repeat(2) {
+                press(3)
+                val actual = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
+                assertTrue(actual > 3)
+                assertEquals(actual,session.deckState.value.media.volume)
+                assertEquals("$actual / ${audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)}",session.frame().keys[2].footer)
+            }
             press(5); assertNull(shadowOf(app).nextStartedActivity)
         }
         shadowOf(app.getSystemService(NotificationManager::class.java)).setNotificationListenerAccessGranted(

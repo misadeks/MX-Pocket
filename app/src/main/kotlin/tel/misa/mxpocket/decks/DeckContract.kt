@@ -2,6 +2,8 @@ package tel.misa.mxpocket.decks
 
 import tel.misa.mxpocket.plugins.KeyTile
 
+internal const val AUDIO_BACKGROUND = 0xff303438
+
 /** Persist IDs, never enum ordinals. A favorite is an Android flattened ComponentName, not an intent URI. */
 enum class DeckCommand(val id: String, val label: String, val deck: String) {
     OPEN("launcher.open", "Open favorite", "launcher"), EDIT("launcher.edit", "Edit favorites", "launcher"),
@@ -83,7 +85,7 @@ data class DeckState(
         val color = when (command.deck) {
             "launcher" -> 0xff384674
             "studio" -> if (studio.recording) 0xff952d3f else 0xff49345f
-            "audio" -> if (media.playing == true) 0xff12634e else 0xff274740
+            "audio" -> AUDIO_BACKGROUND
             else -> 0xff254c69
         }.toInt()
         val available = when (command) {

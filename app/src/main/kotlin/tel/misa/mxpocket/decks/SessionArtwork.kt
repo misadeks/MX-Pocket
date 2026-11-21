@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Rect
 import android.media.MediaMetadata
@@ -13,9 +14,14 @@ import android.net.Uri
 import android.os.Process
 import java.io.ByteArrayOutputStream
 import java.io.IOException
+import tel.misa.mxpocket.driver.KeypadProtocol
 
 /** Sources come only from the selected session's metadata; never follow a network or file URL. */
 internal class SessionArtwork private constructor(private val bitmap: Bitmap?, private val uri: Uri?) {
+    private val generation = bitmap?.generationId
+    val isUri get() = uri != null
+    fun sameSource(other: SessionArtwork?) = other != null && bitmap === other.bitmap &&
+        generation == other.generation && uri == other.uri
     fun readable(context: Context) = uri == null || context.checkUriPermission(uri, Process.myPid(), Process.myUid(),
         Intent.FLAG_GRANT_READ_URI_PERMISSION) == PackageManager.PERMISSION_GRANTED
 
@@ -31,8 +37,10 @@ internal class SessionArtwork private constructor(private val bitmap: Bitmap?, p
         val side = minOf(software.width, software.height)
         val x = (software.width - side) / 2
         val y = (software.height - side) / 2
+        val crop = Rect(x, y, x + side, y + side)
         return Bitmap.createBitmap(480, 480, Bitmap.Config.ARGB_8888).also {
-            Canvas(it).drawBitmap(software, Rect(x, y, x + side, y + side), Rect(0, 0, 480, 480),
+            it.eraseColor(edgeColor(software, crop))
+            Canvas(it).drawBitmap(software, crop, coverBounds,
                 Paint(Paint.FILTER_BITMAP_FLAG))
         }
     }
@@ -61,6 +69,25 @@ internal class SessionArtwork private constructor(private val bitmap: Bitmap?, p
     }
 
     companion object {
+        // The visible nine-key square is offset within the panel. Put the mat *inside* its outer keys.
+        private val coverBounds = KeypadProtocol.keyRegion(0).let { first ->
+            val last = KeypadProtocol.keyRegion(8)
+            Rect(first.x + 10, first.y + 10, last.x + last.width - 10, last.y + last.height - 10)
+        }
+        private fun edgeColor(image: Bitmap, crop: Rect): Int {
+            var r = 0; var g = 0; var b = 0; var weight = 0
+            fun sample(x: Int, y: Int) {
+                val c = image.getPixel(x, y)
+                val a = Color.alpha(c)
+                r += Color.red(c) * a; g += Color.green(c) * a; b += Color.blue(c) * a; weight += a
+            }
+            for (i in 0 until 16) {
+                val d = (2 * i + 1) * crop.width() / 32
+                sample(crop.left + d, crop.top); sample(crop.left + d, crop.bottom - 1)
+                sample(crop.left, crop.top + d); sample(crop.right - 1, crop.top + d)
+            }
+            return if (weight == 0) Color.DKGRAY else Color.rgb(r / weight, g / weight, b / weight)
+        }
         fun from(metadata: MediaMetadata?): SessionArtwork? {
             metadata ?: return null
             for (key in listOf(MediaMetadata.METADATA_KEY_ALBUM_ART, MediaMetadata.METADATA_KEY_ART, MediaMetadata.METADATA_KEY_DISPLAY_ICON))

@@ -27,9 +27,9 @@ the session-only image picker and diagnostic log export.
    is visible or hosting a real session, a stable match selects Audio after
    debounce. Supported players expose Play/Pause and title with consent;
    without it the app sends ordinary media keys and does not invent a title
-   or playback state. While unlocked, the player's local cover fills the Home
-   keypad and spans the nine LCD keys. Paused artwork stays on Audio; playing
-   artwork also appears on a pinned profile without replacing its keys.
+   or playback state. On Audio, an unlocked phone and the keypad show one inset
+   cover across the nine keys. The cover stays on Audio, even during playback;
+   a pinned non-music profile keeps its own background.
 5. Inspect the selection reason, matched rules and observed values in Keypad.
    Create or change weighted rules for an observed app-owned activity, device,
    local hour/range, media, plugin or workflow state. Pin Desk, change playback

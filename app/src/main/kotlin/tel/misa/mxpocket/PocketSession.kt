@@ -212,7 +212,7 @@ internal class PocketSession(
     }
 
     private fun visibleArtwork(state: MediaDeckState) = state.artwork?.takeIf { "audio" !in disabled.value &&
-        (deck.state.value.activeProfileId == "audio" || state.playing == true) && app.isUnlockedAndInteractive() }
+        deck.state.value.activeProfileId == "audio" && app.isUnlockedAndInteractive() }
 
     fun frame(): PluginFrame {
         if (images.useArtwork(visibleArtwork(deckState.value.media))) revision++

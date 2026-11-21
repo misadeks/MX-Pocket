@@ -76,7 +76,6 @@ internal class KeypadPanel(context: Context) : ViewGroup(context) {
         canvas.save()
         canvas.translate(0f, (height - width) / 2f)
         canvas.drawBitmap(image, null, Rect(0,0,width,width), filter)
-        canvas.drawColor(0x92000000.toInt())
         images.forEachIndexed { i, tile -> canvas.drawBitmap(tile, null, region(i, width), filter) }
         canvas.restore()
     }
