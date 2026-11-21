@@ -17,6 +17,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import tel.misa.mxpocket.MainActivity
 import tel.misa.mxpocket.PocketApplication
+import tel.misa.mxpocket.installTestCamera
 
 @RunWith(org.robolectric.RobolectricTestRunner::class)
 @Config(sdk = [28, 35])
@@ -49,7 +50,7 @@ class AndroidDeckTest {
         store.setSelected(target, false)
         assertNull(store.intentFor(target))
     }
-    @Test fun foregroundKeyOpensOnlyRationaleAndStudioRemainsInertWithoutCameraGrant() {
+    @Test fun foregroundKeyOpensOnlyRationaleAndVirtualStudioCannotCapture() {
         val session = app.session
         assertFalse(session.runDeckAction("studio.record").success)
         assertFalse(session.runDeckAction("navigation.activate").success)
@@ -61,16 +62,23 @@ class AndroidDeckTest {
             assertEquals(DeckAccessActivity::class.java.name, shadowOf(activity).nextStartedActivity.component?.className)
             session.selectProfile("studio")
             session.phoneKey(1)
-            assertFalse(session.deckState.value.studio.recording)
+            assertTrue(session.status.contains("physical Studio keypad"))
             assertNull(shadowOf(activity).nextStartedActivity)
+            val native = installTestCamera(app)
+            for ((index, mode) in listOf(7 to CameraMode.PHOTO, 6 to CameraMode.VIDEO)) {
+                session.phoneKey(index)
+                val viewfinder = shadowOf(activity).nextStartedActivity
+                assertEquals(native, viewfinder.component)
+                assertEquals(mode.action, viewfinder.action)
+                assertNull(viewfinder.extras)
+            }
             shadowOf(app.getSystemService(KeyguardManager::class.java)).setKeyguardLocked(true)
             session.phoneKey(7)
             assertNull(shadowOf(activity).nextStartedActivity)
         }
-        Robolectric.buildActivity(StudioActivity::class.java).setup().use {
-            assertFalse(it.get().press(DeckCommand.RECORD).success)
-            assertFalse(session.deckState.value.studio.ready)
-            assertFalse(session.deckState.value.studio.recording)
+        Robolectric.buildActivity(CameraControlsActivity::class.java).setup().use {
+            assertFalse(CameraControlsAccess(app).enabled)
+            assertNull(shadowOf(it.get()).lastRequestedPermission)
             assertNull(shadowOf(it.get()).nextStartedActivity)
         }
     }

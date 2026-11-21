@@ -36,8 +36,8 @@ class DeckPluginTest {
         engine.close()
     }
 
-    @Test fun studioWaitsForConfirmedRecordingAndNeverRecordsOnActivationOrRelease() = runTest {
-        val states = MutableStateFlow(DeckState(studio = StudioState(ready = true)))
+    @Test fun studioHasSeparateOpenAndInputKeysAndNeverInfersRecordingFromAPress() = runTest {
+        val states = MutableStateFlow(DeckState())
         val actions = mutableListOf<PluginAction>()
         val engine = PluginEngine(BuiltInPlugins.create("Focus", "Media", "Phone"), this, { 0L },
             { AudioSnapshot(0, 0) }, { action, _ -> actions.add(action) }, {}, { _, e -> throw e }, states)
@@ -47,14 +47,11 @@ class DeckPluginTest {
         engine.key(PluginKeyEvent(1, true))
         engine.key(PluginKeyEvent(1, true))
         assertEquals(idle, engine.render().keys[1])
-        states.value = DeckState(studio = StudioState(ready = true, recording = true, elapsedSeconds = 64, markers = 1))
-        runCurrent()
-        val active = engine.render().keys[1]
-        assertEquals("Stop 1:04", active.label)
-        assertNotEquals(idle.inputToken, active.inputToken)
-        assertNotEquals(idle.background, active.background)
+        assertEquals("Stop", engine.render().keys[2].label)
+        assertEquals("Open Camera", engine.render().keys[7].label)
+        assertFalse(states.value.tile(DeckCommand.RECORD).enabled) // Old saved capture action.
         engine.select("navigation"); engine.key(PluginKeyEvent(1, false))
-        assertEquals(listOf(PluginAction.Deck(DeckCommand.RECORD)), actions)
+        assertEquals(listOf(PluginAction.Deck(DeckCommand.START_VIDEO)), actions)
         engine.close()
     }
 }

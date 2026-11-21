@@ -13,6 +13,7 @@ import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
@@ -21,7 +22,9 @@ import org.robolectric.annotation.LooperMode
 import org.robolectric.util.ReflectionHelpers
 import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.DeckKey
+import tel.misa.mxpocket.decks.CameraControlsAccess
 import tel.misa.mxpocket.decks.DeckCommand
+import tel.misa.mxpocket.decks.NavigationService
 import tel.misa.mxpocket.decks.ok
 import tel.misa.mxpocket.driver.KeyEvent
 import tel.misa.mxpocket.driver.KeyInput
@@ -84,7 +87,15 @@ class ChordSessionTest {
 
     @Before fun setup() {
         shadowOf(usb).addOrUpdateUsbDevice(device, true)
-        session = PocketSession(app, listOf(probe)) { _, _, event, _, _ ->
+        val studio = DeckPlugin("studio", "Studio", PluginCapability.STUDIO)
+        val chordStudio = object : PocketPlugin by studio {
+            override val descriptor = studio.descriptor.copy(chords = setOf(KeyChord(0, 8)))
+            override fun onChord(chord: KeyChord, host: PluginHost) {
+                events += "shutter chord"
+                host.dispatch(PluginAction.Deck(DeckCommand.SHUTTER))
+            }
+        }
+        session = PocketSession(app, listOf(probe, chordStudio)) { _, _, event, _, _ ->
             emit = event
             object : KeypadOutput {
                 override fun close() {}
@@ -175,13 +186,40 @@ class ChordSessionTest {
         report(1); waitWindow(); report()
         assertEquals(listOf("8+", "8-", "0&8", "0+", "0-"), events)
         assertEquals(1, launches)
-        effect = PluginAction.Deck(DeckCommand.PHOTO)
+        effect = PluginAction.Deck(DeckCommand.SHUTTER)
         report(1, 9); report(); report(1); report()
         assertEquals("Press a key on the unlocked phone or connected keypad.", session.status)
         assertEquals(0, captures)
         effect = PluginAction.OpenApp(PhoneApp.CAMERA)
         report(4); event(4, true); report()
         assertEquals(2, launches) // Positive control: unconfigured fresh down works, repeat does not.
+    }
+
+    @Config(shadows = [CameraWindowFixture::class])
+    @Test fun acknowledgedStudioShutterRequiresAnImmediateSingleEvenWhenTheCameraIsReady() {
+        installTestCamera(app)
+        val service = Robolectric.buildService(NavigationService::class.java).create()
+        try {
+            val navigation = service.get()
+            ReflectionHelpers.callInstanceMethod<Unit>(navigation, "onServiceConnected")
+            val button = cameraNode("Take picture")
+            var clicks = 0
+            shadowOf(button).setOnPerformActionListener { _, _ -> clicks++; true }
+            (shadowOf(navigation) as CameraWindowFixture).root = button
+            CameraControlsAccess(app).enabled = true
+            session.selectProfile("studio"); main.idle()
+
+            report(9); report(9, 1); report() // Complete with the acknowledged Shutter key itself.
+            assertEquals(listOf("shutter chord"), events)
+            assertEquals(0, clicks)
+            report(1); waitWindow(); report() // Replay the very same Studio Shutter binding.
+            report(1); report() // Tap/release fallback is not authority either.
+            assertEquals(0, clicks)
+
+            session.deck.setKey("studio", "root", 8, DeckKey()).getOrThrow()
+            main.idle(); report(1); report()
+            assertEquals(1, clicks) // Same grant, camera, binding and key; now an immediate single.
+        } finally { session.disconnect(); service.destroy() }
     }
 
     @Test fun screenBoundaryGrantLossAndOldArrivalCannotCompleteAPair() {
