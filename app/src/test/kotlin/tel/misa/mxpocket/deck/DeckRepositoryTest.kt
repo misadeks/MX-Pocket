@@ -91,6 +91,53 @@ class DeckRepositoryTest {
         assertEquals(repo.state.value, DeckRepository(file).state.value)
     }
 
+    @Test fun exactLimitV1AudioSlotsRemainExportableAfterColdLoadAndImport() {
+        // Build literal v1 input, not a current-schema export. Fill preserved action parameters,
+        // not JSON whitespace that the encoder could remove to make the migration appear to fit.
+        val pages = org.json.JSONArray()
+        val fillers = mutableListOf<JSONObject>()
+        repeat(18) { page ->
+            val keys = org.json.JSONArray()
+            repeat(9) { i ->
+                val action = if (page == 0) {
+                    JSONObject("""{"id":"plugin.key","params":{"pluginId":"audio","index":"${if (i == 0) 0 else 7}"}}""")
+                } else {
+                    val params = JSONObject().also { p -> repeat(4) { p.put("p$it", "") } }
+                    fillers += params
+                    JSONObject().put("id","custom.action").put("params",params)
+                }
+                keys.put(JSONObject().put("icon","").put("label","音").put("color",0).put("action",action).put("enabled",true))
+            }
+            pages.put(JSONObject().put("id","p$page").put("name","Page $page").put("keys",keys))
+        }
+        val profile = JSONObject("""{"id":"custom","name":"Custom","rootPageId":"p0","automatic":false,"rules":[]}""")
+            .put("pages",pages)
+        val v1 = JSONObject("""{"version":1,"activeProfileId":"custom","defaultProfileId":"custom","pinnedProfileId":null,
+            "automatic":false,"histories":{"custom":["p0"]},"selectionReason":"Manual"}""")
+            .put("profiles",org.json.JSONArray().put(profile))
+        var remaining = DeckLimits.MAX_BYTES - v1.toString().toByteArray().size
+        for (params in fillers) for (i in 0..3) {
+            val n = minOf(remaining, DeckLimits.PARAM_VALUE)
+            params.put("p$i","x".repeat(n)); remaining -= n
+        }
+        val input = v1.toString()
+        assertEquals(DeckLimits.MAX_BYTES,input.toByteArray().size)
+        file.writeText(input)
+        val cold = DeckRepository(file)
+        assertNull(cold.loadError)
+        val exported = cold.exportJson()
+        assertTrue(exported.toByteArray().size <= DeckLimits.MAX_BYTES)
+        val savedKeys = cold.state.value.activePage.keys
+        assertEquals("media.volume-down",savedKeys.first().action!!.id)
+        assertEquals("media.volume-level",savedKeys.last().action!!.id)
+        assertTrue(savedKeys.all { it.action!!.slotOwner() == "audio" })
+        val imported = DeckRepository(File(folder.root,"imported.json"))
+        imported.importJson(input).getOrThrow()
+        imported.save().getOrThrow()
+        assertEquals(exported,imported.exportJson())
+        assertEquals(cold.state.value,DeckRepository(File(folder.root,"imported.json")).state.value)
+    }
+
     @Test fun failedWritesAndCorruptStartupDoNotClobberLastData() {
         file.writeText("{broken")
         val recovery = DeckRepository(file)
