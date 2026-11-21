@@ -2,7 +2,12 @@
 
 Native Android USB Host driver and companion app for the Logitech MX Creative
 Keypad (046D:C354). Application ID: `tel.misa.mxpocket`. Android 9/API 28 or newer.
-This is a source-supported MVP, **not a physically verified Android driver**.
+An experimental, source-supported MVP. Automated tests do not establish complete
+physical USB/LCD compatibility.
+
+This repository is private: invited collaborators can work through feature
+branches and pull requests. Start with [CONTRIBUTING.md](CONTRIBUTING.md).
+There is no hosted CI; validation runs locally.
 
 ## What is implemented
 
@@ -15,7 +20,7 @@ This is a source-supported MVP, **not a physically verified Android driver**.
 - `app`: native Material Android UI with explicit USB permission request, device
   and endpoint diagnostics, connection/cancellation/detach handling, bounded
   event log with user-selected file export, custom image picker, and dynamic
-  Focus/Audio/Phone pages. The two physical page buttons switch pages.
+  Focus/Audio/Phone plugins. The two physical page buttons switch plugins.
 - Focus starts/pauses/resets a real monotonic countdown, changes duration, and
   plays a completion tone. Audio changes the music stream volume/mute and
   dispatches media keys to an existing Android media session. Phone opens
@@ -24,6 +29,32 @@ This is a source-supported MVP, **not a physically verified Android driver**.
   root, a custom kernel, or BLE Dialpad.
 - Phone-only preview exercises app actions without pretending to connect or
   sending any USB reports.
+- Compile-time Kotlin plugin engine with stable registration IDs, exactly nine
+  key tiles per frame, physical press/release handling, scoped contextual updates
+  and host-mediated Android actions. Focus, Audio and Phone all use this API.
+  [Plugin authoring guide](docs/plugins.md) includes a working Counter example.
+  No downloaded code, external APK plugin loading or runtime class loading.
+
+## Architecture
+
+```text
+app/MainActivity                  permission, lifecycle, UI, image composition
+  -> plugins/PluginEngine         selection, key ownership, scopes, errors
+       -> PocketPlugin            Focus, Audio, Phone, optional Counter
+       -> PluginHost              bounded Android actions + invalidate
+  -> mx-driver/MxKeypad            independent reusable USB Host API
+       -> HidSession              serialized command/acknowledgement protocol
+       -> UsbReportTransport      descriptor-backed USB endpoints and requests
+```
+
+Plugins return logical frames; the app composites key labels/custom images and
+the driver encodes/fragments JPEGs. A feature does not need to know VID/PID,
+report IDs, USB interfaces, packet sizes or firmware details. The `mx-driver`
+module never imports plugin/app code.
+
+The registry is `BuiltInPlugins.create()`. Adding an instance there adds a page
+to the scrollable plugin selector and physical page-button rotation. Keep
+stable IDs across versions so navigation targets continue to work.
 
 ## Display/protocol caveat
 
@@ -55,7 +86,15 @@ No speculative keepalive, firmware commands, captured startup replay, display
 ownership guesses, or undocumented reset are sent. Protocol acceptance in the
 log is **not proof of visible or persistent LCD content**.
 
-## Build and test on Windows
+## Quickstart and local validation
+
+Invited collaborators can clone using Git or the GitHub CLI:
+
+```powershell
+gh repo clone misadeks/MX-Pocket
+Set-Location MX-Pocket
+git switch -c feature/your-change
+```
 
 Install Android SDK platform 35/build tools and JDK 17 or 21. Set `ANDROID_HOME`
 to the SDK directory and `JAVA_HOME` to the JDK, or configure the SDK using your
@@ -82,11 +121,17 @@ app\build\outputs\apk\debug\app-debug.apk
 mx-driver\build\outputs\aar\mx-driver-release.aar
 ```
 
+On Linux/macOS use `./gradlew` with the same task arguments. The Gradle wrapper
+downloads Gradle 8.14.4; Android SDK dependencies must already be installed.
+Use SDK Manager to install `platforms;android-35` and `build-tools;35.0.0`.
+Do not commit `local.properties` or personal SDK/JDK paths.
+
 The APK uses the local Android debug signing key. The AAR is not a fat archive;
 consuming projects also need `org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2`.
 Tests cover protocol vectors/boundaries, maximum-size fragmentation, explicit
 busy/error responses, multi-key input transitions, HID descriptor lengths,
-serialized exchanges, cancellation/disconnect/timeout, timer semantics and
+serialized exchanges, cancellation/disconnect/timeout, timer semantics,
+plugin registration/capabilities/activation cleanup/stale callbacks, and
 Android app startup/preview/lifecycle under Robolectric API 28 and 35.
 Robolectric is Android API simulation, not USB host or physical LCD validation.
 
@@ -142,6 +187,13 @@ Page diversion is volatile on the device; unplugging removes the session. This
 MVP does not restore a prior host's diversion configuration. Media-key dispatch
 requires an active media session and OEM behavior may differ.
 
+Plugin tasks are active only for the selected page during a connected or
+phone-preview session. Switching pages/backgrounding/disconnecting cancels the
+activation scope and synthesizes releases for its held keys. The focus deadline
+retains elapsed time in memory while another page is selected, but its completion
+tone is deferred until Focus becomes active again. There is no background plugin
+service. Custom images and plugin state do not survive process recreation.
+
 ## Evidence and limits
 
 Automated validation covers software behavior, not physical USB/LCD behavior.
@@ -160,6 +212,23 @@ mx-driver\src\main\assets\mx-pocket-provenance.txt
 That file is embedded in both the AAR and APK. Upstream algorithms are used under
 their MIT licenses; source-supported behavior is kept separate from
 hardware-confirmed behavior throughout the diagnostic UI and logs.
+
+## Troubleshooting
+
+| Symptom | Next check |
+| --- | --- |
+| No keypad in diagnostics | USB-host support, data-capable cable, OTG adapter and power; look for 046D:C354 |
+| Permission denied | Tap Connect and accept Android's device permission; reattach if the permission was lost |
+| Interface claim fails | Inspect unforced/forced claim results; OEM/kernel HID conflicts may prevent userspace access |
+| Unsupported descriptor | Provide a small redacted interface/report table; do not guess interface numbers or replay packets |
+| Missing ACK or rejected image | Save the first relevant redacted error; connection closes rather than claiming success |
+| Media command has no effect | An active Android media session is required; validate audio stream state separately |
+| Plugin error | Error is attributed to its ID; its tasks stop. Reconnect/re-enter preview or reselect the plugin to retry |
+| Windows ARM64 Robolectric failure | Run local app tests with an x64 JDK, not ARM64 Java |
+
+No firmware update, root or kernel change is part of troubleshooting. Do not
+upload raw device logs or private images; follow the issue template's redaction
+instructions.
 
 ## License
 

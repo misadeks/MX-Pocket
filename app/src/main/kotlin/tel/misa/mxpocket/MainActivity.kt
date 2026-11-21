@@ -23,6 +23,7 @@ import android.provider.Settings
 import android.view.KeyEvent as AndroidKeyEvent
 import android.view.View
 import android.widget.LinearLayout
+import android.widget.HorizontalScrollView
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
@@ -36,7 +37,18 @@ import com.google.android.material.snackbar.Snackbar
 import tel.misa.mxpocket.driver.KeyEvent
 import tel.misa.mxpocket.driver.MxKeypad
 import tel.misa.mxpocket.driver.UsbDiagnostics
+import tel.misa.mxpocket.plugins.AudioSnapshot
+import tel.misa.mxpocket.plugins.BuiltInPlugins
+import tel.misa.mxpocket.plugins.KeyTile
+import tel.misa.mxpocket.plugins.MediaCommand
+import tel.misa.mxpocket.plugins.PhoneApp
+import tel.misa.mxpocket.plugins.PluginAction
+import tel.misa.mxpocket.plugins.PluginEngine
+import tel.misa.mxpocket.plugins.PluginFrame
+import tel.misa.mxpocket.plugins.PluginKeyEvent
+import tel.misa.mxpocket.plugins.VolumeChange
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
@@ -55,8 +67,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var connectButton: MaterialButton
     private val keyButtons = mutableListOf<MaterialButton>()
     private val logs = ArrayDeque<String>()
-    private val focus = FocusTimer()
-    private var page = 0
+    private lateinit var plugins: PluginEngine
     private var preview = false
     private var driver: MxKeypad? = null
     private var deviceName: String? = null
@@ -66,7 +77,15 @@ class MainActivity : AppCompatActivity() {
     private var refreshJob: Job? = null
     private var custom: Bitmap? = null
     private var customVersion = 0
-    private var lastPaint = emptyList<String>()
+    private data class RenderStamp(
+        val pluginId: String,
+        val generation: Int,
+        val frame: PluginFrame,
+        val customVersion: Int,
+        val repaintVersion: Int,
+    )
+    private var repaintVersion = 0
+    private var lastPaint: RenderStamp? = null
     private var resumed = false
     private var destroyed = false
     private var connectionGeneration = 0
@@ -154,6 +173,18 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        plugins = PluginEngine(
+            BuiltInPlugins.create(getString(R.string.focus), getString(R.string.audio), getString(R.string.phone)),
+            lifecycleScope,
+            SystemClock::elapsedRealtime,
+            readAudio = {
+                AudioSnapshot(audio.getStreamVolume(AudioManager.STREAM_MUSIC),
+                    audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC))
+            },
+            perform = ::performPluginAction,
+            invalidateUi = { if (::root.isInitialized) root.post { if (!destroyed) updateDemo() } },
+            reportError = { id, error -> if (!destroyed) fail("Plugin $id failed", error) },
+        )
         buildUi()
         ContextCompat.registerReceiver(this, permissionReceiver, IntentFilter(permissionAction),
             ContextCompat.RECEIVER_NOT_EXPORTED)
@@ -165,28 +196,12 @@ class MainActivity : AppCompatActivity() {
         appendLog("Protocol derived from MIT sources; USB and LCD operation not yet physically verified")
         refreshDiagnostics()
         updateDemo()
-        lifecycleScope.launch {
-            while (true) {
-                val finished = focus.tick(SystemClock.elapsedRealtime())
-                if (finished) {
-                    val tone = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 50)
-                    try {
-                        tone.startTone(ToneGenerator.TONE_PROP_ACK, 500)
-                        delay(600)
-                    } finally {
-                        tone.release()
-                    }
-                    appendLog("Focus session complete")
-                }
-                if (resumed) updateDemo()
-                delay(1000)
-            }
-        }
     }
 
     override fun onStart() {
         super.onStart()
         resumed = true
+        plugins.setEnabled(preview || driver != null)
         refreshDiagnostics()
     }
 
@@ -200,6 +215,7 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         destroyed = true
         disconnect()
+        plugins.close()
         unregisterReceiver(permissionReceiver)
         unregisterReceiver(attachReceiver)
         custom?.recycle()
@@ -229,13 +245,23 @@ class MainActivity : AppCompatActivity() {
         button(getString(R.string.preview), outlined = true) {
             disconnect()
             preview = true
+            plugins.setEnabled(resumed)
             showStatus(getString(R.string.preview_note))
             updateDemo()
         }
         pageTitle = text(getString(R.string.focus), 22)
-        val tabs = row()
-        listOf(R.string.focus, R.string.audio, R.string.phone).forEachIndexed { index, label ->
-            button(getString(label), parent = tabs, outlined = true) { page = index; updateDemo(force = true) }
+        val tabs = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        root.addView(HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            addView(tabs)
+        }, LinearLayout.LayoutParams(-1, -2))
+        for (descriptor in plugins.descriptors) {
+            button(descriptor.title, parent = tabs, outlined = true) {
+                plugins.select(descriptor.id)
+                updateDemo()
+            }.apply {
+                layoutParams = LinearLayout.LayoutParams(-2, -2).apply { setMargins(dp(4), dp(4), dp(4), dp(4)) }
+            }
         }
         repeat(3) { r ->
             val line = row()
@@ -294,6 +320,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun requestConnect() {
         preview = false
+        plugins.setEnabled(false)
         val candidates = usb.deviceList.values.filter(UsbDiagnostics::isKeypad)
         if (candidates.size != 1) {
             showStatus(if (candidates.isEmpty()) "No MX Creative Keypad (046D:C354). Check cable and USB host support."
@@ -338,8 +365,9 @@ class MainActivity : AppCompatActivity() {
                     return@launch
                 }
                 driver = connected
+                plugins.setEnabled(true)
                 showStatus("Protocol initialized. Uploading nine LCD images; check the physical keys.")
-                lastPaint = emptyList()
+                lastPaint = null
                 updateDemo(force = true)
             } catch (e: CancellationException) {
                 throw e
@@ -352,6 +380,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun disconnect() {
         connectionGeneration++
+        if (::plugins.isInitialized) plugins.setEnabled(false)
         paintJob?.cancel()
         paintJob = null
         connectionJob?.cancel()
@@ -360,7 +389,7 @@ class MainActivity : AppCompatActivity() {
         driver = null
         deviceName = null
         permissionDeviceName = null
-        lastPaint = emptyList()
+        lastPaint = null
         if (::connectButton.isInitialized) connectButton.text = getString(R.string.connect)
         if (!preview && ::status.isInitialized) showStatus(getString(R.string.not_connected))
     }
@@ -369,59 +398,59 @@ class MainActivity : AppCompatActivity() {
         if (destroyed) return
         appendLog("${if (event.synthetic) "CANCEL" else "KEY"} 0x${event.controlId.toString(16)} " +
             if (event.pressed) "press" else "release")
-        if (!event.pressed || !resumed) return
+        if (!resumed) return
         when (event.controlId) {
-            0x01a1 -> changePage(-1)
-            0x01a2 -> changePage(1)
-            in 1..9 -> performAction(event.controlId - 1)
+            0x01a1 -> if (event.pressed && !event.synthetic) changePage(-1)
+            0x01a2 -> if (event.pressed && !event.synthetic) changePage(1)
+            in 1..9 -> plugins.key(PluginKeyEvent(event.controlId - 1, event.pressed, event.synthetic))
         }
     }
 
     private fun changePage(delta: Int) {
-        page = (page + delta + 3) % 3
-        updateDemo(force = true)
-    }
-
-    private fun labels(): List<String> = when (page) {
-        0 -> listOf(if (focus.running) "Pause" else "Start", focus.label(SystemClock.elapsedRealtime()), "Reset",
-            "-5 min", "${focus.durationMillis / 60_000} min", "+5 min", "15 min", "25 min", "50 min")
-        1 -> listOf("Volume -", "Play/Pause", "Volume +", "Previous", "Audio", "Next",
-            "Mute", "${audio.getStreamVolume(AudioManager.STREAM_MUSIC)} / ${audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)}", "Unmute")
-        else -> listOf("Camera", "Settings", "Dialer", "Web", "Phone", "Alarm", "Focus", "Audio", "Repaint")
+        plugins.next(delta)
+        updateDemo()
     }
 
     private fun updateDemo(force: Boolean = false) {
-        val labels = labels()
-        pageTitle.text = listOf(getString(R.string.focus), getString(R.string.audio), getString(R.string.phone))[page]
-        keyButtons.forEachIndexed { index, button -> button.text = labels[index] }
+        val frame = plugins.render()
+        pageTitle.text = plugins.descriptors.single { it.id == plugins.selectedId }.title
+        keyButtons.forEachIndexed { index, button -> button.text = frame.keys[index].label }
         val connected = driver ?: return
-        val renderPage = page
-        val signature = labels + listOf("page=$page", "image=$customVersion")
-        if (!force && signature == lastPaint) return
-        if (paintJob?.isActive == true) return // Next tick paints the latest state; never build an unbounded frame queue.
+        if (force) repaintVersion++
+        val stamp = RenderStamp(plugins.selectedId, plugins.generation, frame, customVersion, repaintVersion)
+        if (stamp == lastPaint) return
+        if (paintJob?.isActive == true) return // Coalesce updates; never cancel a USB fragment exchange on a page switch.
         paintJob = lifecycleScope.launch {
             try {
-                val sameContext = lastPaint.size == signature.size && lastPaint.takeLast(2) == signature.takeLast(2)
+                val previous = lastPaint
+                val sameContext = previous != null && previous.pluginId == stamp.pluginId &&
+                    previous.generation == stamp.generation && previous.customVersion == stamp.customVersion &&
+                    previous.repaintVersion == stamp.repaintVersion
                 for (index in 0..8) {
-                    if (!force && sameContext && lastPaint[index] == signature[index]) continue
-                    val bitmap = renderKey(index, labels[index], renderPage)
+                    if (stamp.generation != plugins.generation || driver !== connected) break
+                    if (sameContext && previous?.frame?.keys?.get(index) == frame.keys[index]) continue
+                    val bitmap = renderKey(index, frame.keys[index])
                     try { connected.setKeyImage(index, bitmap) } finally { bitmap.recycle() }
                 }
-                lastPaint = signature
-                showStatus("Nine LCD image uploads acknowledged. Verify visibility and physical press/release in the log.")
+                if (stamp.generation == plugins.generation && driver === connected) {
+                    lastPaint = stamp
+                    showStatus("LCD image updates acknowledged. Verify visibility and physical press/release in the log.")
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 disconnect()
                 fail("LCD upload failed", e)
+            } finally {
+                if (driver === connected && !destroyed) root.post { updateDemo() }
             }
         }
     }
 
-    private fun renderKey(index: Int, label: String, renderPage: Int): Bitmap {
+    private fun renderKey(index: Int, tile: KeyTile): Bitmap {
         val bitmap = Bitmap.createBitmap(118, 118, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
-        canvas.drawColor(listOf(Color.rgb(25, 67, 117), Color.rgb(39, 71, 64), Color.rgb(73, 52, 95))[renderPage])
+        canvas.drawColor(tile.background)
         custom?.let { canvas.drawBitmap(it, 0f, 0f, null) }
         val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textAlign = Paint.Align.CENTER }
         if (custom != null) {
@@ -432,10 +461,11 @@ class MainActivity : AppCompatActivity() {
         paint.textSize = 14f
         canvas.drawText("${index + 1}", 59f, 23f, paint)
         paint.textSize = 18f
-        while (paint.measureText(label) > 106 && paint.textSize > 10) paint.textSize -= 1
-        canvas.drawText(label, 59f, 66f, paint)
+        while (paint.measureText(tile.label) > 106 && paint.textSize > 10) paint.textSize -= 1
+        canvas.drawText(tile.label, 59f, 66f, paint)
         paint.textSize = 12f
-        canvas.drawText(listOf("FOCUS", "AUDIO", "PHONE")[renderPage], 59f, 104f, paint)
+        while (paint.measureText(tile.footer) > 106 && paint.textSize > 8) paint.textSize -= 1
+        canvas.drawText(tile.footer, 59f, 104f, paint)
         return bitmap
     }
 
@@ -444,40 +474,47 @@ class MainActivity : AppCompatActivity() {
             Snackbar.make(root, "Connect a keypad or select Phone-only preview first", Snackbar.LENGTH_SHORT).show()
             return
         }
-        try {
-            when (page) {
-                0 -> when (index) {
-                    0 -> focus.toggle(SystemClock.elapsedRealtime())
-                    2 -> focus.reset()
-                    3 -> focus.adjust(-5)
-                    5 -> focus.adjust(5)
-                    6 -> focus.select(15)
-                    7 -> focus.select(25)
-                    8 -> focus.select(50)
+        plugins.key(PluginKeyEvent(index, true))
+        plugins.key(PluginKeyEvent(index, false))
+        appendLog("${if (preview) "PREVIEW" else "ACTION"} plugin=${plugins.selectedId} key=${index + 1}")
+        updateDemo()
+    }
+
+    private fun performPluginAction(action: PluginAction, scope: CoroutineScope) {
+        when (action) {
+            is PluginAction.Volume -> {
+                val adjustment = when (action.change) {
+                    VolumeChange.LOWER -> AudioManager.ADJUST_LOWER
+                    VolumeChange.RAISE -> AudioManager.ADJUST_RAISE
+                    VolumeChange.MUTE -> AudioManager.ADJUST_MUTE
+                    VolumeChange.UNMUTE -> AudioManager.ADJUST_UNMUTE
                 }
-                1 -> when (index) {
-                    0 -> audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI)
-                    1 -> mediaKey(AndroidKeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
-                    2 -> audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI)
-                    3 -> mediaKey(AndroidKeyEvent.KEYCODE_MEDIA_PREVIOUS)
-                    5 -> mediaKey(AndroidKeyEvent.KEYCODE_MEDIA_NEXT)
-                    6 -> audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, AudioManager.FLAG_SHOW_UI)
-                    8 -> audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, AudioManager.FLAG_SHOW_UI)
-                }
-                2 -> when (index) {
-                    0 -> launch(Intent("android.media.action.STILL_IMAGE_CAMERA"))
-                    1 -> launch(Intent(Settings.ACTION_SETTINGS))
-                    2 -> launch(Intent(Intent.ACTION_DIAL, Uri.parse("tel:")))
-                    3 -> launch(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.logitech.com/")))
-                    5 -> launch(Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS))
-                    6 -> page = 0
-                    7 -> page = 1
-                }
+                audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, adjustment, AudioManager.FLAG_SHOW_UI)
             }
-            appendLog("${if (preview) "PREVIEW" else "ACTION"} page=$page key=${index + 1}")
-            updateDemo(force = true)
-        } catch (e: SecurityException) {
-            fail("Android rejected this control action", e)
+            is PluginAction.Media -> mediaKey(when (action.command) {
+                MediaCommand.PLAY_PAUSE -> AndroidKeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
+                MediaCommand.PREVIOUS -> AndroidKeyEvent.KEYCODE_MEDIA_PREVIOUS
+                MediaCommand.NEXT -> AndroidKeyEvent.KEYCODE_MEDIA_NEXT
+            })
+            is PluginAction.OpenApp -> launch(when (action.app) {
+                PhoneApp.CAMERA -> Intent("android.media.action.STILL_IMAGE_CAMERA")
+                PhoneApp.SETTINGS -> Intent(Settings.ACTION_SETTINGS)
+                PhoneApp.DIALER -> Intent(Intent.ACTION_DIAL, Uri.parse("tel:"))
+                PhoneApp.WEB -> Intent(Intent.ACTION_VIEW, Uri.parse("https://www.logitech.com/"))
+                PhoneApp.ALARMS -> Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS)
+            })
+            PluginAction.CompletionTone -> scope.launch {
+                val tone = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 50)
+                try {
+                    tone.startTone(ToneGenerator.TONE_PROP_ACK, 500)
+                    delay(600)
+                } finally {
+                    tone.release()
+                }
+                appendLog("Focus session complete")
+            }
+            PluginAction.Repaint -> updateDemo(force = true)
+            is PluginAction.SelectPlugin -> error("Navigation is handled by PluginEngine")
         }
     }
 

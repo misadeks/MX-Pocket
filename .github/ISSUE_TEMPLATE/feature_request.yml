@@ -1,0 +1,23 @@
+name: Feature or plugin proposal
+description: Propose a focused compile-time plugin or improvement
+title: "[Feature] "
+body:
+  - type: textarea
+    id: task
+    attributes:
+      label: User task
+      description: What should a keypad user accomplish?
+    validations:
+      required: true
+  - type: textarea
+    id: plugin
+    attributes:
+      label: Proposed plugin behavior
+      description: Describe the nine-key layout, press/release behavior, contextual updates, host capabilities and lifecycle cleanup.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope and validation
+      description: What is excluded, and which automated or physical checks would prove the feature?
