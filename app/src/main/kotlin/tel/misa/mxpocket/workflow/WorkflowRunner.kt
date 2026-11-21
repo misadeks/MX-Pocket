@@ -41,7 +41,7 @@ internal class WorkflowRunner(
         workflow: WorkflowDefinition, origin: WorkflowOrigin,
         definitions: List<WorkflowDefinition>, endpoints: List<WorkflowEndpoint>,
     ): Job? {
-        if (busy || !scope.coroutineContext[Job].let { it == null || it.isActive }) return null
+        if (busy || scope.coroutineContext[Job]?.isActive == false) return null
         val initial = WorkflowStatus(workflow.id, workflow.name, origin, WorkflowPhase.RUNNING, "Starting")
         val job = scope.launch(start = CoroutineStart.LAZY) {
             var stepNumber = 0
@@ -56,7 +56,7 @@ internal class WorkflowRunner(
             }
             val variables = mutableMapOf<String, String>()
             var previous = true
-            val specs = host.actions().associateBy { it.id }
+            var specs = emptyMap<String, WorkflowActionSpec>()
             val library = definitions.associateBy { it.id }
             suspend fun walk(steps: List<WorkflowStep>, chain: Set<String>) {
                 for (step in steps) {
@@ -99,8 +99,10 @@ internal class WorkflowRunner(
                                             }
                                         }
                                     }
-                                    StepKind.OPEN_URL -> if (!effects.openUrl(step.value))
-                                        throw StepFailure(FailureKind.DECLINED)
+                                    StepKind.OPEN_URL -> {
+                                        progress("Waiting for browser approval", WorkflowPhase.CONFIRMATION)
+                                        if (!effects.openUrl(step.value)) throw StepFailure(FailureKind.DECLINED)
+                                    }
                                     StepKind.SPEAK -> if (!withTimeout(30_000) { effects.speak(step.value) })
                                         throw StepFailure(FailureKind.UNAVAILABLE)
                                     StepKind.NOTIFY -> if (!effects.notify(step.value)) throw StepFailure(FailureKind.UNAVAILABLE)
@@ -122,6 +124,7 @@ internal class WorkflowRunner(
             var terminal = initial.copy(phase = WorkflowPhase.CANCELLED, message = "Cancelled")
             try {
                 progress("Validating")
+                specs = host.actions().associateBy { it.id }
                 val error = validateWorkflow(workflow, definitions, endpoints, specs.values.toList())
                 if (error != null) throw StepFailure(FailureKind.INVALID)
                 // An outer deadline is never restartable by a nested call, branch or retry.
