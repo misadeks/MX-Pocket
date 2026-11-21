@@ -275,6 +275,10 @@ class KeypadPaintTest {
             main.idle()
         }
         try {
+            // The factory player has a single volume readout. Exercise multi-key fairness on
+            // a saved layout with another explicit volume binding, not the old factory order.
+            p.session.deck.setKey("audio", "root", 8, tel.misa.mxpocket.deck.DeckKey(
+                action = tel.misa.mxpocket.actions.ActionCall("media.volume-level"))).getOrThrow()
             p.session.selectProfile("audio"); volume(1)
             val original = p.session.frame()
             p.writes.clear(); p.pause = true
@@ -313,7 +317,7 @@ class KeypadPaintTest {
         } finally { p.session.disconnect() }
     }
 
-    @Test fun oversizeCoverFallsBackOnceThenVolumeAndNewCoversUseGrids() {
+    @Test fun oversizeCoverFallsBackOnceThenVolumeUsesOneKeyAndNewCoversUseGrids() {
         shadowOf(app.getSystemService(NotificationManager::class.java)).setNotificationListenerAccessGranted(
             ComponentName(app, MediaSessionAccess::class.java), true)
         val media = MediaSession(app, "panel")
@@ -342,7 +346,7 @@ class KeypadPaintTest {
             val v = if (audio.getStreamVolume(AudioManager.STREAM_MUSIC) == 1) 2 else 1
             audio.setStreamVolume(AudioManager.STREAM_MUSIC,v,0)
             app.contentResolver.notifyChange(Settings.System.getUriFor("volume_music"),null); main.idle()
-            assertEquals(listOf(Color.RED, Color.GREEN, Color.GREEN), p.grids); assertTrue(p.writes.isEmpty()); p.expectAll()
+            assertEquals(listOf(Color.RED, Color.GREEN), p.grids); assertEquals(listOf(1),p.writes); p.expectAll()
             p.writes.clear(); p.pause = true; cover(Color.BLUE); cover(Color.YELLOW)
             assertEquals(Color.BLUE, p.grids.last())
             p.ack()

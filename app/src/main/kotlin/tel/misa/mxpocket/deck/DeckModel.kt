@@ -11,7 +11,20 @@ object DeckActions {
     const val PROFILE = "profile.switch"
     const val PAGE_ID = "pageId"
     const val PROFILE_ID = "profileId"
+    // The longest migrated media action, including this field, must not exceed the v1 slot's UTF-8 size.
+    const val LEGACY_SLOT_OWNER = "slot"
 }
+
+// A migrated Audio slot still participates in the original page's single-plugin selection.
+// An explicitly bound media command has no such constraint.
+internal fun ActionCall.slotOwner(): String? = when {
+    id == "plugin.key" -> params["pluginId"]
+    id.startsWith("media.") && params[DeckActions.LEGACY_SLOT_OWNER] == "audio" -> "audio"
+    else -> null
+}
+
+internal fun ActionCall.commandBinding() =
+    if (id.startsWith("media.") && slotOwner() == "audio") copy(params = params - DeckActions.LEGACY_SLOT_OWNER) else this
 
 enum class SelectionSource { USER, AUTOMATIC }
 
@@ -56,7 +69,7 @@ data class DeckState(
 }
 
 object DeckLimits {
-    const val VERSION = 1
+    const val VERSION = 2
     const val MAX_BYTES = 512 * 1024
     const val PROFILES = 16
     const val PAGES = 32

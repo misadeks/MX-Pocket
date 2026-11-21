@@ -37,6 +37,44 @@ class DeckSessionTest {
         override fun openApp(app: PhoneApp) = false
     }
 
+    @Test fun v1MixedStudioPageKeepsItsOriginalPluginSelection() {
+        val session = app.session
+        val repo = session.deck
+        repo.setKey("studio","root",0,DeckKey(action = ActionCall("plugin.key",
+            mapOf("pluginId" to "audio","index" to "0")))).getOrThrow()
+        session.attach(screen)
+        session.selectProfile("studio")
+        repo.importJson(org.json.JSONObject(repo.exportJson()).put("version",1).toString()).getOrThrow()
+        val audio = app.getSystemService(android.media.AudioManager::class.java)
+        val stream = android.media.AudioManager.STREAM_MUSIC
+        audio.setStreamVolume(stream, 4, 0)
+        fun verifyLoaded(active: PocketSession, expectedVolume: Int) {
+            active.startPreview()
+            main.idle()
+            assertEquals("audio",active.plugins.selectedId)
+            assertEquals("audio",active.signals.value["plugin"])
+            assertTrue(active.frame().keys[0].enabled)
+            assertFalse(active.frame().keys[1].enabled)
+            assertTrue(active.phoneKey(0))
+            main.idle()
+            assertEquals(expectedVolume, audio.getStreamVolume(stream))
+            active.disconnect()
+            active.detach(screen)
+        }
+        verifyLoaded(session, 3)
+        repo.save().getOrThrow()
+        val reloaded = PocketSession(app)
+        reloaded.attach(screen)
+        verifyLoaded(reloaded, 2)
+        // Explicit v2 actions are not positional plugin bindings.
+        reloaded.deck.setKey("studio","root",0,DeckKey(action = ActionCall("media.volume-down"))).getOrThrow()
+        reloaded.attach(screen)
+        reloaded.startPreview(); main.idle()
+        assertEquals("studio", reloaded.signals.value["plugin"])
+        assertFalse(reloaded.runDeckAction("media.volume-down", mapOf("unexpected" to "x")).success)
+        reloaded.disconnect(); reloaded.detach(screen)
+    }
+
     @Test fun simulatorRunsSavedPagesAndWorkflowAndReconnectsWithoutLosingLocation() {
         val session = app.session
         val repo = session.deck

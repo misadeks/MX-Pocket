@@ -2,7 +2,6 @@ package tel.misa.mxpocket.ui
 
 import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.Color
 import android.media.AudioManager
 import android.view.View
 import android.view.ViewGroup
@@ -72,7 +71,7 @@ class PocketScreenTest {
 
     }
 
-    @Test fun liveCoverUsesNineExistingAccessibleButtonsAndRestoresAllWithoutArt() {
+    @Test fun nativeOverlayHasOneActionNameNoDuplicateLabelAndReadOnlyTrackWithOrWithoutArt() {
         Robolectric.buildActivity(UiPreviewActivity::class.java).setup().use { controller ->
             val activity = controller.get()
             val scenes = UiPreviewScenes(activity)
@@ -83,21 +82,29 @@ class PocketScreenTest {
             screen.render(state)
             val panel = views(screen.view).filterIsInstance<KeypadPanel>().single()
             val keys = (0 until panel.childCount).map { panel.getChildAt(it) as MaterialButton }
-            val colors = keys.map { it.textColors }
-            screen.render(state.copy(panelArt = image))
-            assertEquals(9,keys.size)
-            keys.forEachIndexed { i,key ->
-                assertEquals(Color.TRANSPARENT,key.currentTextColor)
-                assertNull(key.icon)
-                assertTrue(key.contentDescription.contains(state.frame.keys[i].label))
-                key.performClick()
+            for (art in listOf(null,image,null)) {
+                screen.render(state.copy(panelArt = art))
+                events.clear()
+                assertEquals(9,keys.size)
+                keys.forEachIndexed { i,key ->
+                    assertTrue(key.text.isEmpty())
+                    assertNull(key.icon)
+                    assertTrue(key.contentDescription.contains(state.frame.keys[i].label))
+                    assertFalse(key.contentDescription.startsWith("Key "))
+                    key.performClick()
+                }
+                assertEquals("Play", keys[4].contentDescription)
+                assertEquals("Mute, Sound on, 6 / 15", keys[1].contentDescription)
+                assertFalse(keys[6].isEnabled)
+                assertFalse(keys[7].isClickable)
+                assertEquals("android.widget.TextView", keys[7].createAccessibilityNodeInfo().className)
+                assertEquals((0..5).map { PocketScreenEvent.TapKey(it) },events)
             }
-            assertEquals(keys.indices.map { PocketScreenEvent.TapKey(it) },events)
-            screen.render(state)
-            keys.forEachIndexed { i,key ->
-                assertEquals(colors[i],key.textColors)
-                assertNotNull(key.icon)
-            }
+            screen.render(scenes.state("focus").copy(rendered = List(9) { image }))
+            assertTrue(keys[0].text.isEmpty())
+            assertNull(keys[0].icon)
+            assertTrue(keys[0].contentDescription.startsWith("Key 1, Start"))
+            assertTrue(keys[7].isClickable)
         }
     }
 
