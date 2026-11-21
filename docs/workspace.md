@@ -46,7 +46,7 @@ the session-only image picker and diagnostic log export.
 | Profile | What to exercise | Platform boundary |
 | --- | --- | --- |
 | Phone | Select the factory **Phone** profile, connect an authorized physical keypad, opt in to **Open apps directly from keypad** in Settings and grant the explained Android special access. With the phone unlocked, background MX Pocket and press **Dialer**. | This legacy Phone shortcut can open immediately from one fresh physical press. Without the opt-in/grant it offers a notification instead. Virtual input and workflow steps never inherit this permission. |
-| Launcher | Edit favorites, choose installed apps, open one and page through additional favorites. Assign a favorite directly in a custom layout. | Uses launcher-visible components only; removed/non-favorite components cannot launch. A physical background shortcut offers a notification, not a silent app start. |
+| Launcher | Edit favorites, choose installed apps, open one and page through additional favorites. Assign a favorite directly in a custom layout. | Background favorites require a notification tap, except when direct shortcuts are enabled and the favorite belongs to Android's resolved default camera app. That exception opens only its viewfinder. Removed/non-favorite components cannot launch. |
 | Audio | Start a player, adjust volume, skip and toggle playback. Observe the title and transport state. | Global metadata requires optional Android media-session access. Support for individual controls depends on the player. No notification inbox or message access features. |
 | Studio | Open Pocket Studio, grant camera access if desired, take a photo, record silent video, place a marker, stop and open the saved capture. | Only controls the visible in-app CameraX session. Torch, zoom and focus depend on camera support. Leaving the viewfinder stops capture. |
 | Navigation | Try Back, Home, focus movement, activation and scrolling; inspect the optional navigation-access explanation. | System Recents/cross-app operations need explicit service activation. Apps and protected system screens may refuse actions; no gesture recording or scanning mode. |
@@ -76,6 +76,12 @@ keypad model and outcomes without identifiers or media metadata.
   Background, rotate and lock/unlock the phone. Recheck direct Phone shortcuts,
   notification handoff and revoked permissions. Verify CameraX capture/markers,
   optional global navigation and actual player behavior on that handset.
+- With MX Pocket in the background, press **Phone: Camera** on a custom page and
+  **Open Studio**, first with direct shortcuts off, then on with special access.
+  With access, check that the viewfinder appears without tapping and that no
+  capture starts. “If the app did not open, tap to try again” means Android was
+  asked to launch; “Tap to open the app” means a tap is required. Repeat with
+  the default camera favorite and a different app; only the camera is eligible.
 
 The debug `UiPreviewActivity` is a fixture: taps change fixture state or record
 UI events only. It cannot substitute for the executable simulator or hardware

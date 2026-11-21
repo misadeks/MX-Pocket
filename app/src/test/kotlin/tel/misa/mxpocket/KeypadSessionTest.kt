@@ -5,7 +5,11 @@ import android.app.KeyguardManager
 import android.app.Notification
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.ComponentName
 import android.content.Intent
+import android.content.pm.ActivityInfo
+import android.content.pm.ApplicationInfo
+import android.content.pm.ResolveInfo
 import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
 import android.hardware.usb.UsbConfiguration
@@ -14,6 +18,7 @@ import android.hardware.usb.UsbManager
 import android.os.Build
 import android.os.Looper
 import android.os.SystemClock
+import android.provider.MediaStore
 import android.view.View
 import android.widget.TextView
 import kotlinx.coroutines.CompletableDeferred
@@ -35,6 +40,9 @@ import tel.misa.mxpocket.driver.KeyEvent
 import tel.misa.mxpocket.plugins.PhoneApp
 import tel.misa.mxpocket.decks.DeckCommand
 import tel.misa.mxpocket.decks.StudioActivity
+import tel.misa.mxpocket.actions.ActionCall
+import tel.misa.mxpocket.deck.DeckKey
+import tel.misa.mxpocket.decks.Favorite
 
 @RunWith(org.robolectric.RobolectricTestRunner::class)
 @Config(sdk = [28, 35], application = KeypadSessionTest.FakeApp::class, shadows = [KeypadSessionTest.ConsentUsb::class])
@@ -256,7 +264,10 @@ class KeypadSessionTest {
         }
         session.attach(screen)
         val ticket = session.reserve(real)!!
-        session.connect(ticket, usb, real, { stops++ }, { handoff = (it.target as PocketSession.Target.Phone).app })
+        session.connect(ticket, usb, real, { stops++ }, {
+            handoff = (it.target as PocketSession.Target.Phone).app
+            tel.misa.mxpocket.decks.ok("Shortcut offered")
+        })
         main.idle()
         session.detach(screen)
         event(KeyEvent(1, true))
@@ -384,7 +395,7 @@ class KeypadSessionTest {
         service.destroy()
     }
 
-    @Test fun studioMayOfferAnUnlockedFreshOpenButNeverBackgroundCaptureOrOverlayLaunch() {
+    @Test fun studioRequestsOnlyTheViewfinderOrFallsBackToNotificationWithoutDirectAccess() {
         val real = device("test-keypad")
         shadowOf(usb).addOrUpdateUsbDevice(real, true)
         val ticket = app.session.reserve(real)!!
@@ -403,7 +414,16 @@ class KeypadSessionTest {
         assertFalse(app.session.deckState.value.studio.recording)
         assertFalse(app.session.runDeckAction(DeckCommand.STUDIO.id).success)
         press(8)
+        val viewfinder = shadowOf(app).nextStartedActivity
+        assertEquals(StudioActivity::class.java.name, viewfinder?.component?.className)
+        assertNull(viewfinder.extras)
+        assertEquals(app.getString(R.string.phone_action_retry),
+            manager.getNotification(PHONE_NOTICE).extras.getString(Notification.EXTRA_TEXT))
+        ShadowSettings.setCanDrawOverlays(false)
+        press(8)
         assertNull(shadowOf(app).nextStartedActivity)
+        assertEquals(app.getString(R.string.phone_action_note),
+            manager.getNotification(PHONE_NOTICE).extras.getString(Notification.EXTRA_TEXT))
         val open = shadowOf(manager.getNotification(PHONE_NOTICE).contentIntent).savedIntent
         Robolectric.buildActivity(PhoneActionActivity::class.java, open).setup().use {
             val target = shadowOf(it.get()).nextStartedActivity
@@ -417,6 +437,100 @@ class KeypadSessionTest {
             assertNull(shadowOf(it.get()).nextStartedActivity)
         }
         app.session.disconnect()
+        service.destroy()
+    }
+
+    @Test fun customCameraBindingRequestsTheViewfinderButCannotCarryPhysicalAuthorityIntoAWorkflow() {
+        val real = device("test-keypad")
+        shadowOf(usb).addOrUpdateUsbDevice(real, true)
+        val session = app.session
+        val profile = session.deck.createProfile("My controls").getOrThrow()
+        val camera = ActionCall("phone.open", mapOf("app" to "CAMERA"))
+        session.deck.setKey(profile,"root",0,DeckKey(action = camera)).getOrThrow()
+        session.selectProfile(profile)
+        val ticket = session.reserve(real)!!
+        val service = Robolectric.buildService(KeypadService::class.java).create()
+        service.get().onStartCommand(KeypadService.command(app,ticket),0,1)
+        main.idle()
+        val manager = shadowOf(app.getSystemService(NotificationManager::class.java))
+        ShadowSettings.setCanDrawOverlays(true)
+        DirectShortcuts(app).enabled = true
+        assertFalse(kotlinx.coroutines.runBlocking { session.actions.dispatch(camera) }.success)
+        assertNull(shadowOf(app).nextStartedActivity)
+        assertNull(manager.getNotification(PHONE_NOTICE))
+        fun press() { app.emit(KeyEvent(1,true)); app.emit(KeyEvent(1,false)); main.idle() }
+        Robolectric.buildActivity(MainActivity::class.java).setup().use {
+            press()
+            assertEquals(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA, shadowOf(app).nextStartedActivity?.action)
+            assertNull(manager.getNotification(PHONE_NOTICE))
+            app.emit(KeyEvent(1,true)); app.emit(KeyEvent(1,false))
+            SystemClock.sleep(2_001)
+            main.idle()
+            assertNull(shadowOf(app).nextStartedActivity)
+        }
+        press()
+        assertEquals(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA,shadowOf(app).nextStartedActivity?.action)
+        assertEquals(app.getString(R.string.phone_action_retry),manager.getNotification(PHONE_NOTICE).extras.getString(Notification.EXTRA_TEXT))
+        DirectShortcuts(app).enabled = false
+        press()
+        assertNull(shadowOf(app).nextStartedActivity)
+        assertEquals(app.getString(R.string.phone_action_note),manager.getNotification(PHONE_NOTICE).extras.getString(Notification.EXTRA_TEXT))
+        val stale = shadowOf(manager.getNotification(PHONE_NOTICE).contentIntent).savedIntent
+        session.deck.setKey(profile,"root",0,DeckKey()).getOrThrow()
+        main.idle()
+        Robolectric.buildActivity(PhoneActionActivity::class.java,stale).setup().use {
+            assertNull(shadowOf(it.get()).nextStartedActivity)
+        }
+        session.disconnect()
+        service.destroy()
+    }
+
+    @Suppress("DEPRECATION")
+    @Test fun onlyTheDefaultCameraFavoriteCanRequestADirectViewfinder() {
+        val pm = shadowOf(app.packageManager)
+        fun handler(name: ComponentName) = ResolveInfo().apply {
+            isDefault = true
+            activityInfo = ActivityInfo().apply {
+                packageName = name.packageName; this.name = name.className; exported = true; enabled = true
+                applicationInfo = ApplicationInfo().apply { packageName = name.packageName }
+            }
+            nonLocalizedLabel = "Camera"
+        }
+        val session = app.session
+        val camera = ComponentName("sample.camera","sample.camera.Entry")
+        val viewfinder = ComponentName(camera.packageName,"sample.camera.Viewfinder")
+        val other = ComponentName("sample.other","sample.other.Camera")
+        val profile = session.deck.createProfile("Camera controls").getOrThrow()
+        listOf(camera,other).forEachIndexed { index, name ->
+            val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+            pm.addResolveInfoForIntent(launcher,handler(name))
+            pm.addResolveInfoForIntent(Intent(launcher).setPackage(name.packageName),handler(name))
+            session.favoriteApps.setSelected(name.flattenToString(),true)
+            session.deck.setKey(profile,"root",index,DeckKey(label = "Camera",
+                action = ActionCall("launcher.open",mapOf("component" to name.flattenToString())))).getOrThrow()
+        }
+        pm.addResolveInfoForIntent(Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA),handler(viewfinder))
+        val real = device("test-keypad")
+        shadowOf(usb).addOrUpdateUsbDevice(real,true)
+        session.selectProfile(profile)
+        val ticket = session.reserve(real)!!
+        val service = Robolectric.buildService(KeypadService::class.java).create()
+        service.get().onStartCommand(KeypadService.command(app,ticket),0,1)
+        session.publishFavorites(listOf(camera,other).map { Favorite(it.flattenToString(),"Camera") })
+        main.idle()
+        ShadowSettings.setCanDrawOverlays(true)
+        DirectShortcuts(app).enabled = true
+        val manager = shadowOf(app.getSystemService(NotificationManager::class.java))
+        fun press(key: Int) { app.emit(KeyEvent(key,true)); app.emit(KeyEvent(key,false)); main.idle() }
+        press(1)
+        val opened = shadowOf(app).nextStartedActivity
+        assertEquals(viewfinder,opened?.component)
+        assertEquals(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA,opened.action)
+        assertNull(opened.extras)
+        press(2)
+        assertNull(shadowOf(app).nextStartedActivity)
+        assertEquals(app.getString(R.string.phone_action_note),manager.getNotification(PHONE_NOTICE).extras.getString(Notification.EXTRA_TEXT))
+        session.disconnect()
         service.destroy()
     }
 }

@@ -219,16 +219,20 @@ polling while detached or silent service restart is used.
 select **Open apps directly from keypad**, read the explanation and grant
 **Display over other apps** to MX Pocket in Android settings. This optional
 special access is broader than launching apps: it also permits drawing over
-other apps. MX Pocket creates no overlay windows. Direct shortcuts apply only
-to fresh Phone-page presses from the active authorized keypad on an unlocked
-phone. Turn the option off in MX Pocket or revoke special access in Settings.
+other apps. MX Pocket creates no overlay windows. A fresh physical press on the
+active, authorized keypad can open a built-in Phone shortcut, **Phone: Camera**
+on any saved layout, or **Open Studio**. A favorite from the app Android resolves
+as its default still camera can open that app's viewfinder; all other favorites
+still need a notification tap. No opening action takes a photo or starts
+recording. Turn the option off in MX Pocket or revoke special access in Settings.
 
-With the option off, access denied/unavailable, or the phone locked, press a
+With the option off or special access denied/unavailable, press a
 shortcut and tap its **Open Camera**, **Open Dialer**, etc. notification. No second keypad
 press or visit to the MX Pocket screen is needed. Allow the **Keypad app shortcuts**
 notification channel; Android controls whether it appears as a banner or in the
 shade. Only the latest request is usable, for one minute on the same connected
-keypad and plugin page. Unlock normally before opening the shortcut. In the
+keypad and binding. Direct launches require an unlocked, interactive phone.
+If the phone was locked, unlock normally and press again. In the
 foreground the same key still launches the app immediately. Android does not
 confirm that an external app appeared; a quiet tap-to-retry shortcut remains
 available if an OEM suppresses an otherwise permitted direct launch.

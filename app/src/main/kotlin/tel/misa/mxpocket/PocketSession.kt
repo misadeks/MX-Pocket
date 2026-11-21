@@ -68,7 +68,7 @@ internal class PocketSession(
         data class FavoriteApp(val component: String) : Target
         data object Studio : Target
     }
-    data class PhoneAction(val target: Target, val ticket: Request, val generation: Int,
+    data class PhoneAction(val target: Target, val ticket: Request, val index: Int, val receipt: Long,
         val pressedAt: Long, val id: String = UUID.randomUUID().toString())
     companion object { const val PHONE_ACTION_TTL = 60_000L }
     private data class Layout(val profile: String, val page: DeckPage, val pluginEpoch: Int,
@@ -110,8 +110,9 @@ internal class PocketSession(
     private var hardwareScope: CoroutineScope? = null
     private var output: KeypadOutput? = null
     private var onEnd: (() -> Unit)? = null
-    private var onHandoff: ((PhoneAction) -> Unit)? = null
+    private var onHandoff: ((PhoneAction) -> DeckResult)? = null
     private var physicalPressAt: Long? = null
+    private var physicalIndex: Int? = null
     private var pendingAction: PhoneAction? = null
     private val images = KeyImages(favoriteApps::icon)
     private var revision = 0
@@ -361,6 +362,13 @@ internal class PocketSession(
             }
             "phone.open" -> {
                 val target = PhoneApp.entries.find { it.name == call.params["app"] }
+                if (origin == WorkflowOrigin.PHYSICAL && target == PhoneApp.CAMERA) {
+                    if (screen == null) {
+                        val offered = offerPhysicalShortcut(Target.Phone(target))
+                        return ActionResult(offered.success, offered.message)
+                    }
+                    if (!freshAuthorizedPress()) return ActionResult(false,"Press Camera again on the authorized keypad.")
+                }
                 val ok = screen != null && target != null && app.isUnlockedAndInteractive() && app.launchPhoneApp(target) == null
                 ActionResult(ok, if (ok) "App requested" else "Open MX Pocket on an unlocked phone to launch an app.")
             }
@@ -420,7 +428,7 @@ internal class PocketSession(
     }
 
     /** Called only after revalidation and successful foreground promotion. */
-    fun connect(ticket: Request, manager: UsbManager, device: UsbDevice, end: () -> Unit, handoff: (PhoneAction) -> Unit) {
+    fun connect(ticket: Request, manager: UsbManager, device: UsbDevice, end: () -> Unit, handoff: (PhoneAction) -> DeckResult) {
         if (request != ticket || hardwareScope != null) return
         val scope = CoroutineScope(Dispatchers.Main.immediate + SupervisorJob())
         hardwareScope = scope
@@ -505,6 +513,7 @@ internal class PocketSession(
                     !sameBinding(lcd[index], frame().keys[index]))) return
                 if (!frame().keys[index].enabled) return
                 physicalPressAt = arrivedAt.takeIf { !virtual && event.pressed && !event.synthetic && request != null }
+                physicalIndex = index.takeIf { physicalPressAt != null }
                 visibleKey = virtual && event.pressed && !event.synthetic
                 try {
                     if (call.id == "plugin.key" && call.params["pluginId"] == plugins.selectedId) {
@@ -517,6 +526,7 @@ internal class PocketSession(
                     }
                 } finally {
                     physicalPressAt = null
+                    physicalIndex = null
                     visibleKey = false
                 }
             }
@@ -601,13 +611,13 @@ internal class PocketSession(
                 audio.dispatchMediaKeyEvent(AndroidKeyEvent(AndroidKeyEvent.ACTION_UP, code))
                 log("Media command sent; an active media session is required")
             }
-            is PluginAction.OpenApp -> if (screen?.openApp(action.app) != true) {
-                val time = physicalPressAt ?: return
-                val ticket = request ?: return
-                val handoff = PhoneAction(Target.Phone(action.app), ticket, plugins.generation, time)
-                pendingAction = handoff
-                onHandoff?.invoke(handoff)
-            } else Unit
+            is PluginAction.OpenApp -> {
+                if (screen != null && physicalPressAt != null && !freshAuthorizedPress()) {
+                    message("Press the shortcut again on the authorized keypad.")
+                } else if (screen?.openApp(action.app) != true && physicalPressAt != null) {
+                    message(offerPhysicalShortcut(Target.Phone(action.app)).message)
+                }
+            }
             PluginAction.CompletionTone -> scope.launch {
                 val tone = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 50)
                 try { tone.startTone(ToneGenerator.TONE_PROP_ACK, 500); delay(600) } finally { tone.release() }
@@ -678,9 +688,8 @@ internal class PocketSession(
             (c != DeckCommand.OPEN && params.isNotEmpty())) return unavailable("Invalid action parameters.")
         if (!app.isUnlockedAndInteractive()) return unavailable("Unlock the phone before using this control.")
         if (c.workflowSafe) return media.execute(c)
-        val now = SystemClock.elapsedRealtime()
-        val press = physicalPressAt?.takeIf { now - it in 0 until 2_000L && request?.let(app::hasKeypadAccess) == true }
-        if (!(visibleKey && screen != null) && press == null) return unavailable("Press a key on the unlocked phone or connected keypad.")
+        if (!(visibleKey && screen != null) && !freshAuthorizedPress())
+            return unavailable("Press a key on the unlocked phone or connected keypad.")
         if (c.deck == "studio" && c != DeckCommand.STUDIO)
             return studio?.press(c) ?: unavailable("Open Pocket Studio on the phone first.")
         if (c.deck == "navigation" && c != DeckCommand.NAV_ACCESS &&
@@ -695,20 +704,33 @@ internal class PocketSession(
             DeckCommand.STUDIO -> if (studio != null) return ok("Studio is already open.") else Target.Studio
             else -> return unavailable("Open MX Pocket to use this control.")
         }
-        val ticket = request ?: return unavailable("Keypad disconnected.")
-        val handoff = PhoneAction(target, ticket, plugins.generation, press ?: return unavailable("Press a keypad key."))
-        pendingAction = handoff
-        onHandoff?.invoke(handoff)
-        return ok("Shortcut offered. Tap its notification to open.")
+        return offerPhysicalShortcut(target)
     }
+
+    private fun freshAuthorizedPress() = physicalPressAt?.let { SystemClock.elapsedRealtime() - it in 0 until 2_000L } == true &&
+        request?.let(app::hasKeypadAccess) == true
+
+    private fun offerPhysicalShortcut(target: Target): DeckResult {
+        val ticket = request ?: return unavailable("Keypad disconnected.")
+        val time = physicalPressAt ?: return unavailable("Press a keypad key.")
+        val index = physicalIndex ?: return unavailable("Press a keypad key.")
+        val offer = onHandoff ?: return unavailable("Keypad session unavailable.")
+        val action = PhoneAction(target, ticket, index, receipt, time)
+        pendingAction = action
+        return offer(action)
+    }
+
+    fun isCurrentShortcut(action: PhoneAction): Boolean =
+        pendingAction == action && action.ticket == request && output != null && action.receipt != 0L &&
+            action.receipt == receipt && painted?.layout == layout() && sameBinding(lcd[action.index], frame().keys[action.index])
 
     fun logText(limit: Int = 250) = logs.takeLast(limit).joinToString("\n")
     fun takePhoneAction(id: String?): PhoneAction? {
         val pending = pendingAction ?: return null
         if (id != pending.id) return null // An older tap must not consume the replacement.
+        val valid = isCurrentShortcut(pending) && SystemClock.elapsedRealtime() - pending.pressedAt in 0 until PHONE_ACTION_TTL
         pendingAction = null
-        return pending.takeIf { it.ticket == request && output != null && it.generation == plugins.generation &&
-            SystemClock.elapsedRealtime() - it.pressedAt < PHONE_ACTION_TTL }
+        return pending.takeIf { valid }
     }
     fun log(line: String) {
         logs.addLast("${SystemClock.elapsedRealtime()} $line")

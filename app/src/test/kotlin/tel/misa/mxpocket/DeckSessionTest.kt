@@ -89,7 +89,7 @@ class DeckSessionTest {
         val device = ReflectionHelpers.newInstance(UsbDevice::class.java)
         ReflectionHelpers.setField(device,"mName","simulated")
         val ticket = session.reserve(device)!!
-        session.connect(ticket,app.getSystemService(UsbManager::class.java),device,{}, {})
+        session.connect(ticket,app.getSystemService(UsbManager::class.java),device,{}, { error("Unexpected shortcut") })
         main.idle()
         assertEquals(9,writes)
         // Transmit a changed tile, then change the binding while that transaction is waiting.
@@ -119,7 +119,7 @@ class DeckSessionTest {
         }
         val device = ReflectionHelpers.newInstance(UsbDevice::class.java)
         ReflectionHelpers.setField(device,"mName","simulated")
-        session.connect(session.reserve(device)!!,app.getSystemService(UsbManager::class.java),device,{}, {})
+        session.connect(session.reserve(device)!!,app.getSystemService(UsbManager::class.java),device,{}, { error("Unexpected shortcut") })
         main.idle()
         emit(KeyEvent(1,true))
         main.idle()
