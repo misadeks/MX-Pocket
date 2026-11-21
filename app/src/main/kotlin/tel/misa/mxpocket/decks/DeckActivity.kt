@@ -45,6 +45,13 @@ abstract class DeckActivity : AppCompatActivity() {
 
 class DeckAccessActivity : DeckActivity() {
     companion object {
+        internal fun settings(media: Boolean) =
+            Intent(if (media) Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS else Settings.ACTION_ACCESSIBILITY_SETTINGS)
+
+        internal fun disclosure(media: Boolean) = if (media)
+            "Android grants broad notification access. MX Pocket only queries active media sessions for playback controls and track details; it does not read, store or act on notifications. Basic media keys and volume work without access."
+        else "The MX Pocket navigation accessibility service can inspect the current window and act across apps. On a key press it can go Back or Home, open Recents, scroll, move focus or activate an item. It does not read or store screen text, record keys or automate gestures. Without access, navigation stays inside MX Pocket."
+
         fun intent(context: Context, command: DeckCommand): Intent {
             require(command == DeckCommand.MEDIA_ACCESS || command == DeckCommand.NAV_ACCESS)
             return Intent(context, DeckAccessActivity::class.java).putExtra("access", command.id)
@@ -60,15 +67,13 @@ class DeckAccessActivity : DeckActivity() {
         column.addView(scroll)
         val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         scroll.addView(body)
-        description(body, if (media)
-            "To show track titles and playback status, Android requires notification listener access. This is a broad system grant. MX Pocket only queries media sessions; it does not read, store or act on notifications. Without access you can still send media keys and change volume."
-            else "Enable MX Pocket navigation in Android Accessibility settings to use your keypad across apps. On a key press it uses the current app's focused element for scrolling, focus and activation. It does not read or store screen text, record keys or automate gestures. Without access, navigation works inside MX Pocket.")
+        description(body, disclosure(media))
         description(body, "Access is optional. You can turn it off in the same settings at any time.")
         val status = description(body, "")
         status.accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
         button(body, "Open Android settings") {
             try {
-                startActivity(Intent(if (media) Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS else Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                startActivity(settings(media))
             } catch (_: ActivityNotFoundException) { status.text = "These settings are unavailable on this device." }
             catch (_: SecurityException) { status.text = "Android restricted these settings." }
         }
