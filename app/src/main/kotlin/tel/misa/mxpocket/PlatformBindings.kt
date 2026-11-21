@@ -8,7 +8,7 @@ import tel.misa.mxpocket.workflow.WorkflowField
 import tel.misa.mxpocket.workflow.WorkflowOrigin
 
 internal fun PocketSession.platformBindings(): List<Pair<String,ActionCall>> = buildList {
-    for (command in DeckCommand.entries) {
+    for (command in DeckCommand.entries.filterNot { it.legacyCapture || it.nativeControl }) {
         if (command == DeckCommand.OPEN) deckState.value.favorites.forEach {
             add("Launch ${it.label}" to ActionCall(command.id,mapOf("component" to it.component)))
         } else add("${command.deck}: ${command.label}" to ActionCall(command.id))
@@ -23,14 +23,14 @@ internal fun PocketSession.pluginDetails(id: String): String {
     val state = deckState.value
     val access = when (id) {
         "launcher" -> "${state.favorites.size} favorites. Only launchable apps are listed."
-        "studio" -> state.studio.status
+        "studio" -> "Phone camera viewfinder. Keypad camera controls: ${state.cameraStatus}."
         "audio" -> if (state.media.access) "Media access on. ${state.media.status}" else "Media access off. Basic media keys available."
         "navigation" -> if (state.navigationEnabled) "System navigation enabled." else "Basic in-app navigation; system access off."
         "focus" -> "Timer, pause, reset, and duration presets. No permission required."
         "phone" -> "Camera, settings, dialer, browser and alarms. Direct shortcuts are optional."
         else -> ""
     }
-    val commands = DeckCommand.entries.filter { it.deck == id }.joinToString { it.label }
+    val commands = DeckCommand.entries.filter { it.deck == id && !it.legacyCapture }.joinToString { it.label }
     return listOf(access,commands).filter(String::isNotBlank).joinToString("\n")
 }
 
@@ -56,11 +56,8 @@ internal fun PocketSession.platformAction(call: ActionCall, origin: WorkflowOrig
 internal fun PocketSession.platformSignals(): Map<String,String> = deckState.value.let { state ->
     buildMap {
         state.media.playing?.let { put("mediaActive", it.toString()) }
-        put("studioReady",state.studio.ready.toString())
-        put("recording",state.studio.recording.toString())
         put("navigationAvailable",state.navigationEnabled.toString())
         put("mediaAccess",state.media.access.toString())
-        if (state.studio.ready) put("activity","Pocket Studio")
     }
 }
 

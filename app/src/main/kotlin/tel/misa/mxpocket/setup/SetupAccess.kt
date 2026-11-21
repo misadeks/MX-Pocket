@@ -17,6 +17,8 @@ import tel.misa.mxpocket.KeypadService
 import tel.misa.mxpocket.R
 import tel.misa.mxpocket.UsbAccess
 import tel.misa.mxpocket.decks.DeckAccessActivity
+import tel.misa.mxpocket.decks.CameraControlsAccess
+import tel.misa.mxpocket.decks.CameraControlsActivity
 import tel.misa.mxpocket.decks.NavigationService
 import tel.misa.mxpocket.decks.hasMediaSessionAccess
 import tel.misa.mxpocket.driver.UsbDiagnostics
@@ -24,7 +26,7 @@ import tel.misa.mxpocket.driver.UsbDiagnostics
 internal enum class SetupAction(val label: String) {
     USB("Allow this keypad"), POST("Allow session notifications"), APP_NOTICES("Open notification settings"),
     CHANNEL("Open session channel"), AUTO("Enable plug-in handling"), MEDIA("Open notification access"),
-    CAMERA("Allow Studio camera"), APP_DETAILS("Open app settings"), OVERLAY("Open special access"),
+    CAMERA("Manage camera controls"), OVERLAY("Open special access"),
     DIRECT("Enable one-press shortcuts"), NAVIGATION("Open accessibility settings")
 }
 
@@ -54,7 +56,7 @@ internal class SetupAccess(private val host: Activity, private val choices: Setu
         if (attach.automatic || keypads().any(usb::hasPermission)) add(Feature.USB)
         if (attach.automatic) add(Feature.AUTO)
         if (host.hasMediaSessionAccess()) add(Feature.MUSIC)
-        if (granted(Manifest.permission.CAMERA)) add(Feature.STUDIO)
+        if (CameraControlsAccess(host).enabled) add(Feature.STUDIO)
         if (shortcuts.enabled) add(Feature.DIRECT)
         if (navigationAllowed()) add(Feature.NAVIGATION)
     }
@@ -96,18 +98,11 @@ internal class SetupAccess(private val host: Activity, private val choices: Setu
                 if (allowed) "Media session access allowed" else "Basic media keys only", allowed, SetupAction.MEDIA.takeUnless { allowed }))
         }
         if (Feature.STUDIO in features) {
-            val camera = host.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY)
-            val allowed = granted(Manifest.permission.CAMERA)
-            val action = when {
-                !camera || allowed -> null
-                restricted(Manifest.permission.CAMERA) -> SetupAction.APP_DETAILS
-                else -> SetupAction.CAMERA
-            }
-            add(SetupStep("Pocket Studio camera", if (action == SetupAction.APP_DETAILS)
-                "Choose Permissions, then Camera in Android app settings, or leave Studio off."
-                else "Only Pocket Studio uses the camera. Setup never opens the viewfinder or starts a capture.",
-                when { !camera -> "No camera reported"; allowed -> "Camera permission allowed"; else -> "Camera permission off" },
-                camera && allowed, action))
+            val enabled = CameraControlsAccess(host).enabled
+            val ready = enabled && navigationAllowed()
+            add(SetupStep("Studio camera controls", CameraControlsAccess.disclosure,
+                when { ready -> "Keypad controls enabled"; enabled -> "Navigation service off"; else -> "Viewfinder only" },
+                ready, SetupAction.CAMERA))
         }
         if (Feature.DIRECT in features) {
             val allowed = Settings.canDrawOverlays(host)
@@ -128,7 +123,7 @@ internal class SetupAccess(private val host: Activity, private val choices: Setu
         SetupAction.APP_NOTICES -> Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, host.packageName)
         SetupAction.CHANNEL -> Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
             .putExtra(Settings.EXTRA_APP_PACKAGE, host.packageName).putExtra(Settings.EXTRA_CHANNEL_ID, KeypadService.CHANNEL)
-        SetupAction.APP_DETAILS -> Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, packageUri)
+        SetupAction.CAMERA -> Intent(host, CameraControlsActivity::class.java)
         SetupAction.MEDIA, SetupAction.NAVIGATION -> DeckAccessActivity.settings(action == SetupAction.MEDIA)
         SetupAction.OVERLAY -> Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, packageUri)
         else -> error("Not a settings action: $action")

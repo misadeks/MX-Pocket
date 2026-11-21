@@ -45,7 +45,9 @@ import org.robolectric.util.ReflectionHelpers
 import tel.misa.mxpocket.driver.KeyEvent
 import tel.misa.mxpocket.plugins.PhoneApp
 import tel.misa.mxpocket.decks.DeckCommand
-import tel.misa.mxpocket.decks.StudioActivity
+import tel.misa.mxpocket.decks.CameraMode
+import tel.misa.mxpocket.decks.CameraControlsAccess
+import tel.misa.mxpocket.decks.NavigationService
 import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.DeckJson
 import tel.misa.mxpocket.deck.DeckKey
@@ -559,7 +561,64 @@ class KeypadSessionTest {
         service.destroy()
     }
 
+    @Config(shadows = [CameraWindowFixture::class])
+    @Test fun onlyAnAcknowledgedFreshPhysicalStudioPressCanClickTheOptedInCamera() {
+        installTestCamera(app)
+        val service = Robolectric.buildService(NavigationService::class.java).create()
+        val navigation = service.get()
+        ReflectionHelpers.callInstanceMethod<Unit>(navigation, "onServiceConnected")
+        val window = shadowOf(navigation) as CameraWindowFixture
+        var clicks = 0
+        val button = cameraNode("Take picture")
+        shadowOf(button).setOnPerformActionListener { _, _ -> clicks++; true }
+        window.root = button
+        val real = device("test-keypad")
+        shadowOf(usb).addOrUpdateUsbDevice(real, true)
+        val session = app.session
+        val ticket = session.reserve(real)!!
+        val keypad = Robolectric.buildService(KeypadService::class.java).create()
+        keypad.get().onStartCommand(KeypadService.command(app, ticket), 0, 1)
+        try {
+            session.selectProfile("studio")
+            main.idle()
+            press(1)
+            assertEquals(0, clicks)
+            CameraControlsAccess(app).enabled = true
+            session.selectProfile("phone")
+            session.selectProfile("studio")
+            press(1) // Arrived with an invalidated receipt.
+            assertEquals(0, clicks)
+            press(1)
+            assertEquals(1, clicks)
+            assertTrue(session.status.contains("Shutter requested"))
+            press(2) // Photo-mode control must not start video.
+            assertNull(shadowOf(app).nextStartedActivity)
+            val lock = shadowOf(app.getSystemService(KeyguardManager::class.java))
+            lock.setKeyguardLocked(true); press(1); lock.setKeyguardLocked(false)
+            val power = shadowOf(app.getSystemService(android.os.PowerManager::class.java))
+            power.setIsInteractive(false); press(1); power.setIsInteractive(true)
+            app.emit(KeyEvent(1, true)); app.emit(KeyEvent(1, false))
+            SystemClock.sleep(2_001); main.idle()
+            window.root = cameraNode("Take picture", "sample.other")
+            press(1)
+            window.root = button
+            assertFalse(session.runDeckAction(DeckCommand.SHUTTER.id, fromPhysicalKey = true).success)
+            val custom = session.deck.createProfile("My camera").getOrThrow()
+            session.deck.setKey(custom, "root", 0, DeckKey(action = ActionCall("plugin.key",
+                mapOf("pluginId" to "studio", "index" to "0")))).getOrThrow()
+            session.selectProfile(custom); main.idle()
+            assertFalse(session.frame().keys.first().enabled)
+            press(1)
+            session.selectProfile("studio"); main.idle()
+            shadowOf(usb).revokePermission(real, app.packageName); press(1)
+            session.disconnect(); press(1)
+            assertEquals(1, clicks)
+            assertNull(shadowOf(app).nextStartedActivity)
+        } finally { session.disconnect(); keypad.destroy(); service.destroy() }
+    }
+
     @Test fun studioRequestsOnlyTheViewfinderOrFallsBackToNotificationWithoutDirectAccess() {
+        val native = installTestCamera(app)
         val real = device("test-keypad")
         shadowOf(usb).addOrUpdateUsbDevice(real, true)
         val ticket = app.session.reserve(real)!!
@@ -573,25 +632,27 @@ class KeypadSessionTest {
         }
         ShadowSettings.setCanDrawOverlays(true)
         DirectShortcuts(app).enabled = true
-        press(2) // Record without a resumed Studio.
+        press(2) // Record without a camera-controls grant.
         assertNull(manager.getNotification(PHONE_NOTICE))
-        assertFalse(app.session.deckState.value.studio.recording)
+        assertNull(shadowOf(app).nextStartedActivity)
         assertFalse(app.session.runDeckAction(DeckCommand.STUDIO.id).success)
         press(8)
         val viewfinder = shadowOf(app).nextStartedActivity
-        assertEquals(StudioActivity::class.java.name, viewfinder?.component?.className)
+        assertEquals(native, viewfinder?.component)
+        assertEquals(CameraMode.PHOTO.action, viewfinder.action)
         assertNull(viewfinder.extras)
         assertEquals(app.getString(R.string.phone_action_retry),
             manager.getNotification(PHONE_NOTICE).extras.getString(Notification.EXTRA_TEXT))
         ShadowSettings.setCanDrawOverlays(false)
-        press(8)
+        press(7)
         assertNull(shadowOf(app).nextStartedActivity)
         assertEquals(app.getString(R.string.phone_action_note),
             manager.getNotification(PHONE_NOTICE).extras.getString(Notification.EXTRA_TEXT))
         val open = shadowOf(manager.getNotification(PHONE_NOTICE).contentIntent).savedIntent
         Robolectric.buildActivity(PhoneActionActivity::class.java, open).setup().use {
             val target = shadowOf(it.get()).nextStartedActivity
-            assertEquals(StudioActivity::class.java.name, target.component?.className)
+            assertEquals(native, target.component)
+            assertEquals(CameraMode.VIDEO.action, target.action)
             assertNull(target.extras) // No capture action can be embedded in this handoff.
         }
         press(8)

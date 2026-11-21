@@ -432,7 +432,9 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
         val intent = when (command) {
             DeckCommand.OPEN -> session.favoriteApps.intentFor(component) ?: return unavailable("Favorite no longer available.")
             DeckCommand.EDIT -> Intent(this, FavoritesActivity::class.java)
-            DeckCommand.STUDIO -> Intent(this, StudioActivity::class.java)
+            DeckCommand.STUDIO, DeckCommand.VIDEO -> viewfinder(if (command == DeckCommand.STUDIO) CameraMode.PHOTO else CameraMode.VIDEO)
+                ?: return unavailable("No default camera viewfinder for this mode.")
+            DeckCommand.CAMERA_ACCESS -> Intent(this, CameraControlsActivity::class.java)
             DeckCommand.MEDIA_ACCESS, DeckCommand.NAV_ACCESS -> DeckAccessActivity.intent(this, command)
             DeckCommand.HOME -> Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
             DeckCommand.BACK -> { onBackPressedDispatcher.onBackPressed(); return ok("Back in MX Pocket.") }

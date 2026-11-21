@@ -33,9 +33,6 @@ class SetupActivity : AppCompatActivity() {
     private var usbToken: String? = null
     private val usbReply get() = "$packageName.SETUP_USB_PERMISSION"
 
-    private val camera = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
-        afterRequest(Manifest.permission.CAMERA, it)
-    }
     private val notices = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
         afterRequest(Manifest.permission.POST_NOTIFICATIONS, it)
     }
@@ -121,7 +118,6 @@ class SetupActivity : AppCompatActivity() {
             when (action) {
                 SetupAction.AUTO -> access.attach.automatic = true
                 SetupAction.DIRECT -> access.shortcuts.enabled = true
-                SetupAction.CAMERA -> camera.launch(Manifest.permission.CAMERA)
                 SetupAction.POST -> notices.launch(Manifest.permission.POST_NOTIFICATIONS)
                 SetupAction.USB -> {
                     val device = access.keypads().singleOrNull() ?: return refresh()

@@ -19,7 +19,7 @@ Home. Automatic connection is separate: enable plug-in handling, reconnect
 the keypad and select MX Pocket if Android offers a handler choice.
 Optional **notification access** is for richer player controls and artwork,
 not for posting the session notification. Basic media keys still work without
-it. Pocket Studio camera, one-press app opening and cross-app navigation each
+it. Physical Studio camera controls, one-press app opening and cross-app navigation each
 have their own steps. If Android restricts access, leave that option off.
 
 ## Run without hardware
@@ -67,7 +67,7 @@ have their own steps. If Android restricts access, leave that option off.
 | Phone | Select the factory **Phone** profile, connect an authorized physical keypad, opt in to **Open apps directly from keypad** in Settings and grant the explained Android special access. With the phone unlocked, background MX Pocket and press **Dialer**. | This legacy Phone shortcut can open immediately from one fresh physical press. Without the opt-in/grant it offers a notification instead. Virtual input and workflow steps never inherit this permission. |
 | Launcher | Edit favorites, choose installed apps, open one and page through additional favorites. Assign a favorite directly in a custom layout. | With direct shortcuts enabled and special access granted, a fresh physical press requests the exact saved launcher component or the resolved default camera's viewfinder. Removed/non-favorite components cannot launch. |
 | Audio | Start a player, adjust volume, skip and toggle playback. Observe the title and transport state. | Global metadata requires optional Android media-session access. Support for individual controls depends on the player. No notification inbox or message access features. |
-| Studio | Open Pocket Studio, grant camera access if desired, take a photo, record silent video, place a marker, stop and open the saved capture. | Only controls the visible in-app CameraX session. Torch, zoom and focus depend on camera support. Leaving the viewfinder stops capture. |
+| Studio | Open the phone camera in photo or video mode. Optionally enable **Camera controls** and the Android navigation accessibility service to request Shutter, Record or Stop using the physical Studio deck. | Only a matching button in the visible default camera can respond. The camera owns media and reports its own state. No camera grant to MX Pocket is needed. |
 | Navigation | Try Back, Home, focus movement, activation and scrolling; inspect the optional navigation-access explanation. | System Recents/cross-app operations need explicit service activation. Apps and protected system screens may refuse actions; no gesture recording or scanning mode. |
 | Custom | Put different media, page, profile, favorite and workflow actions on adjacent keys. Disable one plugin and verify its assigned controls no longer run. | An import is configuration, not new code. Optional Android grants remain controlled by the OS. |
 
@@ -98,10 +98,10 @@ keypad model and outcomes without identifiers or media metadata.
   [media access and privacy checks](android-decks.md#physical-acceptance-gates-not-established-by-jvm-tests).
 - Detach during upload, reconnect and verify saved location and full repaint.
   Background, rotate and lock/unlock the phone. Recheck direct Phone shortcuts,
-  notification handoff and revoked permissions. Verify CameraX capture/markers,
+  notification handoff and revoked permissions. Verify native viewfinder opening,
   optional global navigation and actual player behavior on that handset.
 - With MX Pocket in the background, press **Phone: Camera** on a custom page and
-  **Open Studio**, first with direct shortcuts off, then on with special access.
+  Studio's **Open Camera**, first with direct shortcuts off, then on with special access.
   With access, check that the viewfinder appears without tapping and that no
   capture starts. “If the app did not open, tap to try again” means Android was
   asked to launch; “Tap to open the app” means no direct request was made.
