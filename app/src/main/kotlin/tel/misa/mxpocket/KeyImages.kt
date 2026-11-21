@@ -9,7 +9,7 @@ import android.util.LruCache
 import tel.misa.mxpocket.plugins.KeyTile
 
 /** Entries are immutable after drawing. Views and an in-flight upload may outlive a cache entry. */
-internal class KeyImages {
+internal class KeyImages(private val appIcon: (String) -> Bitmap?) {
     private data class CacheKey(val index: Int, val tile: KeyTile)
     private val images = LruCache<CacheKey, Bitmap>(36)
     private var backdrop: Bitmap? = null
@@ -44,7 +44,10 @@ internal class KeyImages {
             }
             canvas.drawText(label, 59f, y, paint)
         }
-        line(tile.icon.ifBlank { "${index + 1}" }, 30f, 23f)
+        val appImage = tile.iconComponent?.takeIf { tile.icon.isBlank() }?.let(appIcon)
+        if (appImage != null) canvas.drawBitmap(appImage,null,android.graphics.Rect(38,4,80,46),
+            Paint(Paint.FILTER_BITMAP_FLAG))
+        else line(tile.icon.ifBlank { "${index + 1}" }, 30f, 23f)
         paint.typeface = Typeface.DEFAULT_BOLD
         line(tile.label, 69f, 19f)
         paint.typeface = Typeface.DEFAULT

@@ -88,7 +88,7 @@ class KeypadService : Service() {
         // Android provides no launch-success callback: retain a quiet tap-to-retry on OEM builds.
         val direct = age < 2_000 && session.isPhoneShortcutPage &&
             DirectShortcuts(this).enabled && isUnlockedAndInteractive()
-        val attempted = direct && launchPhoneApp(action.app).let { error ->
+        val attempted = direct && action.target is PocketSession.Target.Phone && launchPhoneApp(action.target.app).let { error ->
             if (error != null) session.log(error)
             error == null
         }
@@ -98,7 +98,7 @@ class KeypadService : Service() {
             notifications.getNotificationChannel(PHONE_CHANNEL).importance == NotificationManager.IMPORTANCE_NONE) {
             session.takePhoneAction(action.id)
             if (attempted) return
-            val message = "Enable Keypad app shortcuts notifications in Android settings to open ${action.app.name}."
+            val message = "Enable Keypad app shortcuts notifications in Android settings to open this shortcut."
             session.message(message)
             if (notificationsVisible(this)) notifications.notify(NOTICE, notification(action.ticket, message))
             return
@@ -107,7 +107,12 @@ class KeypadService : Service() {
             .setData(Uri.parse("mxpocket://shortcut/${action.id}"))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         val tap = PendingIntent.getActivity(this, 0, open, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_ONE_SHOT)
-        val title = getString(R.string.phone_action_open, action.app.name.lowercase().replaceFirstChar(Char::uppercaseChar))
+        val label = when (val target = action.target) {
+            is PocketSession.Target.Phone -> target.app.name.lowercase().replaceFirstChar(Char::uppercaseChar)
+            is PocketSession.Target.FavoriteApp -> "favorite app"
+            PocketSession.Target.Studio -> "Pocket Studio"
+        }
+        val title = getString(R.string.phone_action_open, label)
         val note = Notification.Builder(this, PHONE_CHANNEL)
             .apply { if (attempted) setGroup("shortcut-retry").setGroupAlertBehavior(Notification.GROUP_ALERT_SUMMARY) }
             .setSmallIcon(R.drawable.icon_foreground).setContentTitle(title)

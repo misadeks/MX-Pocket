@@ -254,7 +254,7 @@ class KeypadSessionTest {
         }
         session.attach(screen)
         val ticket = session.reserve(real)!!
-        session.connect(ticket, usb, real, { stops++ }, { handoff = it.app })
+        session.connect(ticket, usb, real, { stops++ }, { handoff = (it.target as PocketSession.Target.Phone).app })
         main.idle()
         session.detach(screen)
         event(KeyEvent(1, true))
@@ -307,7 +307,7 @@ class KeypadSessionTest {
                 Robolectric.buildActivity(PhoneActionActivity::class.java, intent).setup().use {
                     shadowOf(it.get()).nextStartedActivity
                 }
-            press(0x01a1) // Focus -> Phone
+            press(0x01a1)
             press(1)
             assertEquals("android.media.action.STILL_IMAGE_CAMERA", shadowOf(controller.get()).nextStartedActivity?.action)
             controller.pause().stop()

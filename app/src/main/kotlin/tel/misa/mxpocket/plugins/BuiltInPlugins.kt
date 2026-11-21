@@ -7,7 +7,10 @@ import tel.misa.mxpocket.FocusTimer
 /** Registration order is the page-button order. Add your compiled-in plugin here. */
 object BuiltInPlugins {
     fun create(focusTitle: String, audioTitle: String, phoneTitle: String): List<PocketPlugin> =
-        listOf(FocusPlugin(focusTitle), AudioPlugin(audioTitle), PhonePlugin(phoneTitle))
+        listOf(FocusPlugin(focusTitle), DeckPlugin("audio", audioTitle, PluginCapability.AUDIO), PhonePlugin(phoneTitle),
+            DeckPlugin("launcher", "App Launcher", PluginCapability.OPEN_APPS),
+            DeckPlugin("studio", "Pocket Studio", PluginCapability.STUDIO),
+            DeckPlugin("navigation", "Android Navigation", PluginCapability.SYSTEM_NAVIGATION))
 }
 
 class FocusPlugin(title: String) : PocketPlugin {
@@ -41,45 +44,6 @@ class FocusPlugin(title: String) : PocketPlugin {
             7 -> timer.select(25)
             8 -> timer.select(50)
         }
-        host.invalidate()
-    }
-}
-
-class AudioPlugin(title: String) : PocketPlugin {
-    override val descriptor = PluginDescriptor("audio", title, setOf(PluginCapability.AUDIO))
-    private var audio = AudioSnapshot(0, 0)
-
-    override fun onActivate(host: PluginHost) {
-        audio = host.audioSnapshot()
-        host.scope.launch {
-            while (true) {
-                audio = host.audioSnapshot()
-                host.invalidate()
-                delay(1000)
-            }
-        }
-    }
-
-    override fun render(nowMillis: Long) = frame(
-        listOf("Volume -", "Play/Pause", "Volume +", "Previous", "Audio", "Next",
-            "Mute", "${audio.volume} / ${audio.maximum}", "Unmute"),
-        "AUDIO", 0xff274740.toInt(),
-    )
-
-    override fun onKey(event: PluginKeyEvent, host: PluginHost) {
-        if (!event.pressed || event.synthetic) return
-        val action = when (event.index) {
-            0 -> PluginAction.Volume(VolumeChange.LOWER)
-            1 -> PluginAction.Media(MediaCommand.PLAY_PAUSE)
-            2 -> PluginAction.Volume(VolumeChange.RAISE)
-            3 -> PluginAction.Media(MediaCommand.PREVIOUS)
-            5 -> PluginAction.Media(MediaCommand.NEXT)
-            6 -> PluginAction.Volume(VolumeChange.MUTE)
-            8 -> PluginAction.Volume(VolumeChange.UNMUTE)
-            else -> null
-        }
-        action?.let(host::dispatch)
-        audio = host.audioSnapshot()
         host.invalidate()
     }
 }

@@ -13,6 +13,7 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.widget.Toast
 import tel.misa.mxpocket.plugins.PhoneApp
+import tel.misa.mxpocket.decks.StudioActivity
 
 /** Only opened by tapping the system notification. The intent identifies a request, not a target. */
 class PhoneActionActivity : Activity() {
@@ -32,7 +33,7 @@ class PhoneActionActivity : Activity() {
             action == null -> getString(R.string.phone_action_stale)
             !isUnlockedAndInteractive() -> getString(R.string.phone_action_locked)
             !hasKeypadAccess(action.ticket) -> getString(R.string.phone_action_stale)
-            else -> launchPhoneApp(action.app)
+            else -> launchShortcut(action.target)
         }
         if (error != null) {
             session.message(error)
@@ -56,6 +57,20 @@ internal fun Context.isUnlockedAndInteractive() = !getSystemService(KeyguardMana
 internal fun Context.hasKeypadAccess(ticket: PocketSession.Request): Boolean {
     val usb = getSystemService(UsbManager::class.java)
     return usb.keypad(ticket.name)?.let(usb::hasPermission) == true
+}
+
+internal fun Context.launchShortcut(target: PocketSession.Target): String? {
+    val intent = when (target) {
+        is PocketSession.Target.Phone -> return launchPhoneApp(target.app)
+        is PocketSession.Target.FavoriteApp -> (applicationContext as PocketApplication).session.favoriteApps.intentFor(target.component)
+            ?: return "Favorite is no longer available."
+        PocketSession.Target.Studio -> Intent(this, StudioActivity::class.java)
+    }
+    return try {
+        startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        null
+    } catch (_: ActivityNotFoundException) { "App is no longer installed." }
+    catch (_: SecurityException) { "Android restricted this shortcut." }
 }
 
 internal fun Context.launchPhoneApp(app: PhoneApp): String? {

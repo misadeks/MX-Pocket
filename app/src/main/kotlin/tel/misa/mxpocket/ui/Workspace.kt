@@ -18,6 +18,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import tel.misa.mxpocket.PocketSession
+import tel.misa.mxpocket.platformBindings
+import tel.misa.mxpocket.pluginDetails
 import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.DeckActions
 import tel.misa.mxpocket.workflow.WorkflowScreen
