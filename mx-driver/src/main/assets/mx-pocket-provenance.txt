@@ -5,7 +5,8 @@ Revision: 82e66c7f5571dd2fd569733867fd29ae9823c94d
 MIT License; Copyright (c) 2024 Julian Waller.
 Sources: packages/core/src/hidpp.ts; models/definitions.ts;
 models/mx-creative-keypad.ts; registry.ts; services/input/mx-creative-keypad.ts;
-services/imageWriter/imageWriter.ts; services/buttonsLcdDisplay/drawQueue.ts;
+services/imageWriter/imageWriter.ts; services/buttonsLcdDisplay/default.ts
+(fillPanelBuffer with padding); services/buttonsLcdDisplay/drawQueue.ts (key-grid bounds);
 __tests__/imageWriter.spec.ts.
 The Kotlin protocol serializer, snapshot input decoder and acknowledged image
 exchange are adaptations of the transport-independent algorithms. Android USB

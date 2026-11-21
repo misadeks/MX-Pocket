@@ -8,11 +8,43 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+import tel.misa.mxpocket.driver.KeypadProtocol
 import tel.misa.mxpocket.plugins.KeyTile
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28], manifest = Config.NONE)
 class RenderedKeypadTest {
+    @Test @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun gridCarriesTheSameLabeledTilesAndCoverGapsAsTheMirror() = runBlocking {
+        val art = Bitmap.createBitmap(480,480,Bitmap.Config.ARGB_8888).apply { eraseColor(Color.BLUE) }
+        val keys = KeyImages { null }.also { it.useArtwork(art) }
+        val tiles = (0..8).map { keys.image(it, KeyTile("Key $it","Footer",Color.BLUE)) }
+        val bounds = KeypadProtocol.keyGrid
+        var tooLarge = false
+        val sent = mutableListOf<Int>()
+        val sink = RenderedKeypad({ _,_,_ -> error("Not a sparse transfer") }, { _,_ -> error("Unexpected key") }, {},
+            encodeGrid = { bitmap ->
+                val gap = bitmap.getPixel(137,137)
+                if (gap != Color.BLACK) {
+                    assertEquals(Color.BLUE, gap)
+                    for (i in tiles.indices) {
+                        val r = KeypadProtocol.keyRegion(i)
+                        val actual = Bitmap.createBitmap(bitmap,r.x-bounds.x,r.y-bounds.y,r.width,r.height)
+                        assertTrue("Key $i differs from the phone tile", actual.sameAs(tiles[i]))
+                    }
+                }
+                if (tooLarge && gap != Color.BLACK) null else byteArrayOf(if (gap == Color.BLACK) 0 else 1)
+            }, uploadGrid = { sent += it.single().toInt() })
+        assertEquals(GridWrite.SUPERSEDED, sink.writeGrid(art, tiles, false) { false })
+        assertTrue(sent.isEmpty())
+        assertEquals(GridWrite.ACKNOWLEDGED, sink.writeGrid(art,tiles,false) { true })
+        tooLarge = true
+        assertEquals(GridWrite.TOO_LARGE, sink.writeGrid(art,tiles,false) { true })
+        assertEquals(GridWrite.CLEARED, sink.writeGrid(art,tiles,true) { true })
+        assertEquals(listOf(1,0),sent)
+        sink.close()
+    }
     @Test fun revisitingAPageSkipsEncodingButNotUploadingAndNewImagesMiss() = runBlocking {
         val images = KeyImages { null }
         var encodes = 0

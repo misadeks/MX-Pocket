@@ -36,7 +36,7 @@ class KeypadPaintTest {
     private val main get() = shadowOf(Looper.getMainLooper())
 
     /** One ACK per release; keep native pixels to detect visually stale but logically equal tiles. */
-    private inner class Panel {
+    private inner class Panel(val supportsGrid: Boolean = false) {
         val pixels = arrayOfNulls<Bitmap>(9)
         val writes = mutableListOf<Int>()
         var pause = false
@@ -44,9 +44,11 @@ class KeypadPaintTest {
         var outstanding: CompletableDeferred<Unit>? = null
         lateinit var event: (KeyEvent) -> Unit
         var shortcuts = 0
+        val grids = mutableListOf<Int?>()
+        var split = false
         val session = PocketSession(app) { _, _, onEvent, _, _ ->
             event = onEvent
-            object : KeypadOutput {
+            val keys = object : KeypadOutput {
                 override fun close() {}
                 override suspend fun setKeyImage(index: Int, bitmap: Bitmap) {
                     check(outstanding == null) { "Concurrent transfer" }
@@ -59,6 +61,19 @@ class KeypadPaintTest {
                         outstanding = null
                     }
                     pixels[index] = bitmap
+                }
+            }
+            if (!supportsGrid) keys else object : GridOutput, KeypadOutput by keys {
+                override suspend fun writeGrid(art: Bitmap?, tiles: List<Bitmap>, clearOldGaps: Boolean, current: () -> Boolean): GridWrite {
+                    check(outstanding == null && current())
+                    grids += art?.getPixel(240,240)
+                    if (split) return GridWrite.TOO_LARGE
+                    if (pause) {
+                        val ack = CompletableDeferred<Unit>()
+                        outstanding = ack; ack.await(); outstanding = null
+                    }
+                    tiles.forEachIndexed { i, image -> pixels[i] = image }
+                    return GridWrite.ACKNOWLEDGED
                 }
             }
         }
@@ -190,5 +205,49 @@ class KeypadPaintTest {
             p.event(KeyEvent(1, true)); p.event(KeyEvent(1, false)); main.idle()
             assertEquals(1, p.shortcuts)
         } finally { p.session.disconnect() }
+    }
+
+    @Test fun oneGridPerChangedCoverSparseVolumeAndLatestPageAfterBlockedGrid() {
+        shadowOf(app.getSystemService(NotificationManager::class.java)).setNotificationListenerAccessGranted(
+            ComponentName(app, MediaSessionAccess::class.java), true)
+        val media = MediaSession(app, "panel")
+        val player = shadowOf(media.controller)
+        player.setPlaybackState(PlaybackState.Builder().setState(PlaybackState.STATE_PLAYING,0,1f)
+            .setActions(PlaybackState.ACTION_PAUSE).build())
+        shadowOf(app.getSystemService(MediaSessionManager::class.java)).addController(media.controller)
+        val p = Panel(supportsGrid = true)
+        fun cover(color: Int) {
+            val bitmap = Bitmap.createBitmap(32,32,Bitmap.Config.ARGB_8888).apply { eraseColor(color) }
+            player.executeOnMetadataChanged(MediaMetadata.Builder().putString(MediaMetadata.METADATA_KEY_MEDIA_ID, "one")
+                .putBitmap(MediaMetadata.METADATA_KEY_ART, bitmap).build())
+            val end = System.nanoTime() + 5_000_000_000L
+            do { main.idle(); if (p.session.panelArt?.getPixel(240,240) == color) return; Thread.yield() }
+            while (System.nanoTime() < end)
+            fail("Test cover not published")
+        }
+        try {
+            p.session.selectProfile("audio"); main.idle(); p.writes.clear()
+            p.split = true; cover(Color.RED)
+            assertEquals(listOf(Color.RED), p.grids)
+            assertEquals((0..8).toList(), p.writes.sorted()); p.expectAll()
+            p.split = false; p.writes.clear(); cover(Color.GREEN)
+            assertEquals(listOf(Color.RED,Color.GREEN), p.grids); assertTrue(p.writes.isEmpty()); p.expectAll()
+            val audio = app.getSystemService(AudioManager::class.java)
+            val v = if (audio.getStreamVolume(AudioManager.STREAM_MUSIC) == 1) 2 else 1
+            audio.setStreamVolume(AudioManager.STREAM_MUSIC,v,0)
+            app.contentResolver.notifyChange(Settings.System.getUriFor("volume_music"),null); main.idle()
+            assertEquals(2, p.grids.size); assertTrue(p.writes.size in 1..8); p.expectAll()
+            p.writes.clear(); p.pause = true; cover(Color.BLUE); cover(Color.YELLOW)
+            assertEquals(Color.BLUE, p.grids.last())
+            p.ack()
+            assertEquals(Color.YELLOW, p.grids.last())
+            p.session.selectProfile("phone"); main.idle()
+            p.event(KeyEvent(1,true)); p.event(KeyEvent(1,false)); main.idle()
+            assertEquals(0,p.shortcuts)
+            p.settle(); p.expectAll()
+            assertNull(p.grids.last()); assertTrue(p.writes.isEmpty())
+            p.event(KeyEvent(1,true)); p.event(KeyEvent(1,false)); main.idle()
+            assertEquals(1,p.shortcuts)
+        } finally { p.session.disconnect(); media.release() }
     }
 }

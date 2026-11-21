@@ -21,10 +21,13 @@ internal class KeyImages(private val appIcon: (String) -> Bitmap?) {
     private var backdrop: Bitmap? = null
     var artwork: Bitmap? = null
         private set
+    var artworkRevision = 0L
+        private set
 
     fun useArtwork(image: Bitmap?): Boolean {
         if (image === artwork) return false
         artwork = image
+        artworkRevision++
         clear()
         return true
     }
