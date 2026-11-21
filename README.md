@@ -98,8 +98,13 @@ are not required to echo the outbound data-frame flags. Busy 0xfb resends the
 whole image within a bounded retry window; other errors and missing
 acknowledgements fail explicitly. Timeouts/cancellation close the transport to
 avoid misattributing a late answer. Each completed tile is tracked separately;
-identical tiles can be reused across pages. Explicit repaint and reconnect send
-the full layout. Input from a superseded or not-yet-acknowledged page is dropped.
+identical tiles can be reused across pages. When a physical key needs rewriting,
+the app reuses the JPEG if the same rendered bitmap is still cached. The cache
+is per connection and capped at 2 MiB including retained bitmap pixels. It never
+skips an upload or its ACKs. Explicit repaint and reconnect send the full layout.
+The log records JPEG preparation on misses and upload time through the last ACK
+on each completed key; neither measures when the pixels became visible. Input
+from a superseded or not-yet-acknowledged page is dropped.
 
 No speculative keepalive, firmware commands, captured startup replay, display
 ownership guesses, or undocumented reset are sent. Protocol acceptance in the
