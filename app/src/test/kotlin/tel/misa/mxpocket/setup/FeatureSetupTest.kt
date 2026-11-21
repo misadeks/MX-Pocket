@@ -212,12 +212,15 @@ class FeatureSetupTest {
         assertFalse(choices.takeLauncherWelcome(launcher))
     }
 
-    @Test fun upgradeDoesNotInterruptLauncherOrResetWorkingFeaturesOnReplay() {
+    @Test fun upgradeDoesNotInterruptLauncher() {
         @Suppress("DEPRECATION")
         val info = app.packageManager.getPackageInfo(app.packageName, 0)
         info.lastUpdateTime = info.firstInstallTime + 1000
         shadowOf(app.packageManager).installPackage(info)
         assertFalse(SetupChoices(app).takeLauncherWelcome(launcher))
+    }
+
+    @Test fun reentryPicksUpExistingFeaturesAndDeselectionDoesNotResetThem() {
         UsbAccess(app).automatic = true
         ShadowSettings.setCanDrawOverlays(true)
         DirectShortcuts(app).enabled = true
