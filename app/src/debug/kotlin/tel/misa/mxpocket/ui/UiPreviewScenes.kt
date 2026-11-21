@@ -2,6 +2,7 @@ package tel.misa.mxpocket.ui
 
 import android.content.Context
 import tel.misa.mxpocket.R
+import tel.misa.mxpocket.deck.navigationFactorySlots
 import tel.misa.mxpocket.plugins.BuiltInPlugins
 import tel.misa.mxpocket.plugins.PluginFrame
 
@@ -29,7 +30,7 @@ class UiPreviewScenes(context: Context) {
         return PocketScreenState(
             status = if (id == "disconnected") "$note\n$disconnectedNote" else "$note\n${plugin.descriptor.title} fixture",
             pluginTitle = plugin.descriptor.title,
-            frame = displayFrame,
+            frame = if (id == "navigation") PluginFrame(navigationFactorySlots.map(frame.keys::get)) else displayFrame,
             diagnostics = "UI fixture: no USB enumeration has been performed.",
             log = "Static scene: $id. Controls only emit UI preview events.",
         )

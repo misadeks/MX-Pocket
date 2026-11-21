@@ -3,6 +3,17 @@ package tel.misa.mxpocket.preview
 import kotlin.test.Test
 
 class PreviewDeckTest {
+    @Test fun navigationUsesFactoryBindingsAndNeverClaimsAndroidAccess() {
+        val deck = PreviewDeck()
+        deck.select("navigation")
+        val tiles = deck.tiles(0)
+        check(tiles.map { it.label } == listOf("Back", "Scroll up", "Home", "Prev focus", "Select",
+            "Next focus", "Recents", "Scroll down", "Access info"))
+        check(tiles.filterNot { it.enabled }.single() == PreviewDeck.Tile("Recents", false, "Needs access"))
+        check(tiles.last().footer == "System nav off")
+        tiles.forEachIndexed { index, tile -> check(deck.press(index, 0).startsWith(tile.label)) }
+    }
+
     @Test fun factoryNavigationTimerAndSimulatedAudio() {
     val deck = PreviewDeck()
     fun label(key: Int, now: Long = 0) = deck.tiles(now)[key - 1].label

@@ -69,7 +69,7 @@ data class DeckState(
 }
 
 object DeckLimits {
-    const val VERSION = 2
+    const val VERSION = 3
     const val MAX_BYTES = 512 * 1024
     const val PROFILES = 16
     const val PAGES = 32
@@ -101,19 +101,36 @@ internal fun DeckState.snapshot() = copy(
     histories = histories.mapValues { it.value.locked() }.locked(),
 )
 
+// plugin.key indices are persisted action identities; only their physical placement changes.
+internal val navigationFactorySlots = listOf(
+    0, 3, 1, // Back, Scroll up, Home
+    6, 4, 8, // Previous, Select, Next
+    2, 5, 7, // Recents, Scroll down, Access
+).locked()
+
+private fun pluginRoot(id: String, name: String, slots: Iterable<Int> = 0..8) = DeckPage("root", name, slots.map { index ->
+    DeckKey(action = ActionCall("plugin.key", mapOf("pluginId" to id, "index" to index.toString())))
+})
+
+internal fun DeckState.upgradeStockNavigationRoot(): DeckState {
+    val legacy = pluginRoot("navigation", "Navigation")
+    val owner = profiles.find { it.id == "navigation" && it.rootPageId == legacy.id && legacy in it.pages } ?: return this
+    val updated = owner.copy(pages = owner.pages.map { page ->
+        if (page == legacy) page.copy(keys = navigationFactorySlots.map(page.keys::get)) else page
+    })
+    return copy(profiles = profiles.map { if (it.id == owner.id) updated else it })
+}
+
 internal fun defaultDeck(): DeckState {
-    fun plugin(id: String, name: String, rules: List<DeckRule> = emptyList()) = DeckProfile(
-        id, name, "root", listOf(DeckPage("root", name, List(9) {
-            DeckKey(action = ActionCall("plugin.key", mapOf("pluginId" to id, "index" to it.toString())))
-        })), rules = rules,
-    )
+    fun plugin(id: String, name: String, rules: List<DeckRule> = emptyList(), slots: Iterable<Int> = 0..8) =
+        DeckProfile(id, name, "root", listOf(pluginRoot(id, name, slots)), rules = rules)
     val profiles = listOf(
         plugin("focus", "Focus"),
         plugin("audio", "Audio", listOf(DeckRule("mediaActive", "true", 3))),
         plugin("phone", "Phone"),
         plugin("launcher", "Launcher"),
         plugin("studio", "Studio"),
-        plugin("navigation", "Navigation"),
+        plugin("navigation", "Navigation", slots = navigationFactorySlots),
     )
     return DeckState(
         DeckLimits.VERSION, profiles, "focus", "focus", null, false,

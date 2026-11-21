@@ -264,6 +264,9 @@ internal class PocketSession(
             val label = key.label.ifBlank { tile?.label ?: actionLabel(call) }
             val footer = when {
                 !key.enabled || ownerOf(call) in disabled.value -> "Disabled"
+                // Keep the access state and its recovery hint even after an earlier failed press.
+                tile?.glyph == NavigationGlyph.ACCESS_INFO ||
+                    tile?.glyph == NavigationGlyph.RECENTS && !tile.enabled -> tile.footer
                 !available && call != null -> "Unavailable"
                 call?.id == "workflow.run" && workflows.status.value?.workflowId == call.params["workflowId"] -> tile?.footer.orEmpty()
                 else -> feedback[index] ?: tile?.footer.orEmpty()

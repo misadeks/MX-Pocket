@@ -8,7 +8,9 @@ the session-only image picker and diagnostic log export.
 Layout format 2 upgrades the factory Audio page to the music-player key order.
 On import or load, format 1 Audio slots on customized pages retain their old
 command meanings, labels, and icons. Existing `media.*` actions and workflows
-are not remapped. Older app versions cannot import format 2 exports.
+are not remapped. Format 3 also updates the untouched Navigation root from format
+1 or 2; importing a format 3 layout never rearranges the keys. Older app
+versions cannot import format 3 exports.
 
 ## Choose features on first launch
 

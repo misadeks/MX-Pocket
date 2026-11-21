@@ -34,10 +34,11 @@ internal object DeckJson {
             },
             selectionReason = obj.string("selectionReason"),
         )
-        if (state.version == 1) {
+        if (state.version == 1 || state.version == 2) {
             val validated = state.copy(version = DeckLimits.VERSION)
             validateDeck(validated)
-            return upgradeAudioSlots(validated)
+            val audio = if (state.version == 1) upgradeAudioSlots(validated) else validated
+            return audio.upgradeStockNavigationRoot()
         }
         validateDeck(state)
         return state
@@ -48,10 +49,10 @@ internal object DeckJson {
     private fun upgradeAudioSlots(state: DeckState): DeckState {
         val legacy = listOf(DeckCommand.QUIETER, DeckCommand.PLAY, DeckCommand.LOUDER, DeckCommand.PREVIOUS,
             DeckCommand.MEDIA_ACCESS, DeckCommand.NEXT, DeckCommand.MUTE, DeckCommand.VOLUME_LEVEL, DeckCommand.UNMUTE)
-        val stock = defaultDeck().profiles.single { it.id == "audio" }.pages.single().keys
+        val stock = defaultDeck().profiles.single { it.id == "audio" }.pages.single()
         return state.copy(profiles = state.profiles.map { profile ->
             profile.copy(pages = profile.pages.map { page ->
-                if (profile.id == "audio" && page.id == profile.rootPageId && page.keys == stock) page
+                if (profile.id == "audio" && page.id == profile.rootPageId && page == stock) page
                 else page.copy(keys = page.keys.map { key ->
                     val call = key.action
                     if (call?.id == "plugin.key" && call.params["pluginId"] == "audio")

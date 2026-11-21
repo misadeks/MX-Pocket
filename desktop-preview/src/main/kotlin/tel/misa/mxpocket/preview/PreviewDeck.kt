@@ -38,8 +38,8 @@ class PreviewDeck {
         "phone" -> listOf("Camera", "Settings", "Dialer", "Web", "Phone", "Alarm", "Focus", "Audio", "Repaint")
         "launcher" -> listOf("No favorites", "-", "-", "-", "-", "-", "-", "Edit favorites", "Favorites")
         "studio" -> listOf("Shutter", "Record", "Stop", "-", "-", "-", "Open Video", "Open Camera", "Camera controls")
-        "navigation" -> listOf("Back", "Home", "Recents", "Scroll up", "Activate", "Scroll down",
-            "Prior item", "Navigation access", "Next item")
+        "navigation" -> listOf("Back", "Home", "Recents", "Scroll up", "Select", "Scroll down",
+            "Prev focus", "Access info", "Next focus")
         else -> emptyList()
     }
 
@@ -60,7 +60,11 @@ class PreviewDeck {
             6, 8 -> Tile(label, false, "No seek position")
             7 -> Tile(label, false, "Now playing · ${if (playing) "Playing" else "Paused"}", readOnly = true)
             else -> Tile(label, true)
-        } else Tile(label ?: "-", label != null && label != "-")
+        } else when {
+            action?.plugin == "navigation" && action.index == 2 -> Tile("Recents", false, "Needs access")
+            action?.plugin == "navigation" && action.index == 7 -> Tile("Access info", true, "System nav off")
+            else -> Tile(label ?: "-", label != null && label != "-")
+        }
     }
 
     fun press(slot: Int, now: Long): String {
@@ -85,6 +89,11 @@ class PreviewDeck {
                 4 -> playing = !playing
                 6, 8 -> return "Seeking is unavailable in this preview."
                 7 -> return "Now playing: ${tracks[track]}."
+            }
+            "navigation" -> return when (index) {
+                2 -> "Recents needs Android navigation access. No system action sent."
+                7 -> "Access info: system navigation is off in this desktop preview. No settings opened."
+                else -> "$label is simulated. No system action sent."
             }
             "phone" -> if (index == 6 || index == 7) {
                 val target = if (index == 6) "focus" else "audio"

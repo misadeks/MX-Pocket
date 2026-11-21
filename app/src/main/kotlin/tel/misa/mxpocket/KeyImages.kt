@@ -13,6 +13,7 @@ import android.text.TextUtils
 import android.util.LruCache
 import tel.misa.mxpocket.driver.KeypadProtocol
 import tel.misa.mxpocket.plugins.KeyTile
+import tel.misa.mxpocket.plugins.NavigationGlyph
 import tel.misa.mxpocket.plugins.PlayerGlyph
 
 /** Entries are immutable after drawing. Views and an in-flight upload may outlive a cache entry. */
@@ -67,15 +68,18 @@ internal class KeyImages(private val appIcon: (String) -> Bitmap?) {
         val primary = tile.primary
         val caption = tile.showLabel
         val withFooter = tile.showFooter && tile.footer.isNotBlank() && tile.footer != tile.label
-        val player = glyph is PlayerGlyph
-        val face = if (player) 53f else if (caption) 21f else if (withFooter) 47f else 59f
+        val face = when (glyph) {
+            is PlayerGlyph -> 53f
+            is NavigationGlyph -> if (withFooter) 29f else 38f
+            null -> if (caption) 21f else if (withFooter) 47f else 59f
+        }
         val appImage = tile.iconComponent?.takeIf { tile.icon.isBlank() }?.let(appIcon)
         if (glyph is PlayerGlyph && tile.icon.isBlank()) {
             val color = if (photo) contrastInk(bitmap, 37, 31, 81, 75) else ink
             canvas.drawKeyGlyph(glyph, 59f, face, 49.5f, if (tile.enabled) color else mutedInk(color), photo)
-        } else if (glyph != null && tile.icon.isBlank()) {
-            val disk = if (caption) 28f else if (primary) 76f else 58f
-            val diameter = if (caption) 20f else if (primary) 43f else 38f
+        } else if (glyph is NavigationGlyph && tile.icon.isBlank()) {
+            val diameter = if (withFooter) 35f else 48f
+            val disk = diameter + 8f
             val lightDisk = primary && tile.enabled
             if (photo || primary) {
                 paint.color = if (lightDisk) Color.WHITE else 0xdd17191c.toInt()
@@ -88,8 +92,12 @@ internal class KeyImages(private val appIcon: (String) -> Bitmap?) {
         } else {
             caption(canvas, bitmap, tile.icon.ifBlank { "${index+1}" }, face, 20f, 1, false, ink, photo)
         }
-        if (caption) caption(canvas, bitmap, tile.label, if (player) 94f else if (withFooter) 62f else 70f,
-            if (player) 17f else 19f, 2, true, ink, photo)
+        val labelY = when (glyph) {
+            is PlayerGlyph -> 94f
+            is NavigationGlyph -> if (withFooter) 67f else 87f
+            null -> if (withFooter) 62f else 70f
+        }
+        if (caption) caption(canvas, bitmap, tile.label, labelY, if (glyph is PlayerGlyph) 17f else 19f, 2, true, ink, photo)
         if (withFooter) caption(canvas, bitmap, tile.footer, if (caption) 100f else 94f, 15f, 1, false, subdued, photo)
         tile.volumeLevel?.fraction?.let { fraction ->
             val y = if (caption) 74f else 85f

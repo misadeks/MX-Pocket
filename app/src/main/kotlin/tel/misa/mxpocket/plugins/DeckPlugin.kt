@@ -65,6 +65,7 @@ internal class DeckPlugin(id: String, title: String, capability: PluginCapabilit
             C.VIDEO, C.STUDIO, C.CAMERA_ACCESS).map { command ->
             command?.let { slot(it) } ?: Slot(KeyTile("-", "", 0xff49345f.toInt(), enabled = false))
         }
+        // These are persisted plugin.key indices, not the physical positions of the factory keys.
         "navigation" -> listOf(C.BACK, C.HOME, C.RECENTS, C.UP, C.ACTIVATE, C.DOWN, C.REVERSE, C.NAV_ACCESS, C.FORWARD).map { slot(it) }
         else -> error("Unknown page")
     }

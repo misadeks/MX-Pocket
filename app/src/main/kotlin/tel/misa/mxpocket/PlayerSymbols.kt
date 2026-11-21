@@ -6,6 +6,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Typeface
 import tel.misa.mxpocket.plugins.KeyGlyph
+import tel.misa.mxpocket.plugins.NavigationGlyph
 import tel.misa.mxpocket.plugins.PlayerGlyph
 
 internal fun Canvas.drawKeyGlyph(glyph: KeyGlyph, x: Float, y: Float, size: Float, ink: Int, photo: Boolean = false) = when (glyph) {
@@ -14,6 +15,7 @@ internal fun Canvas.drawKeyGlyph(glyph: KeyGlyph, x: Float, y: Float, size: Floa
         val scale = if (glyph == PlayerGlyph.BACK_10 || glyph == PlayerGlyph.FORWARD_10) 16f / 18f else 1f
         playerSymbol(glyph, x, y, size * scale, ink, photo)
     }
+    is NavigationGlyph -> navigationSymbol(glyph, x, y, size, ink)
 }
 
 /** Original 24-unit paths. Draw at the final LCD resolution, without a font or density fallback. */
