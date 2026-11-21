@@ -1,0 +1,78 @@
+# Workspace walkthrough
+
+Home operates the current nine keys. Keypad edits them without executing
+anything. Plugins controls availability and optional Android access. Flows
+edits and runs workflows. Settings contains USB consent preferences, repaint,
+the session-only image picker and diagnostic log export.
+
+## Run without hardware
+
+1. On Home choose **Connect virtual keypad** and press **Start** on Focus.
+   The first tile changes to **Pause** and the countdown advances. No USB
+   permission or foreground service is needed. Disconnecting the virtual
+   keypad disables input; reconnecting restores the selected page.
+2. In Keypad use **Manage profile > New profile** and create *Desk*. Under
+   **Manage page** create *Tools*. On Desk's root page edit a key, choose
+   *Open page: Tools*, and set its label, icon and color. Put *Back* or *Return
+   to root* on Tools. Choose **Use this profile**, then navigate on Home.
+3. In Flows duplicate **Keypad check**. Give the copy a name, change a delay
+   or add a step, then **Test run** and **Save workflow**. A test executes real
+   steps. In Keypad assign the saved workflow to a Tools key. Press that key
+   on Home and watch its running/terminal state. **Run history** shows origin,
+   result and progress. For confirmation steps open Flows and approve or
+   decline on the phone. Cancelling does not undo completed actions.
+4. In Plugins enable Audio; optional media access is explained before opening
+   Android settings. Start playback in a player. In Keypad enable automatic
+   switching and inspect the Audio rule `mediaActive = true`. While the app
+   is visible or hosting a real session, a stable match selects Audio after
+   debounce. Supported players expose Play/Pause and title with consent;
+   without it the app sends ordinary media keys and does not invent a title
+   or playback state.
+5. Inspect the selection reason, matched rules and observed values in Keypad.
+   Create or change weighted rules for an observed app-owned activity, device,
+   local hour/range, media, plugin or workflow state. Pin Desk, change playback
+   and verify it stays on Desk. Unpin to resume automatic selection. Disabling
+   automatic switching for a profile prevents entering or leaving it by rule.
+   MX Pocket does not infer the foreground package of other apps.
+6. Export layouts, duplicate or rename a profile, then import the export.
+   The confirmed import restores profiles, bindings, rules, pins and per-profile
+   histories as one versioned document. Invalid or oversized input must leave
+   the old deck intact. **Restore factory layouts** restores only layouts.
+   Workflows, permissions, favorites and capture files are separate; importing a
+   workflow key does not import its code, grant access, or run it.
+
+## Integrated controls
+
+| Profile | What to exercise | Platform boundary |
+| --- | --- | --- |
+| Launcher | Edit favorites, choose installed apps, open one and page through additional favorites. Assign a favorite directly in a custom layout. | Uses launcher-visible components only; removed/non-favorite components cannot launch. A physical background shortcut offers a notification, not a silent app start. |
+| Audio | Start a player, adjust volume, skip and toggle playback. Observe the title and transport state. | Global metadata requires optional Android media-session access. Support for individual controls depends on the player. No notification inbox or message access features. |
+| Studio | Open Pocket Studio, grant camera access if desired, take a photo, record silent video, place a marker, stop and open the saved capture. | Only controls the visible in-app CameraX session. Torch, zoom and focus depend on camera support. Leaving the viewfinder stops capture. |
+| Navigation | Try Back, Home, focus movement, activation and scrolling; inspect the optional navigation-access explanation. | System Recents/cross-app operations need explicit service activation. Apps and protected system screens may refuse actions; no gesture recording or scanning mode. |
+| Custom | Put different media, page, profile, favorite and workflow actions on adjacent keys. Disable one plugin and verify its assigned controls no longer run. | An import is configuration, not new code. Optional Android grants remain controlled by the OS. |
+
+## Hardware acceptance (manual, not established by JVM tests)
+
+Use the [USB and foreground-service checklist](../README.md#background-sessions-and-automatic-connection)
+on a separately authorized host phone and keypad. Record Android version, handset,
+keypad model and outcomes without identifiers or media metadata.
+
+- Verify discovery, deny/retry/grant and notification consent. Connect one
+  046D:C354, read all nine keys and both page controls, release a multi-key chord.
+- Repeat the Desk/Tools workflow above on hardware. Observe all nine 118x118
+  regions of the single panel, confirm readability and persistence for 60 seconds.
+  Switch pages while an image is transferring; a press against the unacknowledged
+  page must not run the replacement action.
+- Start playback and confirm the selected media profile, physical Play/Pause,
+  corresponding playback-state redraw, then open a nested page. Run the saved
+  workflow with a physical key. Compare progress and result on phone and LCD.
+- Detach during upload, reconnect and verify saved location and full repaint.
+  Background, rotate and lock/unlock the phone. Recheck direct Phone shortcuts,
+  notification handoff and revoked permissions. Verify CameraX capture/markers,
+  optional global navigation and actual player behavior on that handset.
+
+The debug `UiPreviewActivity` is a fixture: taps change fixture state or record
+UI events only. It cannot substitute for the executable simulator or hardware
+checks. Brightness and periodic ownership commands are not sent without a
+supported protocol. No notification center, Tasker, Home Assistant or enhanced
+accessibility integration is included.

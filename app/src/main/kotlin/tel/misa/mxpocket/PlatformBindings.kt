@@ -12,6 +12,10 @@ internal fun PocketSession.platformBindings(): List<Pair<String,ActionCall>> = b
             add("Launch ${it.label}" to ActionCall(command.id,mapOf("component" to it.component)))
         } else add("${command.deck}: ${command.label}" to ActionCall(command.id))
     }
+    for (choice in tel.misa.mxpocket.plugins.PhoneApp.entries) {
+        add("Phone: ${choice.name.lowercase().replaceFirstChar(Char::uppercaseChar)}" to
+            ActionCall("phone.open",mapOf("app" to choice.name)))
+    }
 }
 
 internal fun PocketSession.pluginDetails(id: String): String {

@@ -135,6 +135,8 @@ internal class PocketSession(
     private var lastLayout: Layout? = null
     private val feedback = mutableMapOf<Int, String>()
     private var feedbackPage: DeckPage? = null
+    private var feedbackProfile: String? = null
+    private var attachedUsb = emptySet<String>()
     val actions = ActionDispatcher { call -> execute(call, null) }
     val workflows = WorkflowController(app, sessionScope, object : WorkflowHost {
         override fun snapshot() = workflowContext()
@@ -165,7 +167,8 @@ internal class PocketSession(
             receipt = 0
             pendingAction = null
         }
-        if (feedbackPage != state.activePage) {
+        if (feedbackPage != state.activePage || feedbackProfile != state.activeProfileId) {
+            feedbackProfile = state.activeProfileId
             feedbackPage = state.activePage
             feedback.clear()
         }
@@ -202,12 +205,15 @@ internal class PocketSession(
             val plugin = call?.params?.get("pluginId")?.takeIf { call.id == "plugin.key" }
             val tile = if (plugin == plugins.selectedId) call.params["index"]?.toIntOrNull()?.let(native.keys::getOrNull)
                 else workflowTile(call) ?: platformTile(call)
-            val available = key.enabled && call != null && (plugin == null || plugin == plugins.selectedId) &&
+            val registered = tile != null || call?.id in setOf(DeckActions.PAGE, DeckActions.PROFILE,
+                DeckActions.BACK, DeckActions.ROOT, "sound.play","phone.open","keypad.status")
+            val available = registered && key.enabled && call != null && (plugin == null || plugin == plugins.selectedId) &&
                 ownerOf(call) !in disabled.value && (tile?.enabled != false)
             val label = key.label.ifBlank { tile?.label ?: actionLabel(call) }
             val footer = when {
                 !key.enabled || ownerOf(call) in disabled.value -> "Disabled"
                 !available && call != null -> "Unavailable"
+                call?.id == "workflow.run" && workflows.status.value?.workflowId == call.params["workflowId"] -> tile?.footer.orEmpty()
                 else -> feedback[index] ?: tile?.footer.orEmpty()
             }
             (tile ?: KeyTile(label, footer, key.color)).copy(label = label, footer = footer,
@@ -226,7 +232,7 @@ internal class PocketSession(
         signalClock?.cancel()
         signalClock = null
         sampleContext()
-        if (screen != null || request != null) signalClock = sessionScope.launch {
+        if (screen != null || studio != null || request != null) signalClock = sessionScope.launch {
             while (true) { delay(1000); sampleContext() }
         } else deck.clearObservation()
     }
@@ -235,18 +241,21 @@ internal class PocketSession(
         val time = LocalDateTime.now()
         val connected = output != null && request != null
         val state = deck.state.value
-        val snapshot = mapOf("foreground" to (screen != null).toString(),
+        val snapshot = mapOf("foreground" to (screen != null || studio != null).toString(),
             "activity" to if (screen != null) "MX Pocket" else "Not observed",
             "mediaActive" to audio.isMusicActive.toString(), "keypadConnected" to connected.toString(),
             "usbDevice" to if (connected) "046D:C354" else "None",
             "simulator" to preview.toString(), "hour" to time.hour.toString(),
             "weekday" to time.dayOfWeek.name, "profile" to state.activeProfileId,
             "plugin" to (state.activePage.keys.firstOrNull()?.action?.params?.get("pluginId") ?: "custom"),
-            "workflow" to (workflows.status.value?.phase?.name ?: "IDLE")) + platformSignals()
+            "workflow" to (workflows.status.value?.phase?.name ?: "IDLE")) +
+            attachedUsb.associate { "usb.$it" to "true" } + platformSignals()
         _signals.value = snapshot
         deck.observe(snapshot, SystemClock.elapsedRealtime()).onFailure { fail("Cannot select layout", it) }
         workflows.onContextChanged(workflowContext())
     }
+
+    fun observeUsb(devices: Set<String>) { attachedUsb = devices; sampleContext() }
 
     fun selectProfile(id: String) {
         deck.selectProfile(id).onFailure { fail("Cannot select profile", it) }
@@ -518,6 +527,7 @@ internal class PocketSession(
         val stamp = Stamp(layout(), frame, revision)
         val previous = painted
         if (stamp == previous && receipt != 0L && lcd.indices.all { lcd[it] == frame.keys[it] }) return
+        if (lcd.indices.any { !sameBinding(lcd[it], frame.keys[it]) }) receipt = 0
         painting = scope.launch {
             try {
                 val force = previous?.revision != revision
@@ -585,12 +595,12 @@ internal class PocketSession(
         }
     }
 
-    fun attachStudio(activity: StudioActivity) { studio = activity }
+    fun attachStudio(activity: StudioActivity) { studio = activity; updateObservation() }
     fun updateStudio(activity: StudioActivity, state: StudioState) {
         if (activity === studio) decks.value = decks.value.copy(studio = state)
     }
     fun detachStudio(activity: StudioActivity) {
-        if (activity === studio) { studio = null; decks.value = decks.value.copy(studio = StudioState()) }
+        if (activity === studio) { studio = null; decks.value = decks.value.copy(studio = StudioState()); updateObservation() }
     }
     fun publishFavorites(apps: List<Favorite>) {
         val selected = favoriteApps.selected()

@@ -130,52 +130,49 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
                     output.bufferedWriter().use { it.write(text) }
                 }
 
-                private val layoutSaver = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
-                    if (uri != null) lifecycleScope.launch {
-                        try {
-                            withContext(Dispatchers.IO) {
-                                val text = session.deck.exportJson()
-                                val out = contentResolver.openOutputStream(uri, "wt") ?: error("Cannot open destination")
-                                out.bufferedWriter(Charsets.UTF_8).use { it.write(text) }
-                            }
-                            session.message("Layouts exported.")
-                        } catch (e: CancellationException) { throw e }
-                        catch (e: Exception) { session.fail("Cannot export layouts",e) }
-                    }
-                }
-                private val layoutPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-                    if (uri != null) lifecycleScope.launch {
-                        try {
-                            val json = withContext(Dispatchers.IO) {
-                                val stream = contentResolver.openInputStream(uri) ?: error("Cannot open document")
-                                stream.use {
-                                    val bytes = ByteArrayOutputStream()
-                                    val buffer = ByteArray(8192)
-                                    while (true) {
-                                        val n = it.read(buffer)
-                                        if (n < 0) break
-                                        require(bytes.size() + n <= DeckLimits.MAX_BYTES) { "Layout file too large" }
-                                        bytes.write(buffer,0,n)
-                                    }
-                                    Charsets.UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(bytes.toByteArray())).toString()
-                                }
-                            }
-                            AlertDialog.Builder(this@MainActivity).setTitle("Replace saved layouts?")
-                                .setMessage("Import replaces profiles, page history, and context rules. Workflows and Android permissions are unchanged.")
-                                .setNegativeButton(android.R.string.cancel,null).setPositiveButton("Import") { _,_ ->
-                                    session.deck.importJson(json).fold({ session.message("Layouts imported.") },
-                                        { session.fail("Cannot import layouts", it) })
-                                }.show()
-                        } catch (e: CancellationException) { throw e }
-                        catch (e: Exception) { session.fail("Cannot import layouts",e) }
-                    }
-                }
                 Snackbar.make(screen.view, "Diagnostic log saved", Snackbar.LENGTH_SHORT).show()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 session.fail("Cannot save log", e)
             }
+        }
+    }
+
+    private val layoutSaver = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    val text = session.deck.exportJson()
+                    val out = contentResolver.openOutputStream(uri, "wt") ?: error("Cannot open destination")
+                    out.bufferedWriter(Charsets.UTF_8).use { it.write(text) }
+                }
+                session.message("Layouts exported.")
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { session.fail("Cannot export layouts",e) }
+        }
+    }
+    private val layoutPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) lifecycleScope.launch {
+            try {
+                val imported = withContext(Dispatchers.IO) {
+                    val stream = contentResolver.openInputStream(uri) ?: error("Cannot open document")
+                    val text = stream.use {
+                        val bytes = ByteArrayOutputStream()
+                        val buffer = ByteArray(8192)
+                        while (true) {
+                            val n = it.read(buffer)
+                            if (n < 0) break
+                            require(bytes.size() + n <= DeckLimits.MAX_BYTES) { "Layout file too large" }
+                            bytes.write(buffer,0,n)
+                        }
+                        Charsets.UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(bytes.toByteArray())).toString()
+                    }
+                    session.deck.importJson(text)
+                }
+                imported.fold({ session.message("Layouts imported.") }, { session.fail("Cannot import layouts", it) })
+            } catch (e: CancellationException) { throw e }
+            catch (e: Exception) { session.fail("Cannot import layouts",e) }
         }
     }
 
@@ -458,7 +455,13 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
     private fun refreshDiagnostics() {
         refreshJob?.cancel()
         refreshJob = lifecycleScope.launch {
-            diagnostics = withContext(Dispatchers.IO) { UsbDiagnostics.describe(usb) }
+            val (text, devices) = withContext(Dispatchers.IO) {
+                UsbDiagnostics.describe(usb) to usb.deviceList.values.map {
+                    "%04X-%04X".format(java.util.Locale.ROOT,it.vendorId,it.productId)
+                }.toSet()
+            }
+            diagnostics = text
+            session.observeUsb(devices)
             render()
         }
     }
