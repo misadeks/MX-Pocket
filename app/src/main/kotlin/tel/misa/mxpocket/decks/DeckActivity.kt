@@ -50,7 +50,7 @@ class DeckAccessActivity : DeckActivity() {
 
         internal fun disclosure(media: Boolean) = if (media)
             "Android grants broad notification access. MX Pocket only queries active media sessions; it does not read, store or act on notifications. With Audio selected, the connected, authorized keypad shows track titles and local cover art even when the phone is locked. Switch profiles or revoke access to stop showing them. Basic media keys and volume work without access."
-        else "The MX Pocket navigation accessibility service can inspect the current window and act across apps. On a key press it can go Back or Home, open Recents, scroll, move focus or activate an item. It does not read or store screen text, record keys or automate gestures. Without access, navigation stays inside MX Pocket."
+        else "The MX Pocket navigation accessibility service can inspect the current window and act across apps. On a key press it can go Back or Home, open Recents, scroll, move focus or activate an item. With a separate Studio opt-in it can press a labeled camera button. It does not read or store screen text, record keys or automate gestures. Without access, navigation stays inside MX Pocket."
 
         fun intent(context: Context, command: DeckCommand): Intent {
             require(command == DeckCommand.MEDIA_ACCESS || command == DeckCommand.NAV_ACCESS)

@@ -112,7 +112,7 @@ class KeypadService : Service() {
         val label = when (val target = action.target) {
             is PocketSession.Target.Phone -> target.app.name.lowercase().replaceFirstChar(Char::uppercaseChar)
             is PocketSession.Target.FavoriteApp -> "favorite app"
-            PocketSession.Target.Studio -> "Pocket Studio"
+            is PocketSession.Target.Studio -> if (target.mode == tel.misa.mxpocket.decks.CameraMode.PHOTO) "Camera" else "Video camera"
         }
         val title = getString(R.string.phone_action_open, label)
         val note = Notification.Builder(this, PHONE_CHANNEL)
@@ -138,7 +138,7 @@ class KeypadService : Service() {
     private fun requestDirectLaunch(target: PocketSession.Target): DeckResult? {
         val eligible = when (target) {
             is PocketSession.Target.Phone -> target.app == PhoneApp.CAMERA || session.isPhoneShortcutPage
-            is PocketSession.Target.FavoriteApp, PocketSession.Target.Studio -> true
+            is PocketSession.Target.FavoriteApp, is PocketSession.Target.Studio -> true
         }
         if (!eligible) return null
         return launchShortcut(target)?.let(::unavailable) ?: ok("Direct launch requested.")
