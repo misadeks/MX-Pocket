@@ -61,6 +61,7 @@ internal class PocketSession(
     registeredPlugins: List<PocketPlugin> = BuiltInPlugins.create(app.getString(R.string.focus),
         app.getString(R.string.audio), app.getString(R.string.phone), app.getString(R.string.xo)),
     private val usageDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val usageTimeMillis: () -> Long = System::currentTimeMillis,
     private val open: OpenKeypad = { manager, device, event, log, error ->
         RenderedKeypad(MxKeypad.connect(manager, device, event, log, error))
     },
@@ -327,7 +328,7 @@ internal class PocketSession(
         val watcher = if (configured.isEmpty()) null else app.watchForegroundBoundaries { boundary ->
             generation++
             reader = null
-            val now = System.currentTimeMillis()
+            val now = usageTimeMillis()
             val granted = app.hasUsageAccess()
             unlockedSince = now.takeIf { granted && boundary == ForegroundBoundary.UNLOCK }
             if (boundary == ForegroundBoundary.ACCESS || !granted) lastLockedPoll = null
@@ -340,9 +341,9 @@ internal class PocketSession(
                 val granted = configured.isNotEmpty() && app.hasUsageAccess()
                 if (granted && app.isUnlockedAndInteractive()) {
                     val source = reader ?: ForegroundApps(app.getSystemService(UsageStatsManager::class.java),
-                        unlockedSince ?: System.currentTimeMillis(), lastLockedPoll).also { reader = it }
+                        unlockedSince ?: usageTimeMillis(), lastLockedPoll).also { reader = it }
                     val started = generation
-                    val result = withContext(usageDispatcher) { source.match(configured, System.currentTimeMillis()) }
+                    val result = withContext(usageDispatcher) { source.match(configured, usageTimeMillis()) }
                     if (started == generation) {
                         if (app.isUnlockedAndInteractive() && app.hasUsageAccess()) match = result
                         else { reader = null; lastLockedPoll = null; unlockedSince = null }
@@ -350,7 +351,7 @@ internal class PocketSession(
                 } else {
                     reader = null
                     unlockedSince = null
-                    lastLockedPoll = if (granted) System.currentTimeMillis() else null
+                    lastLockedPoll = if (granted) usageTimeMillis() else null
                 }
                 sampleContext(match)
                 delay(1000)

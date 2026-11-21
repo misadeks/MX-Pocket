@@ -58,6 +58,7 @@ internal class ForegroundApps(private val usage: UsageStatsManager, since: Long,
     private var lastPoll = since
     private var earliest = lastLockedPoll?.coerceIn((since - 5_000L)..since) ?: since
     private val firstUnlockedPoll = since
+    private val freshInterval = lastLockedPoll == null
 
     @Suppress("DEPRECATION") // MOVE_TO_FOREGROUND/BACKGROUND are the API 28 names for RESUMED/PAUSED.
     fun match(configured: Set<String>, now: Long): String? {
@@ -77,6 +78,9 @@ internal class ForegroundApps(private val usage: UsageStatsManager, since: Long,
         val event = Event()
         var pastUnlock = false
         while (events.getNextEvent(event)) {
+            // Usage timestamps have millisecond precision: a resume in the same millisecond
+            // as a new consent interval cannot establish that the app resumed after the grant.
+            if (freshInterval && event.timeStamp == firstUnlockedPoll && event.eventType == Event.MOVE_TO_FOREGROUND) continue
             // Before the first unlocked sample, require Android's unlock boundary. An activity
             // can resume over the lock screen, so a resume (or screen-on) alone is not enough.
             if (event.timeStamp < firstUnlockedPoll) {
