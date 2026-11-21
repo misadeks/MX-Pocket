@@ -1,0 +1,21 @@
+<resources>
+    <string name="app_name">MX Pocket</string>
+    <string name="subtitle">A native USB workspace for your MX Creative Keypad</string>
+    <string name="connect">Connect keypad</string>
+    <string name="disconnect">Disconnect</string>
+    <string name="refresh">Refresh USB diagnostics</string>
+    <string name="preview">Phone-only preview</string>
+    <string name="import_image">Choose custom image for all nine keys</string>
+    <string name="export_log">Save diagnostic log</string>
+    <string name="diagnostics">USB diagnostics</string>
+    <string name="log">Session log</string>
+    <string name="not_connected">Not connected. USB permission and a compatible HID descriptor are required.</string>
+    <string name="preview_note">Phone-only preview. No USB messages are sent and no hardware is being tested.</string>
+    <string name="profile_note">Source-supported profile: one 480x480 panel, nine 118x118 visible key regions. Physical behavior has not been verified on this phone.</string>
+    <string name="focus">Focus</string>
+    <string name="audio">Audio</string>
+    <string name="phone">Phone</string>
+    <string name="previous">Previous page</string>
+    <string name="next">Next page</string>
+    <string name="repaint">Repaint all nine LCDs</string>
+</resources>

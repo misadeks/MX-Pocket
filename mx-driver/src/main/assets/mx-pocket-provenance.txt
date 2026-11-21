@@ -1,0 +1,78 @@
+MX Pocket protocol provenance -- reviewed 2026-11-21
+
+Primary: https://github.com/Julusian/node-logitech-mx-creative-console
+Revision: 82e66c7f5571dd2fd569733867fd29ae9823c94d
+MIT License; Copyright (c) 2024 Julian Waller.
+Sources: packages/core/src/hidpp.ts; models/definitions.ts;
+models/mx-creative-keypad.ts; registry.ts; services/input/mx-creative-keypad.ts;
+services/imageWriter/imageWriter.ts; services/buttonsLcdDisplay/drawQueue.ts;
+__tests__/imageWriter.spec.ts.
+The Kotlin protocol serializer, snapshot input decoder and acknowledged image
+exchange are adaptations of the transport-independent algorithms. Android USB
+transport is new and does not embed the Node or WebHID runtime.
+
+Cross-check: https://github.com/logilinux/logilinux
+Revision: d621d564bbcd888e27579cdc8ab22f30c9307e72
+MIT License; Copyright (c) 2026 Ron0studios, ImArjunJ.
+Source: lib/src/devices/mx_keypad_device.cpp.
+Confirms 118px key geometry, report framing, page diversion and grid snapshots.
+Linux hidraw, udev, writev and ioctl assumptions were not ported.
+
+Concepts: https://github.com/logilinux/logilinux-sdk
+Revision: dc79207bb41e4805e05acdbbbb745d3b7a7144b7
+MIT License; Copyright (c) 2025 Ron0Studios.
+Source: examples/keypad_example.py. Supports separation of SDK/app, dynamic
+images and page transitions. Its example's 90x90 image comment is not used as
+hardware geometry.
+
+Cross-check: https://github.com/mario-gutierrez/mx-creative-console-webhid
+Revision: 6a70b6db14d0b6c0a867f873aa0a4b571026d70a
+MIT License; Copyright (c) 2026 Mario Gutierrez.
+Sources: js/feature19a1.js, js/feature1b04.js, js/mxCreativeConsole.js.
+Confirms JPEG report payload and HID++ 1b04 lookup. Its pragmatic displayIndex=0,
+24-bit length, masked sequence and unacknowledged sends differ from the primary
+source; MX Pocket follows the primary's displayIndex=1, 16-bit image limit,
+unmasked part index and per-fragment acknowledgements instead.
+
+Experimental reference (not copied into runtime):
+https://github.com/hcooper-idealbuilders/mx-creative-controller/blob/main/docs/protocol.md
+Revision: 221c52f3514a25671a08fa19e723e49c44119543
+Ownership/keepalive guesses, captured startup packets and presumed collection
+to-interface mappings are not verified facts and are not replayed by this app.
+
+Android API: https://developer.android.com/develop/connectivity/usb/host
+Hardware: https://support.logi.com/hc/en-ch/articles/24727157859351-Specification-MX-Creative-Console
+Official VID/PID: 046D:C354; 9 LCD buttons, 2 additional buttons; 480x480
+panel specification. The primary driver treats the panel as one 480x480 surface,
+with nine 118x118 visible regions at x=23+158*column, y=6+158*row.
+This layout is source-supported, not measured on attached hardware.
+
+No Android phone or keypad was accessible during the initial build. Unit tests
+and Android API simulation are not physical USB/LCD verification. USB descriptors,
+kernel claim success, actual display visibility/persistence, all 11 controls,
+reconnect and phone power compatibility must be confirmed on hardware.
+
+MIT License notices for the above four MIT sources
+
+Copyright (c) 2024 Julian Waller
+Copyright (c) 2026 Ron0studios, ImArjunJ
+Copyright (c) 2025 Ron0Studios
+Copyright (c) 2026 Mario Gutierrez
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
