@@ -17,11 +17,11 @@ Activity recreation, a delayed workflow, or a locked-screen shortcut. No
 background camera, microphone or storage permission is used. If background
 launches are restricted, a fresh authorized physical press for a favorite or
 Studio offers a one-shot notification; tapping rechecks binding, connection,
-grant, expiry and unlock. Direct shortcuts can instead request **Open Studio**
-or the default camera immediately on an unlocked phone, including from custom
-pages. For a camera favorite, Android must resolve the default still-camera
-handler to the favorite's package; MX Pocket starts that viewfinder, not the
-favorite's arbitrary launcher activity. Other favorites always require a tap.
+grant, expiry and unlock. Direct shortcuts can instead request **Open Studio**,
+the default camera, or a saved favorite on an unlocked phone, including from
+custom pages. For a favorite in the resolved default still-camera package,
+MX Pocket requests the verified viewfinder. For other favorites it requests
+only the exact selected, still-exported `MAIN`/`LAUNCHER` component.
 After a direct request the notification is a quiet retry, not proof of launch.
 
 Android requires a notification-listener grant to inspect active media

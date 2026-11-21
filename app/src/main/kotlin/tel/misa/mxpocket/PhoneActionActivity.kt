@@ -15,6 +15,7 @@ import android.provider.Settings
 import android.provider.MediaStore
 import android.content.pm.PackageManager
 import android.widget.Toast
+import tel.misa.mxpocket.decks.FavoriteApps
 import tel.misa.mxpocket.plugins.PhoneApp
 import tel.misa.mxpocket.decks.StudioActivity
 
@@ -49,9 +50,11 @@ class PhoneActionActivity : Activity() {
 internal const val PHONE_NOTICE = 2
 internal class DirectShortcuts(private val context: Context) {
     private val prefs = context.getSharedPreferences("phone-shortcuts", Context.MODE_PRIVATE)
+    // The old "direct" opt-in explicitly excluded ordinary saved favorites.
+    private val consent = "direct-with-favorites"
     var enabled: Boolean
-        get() = prefs.getBoolean("direct", false) && Settings.canDrawOverlays(context)
-        set(value) { prefs.edit().putBoolean("direct", value && Settings.canDrawOverlays(context)).apply() }
+        get() = prefs.getBoolean(consent, false) && Settings.canDrawOverlays(context)
+        set(value) { prefs.edit().putBoolean(consent, value && Settings.canDrawOverlays(context)).apply() }
 }
 
 internal fun Context.isUnlockedAndInteractive() = !getSystemService(KeyguardManager::class.java).isKeyguardLocked &&
@@ -65,21 +68,22 @@ internal fun Context.hasKeypadAccess(ticket: PocketSession.Request): Boolean {
 internal fun Context.launchShortcut(target: PocketSession.Target): String? {
     val intent = when (target) {
         is PocketSession.Target.Phone -> return launchPhoneApp(target.app)
-        is PocketSession.Target.FavoriteApp -> (applicationContext as PocketApplication).session.favoriteApps.intentFor(target.component)
-            ?: return "Favorite is no longer available."
+        is PocketSession.Target.FavoriteApp -> intentForFavoriteShortcut(target.component,
+            (applicationContext as PocketApplication).session.favoriteApps) ?: return "Favorite shortcut is no longer available."
         PocketSession.Target.Studio -> Intent(this, StudioActivity::class.java)
     }
     return startShortcut(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 }
 
-/** Only return the resolved viewfinder, never a launcher activity supplied by a favorite. */
+/** Resolve from the saved selection at use time, including when retrying from the notification. */
 @Suppress("DEPRECATION")
-internal fun Context.cameraIntentForFavorite(component: String, favorites: tel.misa.mxpocket.decks.FavoriteApps): Intent? {
-    val favorite = favorites.intentFor(component)?.component ?: return null
+private fun Context.intentForFavoriteShortcut(component: String, favorites: FavoriteApps): Intent? {
+    val launcher = favorites.intentFor(component) ?: return null
     val intent = Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA)
     val flags = PackageManager.MATCH_DEFAULT_ONLY
-    val camera = packageManager.resolveActivity(intent, flags)?.activityInfo ?: return null
-    if (camera.packageName != favorite.packageName || !camera.enabled || !camera.exported) return null
+    val camera = packageManager.resolveActivity(intent, flags)?.activityInfo ?: return launcher
+    if (camera.packageName != launcher.component?.packageName) return launcher
+    if (!camera.enabled || !camera.exported) return null
     val name = ComponentName(camera.packageName, camera.name)
     // A resolver/chooser does not itself handle the viewfinder action.
     if (packageManager.queryIntentActivities(intent, flags).none {

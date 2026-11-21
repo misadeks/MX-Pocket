@@ -240,10 +240,13 @@ select **Open apps directly from keypad**, read the explanation and grant
 special access is broader than launching apps: it also permits drawing over
 other apps. MX Pocket creates no overlay windows. A fresh physical press on the
 active, authorized keypad can open a built-in Phone shortcut, **Phone: Camera**
-on any saved layout, or **Open Studio**. A favorite from the app Android resolves
-as its default still camera can open that app's viewfinder; all other favorites
-still need a notification tap. No opening action takes a photo or starts
-recording. Turn the option off in MX Pocket or revoke special access in Settings.
+on any saved layout, **Open Studio**, or a saved favorite. Each new press can
+request the same or a different favorite without returning to MX Pocket. The
+service rechecks the selected launcher component; for Android's resolved default
+still camera it requests the viewfinder instead. Opening a shortcut does not
+take a photo or start recording. If you enabled direct shortcuts before they
+included ordinary favorites, enable the option again to opt in to this scope.
+Turn it off in MX Pocket or revoke special access in Settings.
 
 With the option off or special access denied/unavailable, press a
 shortcut and tap its **Open Camera**, **Open Dialer**, etc. notification. No second keypad
