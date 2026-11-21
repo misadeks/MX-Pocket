@@ -2,6 +2,7 @@ package tel.misa.mxpocket.ui
 
 import android.content.Context
 import tel.misa.mxpocket.R
+import tel.misa.mxpocket.deck.navigationFactorySlots
 import tel.misa.mxpocket.plugins.BuiltInPlugins
 import tel.misa.mxpocket.plugins.PluginFrame
 
@@ -19,12 +20,17 @@ class UiPreviewScenes(context: Context) {
         val plugin = if (id == "disconnected") plugins.first() else plugins.single { it.descriptor.id == id }
         val frame = plugin.render(0)
         val displayFrame = if (id == "audio") PluginFrame(frame.keys.mapIndexed { index, tile ->
-            if (index == 7) tile.copy(label = "6 / 15") else tile
+            when (index) {
+                1 -> tile.copy(footer = "6 / 15", volumeLevel = tel.misa.mxpocket.plugins.VolumeLevel(6,15,false))
+                7 -> tile.copy(label = "Night train", footer = "Paused")
+                4 -> tile.copy(label = "Play", glyph = tel.misa.mxpocket.plugins.PlayerGlyph.PLAY)
+                else -> tile
+            }
         }) else frame
         return PocketScreenState(
             status = if (id == "disconnected") "$note\n$disconnectedNote" else "$note\n${plugin.descriptor.title} fixture",
             pluginTitle = plugin.descriptor.title,
-            frame = displayFrame,
+            frame = if (id == "navigation") PluginFrame(navigationFactorySlots.map(frame.keys::get)) else displayFrame,
             diagnostics = "UI fixture: no USB enumeration has been performed.",
             log = "Static scene: $id. Controls only emit UI preview events.",
         )

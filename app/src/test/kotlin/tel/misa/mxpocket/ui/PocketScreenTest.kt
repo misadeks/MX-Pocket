@@ -2,7 +2,6 @@ package tel.misa.mxpocket.ui
 
 import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.Color
 import android.media.AudioManager
 import android.view.View
 import android.view.ViewGroup
@@ -72,31 +71,42 @@ class PocketScreenTest {
 
     }
 
-    @Test fun liveCoverUsesNineExistingAccessibleButtonsAndRestoresAllWithoutArt() {
+    @Test fun liveMirrorReusesNineControlsAndRestoresActionsAfterAudioWithOrWithoutArt() {
         Robolectric.buildActivity(UiPreviewActivity::class.java).setup().use { controller ->
             val activity = controller.get()
             val scenes = UiPreviewScenes(activity)
             val events = mutableListOf<PocketScreenEvent>()
             val screen = PocketScreen(activity,scenes.descriptors,events::add,live = true)
             val image = Bitmap.createBitmap(118,118,Bitmap.Config.ARGB_8888)
-            val state = scenes.state("audio").copy(rendered = List(9) { image })
-            screen.render(state)
             val panel = views(screen.view).filterIsInstance<KeypadPanel>().single()
             val keys = (0 until panel.childCount).map { panel.getChildAt(it) as MaterialButton }
-            val colors = keys.map { it.textColors }
-            screen.render(state.copy(panelArt = image))
-            assertEquals(9,keys.size)
-            keys.forEachIndexed { i,key ->
-                assertEquals(Color.TRANSPARENT,key.currentTextColor)
-                assertNull(key.icon)
-                assertTrue(key.contentDescription.contains(state.frame.keys[i].label))
-                key.performClick()
-            }
-            assertEquals(keys.indices.map { PocketScreenEvent.TapKey(it) },events)
-            screen.render(state)
-            keys.forEachIndexed { i,key ->
-                assertEquals(colors[i],key.textColors)
-                assertNotNull(key.icon)
+            assertEquals(9, keys.size)
+            for (scene in listOf("audio", "focus")) {
+                val state = scenes.state(scene).copy(rendered = List(9) { image })
+                for (art in listOf(null, image, null)) {
+                    screen.render(state.copy(panelArt = art))
+                    events.clear()
+                    keys.forEachIndexed { i, key ->
+                        assertSame(key, panel.getChildAt(i))
+                        assertTrue(key.text.isEmpty())
+                        assertNull(key.icon)
+                        assertTrue(key.contentDescription.contains(state.frame.keys[i].label))
+                        key.performClick()
+                    }
+                    if (scene == "audio") {
+                        assertTrue(keys.none { it.contentDescription.startsWith("Key ") })
+                        assertEquals("Play", keys[4].contentDescription)
+                        assertEquals("Mute, Sound on, 6 / 15", keys[1].contentDescription)
+                        assertFalse(keys[6].isEnabled)
+                        assertFalse(keys[7].isClickable)
+                        assertEquals("android.widget.TextView", keys[7].createAccessibilityNodeInfo().className)
+                        assertEquals((0..5).map { PocketScreenEvent.TapKey(it) }, events)
+                    } else {
+                        assertTrue(keys[0].contentDescription.startsWith("Key 1, Start"))
+                        assertTrue(keys[7].isClickable)
+                        assertEquals(keys.indices.map { PocketScreenEvent.TapKey(it) }, events)
+                    }
+                }
             }
         }
     }

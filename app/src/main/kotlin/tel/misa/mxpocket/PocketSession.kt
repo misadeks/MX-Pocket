@@ -81,7 +81,7 @@ internal class PocketSession(
     private data class LcdKey(val tile: KeyTile, val action: ActionCall?, val image: Bitmap,
         val repaint: Long, val hasTrackDetails: Boolean) {
         fun matches(other: LcdKey) = repaint == other.repaint && action == other.action &&
-            tile.enabled == other.tile.enabled && tile.inputToken == other.tile.inputToken &&
+            tile.enabled == other.tile.enabled && tile.readOnly == other.tile.readOnly && tile.inputToken == other.tile.inputToken &&
             (image === other.image || image.sameAs(other.image))
     }
 
@@ -186,9 +186,7 @@ internal class PocketSession(
         val state = deck.state.value
         if (lastLayout?.let { it.profile != state.activeProfileId || it.page != state.activePage } == true)
             plugins.setEnabled(false) // Release held keys before rebinding even if the plugin ID is unchanged.
-        val id = state.activePage.keys.mapNotNull { key ->
-            key.action?.takeIf { it.id == "plugin.key" }?.params?.get("pluginId")
-        }.firstOrNull { hasPlugin(it) }
+        val id = selectedPlugin(state.activePage)
         if (id != null && plugins.selectedId != id) plugins.select(id)
         plugins.setEnabled((output != null || preview && screen != null) && id != null && id !in disabled.value &&
             (!preview || screen != null))
@@ -210,6 +208,9 @@ internal class PocketSession(
     }
 
     private fun hasPlugin(id: String) = plugins.descriptors.any { it.id == id }
+    private fun selectedPlugin(page: DeckPage) = page.keys.firstNotNullOfOrNull { key ->
+        key.action?.slotOwner()?.takeIf(::hasPlugin)
+    }
     private fun layout() = deck.state.value.let { Layout(it.activeProfileId, it.activePage, plugins.generation, disabled.value) }
 
     fun setPluginEnabled(id: String, enabled: Boolean) {
@@ -250,8 +251,9 @@ internal class PocketSession(
         val page = deck.state.value.activePage
         val keys = page.keys.mapIndexed { index, key ->
             val call = key.action
-            val plugin = call?.params?.get("pluginId")?.takeIf { call.id == "plugin.key" }
-            val tile = if (plugin == plugins.selectedId) call.params["index"]?.toIntOrNull()?.let(native.keys::getOrNull)
+            val plugin = call?.slotOwner()
+            val tile = if (call?.id == "plugin.key" && plugin == plugins.selectedId)
+                call.params["index"]?.toIntOrNull()?.let(native.keys::getOrNull)
                 else workflowTile(call) ?: platformTile(call)
             val registered = tile != null || call?.id in setOf(DeckActions.PAGE, DeckActions.PROFILE,
                 DeckActions.BACK, DeckActions.ROOT, "sound.play","phone.open","keypad.status")
@@ -262,6 +264,9 @@ internal class PocketSession(
             val label = key.label.ifBlank { tile?.label ?: actionLabel(call) }
             val footer = when {
                 !key.enabled || ownerOf(call) in disabled.value -> "Disabled"
+                // Keep the access state and its recovery hint even after an earlier failed press.
+                tile?.glyph == NavigationGlyph.ACCESS_INFO ||
+                    tile?.glyph == NavigationGlyph.RECENTS && !tile.enabled -> tile.footer
                 !available && call != null -> "Unavailable"
                 call?.id == "workflow.run" && workflows.status.value?.workflowId == call.params["workflowId"] -> tile?.footer.orEmpty()
                 else -> feedback[index] ?: tile?.footer.orEmpty()
@@ -269,6 +274,7 @@ internal class PocketSession(
             (tile ?: KeyTile(label, footer, key.color)).copy(label = label, footer = footer,
                 background = if (!available) 0xff494c51.toInt() else if (key.color == DeckKey().color)
                     tile?.background ?: key.color else key.color,
+                showLabel = key.label.isNotBlank() || tile?.showLabel != false,
                 icon = key.icon.ifBlank { tile?.icon.orEmpty() }, enabled = available)
         }
         val hasPluginKeys = page.keys.any {
@@ -302,7 +308,7 @@ internal class PocketSession(
             "usbDevice" to if (connected) "046D:C354" else "None",
             "simulator" to preview.toString(), "hour" to time.hour.toString(),
             "weekday" to time.dayOfWeek.name, "profile" to state.activeProfileId,
-            "plugin" to (state.activePage.keys.firstOrNull()?.action?.params?.get("pluginId") ?: "custom"),
+            "plugin" to (selectedPlugin(state.activePage) ?: "custom"),
             "workflow" to (workflows.status.value?.phase?.name ?: "IDLE")) +
             attachedUsb.associate { "usb.$it" to "true" } + platformSignals()
         _signals.value = snapshot
@@ -561,7 +567,8 @@ internal class PocketSession(
                 val index = event.controlId - 1
                 if (virtual) {
                     val call = deck.state.value.activePage.keys[index].action ?: return
-                    if (frame().keys[index].enabled)
+                    val tile = frame().keys[index]
+                    if (!event.pressed || tile.enabled && !tile.readOnly)
                         dispatchKey(index, call, event, virtual = true, pressAt = null)
                 } else if (!event.pressed || event.synthetic) {
                     if (!physicalKeys.release(index, event.synthetic)) return
@@ -581,7 +588,9 @@ internal class PocketSession(
         val ticket = request ?: return
         val call = binding.page.keys[index].action ?: return
         val tiles = frame()
-        if (!tiles.keys[index].enabled || !acknowledged(index, epoch, tiles, binding)) return
+        fun actionable(latest: PluginFrame) = latest.keys[index].let { it.enabled && !it.readOnly } &&
+            acknowledged(index, epoch, latest, binding)
+        if (!actionable(tiles)) return
         val partners = chordPartners(binding, tiles, index)
         val event = KeyEvent(index + 1, true)
         if (partners.isEmpty() && !physicalKeys.hasPending) {
@@ -590,7 +599,7 @@ internal class PocketSession(
         }
         val profile = deck.state.value.activeProfile
         physicalKeys.press(index, arrivedAt, epoch, partners, current = {
-            request == ticket && binding == layout() && acknowledged(index, epoch) &&
+            request == ticket && binding == layout() && actionable(frame()) &&
                 (partners.isEmpty() || (deck.state.value.activeProfile == profile &&
                     SystemClock.elapsedRealtime() - arrivedAt in 0 until 2_000L &&
                     app.isUnlockedAndInteractive() && app.hasKeypadAccess(ticket)))
@@ -615,7 +624,7 @@ internal class PocketSession(
                 val partner = pair.partner(own) ?: continue
                 if (PluginSlot(partner, plugins.generation) in physicalOwners) continue
                 for (i in page.keys.indices) {
-                    if (physicalKeys.available(i) && slot(i) == partner && frame.keys[i].enabled &&
+                    if (physicalKeys.available(i) && slot(i) == partner && frame.keys[i].enabled && !frame.keys[i].readOnly &&
                         acknowledged(i, receipts[i], frame, layout))
                         put(i, PhysicalChordInput.Partner(pair, receipts[i]))
                 }
@@ -636,7 +645,7 @@ internal class PocketSession(
                 plugins.key(PluginKeyEvent(slot.index, event.pressed, event.synthetic))
                 followPluginSelection(call.params.getValue("pluginId"))
             } else if (event.pressed && !event.synthetic) {
-                press(call, virtual, index)
+                press(call.commandBinding(), virtual, index)
             }
         } finally {
             physicalPressAt = null
@@ -884,7 +893,8 @@ internal class PocketSession(
         val component = params["component"]
         if ((c == DeckCommand.OPEN && (component.isNullOrBlank() || params.size != 1)) ||
             (c != DeckCommand.OPEN && params.isNotEmpty())) return unavailable("Invalid action parameters.")
-        if (!app.isUnlockedAndInteractive() && !(c.workflowSafe && fromPhysicalKey && freshAuthorizedPress()))
+        if (c == DeckCommand.VOLUME_LEVEL) return unavailable("Volume level is a display, not a control.")
+        if (!app.isUnlockedAndInteractive() && !(c.lockedMediaKey && fromPhysicalKey && freshAuthorizedPress()))
             return unavailable("Unlock the phone or use a connected keypad media key.")
         if (c.workflowSafe) return media.execute(c)
         if (!(visibleKey && screen != null) && !freshAuthorizedPress())
