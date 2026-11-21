@@ -37,6 +37,23 @@ class DeckSessionTest {
         override fun openApp(app: PhoneApp) = false
     }
 
+    @Test fun v1MixedStudioPageKeepsItsOriginalPluginSelection() {
+        val session = app.session
+        val repo = session.deck
+        repo.setKey("studio","root",0,DeckKey(action = ActionCall("plugin.key",
+            mapOf("pluginId" to "audio","index" to "0")))).getOrThrow()
+        session.attach(screen)
+        session.selectProfile("studio")
+        repo.importJson(org.json.JSONObject(repo.exportJson()).put("version",1).toString()).getOrThrow()
+        session.startPreview()
+        main.idle()
+        assertEquals("audio",session.plugins.selectedId)
+        assertTrue(session.frame().keys[0].enabled)
+        assertFalse(session.frame().keys[1].enabled)
+        session.disconnect()
+        session.detach(screen)
+    }
+
     @Test fun simulatorRunsSavedPagesAndWorkflowAndReconnectsWithoutLosingLocation() {
         val session = app.session
         val repo = session.deck

@@ -65,7 +65,8 @@ apps, operate a camera or invoke accessibility actions. Nothing is saved.
 - Compile-time Kotlin plugin engine with stable registration IDs, exactly nine
   key tiles per frame, physical press/release handling, scoped contextual updates
   and host-mediated Android actions. Focus, Audio and Phone all use this API.
-  [Plugin authoring guide](docs/plugins.md) includes a working Counter example.
+  The [Counter example](docs/plugins.md#bind-physical-lcd-keys-1--9) shows how
+  to register an optional two-key binding without changing the USB driver.
   No downloaded code, external APK plugin loading or runtime class loading.
 
 ## Architecture

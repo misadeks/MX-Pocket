@@ -10,6 +10,8 @@ class PreviewDeck {
     private var volume = 6
     private var muted = false
     private var playing = false
+    private val tracks = listOf("Night train", "First light", "Homeward")
+    private var track = 0
 
     val profileName get() = deck.activeProfile.name
     val profileIndex get() = deck.profiles.indexOf(deck.activeProfile)
@@ -31,8 +33,8 @@ class PreviewDeck {
     private fun labels(plugin: String, now: Long): List<String> = when (plugin) {
         "focus" -> listOf(if (focus.running) "Pause" else "Start", focus.label(now), "Reset",
             "-5 min", "${focus.durationMillis / 60_000} min", "+5 min", "15 min", "25 min", "50 min")
-        "audio" -> listOf("Volume -", if (playing) "Pause" else "Play", "Volume +", "Previous",
-            "Media access", "Next", "Mute", "${if (muted) 0 else volume} / 15", "Unmute")
+        "audio" -> listOf("Volume -", if (muted) "Unmute" else "Mute", "Volume +", "Previous",
+            if (playing) "Pause" else "Play", "Next", "Seek back 10 seconds", tracks[track], "Seek forward 10 seconds")
         "phone" -> listOf("Camera", "Settings", "Dialer", "Web", "Phone", "Alarm", "Focus", "Audio", "Repaint")
         "launcher" -> listOf("No favorites", "-", "-", "-", "-", "-", "-", "Edit favorites", "Favorites")
         "studio" -> listOf("Shutter", "Record", "Stop", "-", "-", "-", "Open Video", "Open Camera", "Camera controls")
@@ -41,7 +43,7 @@ class PreviewDeck {
         else -> emptyList()
     }
 
-    data class Tile(val label: String, val enabled: Boolean, val footer: String = "")
+    data class Tile(val label: String, val enabled: Boolean, val footer: String = "", val readOnly: Boolean = false)
     private data class Binding(val plugin: String, val index: Int)
 
     private fun binding(slot: Int): Binding? {
@@ -53,7 +55,12 @@ class PreviewDeck {
     fun tiles(now: Long): List<Tile> = deck.activePage.keys.indices.map { slot ->
         val action = binding(slot)
         val label = action?.let { labels(it.plugin, now).getOrNull(it.index) }
-        when {
+        if (action?.plugin == "audio" && label != null) when (action.index) {
+            1 -> Tile(label, true, "${if (muted) 0 else volume} / 15")
+            6, 8 -> Tile(label, false, "No seek position")
+            7 -> Tile(label, false, "Now playing · ${if (playing) "Playing" else "Paused"}", readOnly = true)
+            else -> Tile(label, true)
+        } else when {
             action?.plugin == "navigation" && action.index == 2 -> Tile("Recents", false, "Needs access")
             action?.plugin == "navigation" && action.index == 7 -> Tile("Access info", true, "System nav off")
             else -> Tile(label ?: "-", label != null && label != "-")
@@ -77,10 +84,11 @@ class PreviewDeck {
                     volume = (volume + if (index == 2) 1 else -1).coerceIn(0, 15)
                     muted = false
                 }
-                1 -> playing = !playing
-                6, 8 -> muted = index == 6
-                7 -> return "Simulated volume: ${if (muted) 0 else volume} / 15."
-                else -> return "$label is simulated. No media command sent."
+                1 -> muted = !muted
+                3, 5 -> track = Math.floorMod(track + if (index == 5) 1 else -1, tracks.size)
+                4 -> playing = !playing
+                6, 8 -> return "Seeking is unavailable in this preview."
+                7 -> return "Now playing: ${tracks[track]}."
             }
             "navigation" -> return when (index) {
                 2 -> "Recents needs Android navigation access. No system action sent."

@@ -7,10 +7,17 @@ import tel.misa.mxpocket.decks.DeckState
 
 enum class PluginCapability { AUDIO, OPEN_APPS, NAVIGATION, TONE, STUDIO, SYSTEM_NAVIGATION }
 
+/** Two distinct logical plugin slots in ascending order (not press order). */
+data class KeyChord(val first: Int, val second: Int) {
+    init { require(first in 0..7 && second in first + 1..8) { "Use two distinct LCD indices in ascending order" } }
+    internal fun partner(index: Int) = when (index) { first -> second; second -> first; else -> null }
+}
+
 data class PluginDescriptor(
     val id: String,
     val title: String,
     val capabilities: Set<PluginCapability> = emptySet(),
+    val chords: Set<KeyChord> = emptySet(),
 ) {
     init {
         require(id.matches(Regex("[a-z][a-z0-9.-]{2,63}"))) { "Use a stable lowercase plugin ID" }
@@ -75,6 +82,8 @@ interface PocketPlugin {
     /** Pure, bounded rendering. Never launch work, perform USB I/O or allocate Bitmaps here. */
     fun render(nowMillis: Long): PluginFrame
     fun onKey(event: PluginKeyEvent, host: PluginHost)
+    /** A matched physical pair replaces both onKey sequences; it is not a direct-launch/capture grant. */
+    fun onChord(chord: KeyChord, host: PluginHost) {}
     fun onDeactivate() {}
 }
 

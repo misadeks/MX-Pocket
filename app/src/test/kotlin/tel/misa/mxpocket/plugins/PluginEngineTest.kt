@@ -126,6 +126,8 @@ class PluginEngineTest {
         val heldColor = fixture.engine.render().keys[2].background
         fixture.engine.key(PluginKeyEvent(2, false))
         assertNotEquals(heldColor, fixture.engine.render().keys[2].background)
+        fixture.engine.chord(KeyChord(0, 8))
+        assertTrue(fixture.engine.render().keys.all { it.label == "0" })
         runCurrent()
         advanceTimeBy(1100)
         runCurrent()

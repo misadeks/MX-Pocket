@@ -60,7 +60,8 @@ fun main() = application {
                         Text("Profile ${deck.profileIndex + 1} of ${deck.profileCount}",
                             style = MaterialTheme.typography.labelLarge)
                     }
-                    KeypadGrid(tiles.map { KeypadTile(it.label, footer = it.footer, color = keyColor, enabled = it.enabled) },
+                    KeypadGrid(tiles.map { KeypadTile(it.label, footer = it.footer, color = keyColor,
+                        enabled = it.enabled, readOnly = it.readOnly, showNumber = profile != "audio" && profile != "navigation") },
                         onKey = { slot, pressed ->
                             if (pressed) { message = deck.press(slot, now()); refresh() }
                         }, modifier = Modifier.background(Color(0xFF162131), MaterialTheme.shapes.medium).padding(10.dp))

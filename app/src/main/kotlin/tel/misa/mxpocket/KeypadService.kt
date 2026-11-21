@@ -26,8 +26,13 @@ class KeypadService : Service() {
     private val usb by lazy { getSystemService(UsbManager::class.java) }
     private val notifications by lazy { getSystemService(NotificationManager::class.java) }
     private var owner: PocketSession.Request? = null
-    private val detach = object : BroadcastReceiver() {
+    private val sessionEvents = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == Intent.ACTION_SCREEN_OFF || intent.action == Intent.ACTION_SCREEN_ON ||
+                intent.action == Intent.ACTION_USER_PRESENT) {
+                session.cancelPhysicalGesture()
+                return
+            }
             if (intent.action != UsbManager.ACTION_USB_DEVICE_DETACHED) return
             val name = intent.usbDevice()?.deviceName ?: return
             if (usb.deviceList.containsKey(name)) return
@@ -38,7 +43,9 @@ class KeypadService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        ContextCompat.registerReceiver(this, detach, IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED),
+        ContextCompat.registerReceiver(this, sessionEvents, IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED).apply {
+            addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_USER_PRESENT)
+        },
             ContextCompat.RECEIVER_NOT_EXPORTED)
     }
 
@@ -157,7 +164,7 @@ class KeypadService : Service() {
     }
 
     override fun onDestroy() {
-        unregisterReceiver(detach)
+        unregisterReceiver(sessionEvents)
         if (owner != null && session.request == owner) session.disconnect("Keypad service stopped.")
         super.onDestroy()
     }
