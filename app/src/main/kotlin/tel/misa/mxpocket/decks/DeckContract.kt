@@ -40,6 +40,7 @@ data class MediaDeckState(
     val playing: Boolean? = null, val supported: Set<DeckCommand> = emptySet(),
     val volume: Int = 0, val maximum: Int = 0,
     val artwork: android.graphics.Bitmap? = null, val fixedVolume: Boolean = false,
+    val awaitingCover: Boolean = false,
 )
 data class StudioState(
     val ready: Boolean = false, val recording: Boolean = false, val elapsedSeconds: Long = 0,

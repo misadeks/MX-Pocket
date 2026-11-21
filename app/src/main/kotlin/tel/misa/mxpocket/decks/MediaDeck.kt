@@ -113,6 +113,7 @@ internal class MediaDeck(private val app: Context, private val canShowTrack: () 
         private var displayed: SessionArtwork? = null
         private var artwork: Bitmap? = null
         private var job: Job? = null
+        private var transition: Job? = null
         private var retryAt = 0L
         private var backoff = INITIAL_BACKOFF
         private var closed = false
@@ -161,17 +162,25 @@ internal class MediaDeck(private val app: Context, private val canShowTrack: () 
                     val data = if (fresh) metadata else owner?.controller?.metadata
                     val identity = trackFields.map { data?.getString(it).orEmpty() }
                     val next = SessionArtwork.from(data)
-                    if (owner !== metadataOwner || identity != track ||
-                        (identity.all(String::isEmpty) && next != null && !next.sameSource(source))) clearLoad()
+                    val ownerChanged = owner !== metadataOwner
+                    val trackChanged = identity != track
+                    val sourceChanged = if (next == null) source != null else !next.sameSource(source)
+                    if (ownerChanged) clearLoad() else if (trackChanged || sourceChanged) cancelRead()
+                    val coldLookup = ownerChanged && (next != null || identity.all(String::isEmpty))
+                    if (owner != null && (coldLookup || ((trackChanged || sourceChanged) && artwork != null)))
+                        beginTransition()
                     track = identity
                     title = (data?.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE)
                         ?: data?.getString(MediaMetadata.METADATA_KEY_TITLE)).orEmpty().take(80).replace(whitespace, " ").trim()
-                    if (next == null || !next.sameSource(source)) source = next
+                    if (ownerChanged || trackChanged || sourceChanged) source = next
                     metadataOwner = owner
                 }
-                load(source?.takeIf { it.readable(app) }, fresh)
+                if (displayed?.readable(app) == false) clearLoad()
+                if (source?.readable(app) == false) clearLoad()
+                else load(source, fresh)
                 publish(basic.copy(access = true, status = if (player == null) "No session" else status(state?.state),
-                    title = title, playing = playing(state?.state), supported = supported(state), artwork = artwork))
+                    title = title, playing = playing(state?.state), supported = supported(state), artwork = artwork,
+                    awaitingCover = transition != null && artwork == null))
             } catch (_: SecurityException) {
                 reset()
                 publish(basic.copy(status = "Access unavailable"))
@@ -179,8 +188,7 @@ internal class MediaDeck(private val app: Context, private val canShowTrack: () 
         }
 
         private fun load(next: SessionArtwork?, freshMetadata: Boolean) {
-            if (next == null) { clearLoad(); return }
-            if (displayed?.readable(app) == false) { displayed = null; artwork = null }
+            if (next == null) return
             if (next !== target) {
                 job?.cancel(); job = null
                 target = next
@@ -197,6 +205,7 @@ internal class MediaDeck(private val app: Context, private val canShowTrack: () 
                     retryAt = SystemClock.elapsedRealtime() + backoff
                     backoff = (backoff * 2).coerceAtMost(60_000L)
                 } else if (canShowTrack() && access && next.readable(app)) {
+                    transition?.cancel(); transition = null
                     displayed = next
                     artwork = image
                     retryAt = 0; backoff = INITIAL_BACKOFF
@@ -205,10 +214,27 @@ internal class MediaDeck(private val app: Context, private val canShowTrack: () 
             }
         }
 
-        private fun clearLoad() {
+        private fun cancelRead() {
             job?.cancel(); job = null
-            target = null; displayed = null; artwork = null
+            target = null
             retryAt = 0; backoff = INITIAL_BACKOFF
+        }
+
+        private fun beginTransition() {
+            if (transition != null) return
+            // Coalesce empty -> title -> cover callbacks without pushing nine temporary LCD tiles.
+            transition = scope.launch {
+                delay(COVER_GRACE_MS)
+                transition = null
+                displayed = null; artwork = null
+                refresh()
+            }
+        }
+
+        private fun clearLoad() {
+            cancelRead()
+            transition?.cancel(); transition = null
+            displayed = null; artwork = null
         }
 
         private fun reset() {
@@ -277,6 +303,7 @@ internal class MediaDeck(private val app: Context, private val canShowTrack: () 
         } catch (_: SecurityException) { unavailable("Android restricted media access or the volume change.") }
     }
     companion object {
+        private const val COVER_GRACE_MS = 650L
         private const val INITIAL_BACKOFF = 2000L
         private val trackFields = listOf(MediaMetadata.METADATA_KEY_MEDIA_ID, MediaMetadata.METADATA_KEY_TITLE,
             MediaMetadata.METADATA_KEY_DISPLAY_TITLE, MediaMetadata.METADATA_KEY_ARTIST, MediaMetadata.METADATA_KEY_ALBUM)

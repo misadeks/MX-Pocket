@@ -25,14 +25,17 @@ internal class RenderedKeypad(
         jpegs.evictAll()
     }
 
-    override suspend fun setKeyImage(index: Int, bitmap: Bitmap) = setKeyImage(index, bitmap, coverArt = false)
+    override suspend fun setKeyImage(index: Int, bitmap: Bitmap) {
+        setKeyImage(index, bitmap, coverArt = false)
+    }
 
-    suspend fun setKeyImage(index: Int, bitmap: Bitmap, coverArt: Boolean) {
+    suspend fun setKeyImage(index: Int, bitmap: Bitmap, coverArt: Boolean): Boolean {
         val key = JpegKey(bitmap, coverArt)
         val epoch = generation
         val jpeg = jpegs.get(key) ?: encode(index, bitmap, coverArt).also { if (epoch == generation) jpegs.put(key, it) }
-        if (epoch != generation) return
+        if (epoch != generation) return false
         upload(index, jpeg)
+        return true
     }
 
     override fun close() {

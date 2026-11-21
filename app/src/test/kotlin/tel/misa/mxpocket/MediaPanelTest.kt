@@ -377,6 +377,7 @@ class MediaPanelTest {
         try {
             main.idle()
             assertNull(session.panelArt)
+            assertTrue("Do not send a placeholder panel on cold Audio entry",writes.isEmpty())
             player.setMetadata(local) // Simulate an incomplete initial snapshot and a missed metadata callback.
             main.idleFor(Duration.ofSeconds(2))
             settle { reads.get() == 1 }
@@ -419,16 +420,55 @@ class MediaPanelTest {
             assertTrue(writes.filter { it.first == 1 }.all { it.second.getPixel(4,4) == color })
             assertTrue(mirrors.isNotEmpty() && mirrors.all { it.getPixel(4,4) == color })
 
-            // A new track must not borrow previous pixels, even if the previous URI read finishes late.
+            // A temporary empty snapshot and delayed art from the same authorized player must not flash gray.
             shadowOf(app.getSystemService(KeyguardManager::class.java)).setKeyguardLocked(true)
             app.sendBroadcast(Intent(Intent.ACTION_SCREEN_ON)); main.idle()
+            player.executeOnMetadataChanged(null); main.idle()
             player.executeOnMetadataChanged(MediaMetadata.Builder().putString(MediaMetadata.METADATA_KEY_MEDIA_ID,"track-b")
                 .putString(MediaMetadata.METADATA_KEY_TITLE,"Second").build())
             main.idle()
-            assertNull(session.panelArt)
+            assertEquals("Second",session.frame().keys[4].label)
+            assertSame(art,session.panelArt)
             finishRead.countDown()
+            val newColor = Color.rgb(80,144,246)
+            val second = Bitmap.createBitmap(32,32,Bitmap.Config.ARGB_8888).apply { eraseColor(newColor) }
+            val secondBytes = ByteArrayOutputStream().apply { second.compress(Bitmap.CompressFormat.PNG,100,this) }.toByteArray()
+            val releaseSecond = CountDownLatch(1)
+            val startedSecond = CountDownLatch(1)
+            shadowOf(app.contentResolver).registerInputStreamSupplier(uri) {
+                startedSecond.countDown()
+                releaseSecond.await(3,TimeUnit.SECONDS)
+                secondBytes.inputStream()
+            }
+            player.executeOnMetadataChanged(MediaMetadata.Builder().putString(MediaMetadata.METADATA_KEY_MEDIA_ID,"track-b")
+                .putString(MediaMetadata.METADATA_KEY_TITLE,"Second").putString(MediaMetadata.METADATA_KEY_ART_URI,uri.toString()).build())
             main.idle()
-            assertNull(session.deckState.value.media.artwork)
+            assertTrue(startedSecond.await(3,TimeUnit.SECONDS))
+            main.idleFor(Duration.ofMillis(400))
+            assertSame(art,session.panelArt)
+            releaseSecond.countDown()
+            settle { session.panelArt?.getPixel(4,4) == newColor }
+            // Disabled keys dim the cover. Both source colors are saturated, unlike the plain gray Audio tiles.
+            fun hasCover(image: Bitmap): Boolean {
+                val c = image.getPixel(4,4)
+                return Color.red(c) > 2 * Color.blue(c) || Color.blue(c) > 2 * Color.red(c)
+            }
+            assertTrue("Unexpected plain tile: ${writes.firstOrNull { !hasCover(it.second) }?.first}",
+                writes.all { hasCover(it.second) })
+            assertTrue(mirrors.all { it.getPixel(4,4) in setOf(color,newColor) })
+            player.executeOnMetadataChanged(null)
+            main.idleFor(Duration.ofMillis(500))
+            player.executeOnMetadataChanged(MediaMetadata.Builder().putString(MediaMetadata.METADATA_KEY_TITLE,"No art").build())
+            main.idleFor(Duration.ofMillis(150))
+            assertNull(session.panelArt)
+            assertEquals("No art",session.frame().keys[4].label)
+            session.selectProfile("focus"); main.idle(); writes.clear()
+            shadowOf(app.contentResolver).registerInputStreamSupplier(uri) { bytes.inputStream() }
+            player.setMetadata(local); session.selectProfile("audio")
+            main.idle()
+            settle { session.panelArt?.getPixel(4,4) == color }
+            settle { writes.map { it.first }.distinct().size == 9 }
+            assertTrue(writes.all { hasCover(it.second) })
         } finally { finishRead.countDown(); session.detach(screen); session.disconnect(); playerSession.release() }
     }
 

@@ -35,6 +35,11 @@ colors; each label uses black or white against its own part of the picture.
 Other profiles keep their normal keys even during playback. Without usable
 art, the keys keep a neutral background (or the user's selected backdrop).
 A temporary read failure is retried with increasing delays, without changing tracks.
+If one player announces the next track before providing its cover, the new title
+updates immediately. The last authorized cover can remain for up to 650 ms; if
+no replacement arrives, the normal background returns. A new Audio page can
+wait that same brief interval before its first physical upload. Losing access
+or switching players does not extend the old cover's lifetime.
 Keypad volume changes read back Android's music-stream level right away.
 Phone-side volume notifications refresh the same readout; devices that omit
 them fall back to a two-second check.

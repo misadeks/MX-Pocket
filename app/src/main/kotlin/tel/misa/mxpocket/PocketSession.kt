@@ -75,7 +75,7 @@ internal class PocketSession(
     companion object { const val PHONE_ACTION_TTL = 60_000L }
     private data class Layout(val profile: String, val page: DeckPage, val pluginEpoch: Int,
         val disabled: Set<String>)
-    private data class Acknowledged(val tile: KeyTile, val image: Bitmap, val repaint: Long)
+    private data class Acknowledged(val tile: KeyTile, val image: Bitmap, val repaint: Long, val hasTrackDetails: Boolean)
 
     private val main = Handler(Looper.getMainLooper())
     private val audio = app.getSystemService(AudioManager::class.java)
@@ -226,7 +226,7 @@ internal class PocketSession(
     fun frame(): PluginFrame {
         val mediaState = deckState.value.media
         if ((mediaState.title.isNotEmpty() || mediaState.artwork != null) && !canShowTrack()) media.refreshDisplay()
-        images.useArtwork(deckState.value.media.artwork)
+        images.useArtwork(visibleArtwork(deckState.value.media))
         val native = plugins.render()
         return PluginFrame(deck.state.value.activePage.keys.mapIndexed { index, key ->
             val call = key.action
@@ -582,6 +582,9 @@ internal class PocketSession(
         val layout = layout()
         if (scanLayout != layout) { scanLayout = layout; nextKey = 0 }
         if (lcd.indices.any { !sameBinding(lcd[it]?.tile, frame.keys[it]) }) receipt = 0
+        // Cold Audio entry: keep the old, non-private layout until cover bytes or the bounded fallback arrive.
+        if (!preview && decks.value.media.awaitingCover && layout.profile == "audio" &&
+            lcd.none { it?.hasTrackDetails == true }) return
         val epoch = repaintEpoch
         // One transaction at a time. Re-read desired state after its ACK, continuing around the panel
         // rather than repeatedly starting at a rapidly changing first key.
@@ -600,11 +603,16 @@ internal class PocketSession(
             }
             nextKey = (index + 1) % lcd.size
             val cover = images.artwork != null
+            val hasTrackDetails = cover || decks.value.media.title.isNotEmpty()
             painting = scope.launch {
                 try {
-                    if (connected is RenderedKeypad && cover) connected.setKeyImage(index, image, coverArt = true)
-                    else connected.setKeyImage(index, image)
-                    if (output === connected) lcd[index] = Acknowledged(tile, image, epoch)
+                    val sent = if (connected is RenderedKeypad) {
+                        connected.setKeyImage(index, image, coverArt = cover)
+                    } else {
+                        connected.setKeyImage(index, image)
+                        true
+                    }
+                    if (sent && output === connected) lcd[index] = Acknowledged(tile, image, epoch, hasTrackDetails)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {

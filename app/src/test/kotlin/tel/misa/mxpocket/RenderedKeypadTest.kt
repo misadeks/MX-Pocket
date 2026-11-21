@@ -74,4 +74,20 @@ class RenderedKeypadTest {
         assertEquals(listOf<Byte>(1, 0, 1, 0), writes)
         keypad.close()
     }
+
+    @Test fun invalidatedEncodeIsNotAcknowledgedOrCached() = runBlocking {
+        var encodes = 0
+        var uploads = 0
+        lateinit var keypad: RenderedKeypad
+        keypad = RenderedKeypad({ _, _, _ ->
+            if (++encodes == 1) keypad.clearImages()
+            byteArrayOf(1)
+        }, { _, _ -> uploads++ }, {})
+        val image = Bitmap.createBitmap(118, 118, Bitmap.Config.ARGB_8888)
+        assertFalse(keypad.setKeyImage(2, image, coverArt = true))
+        assertTrue(keypad.setKeyImage(2, image, coverArt = true))
+        assertEquals(2, encodes)
+        assertEquals(1, uploads)
+        keypad.close()
+    }
 }
