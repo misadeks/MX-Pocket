@@ -24,6 +24,8 @@ class PluginEngine(
 ) : Closeable {
     private val entries = plugins.toList()
     val descriptors: List<PluginDescriptor> = entries.map { it.descriptor }
+    private val registeredChords = descriptors.associate { it.id to it.chords.toSet() }
+    internal val chords: Set<KeyChord> get() = if (host == null) emptySet() else registeredChords.getValue(selectedId)
     var selectedId: String = descriptors.firstOrNull()?.id ?: error("Register at least one plugin")
         private set
     var generation = 0
@@ -85,6 +87,13 @@ class PluginEngine(
             if (!held.add(event.index)) return
         } else if (!held.remove(event.index)) return // A release belonging to the previous page is not a new-page event.
         call(activation) { selected.onKey(event, activation) }
+        if (activation.current()) invalidateUi()
+    }
+
+    internal fun chord(binding: KeyChord) {
+        val activation = host ?: return
+        require(binding in chords)
+        call(activation) { selected.onChord(binding, activation) }
         if (activation.current()) invalidateUi()
     }
 

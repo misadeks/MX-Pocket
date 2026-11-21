@@ -55,6 +55,8 @@ internal typealias OpenKeypad = suspend (UsbManager, UsbDevice, (KeyEvent) -> Un
 /** One main-thread owner across phone screens. Only preview or a promoted service enables plugins. */
 internal class PocketSession(
     private val app: Context,
+    registeredPlugins: List<PocketPlugin> = BuiltInPlugins.create(app.getString(R.string.focus),
+        app.getString(R.string.audio), app.getString(R.string.phone)),
     private val open: OpenKeypad = { manager, device, event, log, error ->
         RenderedKeypad(MxKeypad.connect(manager, device, event, log, error))
     },
@@ -84,6 +86,9 @@ internal class PocketSession(
     }
 
     private val main = Handler(Looper.getMainLooper())
+    private val physicalKeys = PhysicalChordInput(main)
+    private data class PluginSlot(val index: Int, val generation: Int)
+    private val physicalOwners = arrayOfNulls<PluginSlot>(9)
     private val audio = app.getSystemService(AudioManager::class.java)
     private val logs = ArrayDeque<String>()
     private var screen: Screen? = null
@@ -102,7 +107,7 @@ internal class PocketSession(
     val deckState = decks.asStateFlow()
     private var deckWatch: Job? = null
     val plugins = PluginEngine(
-        BuiltInPlugins.create(app.getString(R.string.focus), app.getString(R.string.audio), app.getString(R.string.phone)),
+        registeredPlugins,
         CoroutineScope(Dispatchers.Main.immediate), SystemClock::elapsedRealtime,
         readAudio = { AudioSnapshot(audio.getStreamVolume(AudioManager.STREAM_MUSIC),
             audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)) },
@@ -170,7 +175,7 @@ internal class PocketSession(
 
     init {
         sessionScope.launch {
-            deck.state.collect { syncLayout(); invalidate() }
+            deck.state.collect { physicalKeys.cancel(); syncLayout(); invalidate() }
         }
         sessionScope.launch { workflows.status.collect { invalidate() } }
         sessionScope.launch { workflows.definitions.collect { invalidate() } }
@@ -189,6 +194,7 @@ internal class PocketSession(
             (!preview || screen != null))
         val layout = layout()
         if (layout != lastLayout) {
+            physicalKeys.cancel()
             if (lastLayout?.profile != layout.profile || lastLayout?.page?.id != layout.page.id)
                 screenGeneration++
             lastLayout = layout
@@ -501,6 +507,8 @@ internal class PocketSession(
     }
 
     fun disconnect(reason: String = app.getString(R.string.not_connected)) {
+        physicalKeys.disconnect()
+        physicalOwners.fill(null)
         request = null
         preview = false
         plugins.setEnabled(false)
@@ -550,31 +558,103 @@ internal class PocketSession(
             0x01a1 -> if (event.pressed && !event.synthetic) changePage(-1)
             0x01a2 -> if (event.pressed && !event.synthetic) changePage(1)
             in 1..9 -> {
-                // Old labels can still be visible while a new page is uploading. Never replay a skipped press.
                 val index = event.controlId - 1
-                val page = deck.state.value.activePage
-                val call = page.keys[index].action ?: return
-                if (event.pressed && !virtual && !acknowledged(index, epoch)) return
-                if (!frame().keys[index].enabled) return
-                physicalPressAt = arrivedAt.takeIf { !virtual && event.pressed && !event.synthetic && request != null }
-                physicalIndex = index.takeIf { physicalPressAt != null }
-                visibleKey = virtual && event.pressed && !event.synthetic
-                try {
-                    if (call.id == "plugin.key" && call.params["pluginId"] == plugins.selectedId) {
-                        plugins.key(PluginKeyEvent(call.params.getValue("index").toInt(), event.pressed, event.synthetic))
-                        // A built-in plugin may request navigation as part of its input handler.
-                        if (plugins.selectedId != call.params["pluginId"] && deck.state.value.profiles.any { it.id == plugins.selectedId })
-                            selectProfile(plugins.selectedId)
-                    } else if (event.pressed && !event.synthetic) {
-                        press(call, virtual, index)
-                    }
-                } finally {
-                    physicalPressAt = null
-                    physicalIndex = null
-                    visibleKey = false
+                if (virtual) {
+                    val call = deck.state.value.activePage.keys[index].action ?: return
+                    if (frame().keys[index].enabled)
+                        dispatchKey(index, call, event, virtual = true, pressAt = null)
+                } else if (!event.pressed || event.synthetic) {
+                    if (!physicalKeys.release(index, event.synthetic)) return
+                    val owner = physicalOwners[index]
+                    physicalOwners[index] = null
+                    if (owner != null && owner.generation == plugins.generation)
+                        plugins.key(PluginKeyEvent(owner.index, false, event.synthetic))
+                } else if (physicalKeys.begin(index)) {
+                    physicalDown(index, arrivedAt, epoch)
                 }
             }
         }
+    }
+
+    private fun physicalDown(index: Int, arrivedAt: Long, epoch: Long) {
+        val binding = layout()
+        val ticket = request ?: return
+        val call = binding.page.keys[index].action ?: return
+        val tiles = frame()
+        if (!tiles.keys[index].enabled || !acknowledged(index, epoch, tiles, binding)) return
+        val partners = chordPartners(binding, tiles, index)
+        val event = KeyEvent(index + 1, true)
+        if (partners.isEmpty() && !physicalKeys.hasPending) {
+            dispatchKey(index, call, event, virtual = false, pressAt = arrivedAt)
+            return
+        }
+        val profile = deck.state.value.activeProfile
+        physicalKeys.press(index, arrivedAt, epoch, partners, current = {
+            request == ticket && binding == layout() && acknowledged(index, epoch) &&
+                (partners.isEmpty() || (deck.state.value.activeProfile == profile &&
+                    SystemClock.elapsedRealtime() - arrivedAt in 0 until 2_000L &&
+                    app.isUnlockedAndInteractive() && app.hasKeypadAccess(ticket)))
+        }, single = { deferred ->
+            dispatchKey(index, call, event, virtual = false, pressAt = arrivedAt.takeUnless { deferred })
+        }, chord = { chord ->
+            val id = plugins.selectedId
+            plugins.chord(chord) // Neither member lends a synchronous user-press authority to the callback.
+            followPluginSelection(id)
+        })
+    }
+
+    private fun chordPartners(layout: Layout, frame: PluginFrame, index: Int): Map<Int, PhysicalChordInput.Partner> {
+        if (plugins.chords.isEmpty()) return emptyMap()
+        val page = layout.page
+        fun slot(i: Int) = page.keys[i].action?.takeIf { it.id == "plugin.key" && it.params["pluginId"] == plugins.selectedId }
+            ?.params?.get("index")?.toIntOrNull()
+        val own = slot(index) ?: return emptyMap()
+        if (PluginSlot(own, plugins.generation) in physicalOwners) return emptyMap()
+        return buildMap {
+            for (pair in plugins.chords) {
+                val partner = pair.partner(own) ?: continue
+                if (PluginSlot(partner, plugins.generation) in physicalOwners) continue
+                for (i in page.keys.indices) {
+                    if (physicalKeys.available(i) && slot(i) == partner && frame.keys[i].enabled &&
+                        acknowledged(i, receipts[i], frame, layout))
+                        put(i, PhysicalChordInput.Partner(pair, receipts[i]))
+                }
+            }
+        }
+    }
+
+    private fun dispatchKey(index: Int, call: ActionCall, event: KeyEvent, virtual: Boolean, pressAt: Long?) {
+        physicalPressAt = pressAt
+        physicalIndex = index.takeIf { pressAt != null }
+        visibleKey = virtual && event.pressed && !event.synthetic
+        try {
+            if (call.id == "plugin.key" && call.params["pluginId"] == plugins.selectedId) {
+                val slot = PluginSlot(call.params.getValue("index").toInt(), plugins.generation)
+                // Two physical aliases (or a phone tap) must not release another input's plugin slot.
+                if (slot in physicalOwners) return
+                if (!virtual) physicalOwners[index] = slot
+                plugins.key(PluginKeyEvent(slot.index, event.pressed, event.synthetic))
+                followPluginSelection(call.params.getValue("pluginId"))
+            } else if (event.pressed && !event.synthetic) {
+                press(call, virtual, index)
+            }
+        } finally {
+            physicalPressAt = null
+            physicalIndex = null
+            visibleKey = false
+        }
+    }
+
+    private fun followPluginSelection(previous: String) {
+        if (plugins.selectedId != previous && deck.state.value.profiles.any { it.id == plugins.selectedId })
+            selectProfile(plugins.selectedId)
+    }
+
+    fun cancelPhysicalGesture() {
+        if (plugins.chords.isEmpty()) return
+        physicalKeys.cancel()
+        receipts = LongArray(9) // Also reject input posted from the USB thread before this boundary.
+        invalidate()
     }
 
     fun setImage(image: Bitmap) {
@@ -691,10 +771,8 @@ internal class PocketSession(
             images.artwork != null || decks.value.media.title.isNotEmpty())
     }
 
-    private fun acknowledged(index: Int, epoch: Long): Boolean {
+    private fun acknowledged(index: Int, epoch: Long, latest: PluginFrame = frame(), layout: Layout = layout()): Boolean {
         if (epoch == 0L || epoch != receipts[index]) return false
-        val latest = frame()
-        val layout = layout()
         return paintedLayout == layout && paintedTarget == target(latest) &&
             lcd[index]?.matches(desiredKey(layout, latest, index)) == true
     }
@@ -721,6 +799,7 @@ internal class PocketSession(
                 MediaCommand.NEXT -> DeckCommand.NEXT
             }.id, fromPhysicalKey = physicalPressAt != null).message)
             is PluginAction.OpenApp -> {
+                if (!visibleKey && physicalPressAt == null) return
                 if (screen != null && physicalPressAt != null && !freshAuthorizedPress()) {
                     message("Press the shortcut again on the authorized keypad.")
                 } else if (screen?.openApp(action.app) != true && physicalPressAt != null) {

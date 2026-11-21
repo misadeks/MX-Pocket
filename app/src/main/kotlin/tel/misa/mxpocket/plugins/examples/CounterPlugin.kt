@@ -2,6 +2,7 @@ package tel.misa.mxpocket.plugins.examples
 
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import tel.misa.mxpocket.plugins.KeyChord
 import tel.misa.mxpocket.plugins.KeyTile
 import tel.misa.mxpocket.plugins.PluginDescriptor
 import tel.misa.mxpocket.plugins.PluginFrame
@@ -11,7 +12,8 @@ import tel.misa.mxpocket.plugins.PocketPlugin
 
 /** Register CounterPlugin() in BuiltInPlugins.create() to enable this working authoring example. */
 class CounterPlugin : PocketPlugin {
-    override val descriptor = PluginDescriptor("example.counter", "Counter")
+    private val reset = KeyChord(0, 8)
+    override val descriptor = PluginDescriptor("example.counter", "Counter", chords = setOf(reset))
     private val counts = IntArray(9)
     private val pressed = BooleanArray(9)
     private var elapsed = 0
@@ -35,6 +37,10 @@ class CounterPlugin : PocketPlugin {
         pressed[event.index] = event.pressed
         if (event.pressed && !event.synthetic) counts[event.index]++
         host.invalidate()
+    }
+
+    override fun onChord(chord: KeyChord, host: PluginHost) {
+        if (chord == reset) counts.fill(0)
     }
 
     override fun onDeactivate() {
