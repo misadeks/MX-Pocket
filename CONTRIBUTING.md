@@ -55,6 +55,45 @@ command above before requesting review. Add focused regression tests for new
 behavior and preserve existing tests. Do not weaken tests or silently default on
 failed USB/plugin operations to make checks pass.
 
+## Phone UI layout and safe preview
+
+Phone presentation is in `app/src/main/kotlin/tel/misa/mxpocket/ui/PocketScreen.kt`.
+It builds the existing Material Views and renders `PocketScreenState`; taps emit
+typed `PocketScreenEvent` values. Change layout/composition there, shared spacing
+and type sizes in `res/values/dimens.xml`, copy in `res/values/strings.xml`, and
+the Material 3 DayNight colors/theme in `res/values/styles.xml` and
+`res/values-night/styles.xml`. Stable `pocket_*` IDs support tests and future
+layout refactoring. Rendering does not activate plugins or execute actions.
+Keep the safe-area insets, 48dp control/84dp key minimum heights, selectable
+diagnostics/logs and polite live status announcements.
+
+`MainActivity` remains the live state/event adapter: it owns permission,
+connection/lifecycle, Android actions and LCD image uploads. Styling the phone
+must not require changing USB reports, the plugin API or keypad LCD composition.
+
+For a deterministic, **non-operational** screen preview, choose the debug variant
+in Android Studio and run `tel.misa.mxpocket.ui.UiPreviewActivity` with an
+explicit-Activity run configuration on an emulator. Alternatively, after
+installing a debug build on an emulator:
+
+```powershell
+adb -e shell am start -n tel.misa.mxpocket/.ui.UiPreviewActivity --es scene disconnected
+adb -e shell am start -n tel.misa.mxpocket/.ui.UiPreviewActivity --es scene audio
+```
+
+Scene IDs are `disconnected`, `focus`, `audio` and `phone`. Tabs/page arrows change
+fixtures; key/connection/image/export taps only log UI events. This host does not
+construct the live Activity/engine, register USB receivers, activate plugins,
+query USB/audio state or launch phone actions. It and its fixture data/manifest
+entry exist only in `src/debug`, not release builds. The ordinary **Phone-only
+preview** in the live app still executes real phone controls; do not confuse it
+with this UI-only preview.
+
+Use emulator light/dark mode, font scaling and screen sizes for visual checks.
+Run `:app:testDebugUnitTest --tests "tel.misa.mxpocket.ui.*"` for render/event and
+preview isolation tests, then the full local contributor command before a PR.
+Preview fixtures are not evidence of a USB connection or hardware behavior.
+
 ## Boundaries and evidence
 
 - `mx-driver` owns USB descriptors, interface claims, reports, JPEG encoding,

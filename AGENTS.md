@@ -31,6 +31,10 @@
 - `PluginEngine`: UI-thread-confined activation, coroutine scope ownership,
   held-key cleanup, generation guards and error reporting. Use activation-owned
   scopes; no GlobalScope, raw threads or unowned services in plugins.
+- `app/ui/PocketScreen`: phone Views and state/event rendering only; no USB,
+  platform actions or plugin activation. Keep the debug UI-only preview isolated
+  from the live Activity/engine and excluded from release builds. Preserve
+  accessible insets, minimum touch heights and selectable diagnostics.
 - `MainActivity`: USB permission and Android lifecycle/UI/actions. Preserve the
   foreground connection policy, user-image composition and generation checks.
   Page switches must not cancel a partly acknowledged image transaction; let

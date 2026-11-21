@@ -21,18 +21,10 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.provider.Settings
 import android.view.KeyEvent as AndroidKeyEvent
-import android.view.View
-import android.widget.LinearLayout
-import android.widget.HorizontalScrollView
-import android.widget.ScrollView
-import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
-import com.google.android.material.button.MaterialButton
 import com.google.android.material.snackbar.Snackbar
 import tel.misa.mxpocket.driver.KeyEvent
 import tel.misa.mxpocket.driver.MxKeypad
@@ -47,6 +39,9 @@ import tel.misa.mxpocket.plugins.PluginEngine
 import tel.misa.mxpocket.plugins.PluginFrame
 import tel.misa.mxpocket.plugins.PluginKeyEvent
 import tel.misa.mxpocket.plugins.VolumeChange
+import tel.misa.mxpocket.ui.PocketScreen
+import tel.misa.mxpocket.ui.PocketScreenEvent
+import tel.misa.mxpocket.ui.PocketScreenState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -59,13 +54,8 @@ import kotlinx.coroutines.withContext
 class MainActivity : AppCompatActivity() {
     private val usb by lazy { getSystemService(UsbManager::class.java) }
     private val audio by lazy { getSystemService(AudioManager::class.java) }
-    private lateinit var root: LinearLayout
-    private lateinit var status: TextView
-    private lateinit var diagnostics: TextView
-    private lateinit var logView: TextView
-    private lateinit var pageTitle: TextView
-    private lateinit var connectButton: MaterialButton
-    private val keyButtons = mutableListOf<MaterialButton>()
+    private lateinit var screen: PocketScreen
+    private lateinit var screenState: PocketScreenState
     private val logs = ArrayDeque<String>()
     private lateinit var plugins: PluginEngine
     private var preview = false
@@ -157,12 +147,12 @@ class MainActivity : AppCompatActivity() {
     private val logSaver = registerForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
         if (uri != null) lifecycleScope.launch {
             try {
-                val text = diagnostics.text.toString() + "\n" + logs.joinToString("\n")
+                val text = screenState.diagnostics + "\n" + logs.joinToString("\n")
                 withContext(Dispatchers.IO) {
                     val output = contentResolver.openOutputStream(uri) ?: error("Cannot open log destination")
                     output.bufferedWriter().use { it.write(text) }
                 }
-                Snackbar.make(root, "Diagnostic log saved", Snackbar.LENGTH_SHORT).show()
+                Snackbar.make(screen.view, "Diagnostic log saved", Snackbar.LENGTH_SHORT).show()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -182,10 +172,14 @@ class MainActivity : AppCompatActivity() {
                     audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC))
             },
             perform = ::performPluginAction,
-            invalidateUi = { if (::root.isInitialized) root.post { if (!destroyed) updateDemo() } },
+            invalidateUi = { if (::screen.isInitialized) screen.view.post { if (!destroyed) updateDemo() } },
             reportError = { id, error -> if (!destroyed) fail("Plugin $id failed", error) },
         )
-        buildUi()
+        screenState = PocketScreenState(getString(R.string.not_connected),
+            plugins.descriptors.first().title, PluginFrame(List(9) { KeyTile("", "", 0) }))
+        screen = PocketScreen(this, plugins.descriptors, ::handleScreenEvent)
+        setContentView(screen.view)
+        screen.render(screenState)
         ContextCompat.registerReceiver(this, permissionReceiver, IntentFilter(permissionAction),
             ContextCompat.RECEIVER_NOT_EXPORTED)
         ContextCompat.registerReceiver(this, attachReceiver, IntentFilter().apply {
@@ -222,100 +216,28 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
-    private fun buildUi() {
-        val scroll = ScrollView(this).apply { isFillViewport = true }
-        root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(16), dp(20), dp(24))
-        }
-        scroll.addView(root)
-        setContentView(scroll)
-        ViewCompat.setOnApplyWindowInsetsListener(scroll) { view, insets ->
-            val safe = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
-            view.setPadding(safe.left, safe.top, safe.right, safe.bottom)
-            insets
-        }
-        scroll.requestApplyInsets()
-        text(getString(R.string.app_name), 28)
-        text(getString(R.string.subtitle), 16)
-        status = text(getString(R.string.not_connected), 16).apply { accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE }
-        connectButton = button(getString(R.string.connect)) {
-            if (driver != null || connectionJob?.isActive == true) disconnect() else requestConnect()
-        }
-        button(getString(R.string.preview), outlined = true) {
-            disconnect()
-            preview = true
-            plugins.setEnabled(resumed)
-            showStatus(getString(R.string.preview_note))
-            updateDemo()
-        }
-        pageTitle = text(getString(R.string.focus), 22)
-        val tabs = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        root.addView(HorizontalScrollView(this).apply {
-            isHorizontalScrollBarEnabled = false
-            addView(tabs)
-        }, LinearLayout.LayoutParams(-1, -2))
-        for (descriptor in plugins.descriptors) {
-            button(descriptor.title, parent = tabs, outlined = true) {
-                plugins.select(descriptor.id)
+    private fun handleScreenEvent(event: PocketScreenEvent) {
+        when (event) {
+            PocketScreenEvent.ToggleConnection ->
+                if (driver != null || connectionJob?.isActive == true) disconnect() else requestConnect()
+            PocketScreenEvent.EnterPreview -> {
+                disconnect()
+                preview = true
+                plugins.setEnabled(resumed)
+                showStatus(getString(R.string.preview_note))
                 updateDemo()
-            }.apply {
-                layoutParams = LinearLayout.LayoutParams(-2, -2).apply { setMargins(dp(4), dp(4), dp(4), dp(4)) }
             }
-        }
-        repeat(3) { r ->
-            val line = row()
-            repeat(3) { c ->
-                val index = r * 3 + c
-                keyButtons += button("", parent = line, outlined = true) { performAction(index) }.apply {
-                    minHeight = dp(84)
-                    maxLines = 3
-                }
+            is PocketScreenEvent.SelectPlugin -> {
+                plugins.select(event.id)
+                updateDemo()
             }
+            is PocketScreenEvent.TapKey -> performAction(event.index)
+            is PocketScreenEvent.ChangePage -> changePage(event.delta)
+            PocketScreenEvent.Repaint -> updateDemo(force = true)
+            PocketScreenEvent.ChooseImage -> imagePicker.launch(arrayOf("image/*"))
+            PocketScreenEvent.RefreshDiagnostics -> refreshDiagnostics()
+            PocketScreenEvent.SaveLog -> logSaver.launch("mx-pocket-diagnostics.txt")
         }
-        val arrows = row()
-        button(getString(R.string.previous), parent = arrows, outlined = true) { changePage(-1) }
-        button(getString(R.string.next), parent = arrows, outlined = true) { changePage(1) }
-        button(getString(R.string.repaint), outlined = true) { updateDemo(force = true) }
-        button(getString(R.string.import_image), outlined = true) { imagePicker.launch(arrayOf("image/*")) }
-        text(getString(R.string.profile_note), 14)
-        text(getString(R.string.diagnostics), 22)
-        button(getString(R.string.refresh), outlined = true) { refreshDiagnostics() }
-        diagnostics = text("", 14).apply { setTextIsSelectable(true); typeface = android.graphics.Typeface.MONOSPACE }
-        button(getString(R.string.export_log), outlined = true) { logSaver.launch("mx-pocket-diagnostics.txt") }
-        text(getString(R.string.log), 22)
-        logView = text("", 12).apply { setTextIsSelectable(true); typeface = android.graphics.Typeface.MONOSPACE }
-    }
-
-    private fun row(): LinearLayout = LinearLayout(this).apply {
-        orientation = LinearLayout.HORIZONTAL
-        root.addView(this, LinearLayout.LayoutParams(-1, -2))
-    }
-
-    private fun text(value: String, size: Int): TextView = TextView(this).apply {
-        text = value
-        textSize = size.toFloat()
-        setPadding(0, dp(if (size >= 22) 20 else 8), 0, dp(8))
-        root.addView(this, LinearLayout.LayoutParams(-1, -2))
-    }
-
-    private fun button(
-        label: String,
-        parent: LinearLayout = root,
-        outlined: Boolean = false,
-        action: () -> Unit,
-    ): MaterialButton = MaterialButton(this, null, if (outlined)
-        com.google.android.material.R.attr.materialButtonOutlinedStyle
-        else com.google.android.material.R.attr.materialButtonStyle).apply {
-        text = label
-        minHeight = dp(48)
-        isAllCaps = false
-        textSize = 14f
-        setOnClickListener { action() }
-        val params = if (parent === root) LinearLayout.LayoutParams(-1, -2)
-            else LinearLayout.LayoutParams(0, -2, 1f)
-        params.setMargins(dp(4), dp(4), dp(4), dp(4))
-        parent.addView(this, params)
     }
 
     private fun requestConnect() {
@@ -346,7 +268,8 @@ class MainActivity : AppCompatActivity() {
         val generation = ++connectionGeneration
         deviceName = device.deviceName
         showStatus("Claiming descriptor-backed HID interfaces and initializing keypad...")
-        connectButton.text = getString(R.string.disconnect)
+        screenState = screenState.copy(connectionActive = true)
+        screen.render(screenState)
         connectionJob = lifecycleScope.launch {
             try {
                 val connected = MxKeypad.connect(usb, device,
@@ -390,8 +313,11 @@ class MainActivity : AppCompatActivity() {
         deviceName = null
         permissionDeviceName = null
         lastPaint = null
-        if (::connectButton.isInitialized) connectButton.text = getString(R.string.connect)
-        if (!preview && ::status.isInitialized) showStatus(getString(R.string.not_connected))
+        if (::screen.isInitialized) {
+            screenState = screenState.copy(connectionActive = false)
+            screen.render(screenState)
+            if (!preview) showStatus(getString(R.string.not_connected))
+        }
     }
 
     private fun handleKey(event: KeyEvent) {
@@ -413,8 +339,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateDemo(force: Boolean = false) {
         val frame = plugins.render()
-        pageTitle.text = plugins.descriptors.single { it.id == plugins.selectedId }.title
-        keyButtons.forEachIndexed { index, button -> button.text = frame.keys[index].label }
+        screenState = screenState.copy(frame = frame,
+            pluginTitle = plugins.descriptors.single { it.id == plugins.selectedId }.title)
+        screen.render(screenState)
         val connected = driver ?: return
         if (force) repaintVersion++
         val stamp = RenderStamp(plugins.selectedId, plugins.generation, frame, customVersion, repaintVersion)
@@ -442,7 +369,7 @@ class MainActivity : AppCompatActivity() {
                 disconnect()
                 fail("LCD upload failed", e)
             } finally {
-                if (driver === connected && !destroyed) root.post { updateDemo() }
+                if (driver === connected && !destroyed) screen.view.post { updateDemo() }
             }
         }
     }
@@ -471,7 +398,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun performAction(index: Int) {
         if (!preview && driver == null) {
-            Snackbar.make(root, "Connect a keypad or select Phone-only preview first", Snackbar.LENGTH_SHORT).show()
+            Snackbar.make(screen.view, "Connect a keypad or select Phone-only preview first", Snackbar.LENGTH_SHORT).show()
             return
         }
         plugins.key(PluginKeyEvent(index, true))
@@ -521,7 +448,7 @@ class MainActivity : AppCompatActivity() {
     private fun mediaKey(code: Int) {
         audio.dispatchMediaKeyEvent(AndroidKeyEvent(AndroidKeyEvent.ACTION_DOWN, code))
         audio.dispatchMediaKeyEvent(AndroidKeyEvent(AndroidKeyEvent.ACTION_UP, code))
-        Snackbar.make(root, "Media command sent; an active media session is required", Snackbar.LENGTH_SHORT).show()
+        Snackbar.make(screen.view, "Media command sent; an active media session is required", Snackbar.LENGTH_SHORT).show()
     }
 
     private fun launch(intent: Intent) {
@@ -531,25 +458,30 @@ class MainActivity : AppCompatActivity() {
     private fun refreshDiagnostics() {
         refreshJob?.cancel()
         refreshJob = lifecycleScope.launch {
-            diagnostics.text = withContext(Dispatchers.IO) { UsbDiagnostics.describe(usb) }
+            val description = withContext(Dispatchers.IO) { UsbDiagnostics.describe(usb) }
+            screenState = screenState.copy(diagnostics = description)
+            screen.render(screenState)
         }
     }
 
     private fun fail(message: String, error: Throwable) {
         appendLog("ERROR $message: ${error.message}")
         showStatus("$message: ${error.message}. Check diagnostics, reconnect and try again.")
-        Snackbar.make(root, message, Snackbar.LENGTH_LONG).show()
+        Snackbar.make(screen.view, message, Snackbar.LENGTH_LONG).show()
     }
 
     private fun appendLog(line: String) {
         if (destroyed) return
         logs.addLast("${SystemClock.elapsedRealtime()} $line")
         while (logs.size > 250) logs.removeFirst()
-        logView.text = logs.takeLast(60).joinToString("\n")
+        screenState = screenState.copy(log = logs.takeLast(60).joinToString("\n"))
+        screen.render(screenState)
     }
 
-    private fun showStatus(message: String) { status.text = message }
-    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+    private fun showStatus(message: String) {
+        screenState = screenState.copy(status = message)
+        screen.render(screenState)
+    }
     @Suppress("DEPRECATION")
     private fun Intent.usbDevice(): UsbDevice? = if (Build.VERSION.SDK_INT >= 33)
         getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java) else getParcelableExtra(UsbManager.EXTRA_DEVICE)
