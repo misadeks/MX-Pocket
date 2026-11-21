@@ -23,8 +23,9 @@ import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.RequestBody
 import okhttp3.Response
+import okio.BufferedSink
 
 internal data class WorkflowPrompt(val text: String, val openUrl: String? = null)
 
@@ -61,8 +62,14 @@ internal class AndroidWorkflowEffects(private val app: Context) : WorkflowEffect
 
     override suspend fun request(endpoint: WorkflowEndpoint): RequestResult {
         if (!endpoint.valid()) return RequestResult.REFUSED
-        val request = Request.Builder().url(endpoint.url)
-            .method(endpoint.method, if (endpoint.method == "POST") ByteArray(0).toRequestBody() else null).build()
+        // Mark even an empty POST body one-shot: a transport follow-up must not replay it.
+        val body = if (endpoint.method == "POST") object : RequestBody() {
+            override fun contentType() = null
+            override fun contentLength() = 0L
+            override fun isOneShot() = true
+            override fun writeTo(sink: BufferedSink) = Unit
+        } else null
+        val request = Request.Builder().url(endpoint.url).method(endpoint.method, body).build()
         return suspendCancellableCoroutine { result ->
             val call = client.newCall(request)
             result.invokeOnCancellation { call.cancel() }
