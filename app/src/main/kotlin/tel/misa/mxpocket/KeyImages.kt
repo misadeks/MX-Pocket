@@ -102,7 +102,7 @@ internal class KeyImages(private val appIcon: (String) -> Bitmap?) {
         val width = 104
         val layout = StaticLayout.Builder.obtain(text, 0, text.length, p, width)
             .setAlignment(Layout.Alignment.ALIGN_CENTER).setIncludePad(false).setMaxLines(lines)
-            .setEllipsize(TextUtils.TruncateAt.END).setBreakStrategy(Layout.BREAK_STRATEGY_SIMPLE).build()
+            .setEllipsize(TextUtils.TruncateAt.END).build()
         val top = center - layout.height / 2f
         if (photo) {
             val half = (0 until layout.lineCount).maxOf { layout.getLineWidth(it) } / 2f + 4
