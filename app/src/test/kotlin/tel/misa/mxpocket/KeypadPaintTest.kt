@@ -123,7 +123,7 @@ class KeypadPaintTest {
             controller.executeOnMetadataChanged(MediaMetadata.Builder().putString(MediaMetadata.METADATA_KEY_MEDIA_ID, "same")
                 .putString(MediaMetadata.METADATA_KEY_TITLE, "Same").putBitmap(MediaMetadata.METADATA_KEY_ART, bitmap).build())
             val end = System.nanoTime() + 5_000_000_000L
-            do { main.idle(); if (p.session.panelArt?.getPixel(5, 5) == color) return; Thread.yield() }
+            do { main.idle(); if (p.session.panelArt?.getPixel(240, 240) == color) return; Thread.yield() }
             while (System.nanoTime() < end)
             fail("Test player did not publish its cover")
         }

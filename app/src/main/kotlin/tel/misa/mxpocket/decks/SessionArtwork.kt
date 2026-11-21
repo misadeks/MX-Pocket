@@ -39,7 +39,7 @@ internal class SessionArtwork private constructor(private val bitmap: Bitmap?, p
         val y = (software.height - side) / 2
         val crop = Rect(x, y, x + side, y + side)
         return Bitmap.createBitmap(480, 480, Bitmap.Config.ARGB_8888).also {
-            it.eraseColor(edgeColor(software, crop))
+            it.eraseColor(Color.BLACK)
             Canvas(it).drawBitmap(software, crop, coverBounds,
                 Paint(Paint.FILTER_BITMAP_FLAG))
         }
@@ -69,24 +69,10 @@ internal class SessionArtwork private constructor(private val bitmap: Bitmap?, p
     }
 
     companion object {
-        // The visible nine-key square is offset within the panel. Put the mat *inside* its outer keys.
+        // Leave three pixels of bezel clearance around the entire visible grid, not around each key.
         private val coverBounds = KeypadProtocol.keyRegion(0).let { first ->
             val last = KeypadProtocol.keyRegion(8)
-            Rect(first.x + 10, first.y + 10, last.x + last.width - 10, last.y + last.height - 10)
-        }
-        private fun edgeColor(image: Bitmap, crop: Rect): Int {
-            var r = 0; var g = 0; var b = 0; var weight = 0
-            fun sample(x: Int, y: Int) {
-                val c = image.getPixel(x, y)
-                val a = Color.alpha(c)
-                r += Color.red(c) * a; g += Color.green(c) * a; b += Color.blue(c) * a; weight += a
-            }
-            for (i in 0 until 16) {
-                val d = (2 * i + 1) * crop.width() / 32
-                sample(crop.left + d, crop.top); sample(crop.left + d, crop.bottom - 1)
-                sample(crop.left, crop.top + d); sample(crop.right - 1, crop.top + d)
-            }
-            return if (weight == 0) Color.DKGRAY else Color.rgb(r / weight, g / weight, b / weight)
+            Rect(first.x + 3, first.y + 3, last.x + last.width - 3, last.y + last.height - 3)
         }
         fun from(metadata: MediaMetadata?): SessionArtwork? {
             metadata ?: return null

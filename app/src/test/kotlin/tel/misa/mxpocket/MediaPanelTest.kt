@@ -63,8 +63,9 @@ class MediaPanelTest {
 
     @Test fun oneCenterCropSpansHardwareRegionsSimulatedKeysAndThePhonePanel() = runBlocking {
         val source = Bitmap.createBitmap(600,480,Bitmap.Config.ARGB_8888)
-        val mat = Color.rgb(95, 52, 80)
-        source.eraseColor(mat)
+        val sourceEdge = Color.MAGENTA
+        source.eraseColor(sourceEdge)
+        source.setPixels(IntArray(40 * 40), 0, 40, 280, 0, 40, 40)
         val painter = Canvas(source)
         val colors = (0..8).map { Color.rgb(240 - it*20,20+it*17,160-it*15) }
         val ink = Paint()
@@ -75,7 +76,10 @@ class MediaPanelTest {
         }
         val art = SessionArtwork.from(MediaMetadata.Builder().putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART,source).build())!!.load(app)!!
         assertEquals(480,art.width)
-        assertEquals(mat,art.getPixel(24,7))
+        for ((x,y) in listOf(25 to 9, 26 to 8, 454 to 436, 453 to 437, 240 to 12))
+            assertEquals(Color.BLACK,art.getPixel(x,y))
+        for ((x,y) in listOf(26 to 9, 453 to 436))
+            assertEquals(sourceEdge,art.getPixel(x,y))
         val renderer = KeyImages { null }
         val tile = KeyTile("Play","Media",Color.BLACK)
         renderer.useArtwork(art)
@@ -123,10 +127,10 @@ class MediaPanelTest {
         fun awaitColor(c: Int) {
             refresh()
             val timeout = System.nanoTime() + 5_000_000_000L
-            while (session.panelArt?.getPixel(5,5) != c && System.nanoTime() < timeout) {
+            while (session.panelArt?.getPixel(240,240) != c && System.nanoTime() < timeout) {
                 main.idle(); session.frame(); Thread.yield()
             }
-            assertEquals(c,session.panelArt?.getPixel(5,5))
+            assertEquals(c,session.panelArt?.getPixel(240,240))
         }
         shadowOf(app).grantPermissions("tel.misa.mxpocket.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION")
         state(P.STATE_PAUSED); metadata(Color.RED)
@@ -257,7 +261,7 @@ class MediaPanelTest {
         player.setMetadata(cover(Color.RED))
         val device = authorizedDevice()
         session.connect(session.reserve(device)!!,context.getSystemService(UsbManager::class.java),device,{}, { error("Unexpected shortcut") })
-        fun painted(color: Int) = session.panelArt?.getPixel(5,5) == color && writes.size == 9 &&
+        fun painted(color: Int) = session.panelArt?.getPixel(240,240) == color && writes.size == 9 &&
             writes.all { (i,image) -> image === session.keyImage(i,session.frame().keys[i]) }
         try {
             awaitWrites { painted(Color.RED) }
@@ -293,7 +297,7 @@ class MediaPanelTest {
             writes.clear()
             shadowOf(app.getSystemService(PowerManager::class.java)).setIsInteractive(false)
             app.sendBroadcast(Intent(Intent.ACTION_SCREEN_OFF)); main.idle()
-            assertEquals(Color.RED,session.panelArt?.getPixel(5,5))
+            assertEquals(Color.RED,session.panelArt?.getPixel(240,240))
             fun track(name: String, color: Int) = MediaMetadata.Builder().putString(MediaMetadata.METADATA_KEY_TITLE,name)
                 .putBitmap(MediaMetadata.METADATA_KEY_ART,square(color)).build()
             player.executeOnMetadataChanged(track("Screen off",Color.BLUE))
@@ -383,7 +387,7 @@ class MediaPanelTest {
             settle { reads.get() == 1 }
             repeat(10) { main.idle() }
             assertEquals(1,reads.get())
-            settle(advance = true) { session.panelArt?.getPixel(4,4) == color }
+            settle(advance = true) { session.panelArt?.getPixel(240,240) == color }
             assertEquals(2,reads.get())
 
             // Both a phone-side change and repeated keypad commands must reach the actual volume tile without advancing time.
