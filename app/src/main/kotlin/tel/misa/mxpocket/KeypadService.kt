@@ -95,7 +95,7 @@ class KeypadService : Service() {
         val attempted = direct && when (val target = action.target) {
             is PocketSession.Target.Phone -> (target.app == PhoneApp.CAMERA || session.isPhoneShortcutPage) &&
                 requested(launchPhoneApp(target.app))
-            PocketSession.Target.Studio -> requested(launchShortcut(target))
+            is PocketSession.Target.Studio -> requested(launchShortcut(target))
             is PocketSession.Target.FavoriteApp -> cameraIntentForFavorite(target.component, session.favoriteApps)?.let {
                 requested(startShortcut(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)))
             } == true
@@ -117,7 +117,7 @@ class KeypadService : Service() {
         val label = when (val target = action.target) {
             is PocketSession.Target.Phone -> target.app.name.lowercase().replaceFirstChar(Char::uppercaseChar)
             is PocketSession.Target.FavoriteApp -> "favorite app"
-            PocketSession.Target.Studio -> "Pocket Studio"
+            is PocketSession.Target.Studio -> if (target.mode == tel.misa.mxpocket.decks.CameraMode.PHOTO) "Camera" else "Video camera"
         }
         val title = getString(R.string.phone_action_open, label)
         val note = Notification.Builder(this, PHONE_CHANNEL)

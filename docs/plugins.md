@@ -60,7 +60,7 @@ and focused tests, then open a PR.
 | `OPEN_APPS` | Open supported PhoneApp CAMERA/SETTINGS/DIALER/WEB/ALARMS |
 | `NAVIGATION` | Select another registered plugin by ID |
 | `TONE` | Play the short completion tone |
-| `STUDIO` | Foreground Pocket Studio capture and camera controls on an explicit user press |
+| `STUDIO` | Open the default photo/video viewfinder. Only the physical Studio deck may request a matching camera button with separate consent. |
 | `SYSTEM_NAVIGATION` | Basic local navigation; global/element actions only through the user-enabled service |
 | None | Repaint current frame and invalidate changed state |
 
@@ -86,7 +86,7 @@ audio stream behavior and tone resource cleanup in one place.
 For the Android decks use `PluginAction.Deck(DeckCommand, component?)`.
 Each command declares its fixed namespace and belongs to one capability.
 `PocketSession.deckState` exposes immutable, observable selection, media,
-camera and navigation state to the shell and profile editor; `DeckState.tile()`
+camera-control opt-in and navigation access to the shell and profile editor; `DeckState.tile()`
 uses the same data for saved bindings and built-in pages. `KeyTile.iconComponent`
 names an app icon, not a path or URI. `inputToken` identifies the logical binding
 when state or a favorites page changes. See [deck usage](android-decks.md) for

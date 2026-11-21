@@ -16,7 +16,7 @@ import android.provider.MediaStore
 import android.content.pm.PackageManager
 import android.widget.Toast
 import tel.misa.mxpocket.plugins.PhoneApp
-import tel.misa.mxpocket.decks.StudioActivity
+import tel.misa.mxpocket.decks.viewfinder
 
 /** Only opened by tapping the system notification. The intent identifies a request, not a target. */
 class PhoneActionActivity : Activity() {
@@ -67,7 +67,7 @@ internal fun Context.launchShortcut(target: PocketSession.Target): String? {
         is PocketSession.Target.Phone -> return launchPhoneApp(target.app)
         is PocketSession.Target.FavoriteApp -> (applicationContext as PocketApplication).session.favoriteApps.intentFor(target.component)
             ?: return "Favorite is no longer available."
-        PocketSession.Target.Studio -> Intent(this, StudioActivity::class.java)
+        is PocketSession.Target.Studio -> viewfinder(target.mode) ?: return "No default camera viewfinder for this mode."
     }
     return startShortcut(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 }

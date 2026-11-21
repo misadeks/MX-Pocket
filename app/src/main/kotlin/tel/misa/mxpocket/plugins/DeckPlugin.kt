@@ -48,9 +48,10 @@ internal class DeckPlugin(id: String, title: String, capability: PluginCapabilit
                     tel.misa.mxpocket.decks.AUDIO_BACKGROUND.toInt())),
                 slot(C.UNMUTE))
         }
-        "studio" -> listOf(C.PHOTO,
-            if (state.studio.recording) C.STOP else C.RECORD, C.MARKER, C.ZOOM_OUT, C.FOCUS, C.ZOOM_IN,
-            C.TIMER, C.STUDIO, C.TORCH).map { slot(it) }
+        "studio" -> listOf(C.SHUTTER, C.START_VIDEO, C.STOP_VIDEO, null, null, null,
+            C.VIDEO, C.STUDIO, C.CAMERA_ACCESS).map { command ->
+            command?.let { slot(it) } ?: Slot(KeyTile("-", "", 0xff49345f.toInt(), enabled = false))
+        }
         "navigation" -> listOf(C.BACK, C.HOME, C.RECENTS, C.UP, C.ACTIVATE, C.DOWN, C.REVERSE, C.NAV_ACCESS, C.FORWARD).map { slot(it) }
         else -> error("Unknown page")
     }
