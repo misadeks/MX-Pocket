@@ -7,7 +7,8 @@ import tel.misa.mxpocket.plugins.KeyChord
 /** Main-thread physical LCD input. At most one undecided down and one timer per connection. */
 internal class PhysicalChordInput(private val main: Handler) {
     private val down = mutableSetOf<Int>()
-    private data class Candidate(val index: Int, val time: Long, val partners: Map<Int, KeyChord>,
+    data class Partner(val chord: KeyChord, val receipt: Long)
+    private data class Candidate(val index: Int, val time: Long, val receipt: Long, val partners: Map<Int, Partner>,
         val current: () -> Boolean, val single: () -> Unit)
     private var pending: Candidate? = null
     private val timeout = Runnable { flush() }
@@ -16,16 +17,17 @@ internal class PhysicalChordInput(private val main: Handler) {
     fun available(index: Int) = index !in down || index == pending?.index
     val hasPending get() = pending != null
 
-    fun press(index: Int, time: Long, partners: Map<Int, KeyChord>, current: () -> Boolean,
+    fun press(index: Int, time: Long, receipt: Long, partners: Map<Int, Partner>, current: () -> Boolean,
         single: (deferred: Boolean) -> Unit, chord: (KeyChord) -> Unit) {
         val first = pending
         if (first != null) {
             cancel()
             if (first.current()) {
-                val pair = first.partners[index]
-                if (pair != null && partners[first.index] == pair && current() &&
+                val partner = first.partners[index]
+                if (partner != null && partner.receipt == receipt &&
+                    partners[first.index] == Partner(partner.chord, first.receipt) && current() &&
                     time - first.time in 0 until WINDOW_MS && SystemClock.elapsedRealtime() - first.time in 0 until WINDOW_MS) {
-                    chord(pair)
+                    chord(partner.chord)
                     return
                 }
                 first.single() // Commit the older down before the new one; it may change the page.
@@ -39,7 +41,7 @@ internal class PhysicalChordInput(private val main: Handler) {
         val remaining = WINDOW_MS - (SystemClock.elapsedRealtime() - time)
         if (remaining <= 0) single(true)
         else {
-            pending = Candidate(index, time, partners, current) { single(true) }
+            pending = Candidate(index, time, receipt, partners, current) { single(true) }
             main.postDelayed(timeout, remaining)
         }
     }
