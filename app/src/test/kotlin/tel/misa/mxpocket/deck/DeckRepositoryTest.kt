@@ -19,6 +19,25 @@ class DeckRepositoryTest {
     private val file: File get() = File(folder.root, "deck.json")
     private val repo by lazy { DeckRepository(file) }
 
+    @Test fun addsXoProfileToAnExistingLayoutWithoutChangingSelectionOrKeys() {
+        val factory = defaultDeck()
+        val oldLayout = factory.copy(
+            profiles = factory.profiles.filterNot { it.id == "game.xo" },
+            activeProfileId = "phone",
+            defaultProfileId = "audio",
+            histories = factory.histories - "game.xo",
+        )
+        file.writeText(DeckJson.encode(oldLayout))
+
+        val upgraded = DeckRepository(file).state.value
+        assertEquals("phone", upgraded.activeProfileId)
+        assertEquals("audio", upgraded.defaultProfileId)
+        assertEquals(ActionCall("plugin.key", mapOf("pluginId" to "phone", "index" to "0")),
+            upgraded.activePage.keys[0].action)
+        assertTrue(upgraded.profiles.any { it.id == "game.xo" })
+        assertTrue("game.xo" in upgraded.histories)
+    }
+
     @Test fun savesUnicodeBindingsRulesAndNavigationWithoutLeakingMutableReferences() {
         val id = repo.createProfile("Travail 🐈").getOrThrow()
         val page = repo.createPage(id, "🌿").getOrThrow()

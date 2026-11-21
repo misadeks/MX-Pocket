@@ -101,9 +101,19 @@ internal fun defaultDeck(): DeckState {
         plugin("launcher", "Launcher"),
         plugin("studio", "Studio"),
         plugin("navigation", "Navigation"),
+        plugin("game.xo", "X-O"),
     )
     return DeckState(
         DeckLimits.VERSION, profiles, "focus", "focus", null, false,
         profiles.associate { it.id to listOf(it.rootPageId) },
     )
+}
+
+/** Add the built-in game to existing saved layouts without changing their selection or bindings. */
+internal fun DeckState.withBuiltInXo(): DeckState {
+    if (profiles.any { it.id == "game.xo" } || profiles.size >= DeckLimits.PROFILES) return this
+    val profile = DeckProfile("game.xo", "X-O", "root", listOf(DeckPage("root", "X-O", List(9) { index ->
+        DeckKey(action = ActionCall("plugin.key", mapOf("pluginId" to "game.xo", "index" to index.toString())))
+    })))
+    return copy(profiles = profiles + profile, histories = histories + (profile.id to listOf(profile.rootPageId)))
 }

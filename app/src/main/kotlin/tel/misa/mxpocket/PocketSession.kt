@@ -96,7 +96,8 @@ internal class PocketSession(
     val deckState = decks.asStateFlow()
     private var deckWatch: Job? = null
     val plugins = PluginEngine(
-        BuiltInPlugins.create(app.getString(R.string.focus), app.getString(R.string.audio), app.getString(R.string.phone)),
+        BuiltInPlugins.create(app.getString(R.string.focus), app.getString(R.string.audio),
+            app.getString(R.string.phone), app.getString(R.string.xo)),
         CoroutineScope(Dispatchers.Main.immediate), SystemClock::elapsedRealtime,
         readAudio = { AudioSnapshot(audio.getStreamVolume(AudioManager.STREAM_MUSIC),
             audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)) },

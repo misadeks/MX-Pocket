@@ -31,7 +31,7 @@ class DeckRepository internal constructor(private val file: File) {
     private var lastSample = -1L
 
     init {
-        val initial = try {
+        val loaded = try {
             if (!file.exists()) defaultDeck() else {
                 val text = file.inputStream().use {
                     val length = it.channel.size()
@@ -47,6 +47,7 @@ class DeckRepository internal constructor(private val file: File) {
             loadError = "Saved deck unreadable; import a backup or restore defaults"
             defaultDeck()
         }
+        val initial = loaded.withBuiltInXo()
         mutable = MutableStateFlow(initial.snapshot())
         state = mutable.asStateFlow()
         mutableReason = MutableStateFlow(initial.selectionReason)
@@ -56,7 +57,7 @@ class DeckRepository internal constructor(private val file: File) {
     }
 
     fun exportJson(): String = DeckJson.encode(state.value)
-    fun importJson(text: String) = edit(recover = true, force = true) { DeckJson.decode(text) }
+    fun importJson(text: String) = edit(recover = true, force = true) { DeckJson.decode(text).withBuiltInXo() }
     fun restoreDefaults() = edit(recover = true, force = true) { defaultDeck() }
     fun save() = edit(force = true) { it }
 
