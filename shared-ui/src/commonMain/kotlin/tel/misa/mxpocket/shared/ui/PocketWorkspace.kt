@@ -58,6 +58,9 @@ fun virtualGrid(generation: Long, deck: DeckState, frame: PluginFrame, holds: Pl
 /** Only the standalone desktop host supplies this. A null grid means it is disconnected. */
 data class DesktopSimulator(val limitations: String, val grid: VirtualGrid? = null)
 
+data class PhoneCallSettings(val supported: Boolean, val enabled: Boolean, val phoneGranted: Boolean,
+    val supportsDetails: Boolean, val details: Boolean, val listenerGranted: Boolean)
+
 data class PocketScreenState(
     val status: String,
     val pluginTitle: String,
@@ -75,6 +78,7 @@ data class PocketScreenState(
     val usbReady: Boolean = false,
     val activePageId: String = "root",
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val phoneCalls: PhoneCallSettings? = null,
 )
 
 data class PluginItem(
@@ -102,6 +106,10 @@ sealed interface PocketScreenEvent {
     data class DefaultProfile(val id: String) : PocketScreenEvent
     data class PluginSettings(val id: String) : PocketScreenEvent
     data class SetTheme(val mode: ThemeMode) : PocketScreenEvent
+    data class SetPhoneCalls(val enabled: Boolean) : PocketScreenEvent
+    data class SetCallerDetails(val enabled: Boolean) : PocketScreenEvent
+    data object AllowPhoneState : PocketScreenEvent
+    data object CallerNotificationAccess : PocketScreenEvent
 }
 
 /** Both hosts supply only state and intent handlers. The active content retains its composition on resize. */
@@ -449,6 +457,27 @@ private fun SettingsScreen(state: PocketScreenState, event: (PocketScreenEvent) 
                 Note(state.simulator.limitations)
             }
         }
+        state.phoneCalls?.let { calls -> PocketCard("Phone calls", ShellIcon.PHONE, caps = true) {
+            PocketSwitchRow("Show calls on the keypad",
+                if (calls.supported) "On an unlocked phone, switch once per carrier call. Either page key leaves without changing the call."
+                else "Requires an Android 12 or later phone with telephony.", calls.enabled, calls.supported) {
+                event(PocketScreenEvent.SetPhoneCalls(it))
+            }
+            if (calls.enabled) {
+                Note("Phone permission reads call state, not contacts or call history. Automatic profile switching must be on and no layout pinned.")
+                if (!calls.phoneGranted) PocketButton("Allow phone state", { event(PocketScreenEvent.AllowPhoneState) })
+                PocketDivider()
+                PocketSwitchRow("Show caller and call controls",
+                    if (calls.supportsDetails) "Show the Phone app's caller label and picture on the physical keypad. Anyone nearby can see them. Home hides caller details."
+                    else "Caller details and controls require Android 14 or later. Use Phone on this device.",
+                    calls.details, calls.supportsDetails) { event(PocketScreenEvent.SetCallerDetails(it)) }
+                if (calls.details) {
+                    Note("Android notification access can expose notifications from other apps. MX Pocket uses only this profile's default Phone app call notification. Nothing about the caller is saved. Accept and Decline appear only if Phone supplies both actions.")
+                    PocketButton(if (calls.listenerGranted) "Manage notification access" else "Allow notification access",
+                        { event(PocketScreenEvent.CallerNotificationAccess) })
+                }
+            }
+        } }
         if (state.simulator == null) PocketCard("Display", ShellIcon.MONITOR, caps = true) {
             PocketDivider()
             PocketListRow(ShellIcon.IMAGE, "Choose keypad background", "Image behind all nine keys for this session") { event(PocketScreenEvent.ChooseImage) }

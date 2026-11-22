@@ -68,6 +68,10 @@ See [Teams call controls and client limits](docs/android-decks.md#teams-on-this-
 The **OneNote** profile uses a separate, optional accessibility service to
 select drawing tools and change formatting while OneNote is on screen.
 
+For ordinary mobile calls, **Settings → Phone calls** can temporarily show the
+caller on the **physical keypad**. Either page key leaves without affecting the
+call. See [carrier call setup and supported controls](docs/android-decks.md#carrier-calls-on-the-keypad).
+
 <a name="hardware-evidence-and-credits"></a>
 
 ## Credits

@@ -24,6 +24,10 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
     private var home = true
     private var homeBatch = 0
     private var game = false
+    private var phoneEpisode = false
+    private var showingPhone = false
+    private val phonePage = DeckPage("call", "Phone call")
+    private val phoneView = DeckProfile(PHONE_CALL_VIEW, phonePage.name, phonePage.id, listOf(phonePage))
     private var gameReturnId: String? = null
     private val gameProfile = defaultDeck().profiles.single { it.id == GAME_PROFILE }
     private val mutableReason: MutableStateFlow<String>
@@ -115,6 +119,7 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
     fun save() = edit(force = true) { it }
 
     @Synchronized fun showHome() {
+        showingPhone = false
         if (teamsInForeground) teamsWorkOverridden = true
         home = true
         game = false
@@ -134,6 +139,10 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
 
     @Synchronized fun enterGame(): Result<Unit> = runCatching {
         check(GAME_PROFILE !in saved.disabledPluginIds) { "Enable Tic Tac Toe first." }
+        if (showingPhone) {
+            showingPhone = false
+            publish()
+        }
         if (!game) gameReturnId = operating.value.activeProfileId
         if (teamsInForeground) teamsWorkOverridden = true
         game = true
@@ -189,6 +198,11 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
     }
 
     @Synchronized fun changePage(delta: Int): Result<Unit> {
+        if (showingPhone) {
+            showingPhone = false
+            publish()
+            return Result.success(Unit)
+        }
         if (game) {
             leaveGame()
             publish()
@@ -287,7 +301,7 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
         if (!teamsApp) teamsWorkOverridden = false
         teamsInForeground = teamsApp
         if ((confirmedCall || game) && teamsApp) teamsWorkOverridden = true
-        if (game || confirmedCall || teamsApp && teamsWorkOverridden) return Result.success(Unit)
+        if (showingPhone || game || confirmedCall || teamsApp && teamsWorkOverridden) return Result.success(Unit)
         if (!deck.automatic || !deck.activeProfile.automatic || deck.pinnedProfileId != null || nowMillis < 0L) {
             clearObservation()
             return Result.success(Unit)
@@ -353,6 +367,26 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
         return edit { update(id, it) }.map { id }
     }
 
+    /** Only observed idle rearms entry; unknown (lock, permission loss, detach) is not idle. */
+    @Synchronized fun showPhoneCall(active: Boolean?) {
+        val wasShowing = showingPhone
+        when (active) {
+            true -> if (!phoneEpisode) {
+                phoneEpisode = true
+                showingPhone = phoneEligible()
+            }
+            false -> { showingPhone = false; phoneEpisode = false }
+            null -> showingPhone = false
+        }
+        if (showingPhone != wasShowing) {
+            clearObservation()
+            publish()
+        }
+    }
+
+    private fun phoneEligible() = !game && saved.automatic && saved.activeProfile.automatic &&
+        saved.pinnedProfileId == null && "phone" !in saved.disabledPluginIds
+
     /** null means uncertain (lock, access loss). Release our page but do not steal it again after a manual override. */
     @Synchronized fun showTeamsCall(joined: Boolean?) {
         confirmedCall = joined == true
@@ -397,7 +431,9 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
         if (mutable.value != next) clearObservation()
         mutable.value = next
         if (game && GAME_PROFILE in saved.disabledPluginIds) leaveGame()
+        if (!phoneEligible()) showingPhone = false
         val surface = when {
+            showingPhone -> next.operatingProjection(phoneView, "Phone call on this device").snapshot()
             game -> next.operatingProjection(gameProfile, "Previous or Next exits the game").snapshot()
             showingCall -> next
             home -> next.homeProjection(homeBatch).snapshot()
@@ -427,6 +463,7 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
             saved = snapshot
         }
         if (navigation) {
+            showingPhone = false
             showingCall = false
             resumeCall = false
             home = false
