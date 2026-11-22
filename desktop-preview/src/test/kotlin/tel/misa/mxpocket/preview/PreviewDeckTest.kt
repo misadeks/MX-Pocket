@@ -56,6 +56,8 @@ class PreviewDeckTest {
         deck.select("teams")
         deck.press(7, 0)
         assertEquals("In call", repo.state.value.activePage.name)
+        val status = deck.tiles(0)[7]
+        check(status.readOnly && status.label == "Call status" && status.footer == "Android only")
         val mic = deck.tiles(0)[4]
         assertEquals("Mic unavailable", mic.label)
         check(!mic.enabled)

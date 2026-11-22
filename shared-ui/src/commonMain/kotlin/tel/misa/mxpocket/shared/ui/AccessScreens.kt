@@ -12,8 +12,10 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import tel.misa.mxpocket.decks.CallStatus
 import tel.misa.mxpocket.i18n.AccessCopy
 import tel.misa.mxpocket.i18n.Copy
+import tel.misa.mxpocket.i18n.KeypadCopy
 
 enum class DeckAccess(private val titleCopy: Copy, private val disclosureCopy: Copy) {
     Media(AccessCopy.MediaAccess, AccessCopy.MediaDisclosure),
@@ -24,26 +26,30 @@ enum class DeckAccess(private val titleCopy: Copy, private val disclosureCopy: C
 }
 
 data class TeamsSetupState(val enabled: Boolean, val notifications: Boolean, val toolbar: Boolean,
-    val supported: Boolean, val message: String = "")
+    val supported: Boolean, val singleProfile: Boolean = true, val message: String = "")
 enum class TeamsSetupAction { TOGGLE, NOTIFICATIONS, TOOLBAR, DONE }
 
 @Composable
-fun TeamsSetupScreen(state: TeamsSetupState, onAction: (TeamsSetupAction) -> Unit) {
+fun TeamsSetupScreen(state: TeamsSetupState, status: CallStatus, onAction: (TeamsSetupAction) -> Unit) {
     SubsidiaryPage(AccessCopy.TeamsControls.text(), { onAction(TeamsSetupAction.DONE) }) {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(KeypadCopy.CallStatus.text(), style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
+            Text(status.detail, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
             Text(AccessCopy.TeamsSwitching.text())
             Text(AccessCopy.TeamsDisclosure.text())
             if (!state.supported) Text(AccessCopy.TeamsUnsupported.text())
+            if (!state.singleProfile) Text(AccessCopy.TeamsMultipleProfiles.text())
             OutlinedButton({ onAction(TeamsSetupAction.TOGGLE) }, enabled = state.supported || state.enabled) {
                 Text(if (state.enabled) AccessCopy.DisableTeams.text() else AccessCopy.EnableTeams.text())
             }
             Text(AccessCopy.TeamsNotificationInstructions.text())
+            if (state.notifications && status == CallStatus.NO_SIGNAL) Text(AccessCopy.TeamsFilterInstructions.text())
             OutlinedButton({ onAction(TeamsSetupAction.NOTIFICATIONS) }) {
                 Text(if (state.notifications) AccessCopy.NotificationAccessOn.text() else AccessCopy.NotificationAccessOff.text())
             }
             Text(AccessCopy.TeamsToolbarInstructions.text())
             OutlinedButton({ onAction(TeamsSetupAction.TOOLBAR) }) {
-                Text(if (state.toolbar) AccessCopy.AccessibilityConnected.text() else AccessCopy.AccessibilityOff.text())
+                Text(if (state.toolbar) AccessCopy.AccessibilityOn.text() else AccessCopy.AccessibilityOff.text())
             }
             SubsidiaryStatus(state.message)
         }

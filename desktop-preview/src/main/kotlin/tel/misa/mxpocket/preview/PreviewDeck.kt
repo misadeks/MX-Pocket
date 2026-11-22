@@ -117,8 +117,10 @@ class PreviewDeck(val repository: DeckRepository) {
                     glyph = command?.legend(), showLabel = command != null, showFooter = command != null, quietFace = true)
             }
             "navigation" -> navigationCommands[action.index].navigationFace(systemAccess = null)
-            "teams" -> TeamsState().tile(action.command ?: teamsSlots[action.index]).copy(
-                enabled = false, footer = K.AndroidOnly.text())
+            "teams" -> TeamsState().tile(action.command ?: teamsSlots[action.index]).let { tile ->
+                tile.copy(label = if (tile.readOnly) K.CallStatus.text() else tile.label,
+                    enabled = false, footer = K.AndroidOnly.text())
+            }
             "launcher" -> {
                 val title = when (action.index) { 0 -> K.NoFavorites; 7 -> K.EditFavorites; 8 -> K.Favorites; else -> null }
                 KeyTile(title?.text() ?: "-", K.AndroidOnly.text(), 0xff384674.toInt(), enabled = false,

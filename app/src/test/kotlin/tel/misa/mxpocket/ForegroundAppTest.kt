@@ -27,6 +27,9 @@ import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.DeckKey
 import tel.misa.mxpocket.deck.DeckRule
 import tel.misa.mxpocket.driver.KeyEvent
+import tel.misa.mxpocket.decks.IN_CALL
+import tel.misa.mxpocket.decks.TEAMS
+import tel.misa.mxpocket.decks.TEAMS_PACKAGE
 import java.time.Duration
 import kotlin.coroutines.CoroutineContext
 
@@ -58,6 +61,51 @@ class ForegroundAppTest {
     private fun grant(enabled: Boolean) {
         shadowOf(app.getSystemService(AppOpsManager::class.java)).setMode(AppOpsManager.OPSTR_GET_USAGE_STATS,
             app.applicationInfo.uid, app.packageName, if (enabled) AppOpsManager.MODE_ALLOWED else AppOpsManager.MODE_IGNORED)
+    }
+
+    @Test fun openingTeamsSelectsWorkWithoutAMappingOrAnActionAndRespectsOverrides() {
+        val session = PocketSession(app, usageDispatcher = Dispatchers.Main.immediate, usageTimeMillis = ::usageTime)
+        val screen = object : PocketSession.Screen {
+            override fun render() {}
+            override fun openApp(app: tel.misa.mxpocket.plugins.PhoneApp): Boolean = error("Unexpected key dispatch")
+        }
+        val deck = session.deck
+        fun tick() = main.idleFor(Duration.ofSeconds(4))
+        fun openTeams() { event(TEAMS_PACKAGE, Event.MOVE_TO_FOREGROUND); tick() }
+        fun leaveTeams() { event(TEAMS_PACKAGE, Event.MOVE_TO_BACKGROUND); tick() }
+        fun expectFocus() = assertEquals("focus", deck.state.value.activeProfileId)
+        fun expectWork() {
+            assertEquals(TEAMS, deck.state.value.activeProfileId)
+            assertEquals("root", deck.state.value.activePage.id)
+            assertFalse(session.deckState.value.teams.joined)
+            assertNull(session.workflows.status.value)
+        }
+        deck.selectProfile(TEAMS).getOrThrow()
+        deck.openPage(IN_CALL).getOrThrow()
+        deck.selectProfile("focus").getOrThrow()
+        session.attach(screen)
+        try {
+            grant(true); openTeams(); expectFocus()
+            deck.setAutomatic(true).getOrThrow(); openTeams(); expectFocus()
+            grant(false); session.setDetectForegroundApps(true); openTeams(); expectFocus()
+            grant(true); tick(); openTeams(); expectWork()
+            session.selectProfile("phone"); tick()
+            assertEquals("phone", deck.state.value.activeProfileId)
+            leaveTeams(); openTeams(); expectWork()
+            deck.openPage(IN_CALL).getOrThrow(); tick()
+            assertEquals(IN_CALL, deck.state.value.activePage.id)
+            leaveTeams(); expectFocus()
+            session.setPluginEnabled(TEAMS, false); openTeams(); expectFocus()
+            session.setPluginEnabled(TEAMS, true); tick()
+            deck.setProfileAutomatic(TEAMS, false).getOrThrow(); openTeams(); expectFocus()
+            deck.setProfileAutomatic(TEAMS, true).getOrThrow(); tick()
+            deck.setPinned("phone").getOrThrow(); openTeams()
+            assertEquals("phone", deck.state.value.activeProfileId)
+            deck.setPinned(null).getOrThrow(); tick()
+            grant(false); openTeams(); expectFocus()
+            assertNull(session.signals.value[FOREGROUND_APP])
+            assertFalse(deck.exportJson().contains(TEAMS_PACKAGE))
+        } finally { session.detach(screen) }
     }
 
     @Test fun twoMappingsChangeOnlyTheMenuAndLoseTheirSignalOnPinLockAndRevocation() {

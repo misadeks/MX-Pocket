@@ -156,31 +156,40 @@ object AccessCopy {
         "Kada je telefon otključan, svaki pritisak na fizički taster tastature može da otvori sačuvanu omiljenu aplikaciju, prečicu iz profila Telefon ili tražilo kamere bez dodirivanja obaveštenja. Otvaranje tražila ne pravi fotografiju niti pokreće snimanje. Android zahteva dozvolu „Prikaz preko drugih aplikacija“, koja omogućava i iscrtavanje sadržaja preko drugih aplikacija. MX Pocket ne prikazuje ništa preko njih. Ostavite ovu opciju isključenu ako želite da koristite obaveštenja. Dozvolu možete da opozovete u podešavanjima Androida u bilo kom trenutku.")
     val TeamsControls = Copy("Teams call controls", "Commandes d’appel Teams", "Komande za Teams pozive")
     val TeamsSwitching = Copy(
-        "Show In call when you join on this phone. Leaving returns to your previous page unless you chose another. Opening a page never operates a call control.",
-        "Affichez la page « En appel » lorsque vous rejoignez un appel sur ce téléphone. En quittant l’appel, vous retrouvez la page précédente, sauf si vous en avez choisi une autre. Ouvrir une page ne déclenche jamais de commande d’appel.",
-        "Kada se sa ovog telefona pridružite pozivu, prikazuje se stranica „U pozivu“. Po izlasku iz poziva vraćate se na prethodnu stranicu, osim ako ste izabrali drugu. Otvaranje stranice nikada ne aktivira komandu poziva.")
+        "With a wired keypad, show call notices from Teams in this Android profile. A confirmed call can switch the keypad to In call. Leaving restores your previous page unless you chose another.",
+        "Avec un pavé connecté par câble, vous pouvez afficher les notifications d’appel Teams de ce profil Android. Seul un appel confirmé peut faire passer le pavé à la page « En appel ». À la fin de l’appel, vous retrouvez la page précédente, sauf si vous en avez choisi une autre.",
+        "Kada je tastatura povezana kablom, možete da vidite obaveštenja o Teams pozivima sa ovog Android profila. Tastatura može da pređe na stranicu „U pozivu“ tek kada je poziv potvrđen. Po izlasku iz poziva vraćate se na prethodnu stranicu, osim ako ste izabrali drugu.")
     val TeamsDisclosure = Copy(
-        "Android grants broad notification and accessibility access. MX Pocket checks the Teams call notification type and visible Mic and Hang up buttons. Only a center key press on the physical keypad can operate the meeting mic. No chat text, names or call details are saved.",
-        "Android accorde un accès étendu aux notifications et aux fonctions d’accessibilité. MX Pocket vérifie le type de notification d’appel Teams et repère les boutons visibles « Mic » et « Hang up ». Seule une pression sur la touche centrale du pavé physique peut commander le micro de la réunion. Aucun texte de conversation, nom ou détail d’appel n’est enregistré.",
-        "Android odobrava širok pristup obaveštenjima i funkcijama pristupačnosti. MX Pocket proverava tip obaveštenja o Teams pozivu i vidljivu dugmad „Mic“ i „Hang up“. Mikrofonom na sastanku možete upravljati samo pritiskom na srednji taster fizičke tastature. Tekst poruka, imena i detalji poziva se ne čuvaju.")
+        "Android grants broad notification access. MX Pocket checks the posting app, profile and call notification type, not messages or caller names. No call details are saved.",
+        "Android accorde un accès étendu aux notifications. MX Pocket vérifie quelle application a publié la notification, le profil concerné et le type de notification d’appel. Il ne consulte ni les messages ni les noms des appelants. Aucun détail d’appel n’est enregistré.",
+        "Android odobrava širok pristup obaveštenjima. MX Pocket proverava koja je aplikacija objavila obaveštenje, kom profilu pripada i kog je tipa obaveštenje o pozivu. Ne čita poruke ni imena pozivalaca. Detalji poziva se ne čuvaju.")
     val TeamsUnsupported = Copy(
-        "Automatic switching needs Android 14 or later and a single Android profile. You can still use Work and open Call tools manually.",
-        "Le changement automatique nécessite Android 14 ou une version ultérieure et un seul profil Android. Vous pouvez toujours utiliser « Travail » et ouvrir « Outils d’appel » manuellement.",
-        "Za automatsku promenu stranice potrebni su Android 14 ili noviji i samo jedan Android profil. I dalje možete koristiti stranicu „Posao“ i ručno otvoriti „Alatke za poziv“.")
-    val DisableTeams = Copy("Turn off Teams call switching", "Désactiver le changement de page pour les appels Teams", "Isključi promenu stranice za Teams pozive")
-    val EnableTeams = Copy("Enable Teams call switching", "Activer le changement de page pour les appels Teams", "Uključi promenu stranice za Teams pozive")
+        "Call observation needs Android 14 or later. You can still use Work and open Call tools manually.",
+        "Le suivi des appels nécessite Android 14 ou une version ultérieure. Vous pouvez toujours utiliser « Travail » et ouvrir « Outils d’appel » manuellement.",
+        "Za praćenje stanja poziva potreban je Android 14 ili noviji. I dalje možete koristiti stranicu „Posao“ i ručno otvoriti „Alatke za poziv“.")
+    val TeamsMultipleProfiles = Copy(
+        "With multiple Android profiles, only notification status is available. MX Pocket does not inspect the Teams window, switch pages or operate the mic.",
+        "Avec plusieurs profils Android, seul l’état indiqué par les notifications est disponible. MX Pocket n’examine pas la fenêtre Teams, ne change pas de page et n’actionne pas le micro.",
+        "Ako imate više Android profila, dostupno je samo stanje koje prijavljuju obaveštenja. MX Pocket ne pregleda prozor aplikacije Teams, ne menja stranice i ne upravlja mikrofonom.")
+    val DisableTeams = Copy("Turn off Teams call status", "Désactiver le suivi des appels Teams", "Isključi praćenje stanja Teams poziva")
+    val EnableTeams = Copy("Enable Teams call status", "Activer le suivi des appels Teams", "Uključi praćenje stanja Teams poziva")
     val TeamsNotificationInstructions = Copy(
-        "In Notification access, select MX Pocket Teams calls. Audio access is separate.",
-        "Dans Accès aux notifications, sélectionnez « Appels Teams de MX Pocket ». L’accès pour le profil Audio est distinct.",
-        "U odeljku Pristup obaveštenjima izaberite „MX Pocket: Teams pozivi“. Pristup za profil Audio se podešava zasebno.")
+        "Call status is on by default. It cannot read notifications unless you allow MX Pocket Teams calls in Notification access. Audio access is separate.",
+        "Le suivi des appels est activé par défaut. Il ne peut pas lire les notifications tant que vous n’avez pas autorisé « Appels Teams de MX Pocket » dans Accès aux notifications. L’accès pour le profil Audio est distinct.",
+        "Praćenje stanja poziva je podrazumevano uključeno. Obaveštenja ne može da čita dok u odeljku Pristup obaveštenjima ne odobrite pristup za „MX Pocket: Teams pozivi“. Pristup za profil Audio se podešava zasebno.")
+    val TeamsFilterInstructions = Copy(
+        "After an update, Android may keep an older filter. Open Notification access below. If available, check that Teams, Notifications (alerting), Silent and Conversations are allowed. If these choices are missing or Teams does not publish a call notice, use Teams directly.",
+        "Après une mise à jour, Android peut conserver un ancien filtre. Ouvrez l’accès aux notifications ci-dessous. Si ces options sont proposées, vérifiez que Teams, les notifications avec alerte, les notifications silencieuses et les conversations sont autorisés. Si ces options sont absentes ou si Teams ne publie pas de notification d’appel, utilisez directement Teams.",
+        "Android posle ažuriranja može da zadrži stari filter. Otvorite pristup obaveštenjima ispod. Ako su te opcije dostupne, proverite da li su dozvoljeni Teams, obaveštenja sa upozorenjem, tiha obaveštenja i konverzacije. Ako tih opcija nema ili Teams ne objavljuje obaveštenje o pozivu, koristite direktno aplikaciju Teams.")
     val NotificationAccessOn = Copy("Notification access: on", "Accès aux notifications : activé", "Pristup obaveštenjima: uključen")
     val NotificationAccessOff = Copy("Notification access: off", "Accès aux notifications : désactivé", "Pristup obaveštenjima: isključen")
     val TeamsToolbarInstructions = Copy(
-        "In Accessibility, select MX Pocket Teams call controls. Both grants are optional. Revoke either here or turn off switching above.",
-        "Dans Accessibilité, sélectionnez « Commandes d’appel Teams de MX Pocket ». Les deux autorisations sont facultatives. Vous pouvez en retirer une ici ou désactiver le changement de page ci-dessus.",
-        "U odeljku Pristupačnost izaberite „MX Pocket: kontrole za Teams pozive“. Obe dozvole su opcione. Ovde možete opozvati bilo koju od njih ili iznad isključiti promenu stranice.")
-    val AccessibilityConnected = Copy("Accessibility service: connected", "Service d’accessibilité : connecté", "Usluga pristupačnosti: povezana")
-    val AccessibilityOff = Copy("Accessibility service: off", "Service d’accessibilité : désactivé", "Usluga pristupačnosti: isključena")
+        "For automatic switching on a single-profile phone, MX Pocket also checks for the visible Mic and Hang up buttons in Teams. Only a fresh physical center-key press can operate the mic. To allow this, select MX Pocket Teams call controls in Accessibility.",
+        "Pour changer automatiquement de page sur un téléphone avec un seul profil, MX Pocket vérifie aussi que les boutons « Mic » et « Hang up » sont visibles dans Teams. Seule une nouvelle pression sur la touche centrale du pavé physique peut actionner le micro. Pour l’autoriser, sélectionnez « Commandes d’appel Teams de MX Pocket » dans Accessibilité.",
+        "Za automatsku promenu stranice na telefonu sa jednim profilom, MX Pocket proverava i da li su u aplikaciji Teams vidljiva dugmad „Mic“ i „Hang up“. Mikrofon može da se uključi ili isključi samo novim pritiskom na srednji taster fizičke tastature. Da biste to dozvolili, u odeljku Pristupačnost izaberite „MX Pocket: kontrole za Teams pozive“.")
+    val AccessibilityOn = Copy("Accessibility access: on", "Accès aux fonctions d’accessibilité : activé", "Pristup funkcijama pristupačnosti: uključen")
+    val AccessibilityOff = Copy("Accessibility access: off", "Accès aux fonctions d’accessibilité : désactivé", "Pristup funkcijama pristupačnosti: isključen")
+    val TeamsSettingsUnavailable = Copy("These settings are unavailable.", "Ces paramètres ne sont pas disponibles.", "Ova podešavanja nisu dostupna.")
     val OptionalAccess = Copy(
         "Access is optional. You can turn it off in the same settings at any time.",
         "Cet accès est facultatif. Vous pouvez le désactiver à tout moment dans ces mêmes paramètres.",

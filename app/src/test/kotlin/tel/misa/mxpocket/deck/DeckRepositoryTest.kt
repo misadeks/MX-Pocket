@@ -45,6 +45,39 @@ class DeckRepositoryTest {
         }
     }
 
+    @Test fun workEntryYieldsToConfirmedCallAndExplicitMappings() {
+        val foreground = mapOf("foregroundApp" to "com.microsoft.teams")
+        fun observe(time: Long) = repo.observe(foreground, time, allowTeamsWork = true).getOrThrow()
+        repo.setAutomatic(true).getOrThrow()
+        repo.showTeamsCall(true)
+        observe(0); observe(2000)
+        assertEquals("in-call", repo.state.value.activePage.id)
+        repo.selectProfile("phone").getOrThrow()
+        repo.showTeamsCall(false); observe(4000); observe(6000)
+        assertEquals("phone", repo.state.value.activeProfileId)
+        repo.observe(emptyMap(), 7000).getOrThrow()
+        repo.setRules("studio", listOf(DeckRule("foregroundApp", "com.microsoft.teams", 5))).getOrThrow()
+        observe(8000); observe(10000)
+        assertEquals("studio", repo.state.value.activeProfileId)
+    }
+
+    @Test fun oldTeamsWorkLosesOnlyItsExactTimerBindingAndNewEditsSurviveReload() {
+        val old = DeckKey(label = "Focus timer", action = ActionCall(DeckActions.PROFILE, mapOf(DeckActions.PROFILE_ID to "focus")))
+        fun keys(repo: DeckRepository) = repo.state.value.profiles.single { it.id == "teams" }.pages.first().keys
+        val factory = keys(repo)
+        assertEquals(DeckKey(), factory[6])
+        repo.setKey("teams", "root", 6, old).getOrThrow()
+        fun legacyFile() = file.writeText(JSONObject(repo.exportJson()).put("version", 3).toString())
+        legacyFile()
+        assertEquals(factory, keys(DeckRepository(file)))
+        val customized = old.copy(holdAction = ActionCall(DeckActions.ROOT))
+        repo.setKey("teams", "root", 6, customized).getOrThrow()
+        legacyFile()
+        assertEquals(customized, keys(DeckRepository(file))[6])
+        repo.setKey("teams", "root", 6, old).getOrThrow()
+        assertEquals(old, keys(DeckRepository(file))[6]) // deliberately restored in the new format
+    }
+
     @Test fun callProjectionRestoresExactPageAndNeverOverwritesAnExplicitChoice() {
         val child = repo.createPage("phone", "Tools").getOrThrow()
         repo.selectProfile("phone").getOrThrow()

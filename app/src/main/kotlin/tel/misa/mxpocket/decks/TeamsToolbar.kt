@@ -11,7 +11,8 @@ internal data class Toolbar(val muted: Boolean?, val window: Int)
 /**
  * Microsoft's TalkBack guide identifies the Android meeting's Mic and Hang up buttons.
  * Inspect only button roles and their explicit descriptions/state, never text or event payloads.
- * Require a single pair in the same control group. Never click Hang up.
+ * A visible Mic can identify the control group even when it cannot be operated.
+ * Never click Hang up or authorize a mic without a fresh action and explicit state.
  */
 @Suppress("DEPRECATION")
 internal fun inspectTeamsToolbar(root: Node, press: ((Toolbar) -> Boolean)? = null): Pair<Toolbar?, Boolean> {
@@ -24,13 +25,13 @@ internal fun inspectTeamsToolbar(root: Node, press: ((Toolbar) -> Boolean)? = nu
     fun visit(node: Node, depth: Int) {
         if (--budget < 0 || depth > 20) { incomplete = true; return }
         if (node.packageName != TEAMS_PACKAGE || node.isPassword || !node.isVisibleToUser) return
-        if (node.className in listOf("android.widget.Button", "android.widget.ImageButton", "android.widget.ToggleButton") &&
-            node.isClickable && node.isEnabled && node.actionList.any { it.id == Node.ACTION_CLICK }) {
+        if (node.className in listOf("android.widget.Button", "android.widget.ImageButton", "android.widget.ToggleButton")) {
+            val actionable = node.isEnabled && node.isClickable && node.actionList.any { it.id == Node.ACTION_CLICK }
             when (node.contentDescription?.toString()?.trim()?.lowercase(java.util.Locale.ROOT)) {
-                "hang up" -> if (leave != null) incomplete = true else leave = Node.obtain(node)
+                "hang up" -> if (actionable && leave == null) leave = Node.obtain(node) else incomplete = true
                 "mic" -> if (mic != null) incomplete = true else {
                     mic = Node.obtain(node)
-                    muted = when (node.stateDescription?.toString()?.trim()?.lowercase(java.util.Locale.ROOT)) {
+                    muted = if (!actionable) null else when (node.stateDescription?.toString()?.trim()?.lowercase(java.util.Locale.ROOT)) {
                         "muted" -> true
                         "unmuted" -> false
                         else -> null

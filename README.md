@@ -59,7 +59,10 @@ edit profiles before connecting hardware.
 
 The **Teams** profile opens the Android client on this phone. Choose **Call
 tools** for its manual meeting page, or **Teams setup** for optional local call
-switching. Teams uses separate grants; enabling Audio does not enable Teams.
+status and switching. A Teams call notice is not proof you joined. Key 8 and
+Teams setup distinguish a notice from a confirmed call. The in-app setting
+defaults to on, but Teams still needs its own Android permissions. You can
+turn call status off in Teams setup.
 See [Teams call controls and client limits](docs/android-decks.md#teams-on-this-phone).
 
 <a name="hardware-evidence-and-credits"></a>

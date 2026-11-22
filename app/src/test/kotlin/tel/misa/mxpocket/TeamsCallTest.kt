@@ -6,6 +6,7 @@ import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
 import android.content.pm.ResolveInfo
 import android.hardware.usb.UsbConfiguration
 import android.hardware.usb.UsbDevice
@@ -14,6 +15,8 @@ import android.media.AudioManager
 import android.os.Looper
 import android.os.Process
 import android.os.UserHandle
+import android.os.UserManager
+import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import org.junit.Assert.*
 import org.junit.Test
@@ -21,6 +24,7 @@ import org.junit.runner.RunWith
 import org.robolectric.*
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 import org.robolectric.annotation.LooperMode
 import org.robolectric.util.ReflectionHelpers
 import tel.misa.mxpocket.actions.ActionCall
@@ -36,24 +40,36 @@ class TeamsCallTest {
     private val app get() = RuntimeEnvironment.getApplication() as KeypadSessionTest.FakeApp
     private val main get() = shadowOf(Looper.getMainLooper())
     private fun note(pkg: String = TEAMS_PACKAGE, type: Int = Notification.CallStyle.CALL_TYPE_ONGOING,
-        styled: Boolean = true, user: UserHandle = Process.myUserHandle(), id: Int = 1) =
-        StatusBarNotification(pkg, pkg, id, null, 10000, 0, 0, Notification().apply {
-            category = Notification.CATEGORY_CALL
+        styled: Boolean = true, user: UserHandle = Process.myUserHandle(), id: Int = 1,
+        poster: String = pkg, kind: String = Notification.CATEGORY_CALL) =
+        StatusBarNotification(pkg, poster, id, null, 10000, 0, 0, Notification().apply {
+            category = kind
             if (styled) extras.putString(Notification.EXTRA_TEMPLATE, Notification.CallStyle::class.java.name)
             extras.putInt(Notification.EXTRA_CALL_TYPE, type)
         }, user, 1L)
 
+    @Test fun androidMayDeliverCallsInAnyNotificationRankingClass() {
+        // NotificationManager filters snapshots as well as callbacks, before teamsObservation runs.
+        val info = app.packageManager.getServiceInfo(ComponentName(app, TeamsCallListener::class.java), PackageManager.GET_META_DATA)
+        assertFalse(info.metaData?.containsKey(NotificationListenerService.META_DATA_DEFAULT_FILTER_TYPES) == true)
+        assertFalse(info.metaData?.containsKey(NotificationListenerService.META_DATA_DISABLED_FILTER_TYPES) == true)
+    }
+
     @Test fun onlyOneLocalTypedOngoingTeamsCallIsEligible() {
-        for (rejected in listOf(note("com.android.dialer"), note("other.voip"),
-            note(user = UserHandle.getUserHandleForUid(1_010_000)), note(styled = false), note(type = Notification.CallStyle.CALL_TYPE_INCOMING),
-            note(type = Notification.CallStyle.CALL_TYPE_SCREENING))) {
+        for (rejected in listOf(note("com.android.dialer"), note("other.voip"), note(poster = "delegate"),
+            note(user = UserHandle.getUserHandleForUid(1_010_000)), note(styled = false, kind = Notification.CATEGORY_MESSAGE))) {
             assertSame(TeamsObservation.None, teamsObservation(arrayOf(rejected)))
         }
+        assertSame(TeamsObservation.Untyped, teamsObservation(arrayOf(note(styled = false))))
+        assertSame(TeamsObservation.Incoming, teamsObservation(arrayOf(note(type = Notification.CallStyle.CALL_TYPE_INCOMING))))
+        assertSame(TeamsObservation.Screening, teamsObservation(arrayOf(note(type = Notification.CallStyle.CALL_TYPE_SCREENING))))
+        assertSame(TeamsObservation.Unavailable, teamsObservation(arrayOf(note(), note(id = 2, styled = false))))
         assertSame(TeamsObservation.None, teamsObservation(emptyArray()))
         assertSame(TeamsObservation.Unavailable, teamsObservation(arrayOf(note(), note(id = 2))))
         assertTrue(teamsObservation(arrayOf(note("com.android.dialer"), note())) is TeamsObservation.Ongoing)
     }
 
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
     @Test fun typedEventAndJoinedToolbarDrivePhysicalPageMicAndRestore() {
         val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
         val handler = ResolveInfo().apply { activityInfo = ActivityInfo().apply {
@@ -116,13 +132,50 @@ class TeamsCallTest {
                 Thread.sleep(10)
             }
             assertTrue("Teams launcher discovered", session.deckState.value.teams.installed)
+            session.selectProfile(TEAMS)
+            session.deck.openPage(IN_CALL).getOrThrow()
+            main.idle()
+            fun bitmap(status: CallStatus) = session.frame().keys[7].let { tile ->
+                assertEquals(status, session.deckState.value.teams.status)
+                assertEquals(status.label, tile.label)
+                assertEquals(status.footer, tile.footer)
+                assertTrue(tile.readOnly)
+                session.keyImage(7, tile).also { image ->
+                    for (rows in listOf(25..71, 88..112)) {
+                        val ink = rows.sumOf { y -> (5..112).count { x ->
+                            android.graphics.Color.red(image.getPixel(x, y)) > 160
+                        } }
+                        assertTrue("Missing readout ink in $rows: $ink", ink > 40)
+                    }
+                }
+            }
+            bitmap(CallStatus.NEEDS_ACCESS) // the Audio grant cannot supply Teams evidence
+            notices.setNotificationListenerAccessGranted(teams, true)
+            signal()
+            val noSignal = bitmap(CallStatus.NO_SIGNAL)
+            TeamsAccess(app).enabled = false
             shadowOf(listener).addActiveNotification(call)
             signal()
-            assertEquals("focus", session.deck.state.value.activeProfileId) // Audio grant alone
+            bitmap(CallStatus.OFF) // both Android grants are held, but the saved opt-out wins
             TeamsAccess(app).enabled = true
             signal()
-            assertEquals("focus", session.deck.state.value.activeProfileId) // no Teams grant
-            notices.setNotificationListenerAccessGranted(teams, true)
+            val partial = bitmap(CallStatus.NOTIFICATION)
+            assertFalse("A typed ongoing notification with no recognized joined toolbar must change the readout", partial.sameAs(noSignal))
+            val slot = session.deck.state.value.activePage.keys[7]
+            session.deck.setKey(TEAMS, IN_CALL, 7, DeckKey(label = "Meeting", action = ActionCall(DeckCommand.TEAMS_STATUS.id))).getOrThrow()
+            main.idle()
+            session.frame().keys[7].also {
+                assertTrue(it.readOnly)
+                assertEquals("Meeting", it.label)
+                assertEquals("Call notice", it.footer)
+            }
+            session.deck.setKey(TEAMS, IN_CALL, 7, slot).getOrThrow()
+            main.idle()
+            val accessManager = shadowOf(app.getSystemService(android.view.accessibility.AccessibilityManager::class.java))
+            accessManager.setEnabledAccessibilityServiceList(emptyList()); signal()
+            bitmap(CallStatus.TOOLBAR_OFF)
+            accessManager.setEnabledAccessibilityServiceList(listOf(info)); signal()
+            session.selectProfile("focus")
             signal()
             assertEquals("focus", session.deck.state.value.activeProfileId) // prejoin mic only
             assertFalse(session.deckState.value.teams.joined)
@@ -137,10 +190,18 @@ class TeamsCallTest {
             assertEquals(3, volume())
             probeEdge(true)
             shadowOf(root).addChild(leave)
+            mic.isClickable = false // join evidence, but not a mic action
             service.onAccessibilityEvent(null); main.idle()
             assertEquals("in-call", session.deck.state.value.activePage.id)
+            assertFalse(partial.sameAs(bitmap(CallStatus.JOINED)))
             main.idleFor(deadline); probeEdge(false)
             assertEquals(3, volume()) // joining cancels both choices on the old page
+            assertFalse(session.frame().keys[4].enabled)
+            center()
+            app.emit(KeyEvent(8, true)); app.emit(KeyEvent(8, false)); main.idle()
+            assertEquals(0, clicks)
+            mic.isClickable = true
+            service.onAccessibilityEvent(null); main.idle()
             assertEquals("Mute mic", session.frame().keys[4].label)
             assertEquals(0, clicks)
             assertFalse(session.runDeckAction("teams.mic").success) // no physical press
@@ -200,6 +261,25 @@ class TeamsCallTest {
             notices.setNotificationListenerAccessGranted(teams, true)
             signal()
             assertEquals("phone", session.deck.state.value.activeProfileId)
+            val profiles = shadowOf(app.getSystemService(UserManager::class.java))
+            profiles.addProfile(0, 10, "Test profile", org.robolectric.shadows.ShadowUserManager.FLAG_MANAGED_PROFILE)
+            assertFalse(TeamsAccess(app).singleProfile)
+            val reads = window.rootReads
+            signal()
+            assertEquals(CallStatus.PROFILE_NOTICE, session.deckState.value.teams.status)
+            assertNull(session.deckState.value.teams.muted)
+            assertEquals(reads, window.rootReads)
+            assertEquals("phone", session.deck.state.value.activeProfileId)
+            session.selectProfile(TEAMS)
+            session.deck.openPage(IN_CALL).getOrThrow(); main.idle()
+            bitmap(CallStatus.PROFILE_NOTICE)
+            center()
+            assertEquals(1, clicks)
+            assertEquals(reads, window.rootReads)
+            session.selectProfile("phone")
+            listener.cancelAllNotifications()
+            shadowOf(listener).addActiveNotification(note(user = UserHandle.getUserHandleForUid(1_010_000))); signal()
+            assertEquals(CallStatus.NO_SIGNAL, session.deckState.value.teams.status)
             listener.onListenerDisconnected(); main.idle()
             assertFalse(session.deckState.value.teams.joined)
             assertEquals("phone", session.deck.state.value.activeProfileId)
