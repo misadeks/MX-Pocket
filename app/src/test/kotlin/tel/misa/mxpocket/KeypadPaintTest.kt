@@ -163,7 +163,7 @@ class KeypadPaintTest {
             val deck = p.session.deck
             val custom = deck.createProfile("One game key").getOrThrow()
             deck.setKey(custom, "root", 0, DeckKey(action = ActionCall("plugin.key",
-                mapOf("pluginId" to "game.xo", "index" to "0")))).getOrThrow()
+                mapOf("pluginId" to "game.xo", "index" to "6")))).getOrThrow()
             p.session.selectProfile(custom); main.idle()
             p.expectAll()
             assertEquals("1 Player", p.session.frame().keys[0].label)
@@ -172,7 +172,7 @@ class KeypadPaintTest {
             assertEquals(listOf<Int?>(null), p.grids)
             assertTrue(p.writes.isEmpty())
             p.press(1)
-            assertEquals("1", p.session.frame().keys[0].label)
+            assertEquals("7", p.session.frame().keys[0].label)
             p.settle(); p.press(1)
             assertEquals("X", p.session.frame().keys[0].label)
             p.expectAll()

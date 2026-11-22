@@ -181,7 +181,7 @@ class PlayerRenderTest {
         assertEquals(menu.size, menu.map { it.glyph }.distinct().size)
         val game = TicTacToeGame()
         val picker = game.frame()
-        game.press(2); game.press(0); game.press(4)
+        game.press(8); game.press(0); game.press(4)
         for ((name, frame) in mapOf("folder-menu" to menu, "focus" to FocusTimer().present(0).keys,
             "tic-tac-toe" to picker.keys, "tic-tac-toe-board" to game.frame().keys)) {
             val keys = frame.mapIndexed { index, tile ->
