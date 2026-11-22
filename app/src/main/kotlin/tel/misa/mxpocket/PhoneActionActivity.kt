@@ -1,7 +1,6 @@
 package tel.misa.mxpocket
 
 import android.app.KeyguardManager
-import android.app.NotificationManager
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Context
@@ -67,9 +66,6 @@ class PhoneActionActivity : ComponentActivity() {
         if (failure != null || isFinishing) return
         val session = (application as PocketApplication).session
         val action = session.takePhoneAction(intent.data?.lastPathSegment)
-        if (action != null) {
-            getSystemService(NotificationManager::class.java).cancel(PHONE_NOTICE)
-        }
         phoneApp = (action?.target as? PocketSession.Target.Phone)?.app
         val error = when {
             action == null -> ShortcutFailure.STALE

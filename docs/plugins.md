@@ -220,7 +220,9 @@ Transient plugin state may be lost on process death; saved layouts and workflow
 definitions are independent of the activation. A background `OpenApp` dispatched
 synchronously for a real LCD key press offers a one-tap notification for that
 app. The tap requires a current request, USB grant and plugin page on an unlocked
-phone. With direct shortcuts explicitly enabled and Android special access
+phone. Changing the layout or retiring the pressed key's LCD receipt withdraws
+the offer; a tap already in flight cannot launch a replacement. With direct
+shortcuts explicitly enabled and Android special access
 granted, a fresh physical press can request a legacy Phone shortcut, a saved
 favorite's launcher activity, or a camera viewfinder (Phone: Camera, Pocket
 Studio, or the default camera favorite). Opening a viewfinder does not authorize capture.
