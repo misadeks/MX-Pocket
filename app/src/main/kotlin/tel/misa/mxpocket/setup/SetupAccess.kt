@@ -156,8 +156,6 @@ internal class SetupAccess(private val host: Activity, private val choices: Setu
                 host.hasUsageAccess(), Action.USAGE, AccessCopy.AndroidAllowed.text(), AccessCopy.AndroidNotAllowed.text())
             setting(Feature.PROFILES, AccessCopy.DetectApps.text(), AccessCopy.DetectAppsDetail.text(),
                 session.detectForegroundApps.value, Action.DETECTION)
-            setting(Feature.PROFILES, AccessCopy.AutomaticSwitching.text(), AccessCopy.SwitchingDetail.text(),
-                session.deck.state.value.automatic, Action.SWITCHING)
         }
         if (Feature.ONENOTE in features) {
             plugin(Feature.ONENOTE, "OneNote", "onenote", Action.ONENOTE_PLUGIN)
@@ -182,7 +180,6 @@ internal class SetupAccess(private val host: Activity, private val choices: Setu
             Action.DIRECT -> shortcuts.enabled = true
             Action.CAMERA -> camera.enabled = true
             Action.TEAMS -> { teams.enabled = true; TeamsEvents.refresh?.invoke() }
-            Action.SWITCHING -> session.deck.setAutomatic(true).getOrThrow()
             Action.DETECTION -> session.setDetectForegroundApps(true)
             Action.AUDIO_PLUGIN -> session.setPluginEnabled("audio", true)
             Action.STUDIO_PLUGIN -> session.setPluginEnabled("studio", true)

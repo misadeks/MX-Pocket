@@ -53,6 +53,7 @@ import tel.misa.mxpocket.decks.NavigationService
 import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.DeckJson
 import tel.misa.mxpocket.deck.DeckKey
+import tel.misa.mxpocket.deck.importLegacyPhone
 import tel.misa.mxpocket.decks.Favorite
 import tel.misa.mxpocket.workflow.StepKind
 import tel.misa.mxpocket.workflow.WorkflowDefinition
@@ -401,7 +402,7 @@ class KeypadSessionTest {
         assertEquals("Focus", session.frame().keys.first().label)
         press(1); expectProfile("focus")
         session.setPluginEnabled("audio", false)
-        val ids = listOf("phone", "launcher", "studio", "navigation", "teams", "onenote", "@home", "focus")
+        val ids = listOf("launcher", "studio", "navigation", "teams", "onenote", "@home", "focus")
         ids.forEach { press(0x01a2); expectProfile(it) }
         val hold = ViewConfiguration.getLongPressTimeout().toLong()
         for ((first, second) in listOf(0x01a1 to 0x01a2, 0x01a2 to 0x01a1)) {
@@ -513,6 +514,7 @@ class KeypadSessionTest {
         }
         session.attach(screen)
         val ticket = session.reserve(real)!!
+        session.deck.importLegacyPhone("My shortcuts")
         session.selectProfile("focus")
         session.connect(ticket, usb, real, { stops++ }, {
             handoff = (it.target as PocketSession.Target.Phone).app
@@ -556,6 +558,7 @@ class KeypadSessionTest {
     }
 
     @Test fun backgroundPhoneKeyOffersExactSingleTapTargetAndRejectsStaleTaps() {
+        app.session.deck.importLegacyPhone("My shortcuts")
         val real = device("test-keypad")
         shadowOf(usb).addOrUpdateUsbDevice(real, true)
         val ticket = app.session.reserve(real)!!
@@ -573,7 +576,7 @@ class KeypadSessionTest {
                 Robolectric.buildActivity(PhoneActionActivity::class.java, intent).setup().use {
                     shadowOf(it.get()).nextStartedActivity
                 }
-            press(3) // Open Phone from the startup launcher.
+            press(3) // Open the user's saved shortcuts from the startup launcher.
             press(1)
             assertEquals("android.media.action.STILL_IMAGE_CAMERA", shadowOf(controller.get()).nextStartedActivity?.action)
             controller.pause().stop()
@@ -677,7 +680,7 @@ class KeypadSessionTest {
             press(1)
             assertEquals(0, clicks)
             CameraControlsAccess(app).enabled = true
-            session.selectProfile("phone")
+            session.selectProfile("audio")
             session.selectProfile("studio")
             press(1) // Arrived with an invalidated receipt.
             assertEquals(0, clicks)

@@ -32,7 +32,7 @@ internal fun AndroidWorkspace(
     val plugins = session.plugins.descriptors.map { plugin ->
         PluginItem(plugin.id, plugin.displayTitle(), plugin.id !in disabled,
             plugin.capabilities.joinToString { it.displayName() }, session.pluginDetails(plugin.id),
-            deck.visibleProfiles.any { it.id == plugin.id }, deck.defaultProfileId == plugin.id, session.pluginSettings(plugin.id)?.first)
+            deck.navigationProfiles.any { it.id == plugin.id }, deck.defaultProfileId == plugin.id, session.pluginSettings(plugin.id)?.first)
     }
     PocketWorkspace(tab, select, state, plugins, event, profiles = {
         val options = buildList {

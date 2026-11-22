@@ -166,8 +166,8 @@ call doesn't require changing Android permissions. See
    result and progress. For confirmation steps open Flows and approve or
    decline on the phone. Cancelling does not undo completed actions.
 4. In Plugins enable Audio; optional media access is explained before opening
-   Android settings. Start playback in a player. In Profiles enable automatic
-   switching and inspect the Audio rule `mediaActive = true`. While the app
+   Android settings. Start playback in a player. In Profiles inspect the
+   Audio rule `mediaActive = true`. While the app
    is visible or hosting a real session, a stable match selects Audio after
    a short delay. Supported players expose Play/Pause and title with consent;
    without it the app sends ordinary media keys and does not invent a title
@@ -224,31 +224,37 @@ No root, firmware update or kernel change is part of setup.
 
 ## Show a profile when an app opens
 
-**Automatic profile switching** lets you choose whether app and context rules
-can move your keypad at all. Leave it off for manual control, or pin a profile
-to pause switching. Teams has a built-in app match: once step 2 below is set
-up, opening Teams selects **Teams / Work** without a custom rule. This does
+Android applies eligible context rules automatically, including for layouts
+saved with the old master switch off. Pin a profile to keep it on the keypad,
+or exclude individual profiles in **Profile settings and rules**.
+Teams has a built-in app match: with **Teams call status** enabled and step 2
+set up, opening Teams selects **Teams / Work** without a custom rule. This does
 not join a call or press a key.
 
-1. In **Profiles**, open **Studio > Profile settings and rules**. Under **Context rules > Choose app**, tap **Camera** (Samsung Camera on a Galaxy). Open **Audio** and repeat for **YouTube Music**. You can choose a custom profile the same way. Saving a mapping does not enable detection, change key bindings or launch anything.
-2. Enable **Automatic profile switching** and **Detect foreground apps**. Tap **Open usage access settings**, select **MX Pocket**, and allow Usage Access. No notification, accessibility or overlay access is needed for detection. Turn detection off here or revoke the Android grant at any time.
+1. In **Profiles**, open **Studio > Profile settings and rules**. Turn on **Include Studio in automatic switching** (off on fresh layouts). Under **Context rules > Choose app**, tap **Camera**. Open **Audio** and repeat for **YouTube Music**. You can choose a custom profile the same way. Saving a mapping does not enable detection, change key bindings or launch anything.
+2. Enable **Detect foreground apps**. Tap **Open usage access settings**, select **MX Pocket**, and allow Usage Access. No notification, accessibility or overlay access is needed for detection. Turn detection off here or revoke the Android grant at any time.
 3. With the physical keypad connected and the phone unlocked, open one app, then the other. After a stable match the keypad shows that profile’s last page. Opening Camera does **not** take a picture, and opening YouTube Music does **not** start playback. Studio’s optional physical shutter and recording controls require separate setup for the default camera; mapping Camera does not enable them.
 
-The picker creates one ordinary `foregroundApp` rule for the chosen package, with weight **5**: enough to beat the stock Audio playback rule (**3**) by the required two points. Use **Advanced rules** only to inspect signals or change weights. If no app matches, other eligible rules still compete (including playback); if none match, the eligible default wins after debounce. Pins and profile opt-outs still take precedence.
+The picker creates one ordinary `foregroundApp` rule for the chosen package, with weight **5**: enough to beat the stock Audio playback rule (**3**) by the required two points. Use **Advanced rules** only to inspect signals or change weights. If no app matches, other eligible rules still compete (including playback). When a rule-selected layout loses its match, the eligible default returns after debounce; without a match, manual layouts stay put. Pins and profile opt-outs still take precedence.
 
 Detection reads local Android activity transitions, not media sessions or screen text. It runs only while MX Pocket is visible or hosting a connected keypad, unlocked, with an eligible mapping. The picker lists launchable apps visible in this Android user/profile. Usage events don’t identify the focused pane in multi-window mode; simultaneous resumed apps, missing events or an observation older than ten minutes give no app match. After granting access, unpinning, or unlocking, reopen the app if Android hasn't reported a fresh resume. Locked playback and authorized hardware media controls work as before. MX Pocket saves your mappings, not an app usage history.
 
 ## Open a shortcut while another app is visible
 
-With the phone unlocked and the physical keypad connected, try **Dialer** on
-the factory **Phone** profile. By default a background press offers a shortcut
+Phone shortcuts are key bindings, not a factory menu. Assign **Phone: Camera**
+to a key on your layout. Existing Phone layouts with edits, extra pages or
+rules still appear; an untouched legacy Phone layout remains a valid target
+for saved bindings and workflows but is skipped when browsing profiles.
+
+With the phone unlocked and the physical keypad connected, press that Camera
+key. By default a background press offers a shortcut
 notification: tap it to open the app. Only the latest request is usable, for
 one minute on the same connected keypad and binding.
 
 For one-press opening, turn on **Settings → Open apps directly from keypad**
 and grant **Display over other apps**. Android gives that setting broader
 powers than launching apps; MX Pocket does not draw overlays. A new physical
-press can request a Phone shortcut, a saved launcher favorite or the camera
+press can request Camera, a shortcut on a legacy Phone root, a saved launcher favorite or the camera
 viewfinder, not a capture. If Android suppresses the launch, tap the retry
 notification. Turn off the option or revoke the grant to return to notifications.
 

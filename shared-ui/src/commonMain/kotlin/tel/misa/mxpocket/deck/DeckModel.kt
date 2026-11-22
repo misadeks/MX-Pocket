@@ -88,7 +88,6 @@ data class DeckState(
     val activeProfileId: String,
     val defaultProfileId: String,
     val pinnedProfileId: String?,
-    val automatic: Boolean,
     val histories: Map<String, List<String>>,
     val selectionReason: String = "Default profile",
     val xoProfileRemoved: Boolean = false,
@@ -97,7 +96,9 @@ data class DeckState(
     val disabledPluginIds: Set<String> = emptySet(),
 ) {
     val visibleProfiles get() = profiles.filterNot { it.id in disabledPluginIds || it.id in setOf(GAME_PROFILE, PROFILE_HOME, PHONE_CALL_VIEW) }
-    val availableDefaultId get() = visibleProfiles.firstOrNull { it.id == defaultProfileId }?.id ?: visibleProfiles.first().id
+    // Keep the legacy target available to editors, explicit bindings and workflow validation.
+    val navigationProfiles get() = visibleProfiles.filterNot { it == stockPhoneProfile }
+    val availableDefaultId get() = visibleProfiles.firstOrNull { it.id == defaultProfileId }?.id ?: navigationProfiles.first().id
     val activeProfile: DeckProfile get() = profiles.first { it.id == activeProfileId }
     val activePage: DeckPage get() = activeProfile.pages.first { it.id == histories.getValue(activeProfileId).last() }
 }
@@ -157,13 +158,16 @@ internal fun DeckState.upgradeStockNavigationRoot(): DeckState {
     return copy(profiles = profiles.map { if (it.id == owner.id) updated else it })
 }
 
-fun defaultDeck(): DeckState {
+private val stockPhoneProfile = DeckProfile("phone", "Phone", "root", listOf(pluginRoot("phone", "Phone")))
+
+/** Slot templates are also the catalog of built-in plugins, independently of saved layouts. */
+fun factoryProfiles(): List<DeckProfile> {
     fun plugin(id: String, name: String, rules: List<DeckRule> = emptyList(), slots: Iterable<Int> = 0..8) =
         DeckProfile(id, name, "root", listOf(pluginRoot(id, name, slots)), rules = rules)
-    val profiles = listOf(
+    return listOf(
         plugin("focus", "Focus"),
         plugin("audio", "Audio", listOf(DeckRule("mediaActive", "true", 3))),
-        plugin("phone", "Phone"),
+        stockPhoneProfile,
         plugin("launcher", "Launcher"),
         plugin("studio", "Studio").copy(automatic = false),
         DeckProfile("navigation", "Navigation", "root", navigationPages()),
@@ -171,8 +175,12 @@ fun defaultDeck(): DeckState {
         tel.misa.mxpocket.decks.teamsProfile(),
         plugin("onenote", "OneNote"),
     )
+}
+
+fun defaultDeck(): DeckState {
+    val profiles = factoryProfiles().filterNot { it == stockPhoneProfile }
     return DeckState(
-        DeckLimits.VERSION, profiles, "launcher", "launcher", null, false,
+        DeckLimits.VERSION, profiles, "launcher", "launcher", null,
         profiles.associate { it.id to listOf(it.rootPageId) },
     )
 }

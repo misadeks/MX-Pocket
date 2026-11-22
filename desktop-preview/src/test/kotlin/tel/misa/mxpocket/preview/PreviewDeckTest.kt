@@ -360,7 +360,6 @@ class PreviewDeckTest {
         check(cold.state.value.visibleProfiles.none { it.id == "audio" })
         host.select(copy)
         repo.setDefault(copy).getOrThrow()
-        repo.setAutomatic(true).getOrThrow()
         for (time in listOf(0L, 2000L)) repo.observe(mapOf("foregroundApp" to "sample.app"), time).getOrThrow()
         assertEquals(copy, host.profileId)
         check("audio" !in repo.decision.value.scores)
