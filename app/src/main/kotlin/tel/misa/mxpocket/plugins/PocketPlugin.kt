@@ -35,6 +35,8 @@ enum class VolumeChange { LOWER, RAISE, MUTE, UNMUTE }
 enum class MediaCommand { PLAY_PAUSE, PREVIOUS, NEXT }
 enum class PhoneApp { CAMERA, SETTINGS, DIALER, WEB, ALARMS, ONENOTE }
 
+data class OneNoteSettings(val colors: List<String>, val selectedColor: String?, val thickness: Float, val min: Float, val max: Float)
+
 sealed interface PluginAction {
     data class Deck(val command: DeckCommand, val component: String? = null) : PluginAction
     data class Volume(val change: VolumeChange) : PluginAction
@@ -46,6 +48,7 @@ sealed interface PluginAction {
     data class ShareText(val text: String) : PluginAction
     /** Click the visible control with this text via the opt-in accessibility service. */
     data class AccessibilityClick(val text: String) : PluginAction
+    data class OneNoteSetting(val color: String? = null, val thicknessDelta: Int = 0, val close: Boolean = false) : PluginAction
     data class SelectPlugin(val id: String) : PluginAction
     data object CompletionTone : PluginAction
     data object Repaint : PluginAction
@@ -65,6 +68,7 @@ interface PluginHost {
     /** Toolbar tools of the foreground app as (stable id, description). */
     val toolBar: List<Pair<String, String>>
         get() = error("No accessibility state installed")
+    val oneNoteSettings: OneNoteSettings? get() = null
     fun dispatch(action: PluginAction)
 }
 

@@ -90,19 +90,23 @@ class BuiltInPluginsTest {
         engine.close()
     }
 
-    @Test fun oneNotePageMapsToolbarToolsWithoutActiveToolOrMoreOptions() = runTest {
+    @Test fun oneNotePageMapsAllNineToolsInToolbarOrder() = runTest {
         val actions = mutableListOf<PluginAction>()
-        val toolbar = listOf(
-            "Red color, thickness 10.00 percent, pen options" to "Red color, thickness 10.00 percent, pen options",
-            "Yellow color, thickness 20.00 percent, highlighter options" to "Yellow color, thickness 20.00 percent, highlighter options",
-            "Stroke Eraser" to "Stroke Eraser",
-            "More options" to "More options",
+        val descriptions = listOf(
+            "Green color, thickness 10.00 percent, pen options",
+            "Red color, thickness 10.00 percent, pen options",
+            "Light Green color, thickness 14.00 percent, pen options",
+            "Dark Blue color, thickness 20.00 percent, pen options",
+            "Yellow color, thickness 20.00 percent, highlighter options",
+            "Aqua color, thickness 20.00 percent, highlighter options",
+            "Stroke Eraser", "Shape select", "Lasso select",
         )
-        val engine = PluginEngine(BuiltInPlugins.create("Focus", "Audio", "Phone", oneNoteTitle = "OneNote"), this,
+        var toolbar = (listOf("More options") + descriptions).map { it to it }
+        val engine = PluginEngine(BuiltInPlugins.create("Focus", "Audio", "Phone"), this,
             { testScheduler.currentTime }, { AudioSnapshot(0, 15) },
             { action, _ -> actions += action }, {}, { _, error -> throw AssertionError(error) },
             MutableStateFlow(DeckState()),
-            readActiveTool = { toolbar[2].second }, readToolBar = { toolbar })
+            readActiveTool = { descriptions[6] }, readToolBar = { toolbar })
         fun tap(index: Int) {
             engine.key(PluginKeyEvent(index, true))
             engine.key(PluginKeyEvent(index, false))
@@ -111,32 +115,56 @@ class BuiltInPluginsTest {
         engine.select("onenote")
         runCurrent()
         val tiles = engine.render().keys
-        assertEquals(9, tiles.size)
-        assertEquals("", tiles[0].label) // top-left slot is OneNote's current-tool preview: blank
-        assertFalse(tiles[0].enabled)
-        assertEquals("Yellow highl", tiles[1].label) // toolbar minus preview and More options
-        assertEquals("Stroke Eraser", tiles[2].label)
-        assertEquals(0xffa56eff.toInt(), tiles[2].background) // active tool keeps its slot, highlighted
-        assertEquals(0xff7719aa.toInt(), tiles[1].background)
-        assertEquals("", tiles[3].label)
-        // Nine toolbar tools must not overflow the grid past the blank top-left slot.
-        val full = (toolbar + List(6) { "Pen ${it + 5} color, thickness 1$it.00 percent, pen options"
-            .let { "$it x" to "$it x" } })
-        val engine2 = PluginEngine(BuiltInPlugins.create("Focus", "Audio", "Phone", "OneNote"), this,
-            { testScheduler.currentTime }, { AudioSnapshot(0, 15) },
-            { _, _ -> }, {}, { _, error -> throw AssertionError(error) },
-            MutableStateFlow(DeckState()), readActiveTool = { null }, readToolBar = { full })
-        engine2.setEnabled(true)
-        engine2.select("onenote")
+        assertEquals(listOf("Green pen", "Red pen", "Light Green pen", "Dark Blue pen",
+            "Yellow highl", "Aqua highl", "Stroke Eraser", "Shape select", "Lasso select"),
+            tiles.map { it.label })
+        assertTrue(tiles.all { it.enabled })
+        assertEquals(0xffa56eff.toInt(), tiles[6].background)
+        assertEquals(0xff7719aa.toInt(), tiles[0].background)
+        (0..8).forEach(::tap)
+        assertEquals(descriptions.map { PluginAction.AccessibilityClick(it) }, actions)
+
+        toolbar = emptyList()
+        testScheduler.advanceTimeBy(250)
         runCurrent()
-        assertEquals(9, engine2.render().keys.size)
-        assertEquals("", engine2.render().keys[0].label)
-        engine2.close()
-        tap(1)
-        assertEquals(listOf(PluginAction.AccessibilityClick(toolbar[1].first)), actions)
+        assertEquals(9, engine.render().keys.size)
+        assertTrue(engine.render().keys.none { it.enabled })
         actions.clear()
-        tap(0) // blank top-left key does nothing
+        (0..8).forEach(::tap)
         assertTrue(actions.isEmpty())
         engine.close()
     }
+    @Test fun oneNoteSettingsNavigateColorsAndAdjustThickness() = runTest {
+        val actions = mutableListOf<PluginAction>()
+        val colors = listOf("Yellow", "Orange", "Pink", "Red", "Indigo", "Purple", "Plum")
+        val pen = "Green color, thickness 10.00 percent, pen options"
+        var settings: OneNoteSettings? = null
+        val engine = PluginEngine(BuiltInPlugins.create("Focus", "Audio", "Phone"), this,
+            { testScheduler.currentTime }, { AudioSnapshot(0, 15) },
+            { action, _ -> actions += action; if (action is PluginAction.AccessibilityClick)
+                settings = OneNoteSettings(colors, "Green", 10f, 0f, 100f) },
+            {}, { _, error -> throw AssertionError(error) }, MutableStateFlow(DeckState()),
+            readActiveTool = { pen }, readToolBar = { listOf(pen to pen) },
+            readOneNoteSettings = { settings })
+        fun tap(index: Int) { engine.key(PluginKeyEvent(index, true)); engine.key(PluginKeyEvent(index, false)) }
+        engine.select("onenote"); engine.setEnabled(true); runCurrent()
+        tap(0); testScheduler.advanceTimeBy(301); runCurrent()
+        assertEquals("Thickness", engine.render().keys[1].label)
+        assertEquals(0.1f, engine.render().keys[1].levelFraction)
+        tap(0); tap(2)
+        assertEquals(listOf(PluginAction.OneNoteSetting(thicknessDelta = -1),
+            PluginAction.OneNoteSetting(thicknessDelta = 1)), actions.takeLast(2))
+        tap(4)
+        assertEquals("Yellow", engine.render().keys[0].label)
+        assertEquals("1 / 2", engine.render().keys[7].label)
+        tap(8)
+        assertEquals("Plum", engine.render().keys[0].label)
+        assertEquals("2 / 2", engine.render().keys[7].label)
+        tap(7)
+        assertEquals("Color", engine.render().keys[4].label)
+        tap(4); tap(8); tap(0)
+        assertEquals(PluginAction.OneNoteSetting(color = "Plum"), actions.last())
+        engine.close()
+    }
+
 }

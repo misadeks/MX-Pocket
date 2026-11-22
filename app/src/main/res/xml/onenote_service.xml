@@ -1,5 +1,6 @@
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityFeedbackType="feedbackGeneric"
     android:canRetrieveWindowContent="true"
+    android:accessibilityFlags="flagReportViewIds"
     android:packageNames="com.microsoft.office.onenote"
     android:description="@string/onenote_access_description" />

@@ -81,27 +81,59 @@ class OneNotePlugin(title: String) : PocketPlugin {
     // The ink toolbar's tools as (description, description); empty outside the draw view.
     private var tools: List<Pair<String, String>> = emptyList()
     private var active: String? = null
+    private var settings: OneNoteSettings? = null
+    private var page = 0
+    private var colorsOpen = false
+    private var opening = false
 
     override fun onActivate(host: PluginHost) {
         host.scope.launch {
             while (true) {
-                tools = host.toolBar
-                active = host.activeTool
+                settings = host.oneNoteSettings
+                if (settings == null && !opening) {
+                    colorsOpen = false
+                    tools = host.toolBar
+                    active = host.activeTool
+                }
                 host.invalidate()
                 delay(250)
             }
         }
     }
 
-    // Keys map to the toolbar minus its first entry (OneNote's current-tool preview, always
-    // top-left) and minus More options; the active tool keeps its palette slot, highlighted.
-    private fun selectable() = tools.drop(1).filter { it.second != "More options" }
+    // More options belongs to the app menu, not the nine draw tools.
+    private fun selectable() = tools.filter { it.second != "More options" }
 
     override fun render(nowMillis: Long): PluginFrame {
+        val current = settings
+        if (current != null) {
+            val purple = 0xff7719aa.toInt()
+            if (colorsOpen) {
+                val pages = ((current.colors.size + 5) / 6).coerceAtLeast(1)
+                val visiblePage = page.coerceIn(0, pages - 1)
+                return PluginFrame(List(9) { i ->
+                    val color = current.colors.getOrNull(visiblePage * 6 + i)
+                    when {
+                        i < 6 -> KeyTile(color.orEmpty(), "", colorValue(color), enabled = color != null)
+                        i == 6 -> KeyTile("Previous", "", purple, enabled = visiblePage > 0)
+                        i == 7 -> KeyTile("${visiblePage + 1} / $pages", "Cancel", purple)
+                        else -> KeyTile("Next", "", purple, enabled = visiblePage + 1 < pages)
+                    }
+                })
+            }
+            val fraction = (current.thickness - current.min) / (current.max - current.min)
+            val labels = listOf("Thickness −", "Thickness", "Thickness +", "", "Color", "", "", "Back", "")
+            return PluginFrame(labels.mapIndexed { i, label ->
+                KeyTile(label, if (i == 4) current.selectedColor.orEmpty() else "",
+                    if (i == 4) colorValue(current.selectedColor) else purple,
+                    enabled = i in listOf(0, 1, 2, 4, 7), readOnly = i == 1,
+                    levelFraction = fraction.takeIf { i == 1 })
+            })
+        }
         val labels = MutableList(9) { "" }
-        selectable().take(8).forEachIndexed { i, tool -> labels[i + 1] = shortLabel(tool.second) }
+        selectable().take(9).forEachIndexed { i, tool -> labels[i] = shortLabel(tool.second) }
         return PluginFrame(labels.mapIndexed { index, label ->
-            val isActive = selectable().getOrNull(index - 1)?.second == active
+            val isActive = selectable().getOrNull(index)?.second == active
             KeyTile(label, "ONENOTE", if (isActive) 0xffa56eff.toInt() else 0xff7719aa.toInt(),
                 enabled = label.isNotBlank())
         })
@@ -109,14 +141,50 @@ class OneNotePlugin(title: String) : PocketPlugin {
 
     override fun onKey(event: PluginKeyEvent, host: PluginHost) {
         if (!event.pressed || event.synthetic) return
-        val tool = selectable().getOrNull(event.index - 1) ?: return
+        val current = settings
+        if (current != null) {
+            if (colorsOpen) {
+                when (event.index) {
+                    in 0..5 -> current.colors.getOrNull(page * 6 + event.index)?.let {
+                        host.dispatch(PluginAction.OneNoteSetting(color = it))
+                        colorsOpen = false
+                    }
+                    6 -> page = (page - 1).coerceAtLeast(0)
+                    7 -> colorsOpen = false
+                    8 -> page = (page + 1).coerceAtMost((current.colors.size - 1).coerceAtLeast(0) / 6)
+                }
+            } else when (event.index) {
+                0 -> host.dispatch(PluginAction.OneNoteSetting(thicknessDelta = -1))
+                2 -> host.dispatch(PluginAction.OneNoteSetting(thicknessDelta = 1))
+                4 -> { page = 0; colorsOpen = true }
+                7 -> host.dispatch(PluginAction.OneNoteSetting(close = true))
+            }
+            host.invalidate()
+            return
+        }
+        val tool = selectable().getOrNull(event.index) ?: return
+        val showSettings = tool.second == active && ("pen options" in tool.second || "highlighter options" in tool.second)
+        if (showSettings) opening = true
         host.dispatch(PluginAction.AccessibilityClick(tool.first))
         host.scope.launch {
             delay(300) // OneNote updates its accessibility tree shortly after the click.
-            active = host.activeTool
+            settings = host.oneNoteSettings
+            opening = false
+            if (settings == null) active = host.activeTool
             host.invalidate()
         }
     }
+
+    override fun onDeactivate() { settings = null; colorsOpen = false; opening = false }
+
+    private fun colorValue(name: String?): Int = when (name?.lowercase()) {
+        "yellow" -> 0xff705201; "orange" -> 0xffb94909; "pink" -> 0xffff0066
+        "red" -> 0xffe71225; "indigo" -> 0xffd0b9e9; "purple" -> 0xffff66e3
+        "plum" -> 0xffff52a8; "dark blue" -> 0xff75bfff; "sky blue" -> 0xff007399
+        "light blue" -> 0xff00526b; "green" -> 0xff008c3a; "light green" -> 0xff306100
+        "black" -> 0xffedebe9; "dark gray" -> 0xffcbc8c8; "gray" -> 0xff849398
+        "off white" -> 0xff201f1e; else -> 0xff7719aa
+    }.toInt()
 
     private fun shortLabel(desc: String): String = when {
         "pen options" in desc -> "${desc.substringBefore(" color")} pen"

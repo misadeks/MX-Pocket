@@ -2,6 +2,8 @@ package tel.misa.mxpocket.decks
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
+import android.os.Bundle
+import tel.misa.mxpocket.plugins.OneNoteSettings
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo as Node
 
@@ -55,6 +57,47 @@ class OneNoteAccessService : AccessibilityService() {
             desc to desc
         }
     } ?: emptyList()
+
+    internal fun settings(): OneNoteSettings? = withRoot { root ->
+        val slider = findNode(root) { it.viewIdResourceName?.endsWith(":id/stroke_width_modern") == true }
+            ?: return@withRoot null
+        val range = slider.rangeInfo
+        val current = range?.current
+        val min = range?.min
+        val max = range?.max
+        slider.recycle()
+        if (current == null || min == null || max == null || max <= min) return@withRoot null
+        val nodes = findNodes(root) { it.viewIdResourceName?.endsWith(":id/color_preview_holder") == true }
+        val colors = nodes.mapNotNull { it.text?.toString() }
+        val selected = nodes.firstOrNull { it.isSelected }?.text?.toString()
+        nodes.forEach { it.recycle() }
+        OneNoteSettings(colors, selected, current, min, max)
+    }
+
+    internal fun changeSetting(color: String?, delta: Int, close: Boolean): Boolean = withRoot { root ->
+        val slider = findNode(root) { it.viewIdResourceName?.endsWith(":id/stroke_width_modern") == true }
+            ?: return@withRoot false
+        if (close) {
+            slider.recycle()
+            return@withRoot performGlobalAction(GLOBAL_ACTION_BACK)
+        }
+        if (color != null) {
+            slider.recycle()
+            val node = findNode(root) { it.viewIdResourceName?.endsWith(":id/color_preview_holder") == true && it.text?.toString() == color }
+                ?: return@withRoot false
+            return@withRoot clickNode(node, Node.ACTION_CLICK)
+        }
+        if (delta == 0) { slider.recycle(); return@withRoot false }
+        val scroll = if (delta > 0) Node.ACTION_SCROLL_FORWARD else Node.ACTION_SCROLL_BACKWARD
+        if (slider.performAction(scroll)) { slider.recycle(); return@withRoot true }
+        val range = slider.rangeInfo
+        if (range == null) { slider.recycle(); return@withRoot false }
+        val value = (range.current + delta * (range.max - range.min) / 20f).coerceIn(range.min, range.max)
+        val args = Bundle().apply { putFloat(Node.ACTION_ARGUMENT_PROGRESS_VALUE, value) }
+        val success = slider.performAction(Node.AccessibilityAction.ACTION_SET_PROGRESS.id, args)
+        slider.recycle()
+        success
+    } ?: false
 
     /** Content description of the currently selected draw tool, for the keypad display. */
     internal fun activeTool(): String? = withRoot { root ->

@@ -130,6 +130,7 @@ internal class PocketSession(
         observeDecks = deckState,
         readActiveTool = { OneNoteAccessService.connected?.activeTool() },
         readToolBar = { OneNoteAccessService.connected?.toolBar() ?: emptyList() },
+        readOneNoteSettings = { OneNoteAccessService.connected?.settings() },
     )
     var request: Request? = null
         private set
@@ -905,6 +906,10 @@ internal class PocketSession(
                     service.selectToolById(action.text) -> "Requested ${action.text} in OneNote."
                     else -> "Open OneNote and show the ${action.text} control first."
                 })
+            }
+            is PluginAction.OneNoteSetting -> {
+                if (OneNoteAccessService.connected?.changeSetting(action.color, action.thicknessDelta, action.close) != true)
+                    message("OneNote pen settings are unavailable. Open the pen settings and try again.")
             }
             PluginAction.Repaint -> repaint()
             is PluginAction.SelectPlugin -> error("Navigation is handled by PluginEngine")

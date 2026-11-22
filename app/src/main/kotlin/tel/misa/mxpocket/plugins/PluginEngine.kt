@@ -23,6 +23,7 @@ class PluginEngine(
     private val observeDecks: StateFlow<DeckState> = MutableStateFlow(DeckState()),
     private val readActiveTool: () -> String? = { null },
     private val readToolBar: () -> List<Pair<String, String>> = { emptyList() },
+    private val readOneNoteSettings: () -> OneNoteSettings? = { null },
 ) : Closeable {
     private val entries = plugins.toList()
     val descriptors: List<PluginDescriptor> = entries.map { it.descriptor }
@@ -180,6 +181,11 @@ class PluginEngine(
             }
             return readToolBar()
         }
+        override val oneNoteSettings: OneNoteSettings? get() {
+            check(current()) { "Plugin activation expired" }
+            require(PluginCapability.ACCESSIBILITY in descriptor.capabilities)
+            return readOneNoteSettings()
+        }
         override fun invalidate() { if (current()) invalidateUi() }
         override fun audioSnapshot(): AudioSnapshot {
             check(current()) { "Plugin activation expired" }
@@ -193,7 +199,7 @@ class PluginEngine(
                 is PluginAction.Volume, is PluginAction.Media -> PluginCapability.AUDIO
                 is PluginAction.OpenApp, is PluginAction.OpenUri, is PluginAction.ShareText ->
                     PluginCapability.OPEN_APPS
-                is PluginAction.AccessibilityClick -> PluginCapability.ACCESSIBILITY
+                is PluginAction.AccessibilityClick, is PluginAction.OneNoteSetting -> PluginCapability.ACCESSIBILITY
                 is PluginAction.SelectPlugin -> PluginCapability.NAVIGATION
                 PluginAction.CompletionTone -> PluginCapability.TONE
                 PluginAction.Repaint -> null
