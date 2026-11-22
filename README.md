@@ -72,6 +72,10 @@ highlighters a broad translucent band, and palette keys show a named swatch.
 Black-and-white stripes mean the ink color is unknown. A corner check marks an
 observed selection, not a successful key press.
 
+For ordinary mobile calls, **Settings → Phone calls** can temporarily show the
+caller on the **physical keypad**. Either page key leaves without affecting the
+call. See [carrier call setup and supported controls](docs/android-decks.md#carrier-calls-on-the-keypad).
+
 <a name="hardware-evidence-and-credits"></a>
 
 ## Credits

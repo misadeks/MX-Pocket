@@ -16,6 +16,7 @@ object DeckActions {
 
 // Not a legal saved profile ID. The launcher is an operating view, not part of a layout backup.
 const val PROFILE_HOME = "@home"
+const val PHONE_CALL_VIEW = "@phone-call"
 const val GAME_PROFILE = "game.xo"
 const val MORE_PROFILES = "home.more"
 
@@ -94,7 +95,7 @@ data class DeckState(
     /** Local host preference, never part of a layout backup. Factory profiles use their plugin ID. */
     val disabledPluginIds: Set<String> = emptySet(),
 ) {
-    val visibleProfiles get() = profiles.filterNot { it.id in disabledPluginIds || it.id == GAME_PROFILE || it.id == PROFILE_HOME }
+    val visibleProfiles get() = profiles.filterNot { it.id in disabledPluginIds || it.id in setOf(GAME_PROFILE, PROFILE_HOME, PHONE_CALL_VIEW) }
     val availableDefaultId get() = visibleProfiles.firstOrNull { it.id == defaultProfileId }?.id ?: visibleProfiles.first().id
     val activeProfile: DeckProfile get() = profiles.first { it.id == activeProfileId }
     val activePage: DeckPage get() = activeProfile.pages.first { it.id == histories.getValue(activeProfileId).last() }

@@ -24,7 +24,6 @@ import android.provider.Settings
 import android.view.KeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -105,6 +104,11 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
         if (target != null) {
             if (granted) advance() else cancelAttempt(D.AllowNotifications.text())
         }
+    }
+    private val callStatePermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (!granted) session.message("Phone state was not granted. Use Phone, or allow Phone permission in Android app settings.")
+        session.refreshPhoneCall()
+        render()
     }
     private val imagePicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) lifecycleScope.launch {
@@ -417,19 +421,37 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
                 session.languageChanged()
                 if (Build.VERSION.SDK_INT < 33) recreate()
             }
+            is PocketScreenEvent.SetPhoneCalls -> {
+                session.phoneAccess.enabled = event.enabled && session.phoneAccess.supported
+                session.refreshPhoneCall()
+            }
+            is PocketScreenEvent.SetCallerDetails -> {
+                session.phoneAccess.details = event.enabled && Build.VERSION.SDK_INT >= 34
+                session.refreshPhoneCall()
+            }
+            PocketScreenEvent.AllowPhoneState -> if (resumed && session.phoneAccess.enabled && isUnlockedAndInteractive())
+                callStatePermission.launch(Manifest.permission.READ_PHONE_STATE)
+            PocketScreenEvent.CallerNotificationAccess -> if (Build.VERSION.SDK_INT >= 34 && resumed &&
+                session.phoneAccess.enabled && session.phoneAccess.details && isUnlockedAndInteractive()) try {
+                startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS).putExtra(
+                    Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, session.phoneAccess.listener.flattenToString()))
+            } catch (_: ActivityNotFoundException) {
+                session.message("Open Android notification access settings for MX Pocket phone calls.")
+            } catch (_: SecurityException) {
+                session.message("Android restricted notification access. Use Phone for call controls.")
+            }
         }
         render()
     }
 
     override fun render() {
         val deck = session.deck.operatingState.value
-        val frame = session.frame()
         val profile = deck.activeProfile.displayName()
         val page = deck.activeProfile.displayPageName(deck.activePage)
         val state = PocketScreenState(
             status = session.status,
             pluginTitle = if (page == profile) profile else "$profile / $page",
-            tiles = frame.keys.mapIndexed { i, key -> key.toGridTile(session.ready, session.keyImage(i, key).asImageBitmap()) },
+            tiles = session.homeTiles(),
             profiles = deck.visibleProfiles.map { ProfileChoice(it.id, it.displayName()) },
             activeId = deck.activeProfileId, reason = displaySelectionReason(session.deck.reason.value),
             connectionLabel = session.connectionLabel,
@@ -438,6 +460,9 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             diagnostics = diagnostics, log = session.logText(60), automatic = access.automatic, directShortcuts = direct.enabled,
             themeMode = ThemePreference.current(this),
             language = LanguagePreference.choice(this),
+            phoneCalls = session.phoneAccess.let {
+                PhoneCallSettings(it.supported, it.enabled, it.phoneGranted, Build.VERSION.SDK_INT >= 34, it.details, it.notificationGranted)
+            },
         )
         presentation = state
     }
