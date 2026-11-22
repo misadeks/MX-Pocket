@@ -1,7 +1,8 @@
 # Android keypad decks
 
 Select **Settings > Connect virtual keypad** or connect an authorized keypad,
-then choose a profile in the **Profiles** carousel. Virtual keys run real phone actions. The debug-only UI fixture does not.
+then choose **Profiles > [profile name] > Profile settings and rules > Use on keypad**.
+Browsing a saved profile does not switch it or run its keys. Virtual keys on Home run real phone actions. The debug-only UI fixture does not.
 
 | Deck | How to use it | If access is missing |
 | --- | --- | --- |
@@ -49,8 +50,8 @@ on notifications. Spotify and other players use the same Android interface:
 there is no Spotify sign-in, SDK, playlist browser or downloaded artwork.
 While unlocked on **Audio**, the local cover spans the virtual board on Home
 or all nine LCD regions on a wired keypad, paused or playing. With hardware
-connected, Home mirrors the live keys as a display only; **Profiles > Swap keys** shows
-the active key faces without running their actions. A three-pixel black margin around the whole
+connected, Home mirrors the live keys as a display only; opening a page under **Profiles**
+shows its saved bindings rather than the live playback state. A three-pixel black margin around the whole
 cover provides bezel clearance. Each label uses black or white against its own part of the picture.
 Other profiles keep their normal keys even during playback. Without usable
 art, the keys keep a neutral background (or the user's selected backdrop).

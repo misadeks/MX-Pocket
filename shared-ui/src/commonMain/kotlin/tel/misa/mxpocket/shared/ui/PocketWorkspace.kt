@@ -106,7 +106,7 @@ sealed interface PocketScreenEvent {
 fun PocketWorkspace(
     tab: WorkspaceTab, select: (WorkspaceTab) -> Unit, state: PocketScreenState,
     plugins: List<PluginItem>, event: (PocketScreenEvent) -> Unit,
-    editor: @Composable () -> Unit, workflows: @Composable () -> Unit,
+    profiles: @Composable () -> Unit, workflows: @Composable () -> Unit,
 ) {
     val holder = rememberSaveableStateHolder()
     BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
@@ -125,7 +125,7 @@ fun PocketWorkspace(
                     holder.SaveableStateProvider(tab.name) {
                         when (tab) {
                             WorkspaceTab.HOME -> HomeScreen(state, event)
-                            WorkspaceTab.PROFILES -> ProfilesScreen(state, event, editor)
+                            WorkspaceTab.PROFILES -> profiles()
                             WorkspaceTab.PLUGINS -> PluginsScreen(plugins, event)
                             WorkspaceTab.WORKFLOWS -> workflows()
                             WorkspaceTab.SETTINGS -> SettingsScreen(state, event)
@@ -147,7 +147,7 @@ fun PocketWorkspace(
 
 /**
  * Home mirrors the physical keypad: the nine tiles are the same LCD images, updated as they change.
- * Profile switching lives on the Profiles tab; display maintenance lives in Settings.
+ * Display maintenance lives in Settings.
  */
 @Composable
 fun HomeScreen(state: PocketScreenState, event: (PocketScreenEvent) -> Unit) {
@@ -278,7 +278,7 @@ private fun ConnectionCard(state: PocketScreenState, event: (PocketScreenEvent) 
 
 /** Profiles: the infinite carousel switches what is on the keypad; the editor below edits its layout. */
 @Composable
-private fun ProfilesScreen(state: PocketScreenState, event: (PocketScreenEvent) -> Unit, editor: @Composable () -> Unit) {
+fun SimulatorProfiles(state: PocketScreenState, select: (String) -> Unit, editor: @Composable () -> Unit) {
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
             Column(Modifier.widthIn(max = 1152.dp).fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
@@ -290,7 +290,7 @@ private fun ProfilesScreen(state: PocketScreenState, event: (PocketScreenEvent) 
                 }
             }
         }
-        ProfileCarousel(state.profiles, state.activeId) { event(PocketScreenEvent.SelectPlugin(it)) }
+        ProfileCarousel(state.profiles, state.activeId, select)
         Box(Modifier.weight(1f).fillMaxWidth()) { editor() }
     }
 }

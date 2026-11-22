@@ -30,7 +30,7 @@ internal fun AndroidWorkspace(
             plugin.capabilities.joinToString { it.name.lowercase().replace('_', ' ') }, session.pluginDetails(plugin.id),
             deck.profiles.any { it.id == plugin.id }, deck.defaultProfileId == plugin.id, session.pluginSettings(plugin.id)?.first)
     }
-    PocketWorkspace(tab, select, state, plugins, event, editor = {
+    PocketWorkspace(tab, select, state, plugins, event, profiles = {
         val options = buildList {
             add(BindingOption("Back", ActionCall(DeckActions.BACK)))
             add(BindingOption("Return to root", ActionCall(DeckActions.ROOT)))
@@ -40,8 +40,8 @@ internal fun AndroidWorkspace(
             addAll(factoryKeyBindings)
             session.platformBindings().forEach { (label, call) -> add(BindingOption(label, call)) }
         }
-        LayoutEditor(remember(session.deck) { session.deck.asEditorStore() }, options, signals, onExport, onImport,
-            live = state, foreground = ForegroundControls(detection, usageGranted, session::setDetectForegroundApps, onUsageSettings) {
+        SavedProfilesEditor(remember(session.deck) { session.deck.asEditorStore() }, disabled, options, signals, onExport, onImport,
+            foreground = ForegroundControls(detection, usageGranted, session::setDetectForegroundApps, onUsageSettings) {
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     try {
                         session.favoriteApps.discover().mapNotNull { app ->

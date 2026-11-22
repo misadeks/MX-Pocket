@@ -35,7 +35,7 @@ class ThemeAndProfilesTest {
                 PocketWorkspace(tab, { tab = it }, state(mode), emptyList(), {
                     events += it
                     if (it is PocketScreenEvent.SetTheme) mode = it.mode
-                }, editor = {}, workflows = {})
+                }, profiles = {}, workflows = {})
             }
         }
         ui.onNodeWithContentDescription("Switch to light theme").performClick()

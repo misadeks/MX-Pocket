@@ -10,18 +10,16 @@ instead. The round button in Home's header, or **Settings > Appearance**
 **Plugins** turns features on or off, **Flows** lets you build and run workflows,
 and **Settings** contains USB preferences, background images, repaint and diagnostics.
 
-**Profiles** switches and edits profiles. Swipe the endless profile carousel
-(or tap a card) to put that profile on the keypad; the cards beside the
-centered one are slightly blurred. The profile picker below it always shows
-the same profile: choosing one there also puts it on the keypad. Choosing a
-page only opens it for editing. **Swap keys** opens the keypad with the same
-key faces as the LCDs (live for the page on the keypad): drag a key onto
-another to exchange them, or tap a key to edit its label, icon, color or
-action. Nothing there runs an action; screen readers offer **Swap with key N**
-actions instead of dragging. In a narrow window, Back returns from the key
-editor; a wider window keeps the key details beside the picker.
+On Android, **Profiles** lists saved profiles by name and page count. Tap a
+profile, choose a page by name, then tap a key on the keypad drawing to edit
+its label, icon, color or actions. **Save key** returns to the same page.
+Back retraces the path to the page list and then to Profiles. You can also
+drag one key onto another to swap them, or use the **Swap with key N** screen
+reader actions. This edits saved bindings, not the live screen: it works
+disconnected, runs no keys and does not switch profiles. To switch explicitly,
+open the profile’s **Profile settings and rules > Use on keypad**.
 
-To give a key a second action, open it from **Profiles > Swap keys**, choose **Hold** under
+To give a key a second action, open the key on its page, choose **Hold** under
 **Key actions**, pick an action, and save the key. **Tap** and **Hold** are
 independent; choose **Unassigned** for Hold and save to remove it. Existing
 layouts and factory keys have no Hold. Layout backups include assigned Holds.
@@ -33,8 +31,8 @@ recognized physical two-key chord consumes both keys. Hold does not grant
 permission to launch an app in the background or operate the camera shutter.
 Keys without Hold keep their usual response time.
 
-The Windows simulator uses the same workspace and starts with the virtual
-keypad connected. It can save its own layouts, but has no USB connection,
+The Windows simulator keeps its live profile carousel and **Swap keys** editor,
+and starts with the virtual keypad connected. It can save its own layouts, but has no USB connection,
 image upload, or Android permission and foreground-app detection controls.
 The walkthrough below uses the Android host.
 
@@ -77,10 +75,10 @@ option off; see [deck behavior without special access](android-decks.md).
    The first tile changes to **Pause** and the countdown advances. No USB
    permission or foreground service is needed. Disconnecting the virtual
    keypad disables input; reconnecting restores the selected page.
-2. In Profiles use **Manage profile > New profile** and create *Desk*. Under
-   **Manage page** create *Tools*. On Desk's root page edit a key, choose
+2. In Profiles use **New profile** and create *Desk*. Use **New page** to
+   create *Tools*. On Desk's root page edit a key, choose
    *Open page: Tools*, and set its label, icon and color. Put *Back* or *Return
-   to root* on Tools. Choose *Desk* in the carousel, then navigate on Home.
+   to root* on Tools. In Desk’s profile settings choose **Use on keypad**, then navigate on Home.
 3. In Flows duplicate **Keypad check**. Give the copy a name, change a delay
    or add a step, then **Test run** and **Save workflow**. A test executes real
    steps. In Profiles assign the saved workflow to a Tools key. Press that key
@@ -142,7 +140,7 @@ No root, firmware update or kernel change is part of setup.
 
 ## Show a profile when an app opens
 
-1. In **Profiles**, pick **Studio** in the **Profile** picker. Under **Context rules > Choose app**, tap **Camera** (Samsung Camera on a Galaxy). Pick **Audio** and repeat for **YouTube Music**. You can choose a custom profile the same way. Saving a mapping does not enable detection, change key bindings or launch anything.
+1. In **Profiles**, open **Studio > Profile settings and rules**. Under **Context rules > Choose app**, tap **Camera** (Samsung Camera on a Galaxy). Open **Audio** and repeat for **YouTube Music**. You can choose a custom profile the same way. Saving a mapping does not enable detection, change key bindings or launch anything.
 2. Enable **Automatic profile switching** and **Detect foreground apps**. Tap **Open usage access settings**, select **MX Pocket**, and allow Usage Access. No notification, accessibility or overlay access is needed for detection. Turn detection off here or revoke the Android grant at any time.
 3. With the physical keypad connected and the phone unlocked, open one app, then the other. After a stable match the keypad shows that profile’s last page. Opening Camera does **not** take a picture, and opening YouTube Music does **not** start playback. Studio’s optional physical shutter and recording controls require separate setup for the default camera; mapping Camera does not enable them.
 

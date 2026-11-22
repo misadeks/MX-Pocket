@@ -136,25 +136,30 @@ fun main() = application {
                         else -> setup = false
                     }
                 }
-            } else PocketWorkspace(tab, { tab = it }, state, plugins, event = { event ->
-                try {
-                    when (event) {
-                        PocketScreenEvent.EnterPreview -> { host.resetInput(); simulating = true; status("Virtual keypad connected.") }
-                        PocketScreenEvent.StopPreview -> { host.resetInput(); simulating = false; status("Virtual keypad disconnected.") }
-                        is PocketScreenEvent.SelectPlugin -> { host.select(event.id); status("Selected ${host.profileName}.") }
-                        is PocketScreenEvent.ChangePage -> { host.cycle(event.delta); status("Selected ${host.profileName}.") }
-                        is PocketScreenEvent.VirtualKey -> if (simulating && tab == WorkspaceTab.HOME && !setup)
-                            host.press(event, now())?.let(::status)
-                        is PocketScreenEvent.DefaultProfile -> repo.setDefault(event.id).getOrThrow()
-                        PocketScreenEvent.FeatureSetup -> { setupReview = false; setup = true }
-                        is PocketScreenEvent.SetTheme -> { themeMode = event.mode; appearance.put("theme", event.mode.name) }
-                        else -> status(DEVICE_LIMIT)
+            } else {
+                val dispatch: (PocketScreenEvent) -> Unit = { event ->
+                    try {
+                        when (event) {
+                            PocketScreenEvent.EnterPreview -> { host.resetInput(); simulating = true; status("Virtual keypad connected.") }
+                            PocketScreenEvent.StopPreview -> { host.resetInput(); simulating = false; status("Virtual keypad disconnected.") }
+                            is PocketScreenEvent.SelectPlugin -> { host.select(event.id); status("Selected ${host.profileName}.") }
+                            is PocketScreenEvent.ChangePage -> { host.cycle(event.delta); status("Selected ${host.profileName}.") }
+                            is PocketScreenEvent.VirtualKey -> if (simulating && tab == WorkspaceTab.HOME && !setup)
+                                host.press(event, now())?.let(::status)
+                            is PocketScreenEvent.DefaultProfile -> repo.setDefault(event.id).getOrThrow()
+                            PocketScreenEvent.FeatureSetup -> { setupReview = false; setup = true }
+                            is PocketScreenEvent.SetTheme -> { themeMode = event.mode; appearance.put("theme", event.mode.name) }
+                            else -> status(DEVICE_LIMIT)
+                        }
+                    } catch (e: Exception) { status(e.message ?: "Workspace operation failed.") }
+                }
+                PocketWorkspace(tab, { tab = it }, state, plugins, dispatch, profiles = {
+                    SimulatorProfiles(state, { dispatch(PocketScreenEvent.SelectPlugin(it)) }) {
+                        LayoutEditor(remember(repo) { repo.asEditorStore() }, options, emptyMap(), { backup(true) }, { backup(false) },
+                            live = state, backHandler = registerBack)
                     }
-                } catch (e: Exception) { status(e.message ?: "Workspace operation failed.") }
-            }, editor = {
-                LayoutEditor(remember(repo) { repo.asEditorStore() }, options, emptyMap(), { backup(true) }, { backup(false) },
-                    live = state, backHandler = registerBack)
-            }, workflows = { DesktopWorkflows(workflows, registerBack) })
+                }, workflows = { DesktopWorkflows(workflows, registerBack) })
+            }
         }
     }
 }

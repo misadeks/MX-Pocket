@@ -163,6 +163,14 @@ private val palette = listOf(
 
 @Composable
 internal fun BindingDialog(options: List<BindingOption>, draft: KeyDraft) {
+    val target = draft.picking ?: return
+    AlertDialog(onDismissRequest = { draft.picking = null }, title = { Text("Choose a ${target.label.lowercase()} action") },
+        text = { BindingChoices(options, draft, Modifier.heightIn(max = 380.dp)) },
+        confirmButton = { TextButton(onClick = { draft.picking = null }) { Text("Back to key") } })
+}
+
+@Composable
+internal fun BindingChoices(options: List<BindingOption>, draft: KeyDraft, listModifier: Modifier = Modifier) {
     val query = draft.query
     val target = draft.picking ?: return
     val selected = draft.binding(target)?.commandBinding()
@@ -177,19 +185,17 @@ internal fun BindingDialog(options: List<BindingOption>, draft: KeyDraft) {
     val filtered = remember(options, query) {
         options.filter { it.label.contains(query.trim(), ignoreCase = true) || it.call.id.contains(query.trim(), ignoreCase = true) }
     }
-    AlertDialog(onDismissRequest = ::close, title = { Text("Choose a ${target.label.lowercase()} action") }, text = {
-        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            OutlinedTextField(query, { draft.query = it }, Modifier.fillMaxWidth(), label = { Text("Search actions") }, singleLine = true)
-            LazyColumn(Modifier.fillMaxWidth().heightIn(max = 380.dp)) {
-                item {
-                    DropdownMenuItem(text = { Text(if (selected == null) "✓ Unassigned" else "Unassigned") }, onClick = { choose(null) })
-                }
-                if (filtered.isEmpty()) item { EditorNote("No matching actions.") }
-                items(filtered) { option ->
-                    DropdownMenuItem(text = { Text(if (selected == option.call) "✓ ${option.label}" else option.label) },
-                        onClick = { choose(option.call) })
-                }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        OutlinedTextField(query, { draft.query = it }, Modifier.fillMaxWidth(), label = { Text("Search actions") }, singleLine = true)
+        LazyColumn(listModifier.fillMaxWidth()) {
+            item {
+                DropdownMenuItem(text = { Text(if (selected == null) "✓ Unassigned" else "Unassigned") }, onClick = { choose(null) })
+            }
+            if (filtered.isEmpty()) item { EditorNote("No matching actions.") }
+            items(filtered) { option ->
+                DropdownMenuItem(text = { Text(if (selected == option.call) "✓ ${option.label}" else option.label) },
+                    onClick = { choose(option.call) })
             }
         }
-    }, confirmButton = { TextButton(onClick = ::close) { Text("Back to key") } })
+    }
 }

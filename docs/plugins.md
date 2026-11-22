@@ -23,8 +23,9 @@ A `KeyTile` contains a label, footer and ARGB background color. Ordinary keys
 keep their key number unless an icon is supplied. The built-in Audio page uses
 monochrome player symbols instead. Labels remain available to accessibility
 even on icon-only controls. Read-only tiles display state without dispatching input.
-The virtual keypad and the **Swap keys** editor use the same key faces
-as the LCDs, including user backgrounds. With a physical keypad, Home mirrors
+The virtual keypad uses the same key faces as the LCDs, including user backgrounds.
+The Android Profiles editor shows saved bindings rather than transient plugin state;
+selecting a key edits it without dispatching input. With a physical keypad, Home mirrors
 the live LCD images as a display only, rather than a second set of tappable
 keys. The independent
 driver scales, JPEG-encodes and uploads images. Plugins must not

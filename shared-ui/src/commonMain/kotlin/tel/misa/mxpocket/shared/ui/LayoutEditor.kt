@@ -19,17 +19,18 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import tel.misa.mxpocket.deck.*
+import tel.misa.mxpocket.plugins.KeyTile
 import tel.misa.mxpocket.plugins.present
 import tel.misa.mxpocket.plugins.bindingPreview
 
 private enum class Pane { LIBRARY, PREVIEW, SETTINGS, KEY }
-private enum class Command(val title: String) {
+internal enum class Command(val title: String) {
     CREATE_PROFILE("New profile"), COPY_PROFILE("Duplicate profile"), RENAME_PROFILE("Rename profile"),
     DELETE_PROFILE("Delete profile"), CREATE_PAGE("New page"), COPY_PAGE("Duplicate page"),
     RENAME_PAGE("Rename page"), DELETE_PAGE("Delete page"), IMPORT("Import layouts"), RESTORE("Restore factory layouts")
 }
 
-private class Writer(private val scope: CoroutineScope, private val repo: DeckEditorStore) {
+internal class LayoutWriter(private val scope: CoroutineScope, private val repo: DeckEditorStore) {
     var busy by mutableStateOf(false)
         private set
     var error by mutableStateOf<String?>(null)
@@ -73,7 +74,7 @@ fun LayoutEditor(
     val deck by repo.state.collectAsState()
     val decision by repo.decision.collectAsState()
     val scope = rememberCoroutineScope()
-    val writer = remember(repo, scope) { Writer(scope, repo) }
+    val writer = remember(repo, scope) { LayoutWriter(scope, repo) }
     // The editor always edits the profile on the keypad, so the Profiles carousel and this picker agree.
     val profile = deck.activeProfile
     // A profile created or copied here goes on the keypad once its write has finished.
@@ -114,20 +115,16 @@ fun LayoutEditor(
         /** The same faces as the physical LCDs; the active page shows the live images. */
         fun gridTiles(): List<KeypadTile> = page.keys.mapIndexed { i, saved ->
             val tile = if (index == i && draft != null) draft.preview() else saved
-            val label = tile.label.ifBlank { bindingName(tile.action, bindings) }
-            val hint = if (!tile.enabled) "Off" else ""
             val current = active?.tiles?.get(i)
             val visual = if (tile == saved && current != null) current else {
                 val base = current?.face?.takeIf {
                     saved.action == tile.action && saved.icon == tile.icon &&
                         !(saved.label.isNotBlank() && tile.label.isBlank()) && saved.color == tile.color
                 } ?: tile.bindingPreview()
-                tile.present(base, label, if (!tile.enabled) "Disabled" else base?.footer.orEmpty(),
-                    tile.enabled && tile.action != null).toGridTile(true)
+                savedKeyFace(tile, bindings, base)
             }
             // Editing or swapping a readout or unavailable slot must select it, never execute it.
-            visual.copy(enabled = !writer.busy, readOnly = false, selected = false,
-                accessibleName = listOf("Key ${i + 1}", tile.icon, visual.label, hint).filter(String::isNotBlank).joinToString(", "))
+            visual.forEditing(i, tile, !writer.busy)
         }
 
         BoxWithConstraints(modifier.fillMaxSize()) {
@@ -192,20 +189,9 @@ fun LayoutEditor(
                     }
                 } else {
                     if (!wide) TextButton(onClick = { show(Pane.PREVIEW) }) { Text("Back to preview") }
-                    PocketCard { ProfileSettings(profile, deck, decision, writable) { writer.edit(it) } }
-                    PocketCard { RuleSection(profile, deck.profiles, signals, writable, foreground, addApp = { pkg, done ->
-                        writer.edit(DeckEdit.Rules(profile.id, profile.rules, profile.rules +
-                            DeckRule(tel.misa.mxpocket.FOREGROUND_APP, pkg, tel.misa.mxpocket.APP_RULE_WEIGHT)), done)
-                    }, edit = { removingRule = false; rule = it },
-                        remove = { removingRule = true; rule = it }) }
-                    PocketCard("Layout backups", ShellIcon.DOCUMENT) {
-                        EditorNote("Export profiles, pages and context rules together.")
-                        EditorActions {
-                            PocketButton("Export layouts", onExport, icon = ShellIcon.DOWNLOAD, enabled = writable)
-                            PocketButton("Import layouts", { command = Command.IMPORT }, enabled = !writer.busy)
-                            PocketButton("Restore factory layouts", { command = Command.RESTORE }, tone = PocketTone.DANGER, enabled = !writer.busy)
-                        }
-                    }
+                    ProfileOptions(profile, deck, decision, signals, foreground, writer, writable,
+                        edit = { removingRule = false; rule = it }, remove = { removingRule = true; rule = it })
+                    LayoutBackups(writer, writable, onExport) { command = it }
                 }
             }
 
@@ -238,18 +224,7 @@ fun LayoutEditor(
             },
             confirmButton = { TextButton(onClick = ::finishSwap, enabled = !writer.busy) { Text("Done") } })
         rule?.let { i ->
-            // Keep the baseline captured on opening. Never apply an old array index to a new ruleset.
-            val baseline = rememberSaveable(saver = rulesSaver) { profile.rules }
-            val close = { rule = null }
-            val original = baseline.getOrNull(i)
-            if (removingRule && original != null) EditorConfirm("Remove rule?",
-                "${original.signal} = ${original.value} will no longer contribute to ${profile.name}’s score.",
-                "Remove", writable, close) {
-                writer.edit(DeckEdit.Rules(profile.id, baseline, baseline.filterIndexed { n, _ -> n != i }), close)
-            } else RuleDialog(original, signals, writable, close) { updated ->
-                val next = if (i == -1) baseline + updated else baseline.mapIndexed { n, old -> if (n == i) updated else old }
-                writer.edit(DeckEdit.Rules(profile.id, baseline, next), close)
-            }
+            ProfileRuleDialog(profile, signals, writer, writable, i, removingRule) { rule = null }
         }
         command?.let { cmd ->
             CommandDialog(cmd, profile, page, writer, writable, close = { command = null }, onImport,
@@ -257,9 +232,62 @@ fun LayoutEditor(
                 activeProfile = { repo.state.value.activeProfileId })
         }
     }
+    LayoutWriteError(writer)
+}
+
+internal fun savedKeyFace(tile: DeckKey, bindings: List<BindingOption>,
+                         base: KeyTile? = tile.bindingPreview()): KeypadTile =
+    tile.present(base, tile.label.ifBlank { bindingName(tile.action, bindings) },
+        if (!tile.enabled) "Disabled" else base?.footer.orEmpty(), tile.enabled && tile.action != null).toGridTile(true)
+
+internal fun KeypadTile.forEditing(index: Int, key: DeckKey, selectable: Boolean) =
+    copy(enabled = selectable, readOnly = false, selected = false, accessibleName = listOf(
+        "Key ${index + 1}", key.icon, label, if (key.enabled) "" else "Off").filter(String::isNotBlank).joinToString(", "))
+
+@Composable
+internal fun LayoutWriteError(writer: LayoutWriter) {
     writer.error?.let { message ->
         AlertDialog(onDismissRequest = { writer.error = null }, title = { Text("Layout not changed") },
             text = { EditorError(message) }, confirmButton = { TextButton(onClick = { writer.error = null }) { Text("OK") } })
+    }
+}
+
+@Composable
+internal fun ProfileRuleDialog(profile: DeckProfile, signals: Map<String, String>, writer: LayoutWriter,
+                               writable: Boolean, i: Int, removing: Boolean, close: () -> Unit) {
+    // Keep the baseline captured on opening. Never apply an old array index to a new ruleset.
+    val baseline = rememberSaveable(saver = rulesSaver) { profile.rules }
+    val original = baseline.getOrNull(i)
+    if (removing && original != null) EditorConfirm("Remove rule?",
+        "${original.signal} = ${original.value} will no longer contribute to ${profile.name}’s score.",
+        "Remove", writable, close) {
+        writer.edit(DeckEdit.Rules(profile.id, baseline, baseline.filterIndexed { n, _ -> n != i }), close)
+    } else RuleDialog(original, signals, writable, close) { updated ->
+        val next = if (i == -1) baseline + updated else baseline.mapIndexed { n, old -> if (n == i) updated else old }
+        writer.edit(DeckEdit.Rules(profile.id, baseline, next), close)
+    }
+}
+
+@Composable
+internal fun ProfileOptions(profile: DeckProfile, deck: DeckState, decision: DeckDecision, signals: Map<String, String>,
+                            foreground: ForegroundControls?, writer: LayoutWriter, writable: Boolean,
+                            edit: (Int) -> Unit, remove: (Int) -> Unit) {
+    PocketCard { ProfileSettings(profile, deck, decision, writable) { writer.edit(it) } }
+    PocketCard { RuleSection(profile, deck.profiles, signals, writable, foreground, addApp = { pkg, done ->
+        writer.edit(DeckEdit.Rules(profile.id, profile.rules, profile.rules +
+            DeckRule(tel.misa.mxpocket.FOREGROUND_APP, pkg, tel.misa.mxpocket.APP_RULE_WEIGHT)), done)
+    }, edit = edit, remove = remove) }
+}
+
+@Composable
+internal fun LayoutBackups(writer: LayoutWriter, writable: Boolean, onExport: () -> Unit, choose: (Command) -> Unit) {
+    PocketCard("Layout backups", ShellIcon.DOCUMENT) {
+        EditorNote("Export profiles, pages and context rules together.")
+        EditorActions {
+            PocketButton("Export layouts", onExport, icon = ShellIcon.DOWNLOAD, enabled = writable)
+            PocketButton("Import layouts", { choose(Command.IMPORT) }, enabled = !writer.busy)
+            PocketButton("Restore factory layouts", { choose(Command.RESTORE) }, tone = PocketTone.DANGER, enabled = !writer.busy)
+        }
     }
 }
 
@@ -288,9 +316,15 @@ private fun LibraryGroup(
         NavigationDrawerItem(label = { Text(name) }, selected = id == selected, onClick = { if (enabled) select(id) },
             shape = MaterialTheme.shapes.small)
     }
+    ManageMenu("Manage ${title.lowercase()}", commands, enabled, allowed, choose)
+}
+
+@Composable
+internal fun ManageMenu(label: String, commands: List<Command>, enabled: Boolean, allowed: (Command) -> Boolean,
+                        choose: (Command) -> Unit) {
     Box {
         var menu by remember { mutableStateOf(false) }
-        TextButton(onClick = { menu = true }, enabled = enabled) { Text("Manage ${title.lowercase()}") }
+        TextButton(onClick = { menu = true }, enabled = enabled) { Text(label) }
         DropdownMenu(menu, { menu = false }) {
             commands.forEach { command ->
                 DropdownMenuItem(text = { Text(command.title) }, enabled = allowed(command),
@@ -327,7 +361,7 @@ private fun ProfileSettings(profile: DeckProfile, deck: DeckState, decision: Dec
 }
 
 @Composable
-private fun CommandDialog(cmd: Command, profile: DeckProfile, page: DeckPage, writer: Writer, writable: Boolean,
+internal fun CommandDialog(cmd: Command, profile: DeckProfile, page: DeckPage, writer: LayoutWriter, writable: Boolean,
                           close: () -> Unit, onImport: () -> Unit, selectProfile: (String) -> Unit,
                           selectPage: (String) -> Unit, activeProfile: () -> String) {
     when (cmd) {

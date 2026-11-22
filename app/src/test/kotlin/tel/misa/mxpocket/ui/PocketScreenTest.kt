@@ -37,7 +37,7 @@ class PocketScreenTest {
         val tab = mutableStateOf(WorkspaceTab.HOME)
         val events = mutableListOf<PocketScreenEvent>()
         ui.setContent { PocketTheme { PocketWorkspace(tab.value, { tab.value = it }, state.value,
-            emptyList(), events::add, editor = {}, workflows = {}) } }
+            emptyList(), events::add, profiles = {}, workflows = {}) } }
         ui.onNodeWithText(state.value.status).assert(SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite))
         ui.onNodeWithText("Settings").performClick()
         val readout = ui.onNodeWithText(state.value.diagnostics)
