@@ -155,14 +155,13 @@ gh pr create --repo misadeks/MX-Pocket --base main --title "Describe the change"
 ```
 
 Use the PR template, explain behavior and tradeoffs, list actual commands/results,
-and distinguish automated from physical testing. There is no hosted CI. Do not
+and distinguish automated from physical testing. Do not
 add workflows, replacement automation or required status checks as part of an
 unrelated contribution.
 
 ## Merge policy
 
-There are no hosted CI workflows or required automated status checks. Build,
-tests and lint are local contributor checks.
+Build, tests and lint run locally, not in hosted CI.
 
 GitHub main protection requires pull requests, including for administrators,
 with zero required approvals and no status checks. Force pushes and branch

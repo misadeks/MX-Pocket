@@ -98,7 +98,7 @@ class OneNoteAccessService : AccessibilityService() {
         clickNode(target, if (isActive || id == "Shape select") Node.ACTION_LONG_CLICK else Node.ACTION_CLICK)
     } ?: false
 
-    /** The ink toolbar's tools as (description, description); the description is the stable identity. */
+    /** Each pair is an action ID and a display label. Ink tools use their description for both. */
     internal fun toolBar(): List<Pair<String, String>> = withRoot { root ->
         val picker = shapePicker(root)
         if (picker != null) {

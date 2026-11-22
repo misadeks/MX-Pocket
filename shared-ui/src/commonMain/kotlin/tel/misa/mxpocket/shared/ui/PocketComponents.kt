@@ -30,7 +30,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import tel.misa.mxpocket.plugins.IntegrationApp
 
-/** One workspace palette. Dark uses graphite greys with an orange accent; light uses white and pale grey with blue. */
 @Immutable
 internal data class PocketPalette(
     val dark: Boolean,
@@ -97,7 +96,6 @@ internal object PocketColors {
     val dangerStroke: Color @Composable @ReadOnlyComposable get() = p.dangerStroke
 }
 
-/** Compact type scale used by the Stitch screens; touch targets stay at least 48dp. */
 internal val PocketTypography = Typography().let { base ->
     base.copy(
         headlineSmall = base.headlineSmall.copy(fontSize = 24.sp, lineHeight = 30.sp, fontWeight = FontWeight.Bold),
@@ -152,13 +150,11 @@ internal val PocketAccent.ink: Color @Composable get() = Color(if (PocketColors.
         .then(if (focused) Modifier.border(2.dp, PocketColors.accent, shape) else Modifier)
 }
 
-/** Uppercase section label, e.g. "PROFILES" or "SESSION LOG". */
 @Composable internal fun PocketLabel(text: String, modifier: Modifier = Modifier, color: Color = PocketColors.muted) {
     Text(text.uppercase(), modifier, color = color, style = MaterialTheme.typography.labelSmall,
         fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
 }
 
-/** Rounded, outlined surface shared by the workspace tabs. */
 @Composable internal fun PocketCard(
     title: String? = null,
     icon: ShellIcon? = null,
@@ -221,7 +217,7 @@ internal enum class PocketTone {
     }
 }
 
-/** Compact rounded button with an optional leading icon; the touch target remains 48dp. */
+/** Compact mode reduces padding and icon size, not the 48dp touch target. */
 @Composable internal fun PocketButton(
     text: String,
     onClick: () -> Unit,
@@ -248,7 +244,6 @@ internal enum class PocketTone {
     }
 }
 
-/** Switch row with an optional explanation under the title. */
 @Composable internal fun PocketSwitchRow(title: String, subtitle: String? = null, checked: Boolean,
     enabled: Boolean = true, onChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth().heightIn(min = 52.dp)
@@ -265,7 +260,6 @@ internal enum class PocketTone {
     }
 }
 
-/** Tappable settings row: icon tile, title, explanation and a chevron. */
 @Composable internal fun PocketListRow(icon: ShellIcon, title: String, subtitle: String, onClick: () -> Unit) {
     Surface(onClick = onClick, color = PocketColors.inner, shape = RoundedCornerShape(12.dp),
         border = BorderStroke(1.dp, PocketColors.innerStroke), modifier = Modifier.fillMaxWidth()) {
@@ -282,7 +276,6 @@ internal enum class PocketTone {
     }
 }
 
-/** Small monospace tag such as a version, trigger or rule number. */
 @Composable internal fun PocketTag(text: String, color: Color = PocketColors.muted) {
     Text(text, Modifier.clip(RoundedCornerShape(6.dp)).background(PocketColors.control)
         .border(1.dp, PocketColors.buttonStroke, RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp),
