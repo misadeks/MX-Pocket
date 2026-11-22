@@ -25,7 +25,6 @@ import tel.misa.mxpocket.decks.TeamsEvents
 import tel.misa.mxpocket.decks.TeamsToolbarService
 import tel.misa.mxpocket.decks.hasMediaSessionAccess
 import tel.misa.mxpocket.driver.UsbDiagnostics
-import tel.misa.mxpocket.R
 import tel.misa.mxpocket.i18n.AccessCopy
 import tel.misa.mxpocket.i18n.OneNoteCopy
 import tel.misa.mxpocket.i18n.builtInPluginTitle
