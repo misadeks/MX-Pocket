@@ -403,7 +403,7 @@ internal class PocketSession(
         }
         val state = deck.operatingState.value
         val caption = state.activeProfile.displayKeyLabel(state.activePage, state.activePage.keys[index])
-        return key.copy(label = caption).present(tile, actionLabel(call), footer, available)
+        return key.copy(label = caption).present(tile, actionLabel(call), footer, available, onHome = state.activeProfileId == PROFILE_HOME)
     }
 
     fun homeTiles() = (if (callBoard.visible) callBoard.homeFrame() else frame()).keys.mapIndexed { i, tile ->

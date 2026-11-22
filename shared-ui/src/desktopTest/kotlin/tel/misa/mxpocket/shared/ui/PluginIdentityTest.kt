@@ -56,17 +56,48 @@ class PluginIdentityTest {
     @Test fun teamsFallbackMovesDownWithoutMovingTheCaptionOrCustomIcon() {
         val face = TeamsState(installed = true).tile(DeckCommand.TEAMS_OPEN)
         val bitmap = ImageBitmap(118, 118)
-        Canvas(bitmap).paintKeyFace(0, face) { _, _ -> }
+        Canvas(bitmap).paintKeyFace(0, face) { text, _ -> text.center }
         val pixels = bitmap.toPixelMap()
         // Above the conversation outline is clear; its horizontal top stroke crosses y=21.
         assertEquals(0f, pixels[59, 17].alpha, 0f)
         assertTrue(pixels[59, 21].alpha > .9f)
         fun captions(tile: KeyTile) = buildList {
-            Canvas(ImageBitmap(118, 118)).paintKeyFace(0, tile) { text, _ -> add(text) }
+            Canvas(ImageBitmap(118, 118)).paintKeyFace(0, tile) { text, _ -> add(text); text.center }
         }
         val other = face.copy(glyph = IntegrationApp.ONENOTE)
         assertEquals(captions(other), captions(face))
         assertEquals(captions(other.copy(icon = "*")), captions(face.copy(icon = "*")))
+    }
+
+    @Test fun teamsHomeCentersVisiblePixelsAboveTheRenderedLabel() = runDesktopComposeUiTest(150, 150) {
+        val key = defaultDeck().homeProjection(0).activePage.keys.single { it.action?.targetProfileId() == TEAMS }
+        val tiles = listOf(key.present(null, key.label, "", true, onHome = true),
+            key.copy(label = "A longer profile name").present(null, "", "Disabled", false, onHome = true))
+        // The same mark with radically different transparent margins must land in the same place.
+        val icons = listOf(0f to 3f, 36f to 42f).map { (x, y) -> ImageBitmap(64, 64).also {
+            Canvas(it).drawRect(x, y, x + 24f, y + 16f, Paint().apply { color = Color.Cyan })
+        } }
+        val images = mutableListOf<Pair<ImageBitmap, Int>>()
+        setContent {
+            images.clear()
+            for (tile in tiles) for (icon in icons + listOf(null)) {
+                CompositionLocalProvider(LocalIntegrationIcons provides
+                    (icon?.let { mapOf(IntegrationApp.TEAMS to it) } ?: emptyMap())) {
+                    images += rememberKeyPixels(0, tile) to tile.background
+                }
+            }
+        }
+        runOnIdle {
+            for ((image, background) in images) {
+                val pixels = image.toPixelMap()
+                fun ink(x: Int, y: Int) = pixels[x, y].toArgb() != background
+                val rows = (0 until pixels.height).filter { y -> (0 until pixels.width).any { x -> ink(x, y) } }
+                val (markBottom, labelTop) = rows.zipWithNext().first { (a, b) -> b > a + 1 }
+                val xs = (0 until pixels.width).filter { x -> (rows.first()..markBottom).any { y -> ink(x, y) } }
+                assertEquals(58.5, (xs.first() + xs.last()) / 2.0, 1.0)
+                assertEquals(rows.first().toDouble(), (labelTop - markBottom - 1).toDouble(), 3.0)
+            }
+        }
     }
 
     @Test fun unavailablePluginHasANamedDisabledSwitchWithInstalledOrFallbackIdentity() {

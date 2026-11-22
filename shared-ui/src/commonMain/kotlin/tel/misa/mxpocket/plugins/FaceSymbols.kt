@@ -91,11 +91,11 @@ private val symbols: Map<KeyGlyph, List<Mark>> = mapOf(
     DeckGlyph.GAME to outline("M3,6L10,13 M10,6L3,13 M13,15A4,4 0 1,1 21,15A4,4 0 1,1 13,15Z"),
 )
 
-internal fun Canvas.symbol(glyph: KeyGlyph, y: Float, diameter: Float, ink: Color) {
+internal fun Canvas.symbol(glyph: KeyGlyph, y: Float, diameter: Float, ink: Color, viewportCenterX: Float = 12f) {
     val seeking = glyph == PlayerGlyph.BACK_10 || glyph == PlayerGlyph.FORWARD_10
     val size = if (seeking) diameter * 16 / 18 else diameter
     save()
-    translate(59f - size / 2, y - size / 2)
+    translate(59f - size * viewportCenterX / 24f, y - size / 2)
     scale(size / 24, size / 24)
     save()
     if (glyph == PlayerGlyph.PREVIOUS || glyph == PlayerGlyph.BACK_10) {

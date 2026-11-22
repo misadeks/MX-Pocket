@@ -75,6 +75,7 @@ fun rememberKeyPixels(index: Int, face: KeyTile): ImageBitmap {
             canvas.save(); canvas.translate(7f, text.center - layout.size.height / 2f)
             layout.multiParagraph.paint(canvas, color = ink)
             canvas.restore()
+            text.center - layout.size.height / 2f + layout.firstBaseline
         }
         bitmap
     }
