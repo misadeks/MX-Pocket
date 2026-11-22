@@ -124,7 +124,6 @@ internal class PocketSession(
 
     private val main = Handler(Looper.getMainLooper())
     private val physicalKeys = PhysicalChordInput(main)
-    private val pageButtons = PageButtons()
     private data class PluginSlot(val index: Int, val generation: Int)
     private val physicalOwners = arrayOfNulls<PluginSlot>(9)
     private val audio = app.getSystemService(AudioManager::class.java)
@@ -142,6 +141,10 @@ internal class PocketSession(
         .intersect(registeredPlugins.map { it.descriptor.id }.toSet()))
     val disabledPlugins = disabled.asStateFlow()
     val deck = DeckRepository(app, disabled.value)
+    @Volatile private var pageInputEpoch = 0L
+    private val pageButtons = PageButtons(sessionScope, SystemClock::elapsedRealtime,
+        { ViewConfiguration.getLongPressTimeout().toLong() }, ::changePage, deck::showHome,
+        { deck.enterGame().onFailure { message(it.message ?: K.Unavailable.text()) } })
     val phoneAccess = PhoneCallAccess(app)
     private val callBoard = CallBoard(app, deck, phoneAccess::state, phoneAccess::notice, ::retireCallPixels)
     private val phoneUpdate: () -> Unit = { refreshPhoneCall() }
@@ -247,6 +250,7 @@ internal class PocketSession(
         val layout = layout()
         if (layout != lastLayout) {
             physicalKeys.cancel()
+            pageButtons.cancel()
             if (lastLayout?.profile != layout.profile || lastLayout?.page?.id != layout.page.id)
                 screenGeneration++
             lastLayout = layout
@@ -658,7 +662,7 @@ internal class PocketSession(
                 val connected = open(manager, device,
                     { event ->
                         val arrivedAt = SystemClock.elapsedRealtime()
-                        val epoch = receipts.getOrElse(event.controlId - 1) { 0L }
+                        val epoch = receipts.getOrElse(event.controlId - 1) { pageInputEpoch }
                         main.post { if (request == ticket) handleKey(event, arrivedAt, epoch = epoch) }
                     },
                     { line -> main.post { if (request == ticket) log(line) } },
@@ -713,9 +717,7 @@ internal class PocketSession(
             if (event.pressed) "press" else "release")
         when (event.controlId) {
             0x01a1, 0x01a2 -> pageButtons.input(if (event.controlId == 0x01a1) -1 else 1,
-                event.pressed, event.synthetic, ::changePage) {
-                deck.enterGame().onFailure { message(it.message ?: "Game unavailable") }
-            }
+                event.pressed, event.synthetic, arrivedAt) { epoch == pageInputEpoch }
             in 1..9 -> {
                 val index = event.controlId - 1
                 if (!event.pressed || event.synthetic) {
@@ -825,6 +827,8 @@ internal class PocketSession(
     }
 
     fun cancelPhysicalGesture() {
+        pageInputEpoch++
+        pageButtons.cancel()
         if (plugins.chords.isEmpty() && deck.operatingState.value.activePage.keys.none { it.holdAction != null }) return
         physicalKeys.cancel()
         receipts = LongArray(9) // Also reject input posted from the USB thread before this boundary.

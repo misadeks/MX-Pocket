@@ -1,21 +1,64 @@
 package tel.misa.mxpocket.deck
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import tel.misa.mxpocket.actions.ActionCall
 
-/** Resolve a single on release. Once the two controls overlap, consume both until both are up. */
-class PageButtons {
-    private val held = mutableSetOf<Int>()
+/** Confined to the input owner's dispatcher. Measure the overlap, not the first button's dwell. */
+class PageButtons(
+    private val scope: CoroutineScope,
+    private val now: () -> Long,
+    private val longPressMs: () -> Long,
+    private val browse: (Int) -> Unit,
+    private val home: () -> Unit,
+    private val game: () -> Unit,
+) {
+    private val held = mutableMapOf<Int, () -> Boolean>()
     private var consumed = false
-    fun reset() { held.clear(); consumed = false }
-    fun input(delta: Int, down: Boolean, synthetic: Boolean, browse: (Int) -> Unit, game: () -> Unit) {
+    private var deadline: Long? = null
+    private var timer: Job? = null
+
+    fun cancel() {
+        timer?.cancel()
+        timer = null
+        deadline = null
+        consumed = held.isNotEmpty()
+    }
+
+    fun reset() { held.clear(); cancel() }
+
+    fun input(delta: Int, down: Boolean, synthetic: Boolean = false, at: Long = now(), current: () -> Boolean = { true }) {
+        if (synthetic) {
+            if (!down) held.remove(delta)
+            cancel()
+            return
+        }
         if (down) {
-            if (!synthetic && held.add(delta) && held.size == 2 && !consumed) {
+            if (delta in held) return // Keyboard auto-repeat isn't a fresh press.
+            held[delta] = current
+            if (!consumed && held.size == 2) {
                 consumed = true
-                game()
+                val end = at + longPressMs()
+                deadline = end
+                timer = scope.launch {
+                    // Queue even an overdue decision behind releases already delivered by USB.
+                    delay((end - now()).coerceAtLeast(1L))
+                    deadline = null
+                    if (held.values.all { it() }) game()
+                }
             }
-        } else if (held.remove(delta)) {
-            if (!consumed && !synthetic) browse(delta)
-            if (held.isEmpty()) consumed = false
+        } else if (delta in held) {
+            val valid = held.values.all { it() }
+            val end = deadline
+            val single = !consumed
+            held.remove(delta)
+            cancel() // Both chord releases belong to the same decision.
+            if (valid) when {
+                end != null -> if (at < end) home() else game()
+                single -> browse(delta)
+            }
         }
     }
 }

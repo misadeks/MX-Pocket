@@ -21,9 +21,12 @@ Home starts on a nine-key profile launcher. Pick a profile to open its first
 page; **More profiles** shows the next group if there are more than nine.
 **Previous** and **Next** browse Home and the available profile roots. To
 open a submenu such as Teams Call tools, use its assigned key instead.
-Press both page controls together to play Tic Tac Toe (**Page Up** and
-**Page Down** in the Windows simulator). Release both, then press either
-one to exit. The game is not in the regular launcher or editor.
+Press **Previous** and **Next** together and release to return to the keypad’s
+profile launcher. Keep both held instead to open Tic Tac Toe, if enabled.
+The hold starts when the second button goes down and uses Android’s **Touch &
+hold delay** on Android. Release both, then press either one alone to exit the
+game. The game is not in the regular launcher or editor. In the Windows
+simulator, use **Page Up** and **Page Down** on the Home tab for the same gestures.
 
 Turning off a plugin hides its own profile and pages from Home, Profiles and
 the action pickers. Its saved layout returns when you re-enable it in
@@ -77,7 +80,7 @@ key faces as the mirror. Diagnostics distinguish initialization and image
 acknowledgments from visible output. The two physical page keys navigate
 available layouts. Ordinary presses act once; a slot with a Hold binding
 selects Tap or Hold **on release** (500 ms threshold on Windows). Disconnecting
-or changing the layout discards stale input. The two page buttons together open the game; either alone exits it.
+or changing the layout discards stale input.
 
 Choose **Settings → Connect virtual keypad** for clickable Home keys with no
 USB I/O. Phone, Launcher, Studio, Navigation, Teams and OneNote require Android; they

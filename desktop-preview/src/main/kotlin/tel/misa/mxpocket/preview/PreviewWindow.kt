@@ -7,6 +7,7 @@ import tel.misa.mxpocket.i18n.displaySelectionReason
 
 import androidx.compose.runtime.*
 import androidx.compose.ui.input.key.*
+import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.*
@@ -114,13 +115,13 @@ fun main() = application {
     }
     val profile = deck.activeProfile.displayName()
     val page = deck.activeProfile.displayPageName(deck.activePage)
+    var keyboard by remember { mutableStateOf<((Int, Boolean) -> Unit)?>(null) }
     Window({ scope.launch { usb.close(); exitApplication() }; Unit }, title = "$profile - MX Pocket",
         state = rememberWindowState(width = 1120.dp, height = 760.dp),
         onPreviewKeyEvent = {
-            if (!setup && simulating && tab == WorkspaceTab.HOME && it.key in listOf(Key.PageUp, Key.PageDown)) {
-                host.pageButtons.input(if (it.key == Key.PageUp) -1 else 1, it.type == KeyEventType.KeyDown, false,
-                    { delta -> host.cycle(delta) },
-                    { repo.enterGame().onFailure { error -> status(error.message ?: tel.misa.mxpocket.i18n.KeypadCopy.Unavailable.text()) } })
+            val input = keyboard
+            if (input != null && it.key in listOf(Key.PageUp, Key.PageDown)) {
+                input(if (it.key == Key.PageUp) -1 else 1, it.type == KeyEventType.KeyDown)
                 true
             } else if (it.type == KeyEventType.KeyUp && it.key == Key.Escape) {
                 when {
@@ -132,8 +133,20 @@ fun main() = application {
             } else false
         }) {
         PreviewTheme(themeMode) {
-        val acceptsPageKeys = LocalWindowInfo.current.isWindowFocused && !setup && simulating && tab == WorkspaceTab.HOME
-        DisposableEffect(acceptsPageKeys) { onDispose { host.pageButtons.reset() } }
+        val longPressMs = LocalViewConfiguration.current.longPressTimeoutMillis
+        val windowInfo = LocalWindowInfo.current
+        val acceptsPageKeys = windowInfo.isWindowFocused && !setup && simulating && tab == WorkspaceTab.HOME
+        if (acceptsPageKeys) DisposableEffect(longPressMs) {
+            val buttons = host.pageButtons(scope, longPressMs, ::status)
+            keyboard = { delta, down ->
+                val surface = repo.operatingState.value
+                buttons.input(delta, down) {
+                    windowInfo.isWindowFocused && host.simulator && !setup && tab == WorkspaceTab.HOME &&
+                        surface === repo.operatingState.value
+                }
+            }
+            onDispose { buttons.reset(); keyboard = null }
+        }
         val profiles = deck.visibleProfiles.map { ProfileChoice(it.id, it.displayName(), profileReason(it.id)) }
         val board = remember(deck, time, revision, simulating, usb.ready, tel.misa.mxpocket.i18n.AppLocale.current) { host.board(time, deck) }
         val pixels = board.faces.mapIndexed { i, face -> rememberKeyPixels(i, face) }
@@ -190,7 +203,7 @@ fun main() = application {
                 val dispatch: (PocketScreenEvent) -> Unit = { event ->
                 try {
                     when (event) {
-                        PocketScreenEvent.ToggleConnection -> usb.toggle()
+                        PocketScreenEvent.ToggleConnection -> usb.toggle(longPressMs)
                         PocketScreenEvent.Repaint -> if (usb.ready) { repaint++; status(H.Redrawing.text()) }
                         PocketScreenEvent.EnterPreview -> if (!usb.active) { host.simulator = true; status(W.VirtualConnected.text()) }
                         PocketScreenEvent.StopPreview -> { host.simulator = false; status(W.VirtualDisconnected.text()) }
