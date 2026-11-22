@@ -123,7 +123,7 @@ class PocketScreenTest {
     }
 
     @GraphicsMode(GraphicsMode.Mode.NATIVE)
-    @Test fun liveMirrorRestoresActionsAfterReadOnlyAudioWithOrWithoutArtwork() {
+    @Test fun liveMirrorRestoresActionsAfterReadOnlyAudioWithOrWithoutKeyImages() {
         val scenes = UiPreviewScenes(app)
         val events = mutableListOf<PocketScreenEvent>()
         val image = androidx.compose.ui.graphics.ImageBitmap(118, 118)
@@ -133,7 +133,7 @@ class PocketScreenTest {
             val frame = scenes.state(scene)
             ui.runOnIdle {
                 events.clear()
-                state.value = frame.copy(tiles = frame.tiles.map { it.copy(image = image) }, panelArt = art)
+                state.value = frame.copy(tiles = frame.tiles.map { it.copy(image = art) })
             }
             frame.tiles.forEachIndexed { i, tile ->
                 val node = ui.onNodeWithContentDescription(tile.accessibleName ?:

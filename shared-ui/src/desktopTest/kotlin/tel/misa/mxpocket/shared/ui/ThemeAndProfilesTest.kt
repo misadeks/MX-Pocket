@@ -103,9 +103,8 @@ class ThemeAndProfilesTest {
         val before = repo.state.value.activePage.keys
         ui.onNodeWithText("Swap keys").performScrollTo().performClick()
         ui.onNodeWithTag("swap-grid").performTouchInput {
-            val unit = width / 480f
-            val top = (height - width) / 2f
-            swipe(Offset(82 * unit, top + 65 * unit), Offset(240 * unit, top + 65 * unit), 400)
+            val unit = height / 561f
+            swipe(Offset(115 * unit, 116 * unit), Offset(240 * unit, 116 * unit), 400)
         }
         assertSwapped(repo, before, 0, 1)
         ui.onNodeWithText("Drag a key onto another", substring = true).assertExists()
