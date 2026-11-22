@@ -114,7 +114,8 @@ class PocketScreenTest {
                 ui.onNodeWithContentDescription("Mute, Sound on, 6 / 15").assertExists()
                 ui.onNodeWithContentDescription("Now playing, Night train, Paused").assertHasNoClickAction()
             }
-            assertEquals((if (scene == "audio") 0..5 else 0..8).map { PocketScreenEvent.TapKey(it) }, events)
+            val actionable = if (scene == "audio") (0..5).toList() else listOf(0, 2, 3, 5, 6, 7, 8)
+            assertEquals(actionable.map { PocketScreenEvent.TapKey(it) }, events)
         }
     }
 }

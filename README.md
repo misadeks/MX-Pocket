@@ -28,7 +28,7 @@ Choose **Audio** on Home or use **Next page**. The same shared Compose screens
 run on Android and Windows: **Home** operates the keys; **Keypad** edits the
 saved layout. Resize the editor to switch between the single-pane phone layout
 and the wide navigation/preview/editor layout. Windows stores its own layouts
-under the user's local application data. Focus and both X-O game modes run locally, media
+under the user's local application data. Focus and both Tic Tac Toe game modes run locally, media
 is simulated, and no USB, Android camera, accessibility or permission actions run.
 
 ## What is implemented
@@ -44,7 +44,7 @@ is simulated, and no USB, Android camera, accessibility or permission actions ru
   USB attach handling and a foreground service for an active keypad, device
   and endpoint diagnostics, connection/cancellation/detach handling, bounded
   event log with user-selected file export, custom image picker, and dynamic
-  Focus, Audio, Phone, Launcher, Studio, Navigation and X-O game controls. See the
+  Focus, Audio, Phone, Launcher, Studio, Navigation and Tic Tac Toe game controls. See the
   [Android deck walkthrough](docs/android-decks.md) and [workflow guide](docs/workflows.md).
 - The Material 3 workspace includes Home, Keypad, Plugins, Flows and Settings.
   Profiles, page history, pins, rules and individual key bindings are saved
@@ -95,11 +95,11 @@ The phone layout/theme and safe debug-only UI fixtures are described in
 [Contributing: phone UI](CONTRIBUTING.md#phone-ui-layout-and-safe-preview).
 This is separate from **Connect virtual keypad**, which executes phone actions.
 
-The registry is `BuiltInPlugins.create()`. It includes a nine-key X-O game with
+The registry is `BuiltInPlugins.create()`. It includes a nine-key Tic Tac Toe game with
 single-player against a simple computer opponent and local 1v1 modes. Choose a
 mode on the keypad; each key then becomes a board square. After a win or draw,
 tap any key to choose a mode again.
-The X-O profile is added to older layouts only when both the profile count and
+The Tic Tac Toe profile is added to older layouts only when both the profile count and
 the 512 KiB file limit allow it, without changing the selection or bindings.
 Deleting the profile keeps it out of saved layouts and exported backups. Saved profiles reference stable
 actions rather than registry positions. See [plugin authoring](docs/plugins.md).
@@ -238,7 +238,7 @@ finishes. Close on detach, cancellation or your chosen lifecycle boundary.
 4. Confirm text appears on **all nine physical LCD buttons** and remains
    visible for at least 60 seconds without logo fallback. On factory layouts,
    press Next from Focus: verify Audio, Phone, Launcher, Studio, Navigation,
-   X-O, then Focus again. Press Previous to wrap back to X-O. Choose each X-O
+   Tic Tac Toe, then Focus again. Press Previous to wrap back to Tic Tac Toe. Choose each Tic Tac Toe
    mode and play several moves using only the keypad. On saved
    layouts, single-page profiles cycle in workspace order; in a multi-page
    profile the buttons navigate its pages, with Previous retracing page history

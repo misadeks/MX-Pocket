@@ -8,11 +8,11 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class TicTacToePluginTest {
     @Test fun soloModePlaysAgainstComputerAndReturnsToModePickerAfterGame() = runTest {
-        val engine = PluginEngine(listOf(TicTacToePlugin("X-O")), this, { testScheduler.currentTime },
+        val engine = PluginEngine(listOf(TicTacToePlugin("Tic Tac Toe")), this, { testScheduler.currentTime },
             { AudioSnapshot(0, 0) }, { _, _ -> }, {}, { _, error -> throw AssertionError(error) })
         engine.setEnabled(true)
-        assertEquals("1 PLAYER", engine.render().keys[0].label)
-        assertEquals("2 PLAYERS", engine.render().keys[2].label)
+        assertEquals("1 Player", engine.render().keys[0].label)
+        assertEquals("2 Players", engine.render().keys[2].label)
 
         tap(engine, 0)
         tap(engine, 0)
@@ -21,15 +21,15 @@ class TicTacToePluginTest {
         tap(engine, 1)
         assertEquals("O", engine.render().keys[2].label) // The computer blocks X's top row.
         tap(engine, 3)
-        assertEquals("CPU WINS - ANY KEY FOR MODES", engine.render().keys[0].footer)
+        assertEquals("CPU wins", engine.render().keys[0].footer)
 
         tap(engine, 8)
-        assertEquals("1 PLAYER", engine.render().keys[0].label)
+        assertEquals("1 Player", engine.render().keys[0].label)
         engine.close()
     }
 
     @Test fun localTwoPlayerModeAlternatesMarksWithoutComputerMoves() = runTest {
-        val engine = PluginEngine(listOf(TicTacToePlugin("X-O")), this, { testScheduler.currentTime },
+        val engine = PluginEngine(listOf(TicTacToePlugin("Tic Tac Toe")), this, { testScheduler.currentTime },
             { AudioSnapshot(0, 0) }, { _, _ -> }, {}, { _, error -> throw AssertionError(error) })
         engine.setEnabled(true)
 
@@ -38,20 +38,20 @@ class TicTacToePluginTest {
         var frame = engine.render()
         assertEquals("X", frame.keys[0].label)
         assertEquals("5", frame.keys[4].label)
-        assertEquals("O TURN - 1V1", frame.keys[0].footer)
+        assertEquals("O to play", frame.keys[0].footer)
         tap(engine, 0) // An occupied square does not consume O's turn.
-        assertEquals("O TURN - 1V1", engine.render().keys[0].footer)
+        assertEquals("O to play", engine.render().keys[0].footer)
         tap(engine, 4)
         tap(engine, 1)
         tap(engine, 5)
         tap(engine, 2)
         frame = engine.render()
         assertEquals("X", frame.keys[2].label)
-        assertEquals("X WINS - ANY KEY FOR MODES", frame.keys[0].footer)
+        assertEquals("X wins", frame.keys[0].footer)
 
         tap(engine, 8)
         tap(engine, 0)
-        assertEquals("YOUR TURN", engine.render().keys[0].footer)
+        assertEquals("Your turn", engine.render().keys[0].footer)
         engine.close()
     }
 

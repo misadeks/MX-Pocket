@@ -1,5 +1,7 @@
 package tel.misa.mxpocket.plugins
 
+const val TIC_TAC_TOE_TITLE = "Tic Tac Toe"
+
 /** A keypad-only tic-tac-toe game. The player is X; the built-in opponent is O. */
 class TicTacToeGame {
     data class Cell(val label: String, val footer: String, val background: Int)
@@ -21,10 +23,10 @@ class TicTacToeGame {
     fun cells(): List<Cell> {
         if (mode == null) return List(9) { index ->
             when (index) {
-                0 -> Cell("1 PLAYER", "VS COMPUTER", 0xff194375.toInt())
-                2 -> Cell("2 PLAYERS", "LOCAL 1V1", 0xff49345f.toInt())
-                4 -> Cell("X-O", "CHOOSE A MODE", 0xff303d48.toInt())
-                else -> Cell("", "CHOOSE A MODE", 0xff303d48.toInt())
+                0 -> Cell("1 Player", "vs computer", 0xff194375.toInt())
+                2 -> Cell("2 Players", "Local 1v1", 0xff49345f.toInt())
+                4 -> Cell(TIC_TAC_TOE_TITLE, "Choose a mode", 0xff303d48.toInt())
+                else -> Cell("", "", 0xff303d48.toInt())
             }
         }
         return board.mapIndexed { index, mark ->
@@ -36,6 +38,14 @@ class TicTacToeGame {
             })
         }
     }
+
+    fun frame() = PluginFrame(cells().mapIndexed { index, cell ->
+        val picking = mode == null
+        val inert = if (picking) index != 0 && index != 2 else result == Result.PLAYING && board[index] != EMPTY
+        val restart = result != Result.PLAYING && index == 7
+        KeyTile(cell.label, if (restart) "Tap for modes" else cell.footer, cell.background, readOnly = inert, quietFace = true,
+            showFooter = index == 4 || picking && !inert || restart, showLabel = cell.label.isNotBlank())
+    }, interactionPage)
 
     fun press(index: Int): Boolean {
         if (mode == null) {
@@ -68,10 +78,10 @@ class TicTacToeGame {
     }
 
     private fun footer() = when (result) {
-        Result.PLAYING -> if (mode == Mode.SINGLE_PLAYER) "YOUR TURN" else "$turn TURN - 1V1"
-        Result.X_WON -> if (mode == Mode.SINGLE_PLAYER) "YOU WIN - ANY KEY FOR MODES" else "X WINS - ANY KEY FOR MODES"
-        Result.O_WON -> if (mode == Mode.SINGLE_PLAYER) "CPU WINS - ANY KEY FOR MODES" else "O WINS - ANY KEY FOR MODES"
-        Result.DRAW -> "DRAW - ANY KEY FOR MODES"
+        Result.PLAYING -> if (mode == Mode.SINGLE_PLAYER) "Your turn" else "$turn to play"
+        Result.X_WON -> if (mode == Mode.SINGLE_PLAYER) "You win" else "X wins"
+        Result.O_WON -> if (mode == Mode.SINGLE_PLAYER) "CPU wins" else "O wins"
+        Result.DRAW -> "Draw"
     }
 
     private fun resetBoard() {

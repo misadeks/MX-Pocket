@@ -8,6 +8,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.decks.DeckCommand
+import tel.misa.mxpocket.plugins.TIC_TAC_TOE_TITLE
 
 /** Strict token types, bounded depth and collections, and duplicate/unknown field rejection. */
 object DeckJson {
@@ -70,11 +71,16 @@ object DeckJson {
 
     private fun profile(obj: JSONObject): DeckProfile {
         obj.fields("id", "name", "rootPageId", "pages", "automatic", "rules")
+        val id = obj.string("id")
+        val root = obj.string("rootPageId")
+        fun title(name: String) = if (id == "game.xo" && name == "X-O") TIC_TAC_TOE_TITLE else name
         return DeckProfile(
-            obj.string("id"), obj.string("name"), obj.string("rootPageId"),
+            id, title(obj.string("name")), root,
             obj.array("pages") {
                 it.fields("id", "name", "keys")
-                DeckPage(it.string("id"), it.string("name"), it.array("keys", ::key))
+                val pageId = it.string("id")
+                val name = it.string("name")
+                DeckPage(pageId, if (pageId == root) title(name) else name, it.array("keys", ::key))
             },
             obj.get("automatic") as Boolean,
             obj.array("rules") {
@@ -99,6 +105,8 @@ object DeckJson {
 
     private fun serialize(deck: DeckState): String {
         val profiles = deck.profiles.map { profile ->
+            // Keep the original wire spelling: an existing max-size backup must still round trip.
+            fun title(name: String) = if (profile.id == "game.xo" && name == TIC_TAC_TOE_TITLE) "X-O" else name
             val pages = profile.pages.map { page ->
                 val keys = page.keys.map { key ->
                     val call = key.action?.let {
@@ -107,12 +115,13 @@ object DeckJson {
                     JSONObject().put("icon", key.icon).put("label", key.label).put("color", key.color)
                         .put("action", call ?: JSONObject.NULL).put("enabled", key.enabled)
                 }
-                JSONObject().put("id", page.id).put("name", page.name).put("keys", JSONArray(keys))
+                JSONObject().put("id", page.id).put("name", if (page.id == profile.rootPageId) title(page.name) else page.name)
+                    .put("keys", JSONArray(keys))
             }
             val rules = profile.rules.map {
                 JSONObject().put("signal", it.signal).put("value", it.value).put("weight", it.weight)
             }
-            JSONObject().put("id", profile.id).put("name", profile.name).put("rootPageId", profile.rootPageId)
+            JSONObject().put("id", profile.id).put("name", title(profile.name)).put("rootPageId", profile.rootPageId)
                 .put("pages", JSONArray(pages)).put("automatic", profile.automatic).put("rules", JSONArray(rules))
         }
         val histories = JSONObject()

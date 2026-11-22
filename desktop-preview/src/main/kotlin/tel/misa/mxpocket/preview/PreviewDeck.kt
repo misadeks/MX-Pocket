@@ -60,7 +60,7 @@ class PreviewDeck(val repository: DeckRepository) {
             "audio" -> when (command) {
                 DeckCommand.MUTE, DeckCommand.UNMUTE -> 1
                 DeckCommand.MEDIA_ACCESS, DeckCommand.VOLUME_LEVEL -> -1
-                else -> audioCommands.indexOf(command)
+                else -> audioSlots.indexOf(command)
             }
             "navigation" -> navigationCommands.indexOf(command)
             else -> return null
@@ -86,7 +86,9 @@ class PreviewDeck(val repository: DeckRepository) {
         }
         val native = when (action?.plugin) {
             "focus" -> focus.present(now).keys[action.index]
-            "phone" -> phoneFrame().keys[action.index]
+            "phone" -> phoneFrame().keys[action.index].let { tile ->
+                if (action.index in 6..7 || tile.readOnly) tile else tile.copy(enabled = false, footer = "Android only")
+            }
             "audio" -> {
                 val i = action.index
                 val level = VolumeLevel(if (muted) 0 else volume, 15, muted)
@@ -104,25 +106,17 @@ class PreviewDeck(val repository: DeckRepository) {
                     7 -> if (playing) "Playing" else "Paused"
                     else -> ""
                 }, 0xff303438.toInt(), glyph = glyph, primary = i == 4, volumeLevel = level.takeIf { i == 1 },
+                    showLabel = i == 7 || glyph == null, showFooter = glyph == null, playerFace = glyph != null,
                     readOnly = i == 7 || action.command == DeckCommand.VOLUME_LEVEL,
-                    enabled = i < 6 && action.command != DeckCommand.MEDIA_ACCESS)
+                    enabled = (i < 6 || i == 7) && action.command != DeckCommand.MEDIA_ACCESS)
             }
-            "game.xo" -> xo.cells()[action.index].let {
-                KeyTile(it.label.ifEmpty { "-" }, it.footer, it.background, enabled = it.label.isNotEmpty() && it.label != "X-O")
-            }
-            "studio" -> KeyTile(dynamic.orEmpty(), "Android only", 0xff49345f.toInt())
-            "navigation" -> KeyTile(dynamic.orEmpty(), when (action.index) {
-                2 -> "Needs access"
-                7 -> "System nav off"
-                else -> "Android only"
-            }, when (action.index) {
-                4 -> 0xffa6e4ce.toInt()
-                3, 5, 6, 8 -> 0xff245650.toInt()
-                else -> 0xff263943.toInt()
-            }, enabled = action.index != 2, glyph = listOf(NavigationGlyph.BACK, NavigationGlyph.HOME,
-                NavigationGlyph.RECENTS, NavigationGlyph.UP, NavigationGlyph.SELECT, NavigationGlyph.DOWN,
-                NavigationGlyph.PREVIOUS_FOCUS, NavigationGlyph.ACCESS_INFO, NavigationGlyph.NEXT_FOCUS)[action.index])
-            "launcher" -> KeyTile(dynamic.orEmpty(), "Android only", 0xff384674.toInt())
+            "game.xo" -> xo.frame().keys[action.index]
+            "studio" -> KeyTile(dynamic.orEmpty(), "Android only", 0xff49345f.toInt(), enabled = false,
+                glyph = listOf(DeckGlyph.CAMERA, DeckGlyph.VIDEO, DeckGlyph.STOP, null, null, null, DeckGlyph.VIDEO,
+                    DeckGlyph.CAMERA, DeckGlyph.SETTINGS)[action.index], showLabel = dynamic != "-", showFooter = dynamic != "-", quietFace = true)
+            "navigation" -> navigationCommands[action.index].navigationFace(systemAccess = null)
+            "launcher" -> KeyTile(dynamic.orEmpty(), "Android only", 0xff384674.toInt(), enabled = false,
+                showLabel = dynamic != "-", showFooter = dynamic != "-", quietFace = true)
             else -> null
         }
         val navigation = assigned?.id in setOf(DeckActions.PAGE, DeckActions.PROFILE, DeckActions.BACK, DeckActions.ROOT)
@@ -201,8 +195,4 @@ class PreviewDeck(val repository: DeckRepository) {
             else "$label in preview only. Windows media is unchanged."
     }
 
-    private companion object {
-        val audioCommands = listOf(DeckCommand.QUIETER, DeckCommand.MUTE, DeckCommand.LOUDER, DeckCommand.PREVIOUS,
-            DeckCommand.PLAY, DeckCommand.NEXT, DeckCommand.BACK_10, null, DeckCommand.FORWARD_10)
-    }
 }

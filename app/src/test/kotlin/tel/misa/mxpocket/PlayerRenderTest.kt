@@ -23,6 +23,9 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import tel.misa.mxpocket.decks.*
+import tel.misa.mxpocket.actions.ActionCall
+import tel.misa.mxpocket.deck.DeckActions
+import tel.misa.mxpocket.deck.DeckKey
 import tel.misa.mxpocket.driver.HidSession
 import tel.misa.mxpocket.driver.KeypadProtocol
 import tel.misa.mxpocket.driver.MxKeypad
@@ -165,6 +168,32 @@ class PlayerRenderTest {
             File("build/reports/player-preview/$name.png").apply {
                 parentFile?.mkdirs(); outputStream().use { mirror.compress(Bitmap.CompressFormat.PNG,100,it) }
             }
+        }
+        // Keep review sheets tied to the actual encoder and display windows, not a design mock.
+        images.useArtwork(null)
+        val menu = listOf("Focus", "Audio", "Navigation", "My tools", "Studio", "Phone", "Back", "Root", TIC_TAC_TOE_TITLE)
+            .mapIndexed { index, label ->
+                val call = when (index) {
+                    3 -> ActionCall(DeckActions.PAGE, mapOf(DeckActions.PAGE_ID to "tools"))
+                    6 -> ActionCall(DeckActions.BACK)
+                    7 -> ActionCall(DeckActions.ROOT)
+                    else -> ActionCall(DeckActions.PROFILE, mapOf(DeckActions.PROFILE_ID to
+                        if (index == 8) "game.xo" else label.lowercase()))
+                }
+                DeckKey(action = call).present(null, label, "", true)
+            }
+        assertEquals(menu.size, menu.map { it.glyph }.distinct().size)
+        val game = TicTacToeGame()
+        val picker = game.frame()
+        game.press(2); game.press(0); game.press(4)
+        for ((name, frame) in mapOf("folder-menu" to menu, "focus" to FocusTimer().present(0).keys,
+            "tic-tac-toe" to picker.keys, "tic-tac-toe-board" to game.frame().keys)) {
+            val keys = frame.mapIndexed { index, tile ->
+                val bytes = encoder.encodeKeyJpeg(index, images.image(index, tile))
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            }
+            val panel = board.render(frame, keys)
+            File("build/reports/player-preview/$name.png").outputStream().use { panel.compress(Bitmap.CompressFormat.PNG, 100, it) }
         }
         encoder.close()
     }

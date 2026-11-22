@@ -10,6 +10,19 @@ On a phone (including a narrow split-screen window), selecting a key in
 window keeps profile/page navigation and the board alongside the detail pane.
 Controls on **Home** execute runtime actions; controls in **Keypad** edit only.
 
+Home groups the connection, profiles and current page. The physical Android
+host lists the nine LCD labels; connecting the virtual keypad shows the
+interactive board instead. On wide windows the controls sit beside the page;
+narrow windows stack them above it. Windows does not offer USB, image-upload
+or Android permission controls.
+
+The LCD and workspace draw the same key faces in the nine 118-pixel windows:
+transport symbols and a live mute rail for Audio, outlined symbols and names
+for navigation and folders, larger type for readouts. The active editor preview
+uses the live images, including cover art, but a click there always selects the
+slot for editing. Custom labels, icon text and colors belong to the saved key,
+not its position. Other pages can be edited without activating their plugins.
+
 Layout format 2 upgrades the factory Audio page to the music-player key order.
 On import or load, format 1 Audio slots on customized pages retain their old
 command meanings, labels, and icons. Existing `media.*` actions and workflows

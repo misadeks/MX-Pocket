@@ -166,7 +166,7 @@ class KeypadPaintTest {
                 mapOf("pluginId" to "game.xo", "index" to "0")))).getOrThrow()
             p.session.selectProfile(custom); main.idle()
             p.expectAll()
-            assertEquals("1 PLAYER", p.session.frame().keys[0].label)
+            assertEquals("1 Player", p.session.frame().keys[0].label)
             p.grids.clear(); p.writes.clear(); p.pause = true
             p.press(1)
             assertEquals(listOf<Int?>(null), p.grids)

@@ -5,7 +5,6 @@ package tel.misa.mxpocket.shared.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -13,8 +12,6 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
@@ -22,6 +19,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import tel.misa.mxpocket.deck.*
+import tel.misa.mxpocket.plugins.present
+import tel.misa.mxpocket.plugins.bindingPreview
 
 private enum class Pane { LIBRARY, PREVIEW, SETTINGS, KEY }
 private enum class Command(val title: String) {
@@ -68,6 +67,7 @@ fun LayoutEditor(
     onImport: () -> Unit,
     modifier: Modifier = Modifier,
     foreground: ForegroundControls? = null,
+    live: PocketScreenState? = null,
     backHandler: @Composable (enabled: Boolean, onBack: () -> Unit) -> Unit = { _, _ -> },
 ) {
     val deck by repo.state.collectAsState()
@@ -125,7 +125,7 @@ fun LayoutEditor(
             }
 
             val library: @Composable () -> Unit = {
-                EditorHeading("Layouts")
+                WorkspaceTitle("Layouts")
                 EditorNote("On deck: ${deck.activeProfile.name} / ${deck.activePage.name}")
                 LibraryGroup("Profile", deck.profiles.map { it.id to it.name }, profile.id, !writer.busy, ::selectProfile,
                     listOf(Command.CREATE_PROFILE, Command.COPY_PROFILE, Command.RENAME_PROFILE, Command.DELETE_PROFILE),
@@ -144,28 +144,42 @@ fun LayoutEditor(
                 if (!wide) TextButton(onClick = { show(Pane.PREVIEW) }) { Text("Back to preview") }
             }
             val preview: @Composable () -> Unit = {
-                if (!wide) OutlinedButton(onClick = { show(Pane.LIBRARY) }, enabled = !writer.busy) {
-                    Text("${profile.name} / ${page.name} ▾")
-                } else EditorNote("${profile.name} / ${page.name}")
-                EditorHeading("Key positions")
+                WorkspaceTitle("Keypad layout")
+                PocketCard {
+                    PocketLabel("Profile / Page")
+                    if (!wide) PocketButton("${profile.name} / ${page.name} ▾", { show(Pane.LIBRARY) },
+                        Modifier.fillMaxWidth(), PocketStyle.accent(profile.id).icon, enabled = !writer.busy)
+                    else Text("${profile.name} / ${page.name}", style = MaterialTheme.typography.titleMedium)
+                }
+                PocketCard("Key positions", trailing = { PocketTag("3 × 3") }) {
                 EditorNote(when {
                     !swapping -> "Choose a key to edit. Preview taps never run actions."
                     swapFrom == null -> "Choose the first key to swap."
                     else -> "Choose a second key to swap with key ${swapFrom!! + 1}."
                 })
-                val surface = MaterialTheme.colorScheme.surface
+                val active = live?.takeIf { it.activeId == profile.id && it.activePageId == page.id }
                 val tiles = page.keys.mapIndexed { i, saved ->
                     val tile = if (index == i && draft != null) draft.preview() else saved
                     val label = tile.label.ifBlank { bindingName(tile.action, bindings) }
-                    val footer = listOfNotNull(if (!tile.enabled) "Off" else null, when (i) {
+                    val hint = listOfNotNull(if (!tile.enabled) "Off" else null, when (i) {
                         swapFrom -> "First for swap"
                         index -> "Editing"
                         else -> null
                     }).joinToString(" · ")
-                    KeypadTile(listOf(tile.icon, label).filter { it.isNotBlank() }.joinToString(" "), footer,
-                        Color(tile.color).compositeOver(surface), enabled = !writer.busy)
+                    val current = active?.tiles?.get(i)
+                    val visual = if (tile == saved && current != null) current else {
+                        val base = current?.face?.takeIf {
+                            saved.action == tile.action && saved.icon == tile.icon &&
+                                !(saved.label.isNotBlank() && tile.label.isBlank()) && saved.color == tile.color
+                        } ?: tile.bindingPreview()
+                        tile.present(base, label, if (!tile.enabled) "Disabled" else base?.footer.orEmpty(),
+                            tile.enabled && tile.action != null).toGridTile(true)
+                    }
+                    // Editing a readout or unavailable slot must select it, never execute it.
+                    visual.copy(enabled = !writer.busy, readOnly = false, selected = index == i || swapFrom == i,
+                        accessibleName = listOf("Key ${i + 1}", tile.icon, visual.label, hint).filter(String::isNotBlank).joinToString(", "))
                 }
-                KeypadGrid(tiles, { i, down -> if (!down && !writer.busy) pickKey(i) })
+                KeypadGrid(tiles, { i, down -> if (!down && !writer.busy) pickKey(i) }, panelArt = active?.panelArt)
                 EditorActions {
                     TextButton(onClick = {
                         if (swapping) finishSwap() else { show(Pane.PREVIEW); swapping = true }
@@ -185,9 +199,9 @@ fun LayoutEditor(
                         }
                     }
                 }
-                if (!wide || index != null) OutlinedButton(onClick = { show(Pane.SETTINGS) }, enabled = !writer.busy) {
-                    Text("Profile settings and rules")
                 }
+                if (!wide || index != null) PocketButton("Profile settings and rules", { show(Pane.SETTINGS) },
+                    Modifier.fillMaxWidth(), ShellIcon.SETTINGS, enabled = !writer.busy)
                 repo.loadError?.let { EditorError("$it. Recover in Layout backups under profile settings.") }
                 repo.cleanupWarning?.let {
                     EditorError(it)
@@ -202,20 +216,19 @@ fun LayoutEditor(
                     }
                 } else {
                     if (!wide) TextButton(onClick = { show(Pane.PREVIEW) }) { Text("Back to preview") }
-                    ProfileSettings(profile, deck, decision, writable) { writer.edit(it) }
-                    HorizontalDivider()
-                    RuleSection(profile, deck.profiles, signals, writable, foreground, addApp = { pkg, done ->
+                    PocketCard { ProfileSettings(profile, deck, decision, writable) { writer.edit(it) } }
+                    PocketCard { RuleSection(profile, deck.profiles, signals, writable, foreground, addApp = { pkg, done ->
                         writer.edit(DeckEdit.Rules(profile.id, profile.rules, profile.rules +
                             DeckRule(tel.misa.mxpocket.FOREGROUND_APP, pkg, tel.misa.mxpocket.APP_RULE_WEIGHT)), done)
                     }, edit = { removingRule = false; rule = it },
-                        remove = { removingRule = true; rule = it })
-                    HorizontalDivider()
-                    EditorHeading("Layout backups")
-                    EditorNote("Export profiles, pages and context rules together.")
-                    EditorActions {
-                        OutlinedButton(onClick = onExport, enabled = writable) { Text("Export layouts") }
-                        OutlinedButton(onClick = { command = Command.IMPORT }, enabled = !writer.busy) { Text("Import layouts") }
-                        TextButton(onClick = { command = Command.RESTORE }, enabled = !writer.busy) { Text("Restore factory layouts") }
+                        remove = { removingRule = true; rule = it }) }
+                    PocketCard("Layout backups", ShellIcon.DOCUMENT) {
+                        EditorNote("Export profiles, pages and context rules together.")
+                        EditorActions {
+                            PocketButton("Export layouts", onExport, icon = ShellIcon.DOWNLOAD, enabled = writable)
+                            PocketButton("Import layouts", { command = Command.IMPORT }, enabled = !writer.busy)
+                            PocketButton("Restore factory layouts", { command = Command.RESTORE }, tone = PocketTone.DANGER, enabled = !writer.busy)
+                        }
                     }
                 }
             }
@@ -308,12 +321,10 @@ private fun ProfileSettings(profile: DeckProfile, deck: DeckState, decision: Dec
     val pinnedName = deck.profiles.find { it.id == deck.pinnedProfileId }?.name
     EditorNote("Default: $defaultName · " + (pinnedName?.let { "Pinned: $it" } ?: "Not pinned"))
     EditorActions {
-        OutlinedButton(onClick = { edit(DeckEdit.Pin(if (pinned) null else profile.id)) }, enabled = writable) {
-            Text(if (pinned) "Unpin profile" else "Pin this profile")
-        }
-        TextButton(onClick = { edit(DeckEdit.Default(profile.id)) }, enabled = writable && profile.id != deck.defaultProfileId) {
-            Text("Set as default")
-        }
+        PocketButton(if (pinned) "Unpin profile" else "Pin this profile", { edit(DeckEdit.Pin(if (pinned) null else profile.id)) },
+            icon = ShellIcon.PIN, tone = PocketTone.ACCENT, enabled = writable)
+        PocketButton("Set as default", { edit(DeckEdit.Default(profile.id)) }, icon = ShellIcon.STAR,
+            enabled = writable && profile.id != deck.defaultProfileId)
     }
     EditorSwitch("Automatic profile switching", deck.automatic, writable) { edit(DeckEdit.Automatic(it)) }
     EditorSwitch("Include ${profile.name} in automatic switching", profile.automatic, writable) {
@@ -379,11 +390,7 @@ internal fun EditorActions(content: @Composable FlowRowScope.() -> Unit) {
 
 @Composable
 internal fun EditorSwitch(label: String, checked: Boolean, enabled: Boolean, set: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).toggleable(checked, enabled = enabled, role = Role.Switch, onValueChange = set),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-        Switch(checked = checked, enabled = enabled, onCheckedChange = null)
-    }
+    PocketSwitchRow(label, checked = checked, enabled = enabled, onChange = set)
 }
 
 @Composable

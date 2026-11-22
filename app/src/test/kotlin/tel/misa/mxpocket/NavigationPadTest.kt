@@ -69,6 +69,12 @@ class NavigationPadTest {
                 ReflectionHelpers.callInstanceMethod<Unit>(service, "onServiceConnected")
                 main.idleFor(Duration.ofSeconds(1))
                 val on = render()
+                for ((name, panel) in mapOf("navigation-off" to off, "navigation-on" to on)) {
+                    java.io.File("build/reports/player-preview/$name.png").apply {
+                        parentFile.mkdirs()
+                        outputStream().use { panel.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                    }
+                }
                 assertFalse(off.sameAs(on))
                 key("Access info, System nav on").assertExists()
                 key("Recents").assertIsEnabled().performClick()
