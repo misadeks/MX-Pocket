@@ -95,6 +95,15 @@ pause. The key press does not prove playback changed. When player state is
 available, the app uses it to render the key face and sends the image to the
 driver. The driver handles images and key events, not tracks or layouts.
 
+On Android, a saved layout's `plugin.key` binding names a plugin by its stable
+ID and selects one of its nine slots (0–8). `PluginEngine` delivers presses
+and releases to the active plugin using that slot, not the key's physical
+position. On a plugin switch or disconnect, the engine cancels the activation's
+tasks and sends a release for each held key. A plugin can request an
+Android action through `PluginHost`. For the display, it returns nine logical
+`KeyTile` values; the app renders the bound tiles as images and the driver
+sends them over USB.
+
 - [`:mx-driver`](mx-driver) is a standalone Android library (AAR). It opens
   the wired keypad through Android USB Host with the user's permission. The
   [JVM protocol sources](mx-driver/src/jvmShared/kotlin) handle input reports
