@@ -12,6 +12,7 @@ fun Canvas.paintKeyFace(
     photoInk: ((Int, Int, Int, Int) -> Color)? = null,
     caption: (FaceCaption, Color) -> Unit,
 ) {
+    if (tile.backgroundOnly) return
     val glyph = tile.glyph
     // Audio transports own the center of a key; named actions share Navigation's caption baseline.
     val player = tile.playerFace

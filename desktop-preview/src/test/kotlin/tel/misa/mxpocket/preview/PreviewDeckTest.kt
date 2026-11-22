@@ -18,6 +18,24 @@ import tel.misa.mxpocket.shared.ui.PocketScreenEvent
 
 class PreviewDeckTest {
     @get:Rule val folder = TemporaryFolder()
+    @Test fun unavailableSeekSkipsCustomAndLabelOnlyFacesWithoutUnbindingTheKey() {
+        val repo = DeckRepository(File(folder.root, "deck.json"))
+        val deck = PreviewDeck(repo)
+        deck.select("audio")
+        val seek = DeckKey(label = "Jump", icon = "J", color = 0xff254c69.toInt(), action = ActionCall(DeckCommand.FORWARD_10.id))
+        repo.setKey("audio", "root", 0, seek).getOrThrow()
+        val board = deck.board(0)
+        for (i in listOf(0, 6, 8)) {
+            check(board.faces[i].backgroundOnly && !board.grid.taps[i].actionable)
+        }
+        assertEquals(seek.color, board.faces[0].background)
+        assertEquals(seek, repo.state.value.activePage.keys[0])
+        // A host reporting only a disabled label must not resurrect the saved icon or key number.
+        val labelOnly = board.faces[6].copy(glyph = null, showLabel = true)
+        val legacySeek = repo.state.value.activePage.keys[6]
+        check(legacySeek.present(labelOnly, "Seek back", "Unavailable", false).backgroundOnly)
+    }
+
     @Test fun manualTeamsPageNeverSimulatesALiveMeetingOrMicToggle() {
         val repo = DeckRepository(File(folder.root, "deck.json"))
         val deck = PreviewDeck(repo)

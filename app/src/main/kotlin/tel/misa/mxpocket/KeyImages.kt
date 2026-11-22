@@ -55,7 +55,7 @@ internal class KeyImages(private val appIcon: (String) -> Bitmap?) {
             val region = KeypadProtocol.keyRegion(index)
             val src = Rect(region.x, region.y, region.x + region.width, region.y + region.height)
             canvas.drawBitmap(art, src, Rect(0, 0, bitmap.width, bitmap.height), Paint(Paint.FILTER_BITMAP_FLAG))
-            if (!tile.enabled) canvas.drawColor(0x55000000)
+            if (!tile.enabled && !tile.backgroundOnly) canvas.drawColor(0x55000000)
         } else backdrop?.let {
             canvas.drawBitmap(it, 0f, 0f, null)
             canvas.drawColor(0xab000000.toInt())
