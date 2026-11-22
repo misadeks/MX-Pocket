@@ -102,7 +102,7 @@ class BuiltInPluginsTest {
             { testScheduler.currentTime }, { AudioSnapshot(0, 15) },
             { action, _ -> actions += action }, {}, { _, error -> throw AssertionError(error) },
             MutableStateFlow(DeckState()),
-            readActiveTool = { toolbar[0].second }, readToolBar = { toolbar })
+            readActiveTool = { toolbar[2].second }, readToolBar = { toolbar })
         fun tap(index: Int) {
             engine.key(PluginKeyEvent(index, true))
             engine.key(PluginKeyEvent(index, false))
@@ -112,14 +112,17 @@ class BuiltInPluginsTest {
         runCurrent()
         val tiles = engine.render().keys
         assertEquals(9, tiles.size)
-        assertEquals("Yellow highl", tiles[0].label) // active pen and More options are not keys
-        assertEquals("Stroke Eraser", tiles[1].label)
-        assertEquals("", tiles[2].label)
-        assertFalse(tiles[2].enabled)
-        tap(0)
+        assertEquals("", tiles[0].label) // top-left slot is OneNote's current-tool preview: blank
+        assertFalse(tiles[0].enabled)
+        assertEquals("Yellow highl", tiles[1].label) // toolbar minus preview and More options
+        assertEquals("Stroke Eraser", tiles[2].label)
+        assertEquals(0xffa56eff.toInt(), tiles[2].background) // active tool keeps its slot, highlighted
+        assertEquals(0xff7719aa.toInt(), tiles[1].background)
+        assertEquals("", tiles[3].label)
+        tap(1)
         assertEquals(listOf(PluginAction.AccessibilityClick(toolbar[1].first)), actions)
         actions.clear()
-        tap(2) // blank key does nothing
+        tap(0) // blank top-left key does nothing
         assertTrue(actions.isEmpty())
         engine.close()
     }

@@ -93,20 +93,23 @@ class OneNotePlugin(title: String) : PocketPlugin {
         }
     }
 
-    // Keys map to the toolbar minus the active tool (it is already in use) and More options.
-    private fun selectable() = tools.filter { it.second != active && it.second != "More options" }
+    // Keys map to the toolbar minus its first entry (OneNote's current-tool preview, always
+    // top-left) and minus More options; the active tool keeps its palette slot, highlighted.
+    private fun selectable() = tools.drop(1).filter { it.second != "More options" }
 
     override fun render(nowMillis: Long): PluginFrame {
         val labels = MutableList(9) { "" }
-        selectable().take(9).forEachIndexed { i, tool -> labels[i] = shortLabel(tool.second) }
-        return PluginFrame(labels.map { label ->
-            KeyTile(label, "ONENOTE", 0xff7719aa.toInt(), enabled = label.isNotBlank())
+        selectable().take(9).forEachIndexed { i, tool -> labels[i + 1] = shortLabel(tool.second) }
+        return PluginFrame(labels.mapIndexed { index, label ->
+            val isActive = selectable().getOrNull(index - 1)?.second == active
+            KeyTile(label, "ONENOTE", if (isActive) 0xffa56eff.toInt() else 0xff7719aa.toInt(),
+                enabled = label.isNotBlank())
         })
     }
 
     override fun onKey(event: PluginKeyEvent, host: PluginHost) {
         if (!event.pressed || event.synthetic) return
-        val tool = selectable().getOrNull(event.index) ?: return
+        val tool = selectable().getOrNull(event.index - 1) ?: return
         host.dispatch(PluginAction.AccessibilityClick(tool.first))
         host.scope.launch {
             delay(300) // OneNote updates its accessibility tree shortly after the click.
