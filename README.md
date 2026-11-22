@@ -106,7 +106,8 @@ driver. The driver handles images and key events, not tracks or layouts.
   not USB. Connecting the keypad does not grant notification or accessibility access.
 - [`:shared-ui`](shared-ui/src/commonMain) renders the same Compose screens
   on Android and Windows. Screens receive state and send typed events back to
-  the host; the host performs platform actions. Android Home is a read-only mirror.
+  the host; the host performs platform actions. On Android Home, the nine key
+  tiles mirror the keypad but do not execute its actions.
 - [`:desktop-preview`](desktop-preview) is the Windows host. For a wired keypad
   it uses the same protocol sources over native Windows HID, not the Android
   AAR. Its clickable simulator needs no USB and cannot verify physical LCD output.

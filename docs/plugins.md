@@ -35,8 +35,9 @@ A `KeyTile` contains a label, footer and ARGB background color. Ordinary keys
 keep their key number unless an icon is supplied. The built-in Audio page uses
 monochrome player symbols instead. Labels remain available to accessibility
 even on icon-only controls. Read-only tiles do not dispatch input.
-On Android, Home is a read-only mirror of the live LCDs, including user backgrounds. Tapping a
-key in Profiles edits its saved binding rather than running it.
+On Android Home, the nine tiles mirror the live LCDs, including user
+backgrounds, without sending key presses. Tapping a key in Profiles edits
+its saved binding rather than running it.
 The driver scales, JPEG-encodes and uploads images. Plugins must not
 allocate/recycle host images or import `MxKeypad`/raw USB.
 
