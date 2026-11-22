@@ -376,9 +376,9 @@ class KeypadSessionTest {
             assertEquals(id, session.plugins.selectedId)
         }
         expectProfile("focus")
-        val remaining = listOf("audio", "phone", "launcher", "studio", "navigation", "game.xo")
+        val remaining = listOf("audio", "phone", "launcher", "studio", "navigation", "game.xo", "onenote")
         for (id in remaining + "focus") {
-            if (id == "focus") {
+            if (id == "onenote") {
                 press(0x01a2); expectProfile("teams")
                 press(0x01a2); assertEquals("in-call", session.deck.state.value.activePage.id)
             }

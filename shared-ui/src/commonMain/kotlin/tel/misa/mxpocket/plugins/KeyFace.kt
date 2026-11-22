@@ -70,7 +70,7 @@ fun Canvas.paintKeyFace(
         }, 2, true), captionInk)
     }
     if (footer) caption(FaceCaption(tile.footer, if (label) 100f else 94f, 15f, 1, false), subdued)
-    tile.volumeLevel?.fraction?.let { level ->
+    (tile.levelFraction ?: tile.volumeLevel?.fraction)?.coerceIn(0f, 1f)?.let { level ->
         val y = if (label) 74f else 85f
         val color = photoInk?.invoke(28, y.toInt()-2, 90, y.toInt()+2) ?: ink
         p.color = if (color == Color.Black) Color(0xffeeeeee) else Color(0xff1b1d20)

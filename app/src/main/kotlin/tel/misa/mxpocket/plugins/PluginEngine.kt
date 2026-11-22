@@ -21,6 +21,9 @@ class PluginEngine(
     private val invalidateUi: () -> Unit,
     private val reportError: (String, Throwable) -> Unit,
     private val observeDecks: StateFlow<DeckState> = MutableStateFlow(DeckState()),
+    private val readActiveTool: () -> String? = { null },
+    private val readToolBar: () -> List<Pair<String, String>> = { emptyList() },
+    private val readOneNoteSettings: () -> OneNoteSettings? = { null },
 ) : Closeable {
     private val entries = plugins.toList()
     val descriptors: List<PluginDescriptor> = entries.map { it.descriptor }
@@ -164,6 +167,25 @@ class PluginEngine(
             check(current()) { "Plugin activation expired" }
             return observeDecks
         }
+        override val activeTool: String? get() {
+            check(current()) { "Plugin activation expired" }
+            require(PluginCapability.ACCESSIBILITY in descriptor.capabilities) {
+                "Plugin did not declare ACCESSIBILITY capability"
+            }
+            return readActiveTool()
+        }
+        override val toolBar: List<Pair<String, String>> get() {
+            check(current()) { "Plugin activation expired" }
+            require(PluginCapability.ACCESSIBILITY in descriptor.capabilities) {
+                "Plugin did not declare ACCESSIBILITY capability"
+            }
+            return readToolBar()
+        }
+        override val oneNoteSettings: OneNoteSettings? get() {
+            check(current()) { "Plugin activation expired" }
+            require(PluginCapability.ACCESSIBILITY in descriptor.capabilities)
+            return readOneNoteSettings()
+        }
         override fun invalidate() { if (current()) invalidateUi() }
         override fun audioSnapshot(): AudioSnapshot {
             check(current()) { "Plugin activation expired" }
@@ -175,7 +197,9 @@ class PluginEngine(
             val capability = when (action) {
                 is PluginAction.Deck -> action.command.capability()
                 is PluginAction.Volume, is PluginAction.Media -> PluginCapability.AUDIO
-                is PluginAction.OpenApp -> PluginCapability.OPEN_APPS
+                is PluginAction.OpenApp, is PluginAction.OpenUri, is PluginAction.ShareText ->
+                    PluginCapability.OPEN_APPS
+                is PluginAction.AccessibilityClick, is PluginAction.OneNoteSetting -> PluginCapability.ACCESSIBILITY
                 is PluginAction.SelectPlugin -> PluginCapability.NAVIGATION
                 PluginAction.CompletionTone -> PluginCapability.TONE
                 PluginAction.Repaint -> null

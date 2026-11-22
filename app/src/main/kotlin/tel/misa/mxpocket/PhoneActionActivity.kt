@@ -88,6 +88,9 @@ internal fun Context.launchShortcut(target: PocketSession.Target): String? {
         is PocketSession.Target.FavoriteApp -> intentForFavoriteShortcut(target.component,
             (applicationContext as PocketApplication).session.favoriteApps) ?: return "Favorite shortcut is no longer available."
         is PocketSession.Target.Studio -> viewfinder(target.mode) ?: return "No default camera viewfinder for this mode."
+        is PocketSession.Target.Uri -> Intent(Intent.ACTION_VIEW, Uri.parse(target.uri))
+        is PocketSession.Target.Share -> Intent(Intent.ACTION_SEND).setType("text/plain")
+            .putExtra(Intent.EXTRA_TEXT, target.text)
     }
     return startShortcut(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 }
@@ -122,6 +125,8 @@ internal fun Context.launchPhoneApp(app: PhoneApp): String? {
         PhoneApp.DIALER -> Intent(Intent.ACTION_DIAL, Uri.parse("tel:"))
         PhoneApp.WEB -> Intent(Intent.ACTION_VIEW, Uri.parse("https://www.logitech.com/"))
         PhoneApp.ALARMS -> Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS)
+        PhoneApp.ONENOTE -> packageManager.getLaunchIntentForPackage("com.microsoft.office.onenote")
+            ?: return "OneNote is not installed."
     }
     // Keep external apps out of the notification entry Activity's temporary task.
     if (this !is MainActivity) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
