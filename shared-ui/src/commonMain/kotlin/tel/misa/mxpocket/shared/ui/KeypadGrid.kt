@@ -37,6 +37,7 @@ data class KeypadTile(
 
 fun KeyTile.toGridTile(inputEnabled: Boolean, image: ImageBitmap? = null): KeypadTile {
     val name = when {
+        detail.isNotBlank() -> listOf(label, detail, footer)
         glyph == PlayerGlyph.TRACK && readOnly -> listOf("Now playing", label, footer)
         volumeLevel != null -> listOf(label, if (volumeLevel.muted) "Muted" else "Sound on", volumeLevel.description, footer)
         glyph is NavigationGlyph || glyph is PlayerGlyph && !showLabel -> listOf(label, footer)

@@ -59,7 +59,7 @@ internal typealias OpenKeypad = suspend (UsbManager, UsbDevice, (KeyEvent) -> Un
 internal class PocketSession(
     private val app: Context,
     registeredPlugins: List<PocketPlugin> = BuiltInPlugins.create(app.getString(R.string.focus),
-        app.getString(R.string.audio), app.getString(R.string.phone), app.getString(R.string.xo), app.getString(R.string.onenote)),
+        app.getString(R.string.audio), app.getString(R.string.phone), app.getString(R.string.xo), app.getString(R.string.onenote), app.resources),
     private val usageDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val usageTimeMillis: () -> Long = System::currentTimeMillis,
     private val open: OpenKeypad = { manager, device, event, log, error ->

@@ -40,4 +40,19 @@
     <string name="previous">Previous page</string>
     <string name="next">Next page</string>
     <string name="repaint">Repaint all nine LCDs</string>
+    <string name="note_pen">Pen</string>
+    <string name="note_highlighter">Highlighter</string>
+    <string name="note_named_pen">%1$s pen</string>
+    <string name="note_named_highlighter">%1$s highlighter</string>
+    <string name="note_selected">Selected</string>
+    <string name="note_unknown_selection">Selection unknown</string>
+    <string name="note_unknown_ink">Ink unknown</string>
+    <string name="note_size">Font size</string>
+    <string name="note_styles">Styles</string>
+    <string name="note_thickness">Thickness</string>
+    <string name="note_color">Color</string>
+    <string name="note_previous">Previous</string>
+    <string name="note_next">Next</string>
+    <string name="note_cancel">Cancel</string>
+    <string name="note_back">Back</string>
 </resources>

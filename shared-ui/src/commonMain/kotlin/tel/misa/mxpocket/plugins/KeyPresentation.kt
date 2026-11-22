@@ -21,7 +21,8 @@ data class KeyTile(val label: String, val footer: String, val background: Int,
     val icon: String = "", val enabled: Boolean = true, val glyph: KeyGlyph? = null,
     val readOnly: Boolean = false, val showLabel: Boolean = true, val showFooter: Boolean = true,
     val primary: Boolean = false, val volumeLevel: VolumeLevel? = null, val quietFace: Boolean = false,
-    val playerFace: Boolean = false, val levelFraction: Float? = null)
+    val playerFace: Boolean = false, val levelFraction: Float? = null, val selection: KeySelection? = null,
+    val detail: String = "")
 
 data class PluginFrame(val keys: List<KeyTile>, val page: Int = 0) {
     init { require(keys.size == 9) { "A plugin frame must contain exactly nine keys" } }
@@ -132,11 +133,16 @@ val audioSlots = listOf(DeckCommand.QUIETER, DeckCommand.MUTE, DeckCommand.LOUDE
 /** Identical override order for the LCD, phone mirror and offline desktop host. */
 fun DeckKey.present(native: KeyTile?, fallbackLabel: String, footer: String, available: Boolean): KeyTile {
     val title = label.ifBlank { native?.label ?: fallbackLabel }
+    val unavailableNote = !available && action?.id == "plugin.key" && action.params["pluginId"] == "onenote" &&
+        (native?.quietFace != true || label.isNotBlank())
     return (native ?: KeyTile(title, footer, color)).copy(label = title, footer = footer,
-        glyph = native?.glyph ?: bindingGlyph(), quietFace = native?.quietFace == true || action == null && label.isBlank(),
+        glyph = if (unavailableNote) OneNoteLegend(OneNoteMark.UNAVAILABLE) else native?.glyph ?: bindingGlyph(),
+        selection = native?.selection?.takeIf { available }, detail = native?.detail.orEmpty().takeIf { available }.orEmpty(),
+        quietFace = native?.quietFace == true || action == null && label.isBlank(),
         showLabel = label.isNotBlank() || (action != null || native != null) && native?.showLabel != false,
         // Hide repeated deck names, not an explicit status update for this physical key.
-        showFooter = native?.showFooter != false || !native.playerFace && footer.isNotBlank() && footer != native.footer,
+        showFooter = !(native?.quietFace == true && action?.params?.get("pluginId") == "onenote" && label.isBlank()) &&
+            (native?.showFooter != false || !native.playerFace && footer.isNotBlank() && footer != native.footer),
         background = if (!available) 0xff494c51.toInt() else if (color == DeckKey().color) native?.background ?: color else color,
         icon = icon.ifBlank { native?.icon.orEmpty() }, enabled = available)
 }

@@ -133,8 +133,8 @@ class OneNoteAccessService : AccessibilityService() {
                     "Red" -> 0xffff0000; "Green" -> 0xff008000; "Dark Purple" -> 0xff800080
                     "Light Yellow" -> 0xffffff99; "Light Green" -> if (occurrence == 0) 0xffccffcc else 0xff92d050
                     "Sky Blue" -> 0xffccffff; "Rose" -> 0xffff99cc; "Pale Blue" -> 0xff99ccff
-                    "Teal" -> 0xff33cccc; "Lavender" -> 0xffcc99ff; else -> 0xff7719aa
-                }.toInt()
+                    "Teal" -> 0xff33cccc; "Lavender" -> 0xffcc99ff; else -> null
+                }?.toInt()
             } else emptyList()
             nodes.forEach { it.recycle() }
             return@withRoot if (colors.isEmpty()) null else OneNoteSettings(colors, colors.getOrNull(selectedIndex),
