@@ -141,6 +141,7 @@ fun LayoutEditor(
                     writer.error != null -> writer.error = null
                     command != null -> command = null
                     rule != null -> rule = null
+                    draft?.pendingColor != null -> draft.pendingColor = null
                     draft?.picking != null -> draft.picking = null
                     swapping -> finishSwap()
                     else -> show(Pane.PREVIEW)
