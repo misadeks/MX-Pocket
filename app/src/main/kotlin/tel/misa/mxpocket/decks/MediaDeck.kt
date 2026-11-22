@@ -2,9 +2,7 @@ package tel.misa.mxpocket.decks
 
 import tel.misa.mxpocket.i18n.KeypadCopy as K
 
-import android.app.NotificationManager
 import android.content.BroadcastReceiver
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -20,37 +18,26 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
-import android.service.notification.NotificationListenerService
 import android.view.KeyEvent
 import androidx.core.content.ContextCompat
 import tel.misa.mxpocket.isUnlockedAndInteractive
+import tel.misa.mxpocket.NotificationAccess
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runInterruptible
-
-/** A component token for getActiveSessions. No posted/removed callbacks, notification queries or exports. */
-class MediaSessionAccess : NotificationListenerService() {
-    override fun onListenerConnected() { changes.update { it + 1 } }
-    override fun onListenerDisconnected() { changes.update { it + 1 } }
-    companion object { internal val changes = MutableStateFlow(0L) }
-}
-
-internal fun Context.hasMediaSessionAccess(): Boolean = getSystemService(NotificationManager::class.java)
-    .isNotificationListenerAccessGranted(ComponentName(this, MediaSessionAccess::class.java))
 
 internal class MediaDeck(private val app: Context, private val canShowTrack: () -> Boolean) {
     private val audio = app.getSystemService(AudioManager::class.java)
     private val manager = app.getSystemService(MediaSessionManager::class.java)
     private var activeWatch: Watch? = null
     fun refreshDisplay() { activeWatch?.refresh() }
-    private val token = ComponentName(app, MediaSessionAccess::class.java)
-    private val access get() = app.hasMediaSessionAccess()
+    private val notifications = NotificationAccess(app)
+    private val token = notifications.component
+    private val access get() = notifications.music && notifications.granted
     private fun basic() = MediaDeckState(volume = audio.getStreamVolume(AudioManager.STREAM_MUSIC),
         maximum = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC), fixedVolume = audio.isVolumeFixed,
         muted = audio.isStreamMute(AudioManager.STREAM_MUSIC))
@@ -71,7 +58,7 @@ internal class MediaDeck(private val app: Context, private val canShowTrack: () 
             app.contentResolver.registerContentObserver(Settings.System.CONTENT_URI, true, volume)
             try {
                 activeWatch = watch
-                launch { MediaSessionAccess.changes.collect { watch.reconnect() } }
+                launch { NotificationAccess.mediaChanges.collect { watch.reconnect() } }
                 // Recover missed settings/grant notifications and incomplete metadata without polling faster.
                 while (true) { delay(2000); watch.refresh(probeMissing = true) }
             } finally {

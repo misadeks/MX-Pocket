@@ -11,11 +11,50 @@ import org.junit.Test
 import org.junit.Assert.assertEquals
 import java.io.File
 import tel.misa.mxpocket.FocusTimer
+import tel.misa.mxpocket.deck.PROFILE_HOME
 import tel.misa.mxpocket.deck.defaultDeck
 import tel.misa.mxpocket.plugins.present
 
 @OptIn(ExperimentalTestApi::class)
 class WorkspaceRenderTest {
+    @Test fun offlineHomeUsesOneStablePickerForProfilesAndTheLauncher() {
+        for (desktop in listOf(false, true)) runDesktopComposeUiTest(if (desktop) 1120 else 390, 940) {
+            val launcher = PocketScreenState("Disconnected", "Home / Profile launcher",
+                FocusTimer().present(0).keys.map { it.toGridTile(false) }, emptyList(), PROFILE_HOME,
+                reason = "Choose a profile", simulator = if (desktop) DesktopSimulator("Windows") else null)
+            val profile = ProfileChoice("custom", "Desk")
+            val state = mutableStateOf(launcher)
+            val selections = mutableListOf<String>()
+            setContent {
+                PocketTheme { HomeScreen(state.value) { event ->
+                    check(event is PocketScreenEvent.SelectPlugin)
+                    selections += event.id
+                    state.value = if (event.id == PROFILE_HOME) launcher.copy(profiles = listOf(profile))
+                        else state.value.copy(activeId = profile.id, pluginTitle = profile.name, reason = "Manually selected")
+                } }
+            }
+            val picker = onNodeWithText("Switch layout")
+            picker.assertIsNotEnabled()
+            onNodeWithText("Choose a profile").assertDoesNotExist()
+            runOnIdle { state.value = launcher.copy(profiles = listOf(profile)) }
+            onNodeWithText("Desk").assertDoesNotExist()
+            val pickerBounds = picker.fetchSemanticsNode().boundsInRoot
+            val key = onNodeWithContentDescription("Key 1, Start, Focus")
+            val keyBounds = key.assertHasNoClickAction().fetchSemanticsNode().boundsInRoot
+            picker.performClick()
+            onNode(hasText("Profile launcher") and isSelected()).assertExists()
+            onNodeWithText("Desk").performClick()
+            onNodeWithText("Manually selected").assertExists()
+            assertEquals(pickerBounds, picker.fetchSemanticsNode().boundsInRoot)
+            assertEquals(keyBounds, key.assertHasNoClickAction().fetchSemanticsNode().boundsInRoot)
+            picker.performClick()
+            onNode(hasText("Desk") and isSelected()).assertExists()
+            onNodeWithText("Profile launcher").performClick()
+            onNodeWithText("Choose a profile").assertDoesNotExist()
+            assertEquals(listOf(profile.id, PROFILE_HOME), selections)
+        }
+    }
+
     @Test fun switchingLayoutsKeepsNavigationAndKeypadInPlace() {
         for ((width, fontScale) in listOf(390 to 1f, 390 to 1.6f, 1120 to 1f)) runDesktopComposeUiTest(width, 940) {
             val short = PocketScreenState("Not connected", "Focus", FocusTimer().present(0).keys.map { it.toGridTile(false) },

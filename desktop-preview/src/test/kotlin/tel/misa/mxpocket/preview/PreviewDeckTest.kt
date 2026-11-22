@@ -121,6 +121,7 @@ class PreviewDeckTest {
     @Test fun holdOnlyPluginUsesFallbackOwnerAndRejectsEventsFromAnEarlierBoard() {
         val repo = DeckRepository(File(folder.root, "deck.json"))
         val deck = PreviewDeck(repo).apply { simulator = true }
+        repo.selectProfile("focus").getOrThrow()
         val page = repo.createPage("focus", "Hold only").getOrThrow()
         val audio = DeckKey(holdAction = ActionCall("plugin.key", mapOf("pluginId" to "audio", "index" to "2")))
         repo.setKey("focus", page, 0, audio).getOrThrow()
@@ -329,7 +330,7 @@ class PreviewDeckTest {
         repo.openPage(child).getOrThrow()
         val backup = repo.exportJson()
         host.setPluginEnabled("audio", false)
-        assertEquals("focus", host.profileId)
+        assertEquals("launcher", host.profileId)
         check(host.profiles.any { it.first == copy } && host.profiles.none { it.first == "audio" || it.first == "game.xo" })
         check(repo.selectProfile("audio").isFailure && repo.setDefault("audio").isFailure)
         assertEquals(backup, repo.exportJson())

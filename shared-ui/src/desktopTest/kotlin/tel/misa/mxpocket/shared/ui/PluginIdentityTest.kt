@@ -53,6 +53,22 @@ class PluginIdentityTest {
         assertNull(oneNote.copy(action = ActionCall("phone.open", mapOf("app" to "CAMERA"))).bindingGlyph())
     }
 
+    @Test fun teamsFallbackMovesDownWithoutMovingTheCaptionOrCustomIcon() {
+        val face = TeamsState(installed = true).tile(DeckCommand.TEAMS_OPEN)
+        val bitmap = ImageBitmap(118, 118)
+        Canvas(bitmap).paintKeyFace(0, face) { _, _ -> }
+        val pixels = bitmap.toPixelMap()
+        // Above the conversation outline is clear; its horizontal top stroke crosses y=21.
+        assertEquals(0f, pixels[59, 17].alpha, 0f)
+        assertTrue(pixels[59, 21].alpha > .9f)
+        fun captions(tile: KeyTile) = buildList {
+            Canvas(ImageBitmap(118, 118)).paintKeyFace(0, tile) { text, _ -> add(text) }
+        }
+        val other = face.copy(glyph = IntegrationApp.ONENOTE)
+        assertEquals(captions(other), captions(face))
+        assertEquals(captions(other.copy(icon = "*")), captions(face.copy(icon = "*")))
+    }
+
     @Test fun unavailablePluginHasANamedDisabledSwitchWithInstalledOrFallbackIdentity() {
         for (theme in listOf(ThemeMode.DARK, ThemeMode.LIGHT)) runDesktopComposeUiTest(600, 610) {
             val installed = ImageBitmap(32, 32).also {

@@ -1,17 +1,16 @@
 package tel.misa.mxpocket.decks
 
 import android.app.Notification
-import android.app.NotificationManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Process
 import android.os.UserManager
-import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.view.accessibility.AccessibilityManager
+import tel.misa.mxpocket.NotificationAccess
 
 @Suppress("DEPRECATION")
 internal fun Context.teamsLauncher(): Intent? {
@@ -22,12 +21,11 @@ internal fun Context.teamsLauncher(): Intent? {
 }
 
 internal class TeamsAccess(private val app: Context) {
-    private val prefs = app.getSharedPreferences("teams-call", Context.MODE_PRIVATE)
+    private val notifications = NotificationAccess(app)
     var enabled: Boolean
-        get() = prefs.getBoolean("observe", true)
-        set(value) { prefs.edit().putBoolean("observe", value).apply() }
-    val granted get() = app.getSystemService(NotificationManager::class.java)
-        .isNotificationListenerAccessGranted(ComponentName(app, TeamsCallListener::class.java))
+        get() = notifications.teams
+        set(value) { notifications.teams = value }
+    val granted get() = notifications.granted
     val toolbarGranted get() = app.getSystemService(AccessibilityManager::class.java)
         .getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK).any {
             val service = it.resolveInfo.serviceInfo
@@ -71,33 +69,4 @@ internal fun teamsObservation(notifications: Array<StatusBarNotification>): Team
         Notification.CallStyle.CALL_TYPE_SCREENING -> TeamsObservation.Screening
         else -> TeamsObservation.Untyped
     }
-}
-
-class TeamsCallListener : NotificationListenerService() {
-    companion object { internal var current: TeamsCallListener? = null; private set }
-    internal var boundary = 0L
-        private set
-    override fun onListenerConnected() { current = this; TeamsEvents.refresh?.invoke() }
-    override fun onListenerDisconnected() { clear() }
-    override fun onDestroy() { clear(); super.onDestroy() }
-    private fun clear() {
-        if (current === this) { current = null; TeamsEvents.refresh?.invoke() }
-    }
-    override fun onNotificationPosted(sbn: StatusBarNotification) {
-        if (localTeams(sbn)) TeamsEvents.refresh?.invoke()
-    }
-    override fun onNotificationRemoved(sbn: StatusBarNotification) {
-        if (localTeams(sbn)) {
-            // A key may immediately be reused; invalidate even if a successor is already in the snapshot.
-            if (sbn.key == observedKey) boundary++
-            TeamsEvents.refresh?.invoke()
-        }
-    }
-    private var observedKey: String? = null
-    internal fun snapshot(): TeamsObservation = try {
-        (activeNotifications?.let(::teamsObservation) ?: TeamsObservation.Unavailable).also {
-            observedKey = (it as? TeamsObservation.Ongoing)?.key
-        }
-    } catch (_: SecurityException) { TeamsObservation.Unavailable }
-    internal fun forget() { observedKey = null }
 }

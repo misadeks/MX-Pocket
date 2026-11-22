@@ -1,6 +1,5 @@
 package tel.misa.mxpocket
 
-import android.content.ComponentName
 import android.os.UserManager
 import android.provider.Settings
 import androidx.compose.ui.test.*
@@ -20,27 +19,26 @@ import tel.misa.mxpocket.decks.*
 class TeamsSetupTest {
     @get:Rule val ui = createAndroidComposeRule<TeamsAccessActivity>()
 
-    @Test fun callStatusDefaultsOnAndRemembersEitherChoiceWithoutGrantingAndroidAccess() {
+    @Test fun callStatusDefaultsOffAndRemembersEitherChoiceWithoutGrantingAndroidAccess() {
         val activity = ui.activity
         val access = TeamsAccess(activity)
-        assertTrue(access.enabled)
+        assertFalse(access.enabled)
         shadowOf(activity.getSystemService(UserManager::class.java)).addProfile(0, 10, "Work", ShadowUserManager.FLAG_MANAGED_PROFILE)
         ui.activityRule.scenario.recreate()
         ui.onNodeWithText(CallStatus.NO_KEYPAD.detail).assertExists()
         ui.onNodeWithText("With multiple Android profiles", substring = true).assertExists()
-        ui.onNodeWithText("Turn off Teams call status").performScrollTo().assertIsEnabled().performClick()
-        ui.activityRule.scenario.recreate()
-        assertFalse(TeamsAccess(ui.activity).enabled)
         ui.onNodeWithText("Enable Teams call status").performScrollTo().assertIsEnabled().performClick()
         ui.activityRule.scenario.recreate()
-        ui.onNodeWithText("Turn off Teams call status").assertExists()
         assertTrue(TeamsAccess(ui.activity).enabled)
+        ui.onNodeWithText("Turn off Teams call status").performScrollTo().performClick()
+        ui.activityRule.scenario.recreate()
+        assertFalse(TeamsAccess(ui.activity).enabled)
         assertFalse(access.granted)
         assertFalse(access.toolbarGranted)
         ui.onNodeWithText("Notification access: off").performScrollTo().performClick()
         val opened = shadowOf(ui.activity).nextStartedActivity
         assertEquals(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS, opened.action)
-        assertEquals(ComponentName(activity, TeamsCallListener::class.java).flattenToString(),
+        assertEquals(NotificationAccess(activity).component.flattenToString(),
             opened.getStringExtra(Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME))
     }
 }

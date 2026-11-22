@@ -18,6 +18,7 @@ import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.media.AudioManager
 import android.media.ToneGenerator
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -271,8 +272,9 @@ internal class PocketSession(
 
     fun refreshPhoneCall() {
         val authorized = phoneAuthorized()
-        if (authorized && phoneAccess.details && phoneAccess.notificationGranted) PhoneCallListener.refresh = phoneUpdate
-        else if (PhoneCallListener.refresh === phoneUpdate) PhoneCallListener.refresh = null
+        if (authorized && Build.VERSION.SDK_INT >= 34 && phoneAccess.details && phoneAccess.phoneGranted && phoneAccess.notificationGranted)
+            PocketNotificationListener.refreshPhone = phoneUpdate
+        else if (PocketNotificationListener.refreshPhone === phoneUpdate) PocketNotificationListener.refreshPhone = null
         callBoard.refresh(authorized)
     }
 

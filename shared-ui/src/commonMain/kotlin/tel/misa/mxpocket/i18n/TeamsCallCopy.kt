@@ -45,9 +45,9 @@ internal object TeamsCallCopy {
     val OffDetail = Copy("Teams call status is off. No calls are being observed.",
         "Le suivi des appels Teams est désactivé. Aucun appel n’est suivi.",
         "Praćenje stanja Teams poziva je isključeno. Nijedan poziv se ne prati.")
-    val NeedsAccessDetail = Copy("Notification access for MX Pocket Teams calls is off. Audio and Navigation access do not enable Teams.",
-        "L’accès aux notifications est désactivé pour les appels Teams de MX Pocket. Les autorisations Audio et Navigation n’activent pas Teams.",
-        "Pristup obaveštenjima je isključen za Teams pozive u aplikaciji MX Pocket. Dozvole za Audio i Navigaciju ne omogućavaju pristup za Teams.")
+    val NeedsAccessDetail = Copy("Teams call status is enabled. Allow MX Pocket in Android’s Notification access to receive call notices.",
+        "Le suivi des appels Teams est activé. Autorisez MX Pocket dans la rubrique Accès aux notifications d’Android pour recevoir les avis d’appel.",
+        "Praćenje Teams poziva je uključeno. Dozvolite pristup obaveštenjima za MX Pocket u Androidu da biste primali obaveštenja o pozivima.")
     val DisconnectedDetail = Copy("Teams notification access is on, but the listener is not connected. Check the service in Android settings.",
         "L’accès aux notifications Teams est activé, mais le service d’écoute n’est pas connecté. Vérifiez le service dans les paramètres Android.",
         "Pristup Teams obaveštenjima je uključen, ali servis za obaveštenja nije povezan. Proveri servis u Android podešavanjima.")

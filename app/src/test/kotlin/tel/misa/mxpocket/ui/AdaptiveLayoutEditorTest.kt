@@ -37,6 +37,7 @@ class AdaptiveLayoutEditorTest {
     private var back: (() -> Unit)? = null
 
     private fun open() {
+        repo.selectProfile("focus").getOrThrow()
         val store = repo.asEditorStore()
         ui.setContent {
             PocketTheme {
