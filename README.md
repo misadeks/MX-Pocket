@@ -89,6 +89,24 @@ to add the library, obtain USB permission and connect to the wired keypad.
 
 ## Architecture
 
+```mermaid
+flowchart TD
+    accTitle: How the Android and Windows hosts connect to the wired keypad
+    accDescr {
+      Both hosts send state to the shared Compose UI and handle its events.
+      Android uses the USB driver to read keys and update the LCD; Windows uses native HID.
+      The Android driver and the Windows host each compile the shared JVM keypad protocol.
+    }
+    ui["Shared Compose UI"] <-->|state and events| android["Android host (:app)"]
+    ui <-->|state and events| windows["Windows host (:desktop-preview)"]
+    android -->|uses| driver["Android USB driver (:mx-driver AAR)"]
+    windows -->|uses| hid["Native Windows HID transport"]
+    driver -.->|compiles| protocol["Shared JVM keypad protocol"]
+    windows -.->|compiles| protocol
+    driver <--> keypad["Wired MX Creative Keypad"]
+    hid <--> keypad
+```
+
 The driver reports which physical key changed; the active layout determines
 what it does. On Music, for example, the center key asks Android to play or
 pause. The key press does not prove playback changed. When player state is
