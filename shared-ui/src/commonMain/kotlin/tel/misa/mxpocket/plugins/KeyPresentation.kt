@@ -26,7 +26,7 @@ data class KeyTile(val label: String, val footer: String, val background: Int,
     val readOnly: Boolean = false, val showLabel: Boolean = true, val showFooter: Boolean = true,
     val primary: Boolean = false, val volumeLevel: VolumeLevel? = null, val quietFace: Boolean = false,
     val playerFace: Boolean = false, val levelFraction: Float? = null, val selection: KeySelection? = null,
-    val detail: String = "", val callIdentity: Boolean = false) {
+    val detail: String = "", val callIdentity: Boolean = false, val homeProfileKey: Boolean = false) {
     val backgroundOnly get() = !enabled && glyph.isTenSecondSeek
 }
 
@@ -141,7 +141,7 @@ val studioSlots = listOf(DeckCommand.SHUTTER, DeckCommand.START_VIDEO, DeckComma
     DeckCommand.VIDEO, DeckCommand.STUDIO, DeckCommand.CAMERA_ACCESS)
 
 /** Identical override order for the LCD, phone mirror and offline desktop host. */
-fun DeckKey.present(native: KeyTile?, fallbackLabel: String, footer: String, available: Boolean): KeyTile {
+fun DeckKey.present(native: KeyTile?, fallbackLabel: String, footer: String, available: Boolean, onHome: Boolean = false): KeyTile {
     val title = label.ifBlank { native?.label ?: fallbackLabel }
     // Some hosts supply only a label for an unsupported legacy Audio slot.
     val glyph = native?.glyph ?: bindingGlyph() ?: if (!available && action?.params?.get("pluginId") == "audio")
@@ -161,5 +161,6 @@ fun DeckKey.present(native: KeyTile?, fallbackLabel: String, footer: String, ava
             color != DeckKey().color -> color
             else -> launcherIdentity()?.fill ?: native?.background ?: color
         },
-        icon = icon.ifBlank { native?.icon.orEmpty() }, enabled = available)
+        icon = icon.ifBlank { native?.icon.orEmpty() }, enabled = available,
+        homeProfileKey = onHome && action?.id == DeckActions.PROFILE)
 }

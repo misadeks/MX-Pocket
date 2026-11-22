@@ -15,6 +15,7 @@ import android.media.session.PlaybackState
 import android.os.Looper
 import android.provider.Settings
 import androidx.compose.ui.graphics.Canvas
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
@@ -47,6 +48,19 @@ class KeypadPaintTest {
     private val app get() = RuntimeEnvironment.getApplication() as PocketApplication
     private val main get() = shadowOf(Looper.getMainLooper())
 
+    @Test fun teamsHomeMirrorShowsTheSameCenteredFallbackAsTheLcd() {
+        val session = app.session
+        val index = session.deck.operatingState.value.activePage.keys.indexOfFirst {
+            it.action?.params?.get(DeckActions.PROFILE_ID) == "teams"
+        }
+        val tile = session.frame().keys[index]
+        val lcd = session.keyImage(index, tile)
+        assertTrue(lcd.sameAs(session.homeTiles()[index].image!!.asAndroidBitmap()))
+        val rows = (0 until lcd.height).filter { y -> (0 until lcd.width).any { x -> lcd.getPixel(x, y) != tile.background } }
+        val endOfMark = rows.zipWithNext().first { (a, b) -> b > a + 1 }
+        assertEquals(rows.first().toDouble(), (endOfMark.second - endOfMark.first - 1).toDouble(), 2.0)
+    }
+
     @Test fun stockNavigateTitleFitsOneLcdLineInEveryLanguage() {
         val session = app.session
         val home = session.deck.operatingState.value
@@ -73,6 +87,7 @@ class KeypadPaintTest {
                         val width = paint.measureText(title)
                         assertTrue("$title needs $width px of the 104 px LCD caption", width in 1f..104f)
                     }
+                    caption.center
                 }
                 assertTrue("Missing $title on LCD", title in captions)
             }

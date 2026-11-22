@@ -83,8 +83,7 @@ internal class KeyImages(private val integrationIcon: (IntegrationApp) -> Bitmap
 
     /** Fixed optical sizes; wrap the title once and ellipsize instead of shrinking it to fit. */
     private fun caption(canvas: Canvas, bitmap: Bitmap, text: String, center: Float, size: Float, lines: Int,
-                        bold: Boolean, ink: Int, photo: Boolean) {
-        if (text.isBlank()) return
+                        bold: Boolean, ink: Int, photo: Boolean): Float {
         val p = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = ink; textSize = size; typeface = if (bold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
         }
@@ -111,5 +110,6 @@ internal class KeyImages(private val integrationIcon: (IntegrationApp) -> Bitmap
         canvas.translate((118 - width) / 2f, top)
         layout.draw(canvas)
         canvas.restore()
+        return top + layout.getLineBaseline(0)
     }
 }
