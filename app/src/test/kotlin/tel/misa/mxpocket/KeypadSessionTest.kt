@@ -589,6 +589,11 @@ class KeypadSessionTest {
             assertEquals(Intent.ACTION_DIAL, target?.action)
             assertEquals("tel:", target?.dataString)
             assertNull(tap(dialer))
+            press(4)
+            assertEquals("Open logitech.com", manager.getNotification(PHONE_NOTICE).extras.getString(Notification.EXTRA_TITLE))
+            val website = tap(shortcut())
+            assertEquals(Intent.ACTION_VIEW, website?.action)
+            assertEquals("https://www.logitech.com/", website?.dataString)
             press(1)
             val missing = shortcut()
             shadowOf(app).checkActivities(true)
@@ -756,6 +761,27 @@ class KeypadSessionTest {
         }
         app.session.disconnect()
         service.destroy()
+    }
+
+    @Test fun savedPhoneOpenWebStillRequestsOnlyTheLogitechSiteInTheForeground() {
+        val session = app.session
+        val web = ActionCall("phone.open", mapOf("app" to "WEB", "url" to "https://example.com"))
+        val profile = session.deck.createProfile("Shortcuts").getOrThrow()
+        session.deck.setKey(profile, "root", 0, DeckKey(action = web)).getOrThrow()
+        session.selectProfile(profile)
+        app.connectKeypad()
+        try {
+            Robolectric.buildActivity(MainActivity::class.java).setup().use {
+                app.press(1)
+                val target = shadowOf(app).nextStartedActivity
+                assertEquals(Intent.ACTION_VIEW, target?.action)
+                assertEquals("https://www.logitech.com/", target?.dataString)
+            }
+            app.press(1)
+            assertNull(shadowOf(app).nextStartedActivity)
+        } finally {
+            session.disconnect()
+        }
     }
 
     @Test fun customCameraBindingRequestsTheViewfinderButCannotCarryPhysicalAuthorityIntoAWorkflow() {

@@ -7,9 +7,12 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.performSemanticsAction
 import android.content.Intent
 import android.content.pm.ActivityInfo
@@ -64,6 +67,64 @@ class WorkspaceNavigationTest {
     }
 
     @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
+    @Test fun inactiveProfilePickerPreservesImportedCallsAndScopesBothGestures() {
+        val repo = (compose.activity.application as PocketApplication).session.deck
+        val custom = repo.createProfile("My desk").getOrThrow()
+        val old = DeckKey(label = "Original", action = ActionCall("plugin.key", mapOf("pluginId" to "phone", "index" to "3")),
+            holdAction = ActionCall("phone.open", mapOf("app" to "WEB")))
+        repo.setKey(custom, "root", 0, old).getOrThrow()
+        repo.importJson(repo.exportJson()).getOrThrow()
+        val active = repo.state.value.activeProfileId
+        fun clickChoice(text: String) {
+            compose.onNodeWithTag("action-list").performScrollToNode(hasText(text))
+            compose.onNodeWithText(text).performClick()
+        }
+        fun gesture(tag: String) = compose.onNodeWithTag(tag).performScrollTo().performClick()
+        fun back() = compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }
+        fun open(profile: String, page: String) {
+            compose.onNode(hasText(profile) and hasClickAction()).performScrollTo().performClick()
+            compose.onNode(hasText(page) and hasText("Root page")).performScrollTo().performClick()
+            compose.onNodeWithContentDescription("Key 1,", substring = true).performScrollTo().performClick()
+        }
+        compose.onNodeWithText("Profiles").performClick()
+        // An inactive custom profile still owns its picker; browsing never changes the live keypad.
+        val pageName = repo.state.value.profiles.single { it.id == custom }.pages.first().name
+        open("My desk", pageName)
+        for (tag in listOf("choose-binding", "choose-hold-binding"))
+            compose.onNodeWithTag(tag).assertTextContains("Open logitech.com (legacy binding)", substring = true)
+        compose.onNodeWithTag("key-label").performTextReplacement("Desk")
+        compose.onNodeWithText("Save key").performScrollTo().performClick()
+        fun saved() = repo.state.value.profiles.single { it.id == custom }.pages.first().keys.first()
+        compose.waitUntil(5000) { saved() == old.copy(label = "Desk") }
+        compose.onNodeWithContentDescription("Key 1, Desk").performClick()
+        gesture("choose-binding")
+        compose.onNodeWithText("Focus timer").assertDoesNotExist()
+        clickChoice("Apps")
+        clickChoice("Open dialer")
+        gesture("choose-hold-binding")
+        clickChoice("Media and volume")
+        compose.onNodeWithText("Toggle mute").assertDoesNotExist()
+        clickChoice("Volume +")
+        compose.onNodeWithText("Save key").performScrollTo().performClick()
+        compose.waitUntil(5000) { saved().action == ActionCall("phone.open", mapOf("app" to "DIALER")) &&
+            saved().holdAction == ActionCall("media.volume-up") }
+        compose.onNodeWithContentDescription("Key 1, Desk").performClick()
+        compose.onNodeWithTag("choose-binding").assertTextContains("Tap: Open dialer")
+        compose.onNodeWithTag("choose-hold-binding").assertTextContains("Hold: Volume +")
+        back(); back(); back()
+        open("Focus", "Focus")
+        gesture("choose-hold-binding")
+        clickChoice("Focus timer")
+        compose.onNodeWithText("Start / pause").assertExists()
+        back(); back(); back(); back(); back()
+        open("Audio", "Audio")
+        gesture("choose-binding")
+        clickChoice("Media and volume")
+        compose.onNodeWithText("Toggle mute").assertExists()
+        assertEquals(active, repo.state.value.activeProfileId)
+    }
+
+    @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
     @Test fun offlineEditStaysOnTheSavedPageAndBackRetracesTheLibrary() {
         val session = (compose.activity.application as PocketApplication).session
         val repo = session.deck
@@ -82,6 +143,7 @@ class WorkspaceNavigationTest {
         compose.onNodeWithContentDescription("Key 4, Previous").performScrollTo().performClick()
         assertEquals(before, repo.state.value)
         compose.onNodeWithTag("choose-binding").performScrollTo().performClick()
+        compose.onNodeWithText("Pages and profiles").performClick()
         compose.onNodeWithText("Open page: Meetings").performClick()
         // A live switch while editing must not retarget the open key or discard its draft.
         compose.onNodeWithTag("key-label").performTextReplacement("Return")

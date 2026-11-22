@@ -56,10 +56,19 @@ swipe strip. **Plugins** lists controls supported by the current host first;
 unavailable plugins remain visible with the reason they cannot run. The key
 action picker also explains unavailable bindings without changing saved keys.
 
-To give a key a second action, open the key on its page, choose **Hold** under
-**Key actions**, pick an action, and save the key. **Tap** and **Hold** are
-independent; choose **Unassigned** for Hold and save to remove it. Existing
-layouts and factory keys have no Hold. Layout backups include assigned Holds.
+Under **Key actions**, choose **Tap** or **Hold**, then browse by task or search
+across categories. **Pages and profiles** navigates the keypad; **Android
+navigation** controls the phone. Opening a saved profile never imports keys
+from other profiles into its picker. For example, **Focus timer** is available
+when editing Focus, and **Toggle mute** is a live Audio control. App launches,
+media commands and explicit profile switches use named actions rather than
+factory key numbers.
+
+Choosing an action changes only that gesture. **Save key** applies the edit;
+**Unassigned** clears the chosen gesture. A legacy binding stays as saved until
+you replace it, including in imported layouts. In particular, **Open logitech.com**
+still opens that site; it is not a configurable browser shortcut. Readouts and
+controls tied to a physical camera or call key are not new assignments.
 
 On an operational key with Hold assigned, releasing early runs Tap. Keeping
 the key down until Android's **Touch & hold delay** runs Hold once instead;

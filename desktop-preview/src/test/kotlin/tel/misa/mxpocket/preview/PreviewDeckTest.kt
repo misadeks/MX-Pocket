@@ -17,7 +17,7 @@ import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.DeckActions
 import tel.misa.mxpocket.deck.DeckKey
 import tel.misa.mxpocket.decks.DeckCommand
-import tel.misa.mxpocket.shared.ui.factoryKeyBindings
+import tel.misa.mxpocket.decks.navigationCommands
 import tel.misa.mxpocket.shared.ui.PocketScreenEvent
 import tel.misa.mxpocket.i18n.AppLanguage
 import tel.misa.mxpocket.i18n.AppLocale
@@ -209,8 +209,8 @@ class PreviewDeckTest {
     @Test fun navigationUsesFactoryBindingsAndNeverClaimsAndroidAccess() {
         val deck = PreviewDeck(DeckRepository(File(folder.root, "deck.json"))).apply { simulator = true }
         deck.repository.selectProfile("navigation").getOrThrow()
-        val up = factoryKeyBindings.single { it.label == "Navigation key 2: Scroll up" }
-        assertEquals(deck.repository.state.value.activePage.keys[1].action, up.call)
+        val up = deck.repository.state.value.activePage.keys[1].action!!
+        assertEquals(DeckCommand.UP, navigationCommands[up.params.getValue("index").toInt()])
         val tiles = deck.tiles(0)
         check(tiles.map { it.label } == listOf("Back", "Scroll up", "Home", "Prev focus", "Select",
             "Next focus", "Recents", "Scroll down", "Access info"))

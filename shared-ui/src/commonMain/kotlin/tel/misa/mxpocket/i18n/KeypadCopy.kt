@@ -136,7 +136,13 @@ object KeypadCopy {
     val Camera = Copy("Camera", "Caméra", "Kamera")
     val Settings = Copy("Settings", "Réglages", "Podešavanja")
     val Dialer = Copy("Dialer", "Clavier d’appel", "Biranje broja")
-    val Web = Copy("Web", "Web", "Veb")
+    val LogitechSite = Copy("logitech.com", "logitech.com", "logitech.com")
+    val OpenLogitechSite = Copy("Open logitech.com", "Ouvrir logitech.com", "Otvori logitech.com")
+    val OpenDialer = Copy("Open dialer", "Ouvrir le clavier d’appel", "Otvori brojčanik")
+    val ShowAlarms = Copy("Show alarms", "Afficher les alarmes", "Prikaži alarme")
+    val PhoneLabelOnly = Copy("Phone label (no action)", "Libellé Téléphone (aucune action)", "Natpis Telefon (bez radnje)")
+    val SelectPhoneProfile = Copy("Select profile: {0}", "Sélectionner le profil : {0}", "Izaberi profil: {0}")
+    val RefreshKeypad = Copy("Refresh keypad display", "Actualiser l’affichage du pavé", "Osveži prikaz tastature")
     val Alarm = Copy("Alarm", "Alarme", "Alarm")
     val Alarms = Copy("Alarms", "Alarmes", "Alarmi")
     val Repaint = Copy("Repaint", "Redessiner", "Osveži prikaz")
@@ -194,7 +200,7 @@ object KeypadCopy {
         "Appuyez sur Précédent et Suivant ensemble. Relâchez pour revenir à l’accueil du pavé ou maintenez les deux touches pour jouer au morpion. Pour quitter le jeu, appuyez sur une seule touche de page.",
         "Pritisni Prethodno i Sledeće zajedno. Otpusti ih za početni ekran tastature ili ih zadrži za igru iks-oks. Za izlaz iz igre pritisni samo jedan od ta dva tastera.")
     val FocusDetails = Copy("Timer, pause, reset, and duration presets. No permission required.", "Minuteur avec pause, remise à zéro et durées prédéfinies. Aucune autorisation requise.", "Tajmer sa pauzom, resetovanjem i unapred zadatim trajanjem. Dozvola nije potrebna.")
-    val PhoneDetails = Copy("Camera, settings, dialer, browser and alarms. Direct shortcuts are optional.", "Caméra, réglages, clavier d’appel, navigateur et alarmes. Les raccourcis directs sont facultatifs.", "Kamera, podešavanja, biranje broja, pregledač i alarmi. Direktne prečice su opcione.")
+    val PhoneDetails = Copy("Camera, settings, dialer, logitech.com and alarms. Direct shortcuts are optional.", "Caméra, réglages, clavier d’appel, logitech.com et alarmes. Les raccourcis directs sont facultatifs.", "Kamera, podešavanja, biranje broja, logitech.com i alarmi. Direktne prečice su opcione.")
 
     val CameraExpected = Copy("Not a camera control.", "Ce n’est pas une commande de caméra.", "Ovo nije kontrola kamere.")
     val ChooseCamera = Copy("Choose a default phone camera first.", "Choisissez d’abord une caméra par défaut sur le téléphone.", "Prvo izaberi podrazumevanu kameru telefona.")

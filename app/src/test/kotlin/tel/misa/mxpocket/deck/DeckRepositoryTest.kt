@@ -187,6 +187,26 @@ class DeckRepositoryTest {
     private fun pluginKey(id: String, index: Int) =
         DeckKey(action = ActionCall("plugin.key", mapOf("pluginId" to id, "index" to index.toString())))
 
+    @Test fun historicalPhoneSlotsAndExplicitAppCallsRoundTripWithoutRebinding() {
+        val phone = repo.state.value.profiles.single { it.id == "phone" }
+        val stock = phone.pages.single().keys
+        assertEquals((0..8).map { pluginKey("phone", it) }, stock)
+        val apps = listOf("WEB", "ONENOTE", "ALARMS", "DIALER", "SETTINGS", "CAMERA")
+        val keys = stock.reversed().mapIndexed { i, slot ->
+            val params = if (i == 0) mapOf("app" to "WEB", "url" to "https://example.com")
+                else mapOf("app" to apps[i % apps.size])
+            val app = ActionCall("phone.open", params)
+            if (i % 2 == 0) DeckKey(label = "My key", action = app, holdAction = slot.action)
+            else slot.copy(holdAction = app)
+        }
+        keys.forEachIndexed { i, key -> repo.setKey("phone", "root", i, key).getOrThrow() }
+        val backup = JSONObject(repo.exportJson()).put("version", 1).toString()
+        repo.importJson(backup).getOrThrow()
+        fun phoneKeys(state: DeckState) = state.profiles.single { it.id == "phone" }.pages.single().keys
+        assertEquals(keys, phoneKeys(DeckRepository(file).state.value))
+        assertEquals(keys, phoneKeys(DeckJson.decode(repo.exportJson())))
+    }
+
     @Test fun selectedSlotOwnerPrefersRegisteredTapAcrossTheWholePageBeforeHold() {
         fun slot(id: String) = pluginKey(id, 0).action
         val page = DeckPage("root", "Controls", listOf(

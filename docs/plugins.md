@@ -139,13 +139,22 @@ and focused tests, then open a PR.
 | Capability | Allowed host actions |
 | --- | --- |
 | `AUDIO` | Read music volume/max; Volume LOWER/RAISE/MUTE/UNMUTE; Media PLAY_PAUSE/PREVIOUS/NEXT |
-| `OPEN_APPS` | Open supported PhoneApp CAMERA/SETTINGS/DIALER/WEB/ALARMS/ONENOTE/ACCESSIBILITY; `OpenUri` for external URI schemes such as `onenote:` deep links; `ShareText` (ACTION_SEND text/plain) for share targets such as OneNote's quick note |
+| `OPEN_APPS` | Open supported PhoneApp CAMERA/SETTINGS/DIALER/WEB/ALARMS/ONENOTE; `OpenUri` for external URI schemes such as `onenote:` deep links; `ShareText` (ACTION_SEND text/plain) for share targets such as OneNote's quick note |
 | `ACCESSIBILITY` | `AccessibilityClick` taps a visible control by text through the user-enabled, OneNote-scoped `OneNoteAccessService` |
 | `NAVIGATION` | Select another registered plugin by ID |
 | `TONE` | Play the short completion tone |
 | `STUDIO` | Open the default photo/video viewfinder. Only the physical Studio deck may request a matching camera button with separate consent. |
 | `SYSTEM_NAVIGATION` | Basic local navigation; global/element actions only through the user-enabled service |
 | None | Repaint current frame and invalidate changed state |
+
+For saved Phone bindings, use `ActionCall.phoneActionLabel()` from
+`tel.misa.mxpocket.plugins` to describe either `phone.open` or a legacy Phone
+`plugin.key`. It returns a localized description, not a replacement binding.
+`newPhoneAppActions()` returns assignable `phone.open` calls for Android
+settings, the dialer, alarms and OneNote. `app=CAMERA` still opens the photo
+viewfinder (also available as `studio.open`); `app=WEB` still opens exactly
+`https://www.logitech.com/`, even if an imported call supplies a `url`
+parameter. Neither is a new picker choice.
 
 For example:
 
