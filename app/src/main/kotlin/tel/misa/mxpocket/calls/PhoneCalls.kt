@@ -25,6 +25,13 @@ import tel.misa.mxpocket.PocketNotificationListener
 
 internal enum class LineState { UNKNOWN, IDLE, RINGING, OFF_HOOK, MULTIPLE, CALL }
 
+/** Only these fixed codes, never a notice, may enter session diagnostics. */
+internal enum class RingReason {
+    LISTENER_UNAVAILABLE, NO_DEFAULT_DIALER, NO_TRUSTED_CALL, AMBIGUOUS_CALL, HIDDEN,
+    NO_CALL_STYLE, NO_CALL_STYLE_WITH_CALL_PERSON, CALL_TYPE_MISMATCH, STALE_NOTICE, NO_CALLER_LABEL, EARLY_LABEL_ONLY, LABEL_AVAILABLE
+}
+internal data class NoticeRead(val reason: RingReason, val notice: DialerNotice? = null)
+
 internal class PhoneCallAccess(private val context: Context) {
     private val prefs = context.getSharedPreferences("phone-call-view", Context.MODE_PRIVATE)
     private val notifications = NotificationAccess(context)
@@ -38,8 +45,11 @@ internal class PhoneCallAccess(private val context: Context) {
     val phoneGranted get() = context.checkSelfPermission(Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
     val notificationGranted get() = notifications.granted
 
-    fun notice(state: LineState, expectedKey: String? = null) = if (enabled && details && notificationGranted)
-        PocketNotificationListener.current?.phoneSnapshot(state, expectedKey) else null
+    fun notice(state: LineState, expectedKey: String?): NoticeRead {
+        if (enabled && details && notificationGranted)
+            PocketNotificationListener.current?.let { return it.phoneSnapshot(state, expectedKey) }
+        return NoticeRead(RingReason.LISTENER_UNAVAILABLE)
+    }
 
     fun state(): LineState {
         if (!enabled || !phoneGranted || Build.VERSION.SDK_INT < 31) return LineState.UNKNOWN
@@ -114,19 +124,24 @@ internal fun StatusBarNotification.isFromDialer(dialer: String?, packages: Packa
 
 @RequiresApi(34)
 internal fun dialerNotice(notes: Array<StatusBarNotification>, dialer: String, packages: PackageManager, state: LineState, boundary: Long,
-    restricted: Boolean = false, visibleOnLockScreen: (StatusBarNotification) -> Boolean = { false }): DialerNotice? {
-    val sbn = notes.filter {
+    restricted: Boolean = false, visibleOnLockScreen: (StatusBarNotification) -> Boolean = { false }): NoticeRead {
+    val candidates = notes.filter {
         it.isFromDialer(dialer, packages) && it.notification.let { n ->
             n.category == Notification.CATEGORY_CALL || n.extras.getString(Notification.EXTRA_TEMPLATE) == Notification.CallStyle::class.java.name
         }
-    }.singleOrNull() ?: return null
-    if (restricted && !visibleOnLockScreen(sbn)) return null
+    }
+    if (candidates.isEmpty()) return NoticeRead(RingReason.NO_TRUSTED_CALL)
+    val sbn = candidates.singleOrNull() ?: return NoticeRead(RingReason.AMBIGUOUS_CALL)
+    if (restricted && !visibleOnLockScreen(sbn)) return NoticeRead(RingReason.HIDDEN)
     val extras = sbn.notification.extras
-    if (extras.getString(Notification.EXTRA_TEMPLATE) != Notification.CallStyle::class.java.name) return null
+    if (extras.getString(Notification.EXTRA_TEMPLATE) != Notification.CallStyle::class.java.name) {
+        val hasCallPerson = extras.getParcelable(Notification.EXTRA_CALL_PERSON, Person::class.java) != null
+        return NoticeRead(if (hasCallPerson) RingReason.NO_CALL_STYLE_WITH_CALL_PERSON else RingReason.NO_CALL_STYLE)
+    }
     val ringing = state == LineState.RINGING
     val type = extras.getInt(Notification.EXTRA_CALL_TYPE)
     if (!(ringing && type == Notification.CallStyle.CALL_TYPE_INCOMING ||
-            state == LineState.OFF_HOOK && type == Notification.CallStyle.CALL_TYPE_ONGOING)) return null
+            state == LineState.OFF_HOOK && type == Notification.CallStyle.CALL_TYPE_ONGOING)) return NoticeRead(RingReason.CALL_TYPE_MISMATCH)
     fun action(field: String) = if (!ringing) null else extras.getParcelable(field, PendingIntent::class.java)
         ?.takeIf { intent -> intent.creatorPackage == sbn.packageName && intent.creatorUid == sbn.uid &&
             (!restricted || sbn.notification.actions.orEmpty().filter { it.actionIntent == intent }
@@ -135,8 +150,9 @@ internal fun dialerNotice(notes: Array<StatusBarNotification>, dialer: String, p
     val decline = action(Notification.EXTRA_DECLINE_INTENT)
     val caller = sbn.notification.embeddedCaller()
     val controls = accept != null && decline != null && accept != decline
-    return DialerNotice(CallStamp(sbn.key, sbn.postTime, boundary, accept.takeIf { controls },
+    val notice = DialerNotice(CallStamp(sbn.key, sbn.postTime, boundary, accept.takeIf { controls },
         decline.takeIf { controls }, sbn.packageName, restricted), caller.name, caller.icon ?: sbn.notification.getLargeIcon().embeddedBitmap())
+    return NoticeRead(if (caller.name == null) RingReason.NO_CALLER_LABEL else RingReason.LABEL_AVAILABLE, notice)
 }
 
 internal fun Icon.keypadPhoto(context: Context): Bitmap? {

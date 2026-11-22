@@ -7,6 +7,7 @@ object CallCopy {
     val Multiple = Copy("Multiple calls", "Appels multiples", "Više poziva")
     val Call = Copy("Call", "Appel", "Poziv")
     val NoCallerDetails = Copy("Caller details unavailable", "Nom indisponible", "Ime nije dostupno")
+    val LastRingCheck = Copy("Last ringing caller check: {0}", "Dernière vérification de l’appel entrant : {0}", "Poslednja provera dolaznog poziva: {0}")
     val Accept = Copy("Accept", "Accepter", "Prihvati")
     val Decline = Copy("Decline", "Refuser", "Odbij")
 

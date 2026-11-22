@@ -287,12 +287,13 @@ internal class PocketSession(
         val enabled = phoneAccess.enabled
         val blocker = if (enabled) phoneConnectionBlocker() else null
         val authorized = enabled && blocker == null
-        if (authorized && Build.VERSION.SDK_INT >= 34 && phoneAccess.details && phoneAccess.phoneGranted && phoneAccess.notificationGranted)
-            PocketNotificationListener.refreshPhone = phoneUpdate
+        val observeDetails = authorized && Build.VERSION.SDK_INT >= 34 && phoneAccess.details && phoneAccess.phoneGranted && phoneAccess.notificationGranted
+        if (observeDetails) PocketNotificationListener.refreshPhone = phoneUpdate
         else if (PocketNotificationListener.refreshPhone === phoneUpdate) PocketNotificationListener.refreshPhone = null
         val line = if (authorized) phoneAccess.state() else LineState.UNKNOWN
         val before = phoneCallBlocker
         callBoard.refresh(line)
+        if (!observeDetails) callBoard.clearDiagnostic()
         phoneAccessBlocker = blocker ?: CallCopy.LineUnavailable.takeIf { authorized && line == LineState.UNKNOWN }
         if (before != phoneCallBlocker) invalidate()
     }
@@ -397,7 +398,7 @@ internal class PocketSession(
             ownerOf(call) == TEAMS && tile != null -> if (tile.enabled && !available) K.Unavailable.text() else tile.footer
             ownerOf(call) == "onenote" && tile?.enabled == false -> tile.footer
             tile?.glyph == NavigationGlyph.ACCESS_INFO ||
-                tile?.glyph == NavigationGlyph.RECENTS && !tile.enabled -> tile.footer
+                tile?.enabled == false && tile.inputToken?.let(DeckCommand::fromId)?.deck == "navigation" -> tile.footer
             !available && call != null -> K.Unavailable.text()
             call?.id == "workflow.run" && workflows?.status?.value?.workflowId == call.params["workflowId"] -> tile?.footer.orEmpty()
             else -> feedback[index]?.invoke() ?: tile?.footer.orEmpty()
@@ -1263,7 +1264,8 @@ internal class PocketSession(
             return service.cameraPress(c, ::authorized)
         }
         if (c.deck == "navigation" && c != DeckCommand.NAV_ACCESS &&
-            (screen == null || c in setOf(DeckCommand.HOME, DeckCommand.BACK, DeckCommand.RECENTS)))
+            (screen == null || c in setOf(DeckCommand.HOME, DeckCommand.BACK, DeckCommand.RECENTS,
+                DeckCommand.NOTIFICATIONS, DeckCommand.ALL_APPS, DeckCommand.LONG_PRESS)))
             NavigationService.connected?.let { return it.press(c) }
         screen?.let { return it.deckAction(c, component) }
         val target = when (c) {
@@ -1317,7 +1319,10 @@ internal class PocketSession(
     fun isCurrentShortcut(action: PhoneAction): Boolean =
         pendingAction == action && action.ticket == request && output != null && acknowledged(action.index, action.receipt)
 
-    fun logText(limit: Int = 250) = logs.takeLast(limit).joinToString("\n")
+    fun logText(limit: Int = 250) = buildList {
+        callBoard.lastRingReason?.let { add(CallCopy.LastRingCheck.text(it.name)) }
+        addAll(logs.takeLast(limit))
+    }.joinToString("\n")
     fun takePhoneAction(id: String?): PhoneAction? {
         val pending = pendingAction ?: return null
         if (id != pending.id) return null // An older tap must not consume the replacement.

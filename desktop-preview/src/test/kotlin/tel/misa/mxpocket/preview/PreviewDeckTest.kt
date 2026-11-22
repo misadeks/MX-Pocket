@@ -243,13 +243,13 @@ class PreviewDeckTest {
         val deck = PreviewDeck(DeckRepository(File(folder.root, "deck.json"))).apply { simulator = true }
         deck.repository.selectProfile("navigation").getOrThrow()
         assertEquals("Navigate", deck.profileName)
-        val up = deck.repository.state.value.activePage.keys[1].action!!
+        val up = deck.repository.state.value.activePage.keys[6].action!!
         assertEquals(DeckCommand.UP, navigationCommands[up.params.getValue("index").toInt()])
         val tiles = deck.tiles(0)
-        check(tiles.map { it.label } == listOf("Back", "Scroll up", "Home", "Prev focus", "Select",
-            "Next focus", "Recents", "Scroll down", "Accessibility"))
+        assertEquals(listOf("Back", "Home", "Recents", "Prev focus", "Select", "Next focus",
+            "Scroll up", "Scroll down", "More"), tiles.map { it.label })
         check(tiles.none { it.enabled && !it.readOnly })
-        check(tiles[6].let { !it.enabled && it.label == "Recents" && it.footer.contains("Android") })
+        check(tiles[2].let { !it.enabled && it.label == "Recents" && it.footer.contains("Android") })
         tiles.take(8).forEachIndexed { index, tile -> check(deck.press(index, 0).startsWith(tile.label)) }
         check(deck.repository.state.value.activePage.id == "root")
         deck.press(8, 0)

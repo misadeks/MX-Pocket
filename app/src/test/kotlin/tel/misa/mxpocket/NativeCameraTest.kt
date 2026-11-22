@@ -13,6 +13,7 @@ import android.view.accessibility.AccessibilityNodeInfo as Node
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
@@ -22,22 +23,26 @@ import org.robolectric.annotation.Implements
 import org.robolectric.shadows.ShadowAccessibilityService
 import tel.misa.mxpocket.decks.CameraMode
 import tel.misa.mxpocket.decks.DeckCommand
+import tel.misa.mxpocket.decks.NavigationService
 import tel.misa.mxpocket.decks.clickCameraControl
 import tel.misa.mxpocket.decks.viewfinder
 
 // Synthetic handlers/nodes: no device inspection, launch or capture.
 internal const val TEST_CAMERA = "sample.nativecamera"
+private const val SAMSUNG = "com.sec.android.app.camera"
+
+private fun handler(pkg: String, activity: String) = ResolveInfo().apply {
+    isDefault = true
+    activityInfo = ActivityInfo().apply {
+        packageName = pkg; name = activity; exported = true; enabled = true
+        applicationInfo = ApplicationInfo().apply { packageName = pkg; enabled = true }
+    }
+}
+
 internal fun installTestCamera(context: Context, pkg: String = TEST_CAMERA): ComponentName {
     val target = ComponentName(pkg, "$pkg.Viewfinder")
     CameraMode.entries.forEach { mode ->
-        val info = ResolveInfo().apply {
-            isDefault = true
-            activityInfo = ActivityInfo().apply {
-                packageName = pkg; name = target.className; exported = true; enabled = true
-                applicationInfo = ApplicationInfo().apply { packageName = pkg; enabled = true }
-            }
-        }
-        shadowOf(context.packageManager).addResolveInfoForIntent(Intent(mode.action), info)
+        shadowOf(context.packageManager).addResolveInfoForIntent(Intent(mode.action), handler(pkg, target.className))
     }
     return target
 }
@@ -131,19 +136,107 @@ class NativeCameraTest {
         val samsung = "com.sec.android.app.camera"
         val default = installTestCamera(app, samsung)
         val captureIntent = Intent(MediaStore.ACTION_VIDEO_CAPTURE).setPackage(samsung)
-        val handler = ResolveInfo().apply {
-            isDefault = true
-            activityInfo = ActivityInfo().apply {
-                packageName = samsung; name = "$samsung.Camcorder"; exported = true; enabled = true
-                applicationInfo = ApplicationInfo().apply { packageName = samsung; enabled = true }
-            }
-        }
+        val handler = handler(samsung, "$samsung.Camcorder")
         shadowOf(app.packageManager).addResolveInfoForIntent(captureIntent, handler)
         assertEquals(default, app.viewfinder(CameraMode.PHOTO)?.component)
         assertEquals(MediaStore.ACTION_VIDEO_CAPTURE, app.viewfinder(CameraMode.VIDEO)?.action)
         assertEquals(ComponentName(samsung, "$samsung.Camcorder"), app.viewfinder(CameraMode.VIDEO)?.component)
         handler.activityInfo.exported = false
         assertEquals(MediaStore.INTENT_ACTION_VIDEO_CAMERA, app.viewfinder(CameraMode.VIDEO)?.action)
+    }
+
+    private class GalaxyHandlers {
+        val app = RuntimeEnvironment.getApplication()
+        val pm = shadowOf(app.packageManager)
+        val assistant = handler(SAMSUNG, "$SAMSUNG.executor.AssistantActionActivity")
+        val camcorder = handler(SAMSUNG, "$SAMSUNG.Camcorder")
+        val resolver = handler("android", "com.android.internal.app.ResolverActivity")
+        val photo = Intent(CameraMode.PHOTO.action)
+        val video = Intent(CameraMode.VIDEO.action)
+        val capture = Intent(MediaStore.ACTION_VIDEO_CAPTURE)
+        val samsungVideo = Intent(video).setPackage(SAMSUNG)
+        val samsungCapture = Intent(capture).setPackage(SAMSUNG)
+
+        init {
+            pm.addResolveInfoForIntent(photo, assistant)
+            pm.addResolveInfoForIntent(video, resolver)
+            pm.addResolveInfoForIntent(capture, resolver)
+            pm.addResolveInfoForIntent(samsungVideo, handler(SAMSUNG, assistant.activityInfo.name))
+            pm.addResolveInfoForIntent(samsungCapture, camcorder)
+        }
+    }
+
+    @Test fun systemVideoResolverWithSamsungStillDefaultUsesOnlySamsungCamcorder() = with(GalaxyHandlers()) {
+        assertEquals(assistant.activityInfo.name, app.viewfinder(CameraMode.PHOTO)?.component?.className)
+        val target = app.viewfinder(CameraMode.VIDEO)
+        assertEquals(ComponentName(SAMSUNG, camcorder.activityInfo.name), target?.component)
+        assertEquals(MediaStore.ACTION_VIDEO_CAPTURE, target?.action)
+    }
+
+    @Config(shadows = [CameraWindowFixture::class])
+    @Test fun recordAndStopRequestOnlyTheMatchingForegroundSamsungButton() {
+        GalaxyHandlers()
+        val service = Robolectric.buildService(NavigationService::class.java).create()
+        try {
+            val navigation = service.get()
+            val window = shadowOf(navigation) as CameraWindowFixture
+            var clicks = 0
+            fun show(label: String, pkg: String) {
+                window.root = cameraNode(label, pkg).apply {
+                    className = "android.view.ViewGroup"
+                    shadowOf(this).setOnPerformActionListener { _, _ -> clicks++; true }
+                }
+            }
+            show("Start recording", TEST_CAMERA)
+            assertFalse(navigation.cameraPress(DeckCommand.START_VIDEO) { true }.success)
+            show("Start recording", SAMSUNG)
+            assertFalse(navigation.cameraPress(DeckCommand.STOP_VIDEO) { true }.success)
+            assertTrue(navigation.cameraPress(DeckCommand.START_VIDEO) { true }.success)
+            show("Stop recording", SAMSUNG)
+            assertFalse(navigation.cameraPress(DeckCommand.STOP_VIDEO) { false }.success)
+            assertTrue(navigation.cameraPress(DeckCommand.STOP_VIDEO) { true }.success)
+            assertEquals(2, clicks)
+        } finally { service.destroy() }
+    }
+
+    @Test fun samsungFallbackDoesNotOverrideOtherDefaultsOrHandleAnUnknownResolver() = with(GalaxyHandlers()) {
+        val other = handler(TEST_CAMERA, "$TEST_CAMERA.Video")
+        pm.setResolveInfosForIntent(photo, listOf(other))
+        assertNull(app.viewfinder(CameraMode.VIDEO))
+        pm.setResolveInfosForIntent(photo, listOf(resolver))
+        assertNull(app.viewfinder(CameraMode.VIDEO))
+        pm.setResolveInfosForIntent(photo, listOf(assistant))
+        pm.setResolveInfosForIntent(capture, listOf(other))
+        assertNull(app.viewfinder(CameraMode.VIDEO))
+        pm.setResolveInfosForIntent(video, listOf(other))
+        assertEquals(ComponentName(TEST_CAMERA, other.activityInfo.name), app.viewfinder(CameraMode.VIDEO)?.component)
+        pm.setResolveInfosForIntent(capture, listOf(resolver))
+        pm.setResolveInfosForIntent(video, listOf(handler("android", "android.OtherActivity")))
+        assertNull(app.viewfinder(CameraMode.VIDEO))
+        pm.removeResolveInfosForIntent(video, "android")
+        assertNull(app.viewfinder(CameraMode.VIDEO))
+    }
+
+    @Test fun samsungFallbackRequiresAUniqueUsableHandlerForBothVideoActions() = with(GalaxyHandlers()) {
+        for ((intent, expected) in listOf(samsungVideo to assistant, samsungCapture to camcorder)) {
+            pm.setResolveInfosForIntent(intent, listOf(expected, handler(SAMSUNG, "$SAMSUNG.Second")))
+            assertNull(app.viewfinder(CameraMode.VIDEO))
+            pm.setResolveInfosForIntent(intent, listOf(handler(TEST_CAMERA, "$TEST_CAMERA.Other")))
+            assertNull(app.viewfinder(CameraMode.VIDEO))
+            pm.setResolveInfosForIntent(intent, listOf(expected))
+            expected.activityInfo.exported = false
+            assertNull(app.viewfinder(CameraMode.VIDEO))
+            expected.activityInfo.exported = true
+            expected.activityInfo.enabled = false
+            assertNull(app.viewfinder(CameraMode.VIDEO))
+            expected.activityInfo.enabled = true
+            expected.activityInfo.applicationInfo.enabled = false
+            assertNull(app.viewfinder(CameraMode.VIDEO))
+            expected.activityInfo.applicationInfo.enabled = true
+            pm.removeResolveInfosForIntent(intent, SAMSUNG)
+            assertNull(app.viewfinder(CameraMode.VIDEO))
+            pm.addResolveInfoForIntent(intent, expected)
+        }
     }
 
     @Test fun missingOrSystemResolverNeverBecomesAStudioTarget() {

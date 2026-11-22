@@ -57,8 +57,20 @@ fun DeckProfile.displayKeyLabel(page: DeckPage, key: DeckKey): String {
         DeckActions.PROFILE -> profileTitle(key.action.params[DeckActions.PROFILE_ID], key.label)
         else -> key.label
     }
-    if (id == "navigation" && page.id == ACCESSIBILITY_PAGE && page.keys[8] === key &&
-        key.action?.id == DeckActions.ROOT && key.holdAction == null) return K.BackToNavigation.ifFactoryValue(key.label)
+    if (id == "navigation" && key.label.isNotEmpty() && key.holdAction == null) {
+        val caption = when {
+            page.id == "root" && page.keys[8] === key && key.action?.id == DeckActions.PAGE &&
+                key.action.params[DeckActions.PAGE_ID] == ACCESSIBILITY_PAGE -> K.MoreNavigation
+            page.id != ACCESSIBILITY_PAGE -> null
+            page.keys[8] === key && key.action?.id == DeckActions.ROOT -> K.BackToNavigation
+            key.action != null || key.enabled -> null
+            page.keys[3] === key -> K.TalkBackMenu
+            page.keys[4] === key -> K.PreviousReadingControl
+            page.keys[5] === key -> K.NextReadingControl
+            else -> null
+        }
+        return caption.ifFactoryValue(key.label)
+    }
     if (id != TEAMS || key.label.isEmpty()) return key.label
     // Match the factory slot AND binding, not arbitrary user text with a familiar spelling.
     val slot = page.keys.indexOfFirst { it === key }.takeIf { it >= 0 }

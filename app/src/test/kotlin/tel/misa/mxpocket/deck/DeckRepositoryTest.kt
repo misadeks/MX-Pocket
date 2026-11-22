@@ -301,8 +301,58 @@ class DeckRepositoryTest {
         checkDefaults()
     }
 
-    private fun expectedNavigationRoot() = listOf(0, 3, 1, 6, 4, 8, 2, 5).map { pluginKey("navigation", it) } +
-        DeckKey(action = ActionCall(DeckActions.PAGE, mapOf(DeckActions.PAGE_ID to "accessibility")))
+    private fun expectedNavigationRoot() = listOf(0, 1, 2, 6, 4, 8, 3, 5).map { pluginKey("navigation", it) } +
+        DeckKey(label = "More", action = ActionCall(DeckActions.PAGE, mapOf(DeckActions.PAGE_ID to "accessibility")))
+
+    @Test fun savedTalkBackFactoryKeepsItsActionsAcrossColdLoadAndBackupImport() {
+        val original = requireNotNull(javaClass.getResource("/navigation-pr77.json")).readText()
+        file.writeText(original)
+        val loaded = DeckRepository(file)
+        assertNull(loaded.loadError)
+        fun root(repository: DeckRepository) = repository.state.value.profiles.single { it.id == "navigation" }.pages.first()
+        fun actions(page: DeckPage) = page.keys.map { key ->
+            val call = requireNotNull(key.action)
+            if (call.id != "plugin.key") call.id else
+                tel.misa.mxpocket.decks.navigationCommands[call.params.getValue("index").toInt()].id
+        }
+        assertEquals(listOf("navigation.back", "navigation.home", "navigation.recents",
+            "navigation.focus-previous", "navigation.activate", "navigation.focus-next",
+            "navigation.scroll-up", "navigation.scroll-down", DeckActions.PAGE), actions(root(loaded)))
+        loaded.importJson(original).getOrThrow()
+        val saved = loaded.exportJson()
+        assertEquals(saved, DeckRepository(file).exportJson())
+        // The same v5 index can also be a deliberate binding. A change to either page vetoes the migration.
+        for (pageIndex in 0..1) {
+            val edited = JSONObject(original)
+            val pages = edited.getJSONArray("profiles").getJSONObject(0).getJSONArray("pages")
+            pages.getJSONObject(pageIndex).getJSONArray("keys").getJSONObject(0).put("label", "Mine")
+            loaded.importJson(edited.toString()).getOrThrow()
+            assertEquals("navigation.scroll-up", actions(root(loaded))[3])
+            assertEquals("Mine", loaded.state.value.activeProfile.pages[pageIndex].keys.first().label)
+        }
+    }
+
+    @Test fun previousStockNavigationUpgradesButEditedRootIsPreserved() {
+        val state = defaultDeck()
+        val nav = state.profiles.single { it.id == "navigation" }
+        val open = DeckKey(action = ActionCall(DeckActions.PAGE, mapOf(DeckActions.PAGE_ID to "accessibility")))
+        val root = nav.pages.first().copy(keys = listOf(0, 3, 1, 6, 4, 8, 2, 5).map { pluginKey("navigation", it) } + open)
+        val oldActions = listOf("navigation.talkback-settings", "navigation.caption-settings", "navigation.night-light-settings",
+            "navigation.accessibility-shortcut", "navigation.access")
+        val oldPage = DeckPage("accessibility", "Accessibility", oldActions.map { DeckKey(action = ActionCall(it)) } +
+            List(3) { DeckKey() } + DeckKey(label = "Back to Navigation", action = ActionCall(DeckActions.ROOT)))
+        fun load(page: DeckPage): DeckState = DeckJson.decode(DeckJson.encode(state.copy(profiles = state.profiles.map {
+            if (it.id == "navigation") it.copy(pages = listOf(page, oldPage)) else it
+        })))
+        assertEquals(expectedNavigationRoot(), load(root).profiles.single { it.id == "navigation" }.pages.first().keys)
+        val edited = root.copy(keys = root.keys.mapIndexed { i, key -> if (i == 0) key.copy(label = "Custom") else key })
+        val retained = load(edited).profiles.single { it.id == "navigation" }.pages.first()
+        assertEquals(edited, retained)
+        // Old plugin.key bindings still execute their original commands, not the new physical positions.
+        assertEquals(listOf("navigation.back", "navigation.scroll-up", "navigation.home", "navigation.focus-previous",
+            "navigation.activate", "navigation.focus-next", "navigation.recents", "navigation.scroll-down"),
+            retained.keys.take(8).map { tel.misa.mxpocket.decks.navigationCommands[it.action!!.params.getValue("index").toInt()].id })
+    }
 
     @Test fun v4UpgradesOnlyStockNavigationWithoutOverwritingUserPagesOrBindings() {
         val state = repo.state.value
