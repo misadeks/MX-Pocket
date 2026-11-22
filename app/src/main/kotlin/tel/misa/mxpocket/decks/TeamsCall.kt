@@ -22,6 +22,7 @@ internal class TeamsCall(private val app: Context) {
         val allowed = physical && installed && access.enabled && Build.VERSION.SDK_INT >= 34 &&
             app.isUnlockedAndInteractive() && access.granted && access.toolbarGranted && access.singleProfile
         val listener = TeamsCallListener.current.takeIf { allowed }
+        if (owner !== listener) owner?.forget()
         val observation = listener?.snapshot() ?: TeamsObservation.Unavailable
         val ongoing = observation as? TeamsObservation.Ongoing
         val service = TeamsToolbarService.current.takeIf { ongoing != null }

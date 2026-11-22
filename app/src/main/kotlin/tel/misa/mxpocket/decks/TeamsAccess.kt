@@ -82,12 +82,15 @@ class TeamsCallListener : NotificationListenerService() {
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
         if (localTeams(sbn)) {
             // A key may immediately be reused; invalidate even if a successor is already in the snapshot.
-            if (TeamsEvents.refresh != null && TeamsAccess(this).enabled && Build.VERSION.SDK_INT >= 34 && sbn.notification.extras.getString(Notification.EXTRA_TEMPLATE) ==
-                Notification.CallStyle::class.java.name) boundary++
+            if (sbn.key == observedKey) boundary++
             TeamsEvents.refresh?.invoke()
         }
     }
+    private var observedKey: String? = null
     internal fun snapshot(): TeamsObservation = try {
-        activeNotifications?.let(::teamsObservation) ?: TeamsObservation.Unavailable
+        (activeNotifications?.let(::teamsObservation) ?: TeamsObservation.Unavailable).also {
+            observedKey = (it as? TeamsObservation.Ongoing)?.key
+        }
     } catch (_: SecurityException) { TeamsObservation.Unavailable }
+    internal fun forget() { observedKey = null }
 }

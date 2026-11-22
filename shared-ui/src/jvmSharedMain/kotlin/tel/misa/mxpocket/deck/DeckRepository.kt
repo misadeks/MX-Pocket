@@ -37,6 +37,7 @@ class DeckRepository(private val file: File) {
     private var showingCall = false
     private var callEpisode = false
     private var resumeCall = false
+    private var confirmedCall = false
 
     init {
         val loaded = try {
@@ -221,7 +222,7 @@ class DeckRepository(private val file: File) {
      */
     @Synchronized
     fun observe(signals: Map<String, String>, nowMillis: Long): Result<Unit> {
-        if (callEpisode) return Result.success(Unit)
+        if (confirmedCall) return Result.success(Unit)
         val deck = state.value
         if (!deck.automatic || !deck.activeProfile.automatic || deck.pinnedProfileId != null || nowMillis < 0L) {
             clearObservation()
@@ -281,6 +282,7 @@ class DeckRepository(private val file: File) {
 
     /** null means uncertain (lock, access loss). Release our page but do not steal it again after a manual override. */
     @Synchronized fun showTeamsCall(joined: Boolean?) {
+        confirmedCall = joined == true
         if (joined == true && !callEpisode) {
             callEpisode = true
             showingCall = saved.callProjection() != null
