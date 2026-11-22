@@ -17,7 +17,7 @@ import tel.misa.mxpocket.shared.ui.PocketTheme
 abstract class DeckActivity : ComponentActivity() {
     protected fun page(heading: String, content: @Composable () -> Unit) {
         title = heading
-        setContent { PocketTheme(content = content) }
+        setContent { PocketTheme(tel.misa.mxpocket.ui.ThemePreference.current(this), content) }
     }
 }
 

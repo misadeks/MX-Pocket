@@ -19,6 +19,25 @@ import tel.misa.mxpocket.plugins.KeyTile
 import tel.misa.mxpocket.shared.ui.*
 import kotlin.math.roundToInt
 
+/**
+ * True where a 118 x 118 key window shows LCD pixels: everywhere except the rounded-off corners
+ * (one pixel of anti-aliasing at the curve is excluded too).
+ */
+internal fun inKeyWindow(x: Int, y: Int): Boolean {
+    val r = KEY_CORNER.toFloat()
+    val cx = when { x < r -> r; x >= 118 - r -> 118 - r; else -> return true }
+    val cy = when { y < r -> r; y >= 118 - r -> 118 - r; else -> return true }
+    val dx = x + .5f - cx; val dy = y + .5f - cy
+    return dx * dx + dy * dy <= (r - 1) * (r - 1)
+}
+
+/** Pixel equality of a key image and its mirrored window, through the rounded mask. */
+internal fun sameThroughKeyWindow(expected: Bitmap, mirror: Bitmap, left: Int = 0, top: Int = 0): Boolean {
+    for (y in 0 until 118) for (x in 0 until 118)
+        if (inKeyWindow(x, y) && expected.getPixel(x, y) != mirror.getPixel(left + x, top + y)) return false
+    return true
+}
+
 /** Draw the actual Compose window at one pixel per LCD coordinate, without PixelCopy's frame callback. */
 internal class ComposeMirror<R : TestRule, A : ComponentActivity>(
     private val ui: AndroidComposeTestRule<R,A>, onTap: (Int) -> Unit = {},

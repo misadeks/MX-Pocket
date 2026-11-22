@@ -71,7 +71,8 @@ class PocketScreenTest {
             val before = volume.getStreamVolume(AudioManager.STREAM_MUSIC)
             ui.onNodeWithContentDescription("Volume -").performClick()
             assertEquals(before, volume.getStreamVolume(AudioManager.STREAM_MUSIC))
-            ui.onNodeWithText("Phone").performClick()
+            // Profiles are switched on the Profiles tab; Home's page buttons move to the next fixture.
+            ui.onNodeWithContentDescription("Next page").performClick()
             ui.onNodeWithContentDescription("Key 1, Camera", substring = true).performClick()
             scene.onActivity { assertNull(shadowOf(it).nextStartedActivity) }
             ui.onNodeWithText("No action executed.", substring = true).assertExists()

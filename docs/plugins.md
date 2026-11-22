@@ -23,9 +23,10 @@ A `KeyTile` contains a label, footer and ARGB background color. Ordinary keys
 keep their key number unless an icon is supplied. The built-in Audio page uses
 monochrome player symbols instead. Labels remain available to accessibility
 even on icon-only controls. Read-only tiles display state without dispatching input.
-The virtual keypad and the active-page editor preview use the same key faces
-as the LCDs, including user backgrounds. With a physical keypad, Home shows
-the nine labels rather than a second set of tappable keys. The independent
+The virtual keypad and the **Swap keys** editor use the same key faces
+as the LCDs, including user backgrounds. With a physical keypad, Home mirrors
+the live LCD images as a display only, rather than a second set of tappable
+keys. The independent
 driver scales, JPEG-encodes and uploads images. Plugins must not
 allocate/recycle host images or import `MxKeypad`/raw USB.
 
@@ -51,8 +52,8 @@ Import `tel.misa.mxpocket.plugins.examples.CounterPlugin` and append
 `CounterPlugin()` to the list returned by `BuiltInPlugins.create()`.
 
 To exercise it, include a layout whose nine actions are `plugin.key` with
-`pluginId=example.counter` and `index=0` through `8`. Select that profile and **Connect
-virtual keypad** on Home. No USB protocol or Activity change is needed. The
+`pluginId=example.counter` and `index=0` through `8`. Select that profile and choose **Settings > Connect
+virtual keypad**. No USB protocol or Activity change is needed. The
 example is compiled for tests but **not enabled in the default registry**.
 
 ### Bind physical LCD keys 1 + 9

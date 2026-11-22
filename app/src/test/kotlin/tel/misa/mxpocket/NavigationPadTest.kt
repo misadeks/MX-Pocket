@@ -46,8 +46,8 @@ class NavigationPadTest {
                 val preview = board.render(frame.keys, bitmaps)
                 bitmaps.forEachIndexed { i, tile ->
                     val region = KeypadProtocol.keyRegion(i)
-                    val mirrored = Bitmap.createBitmap(preview, region.x, region.y, 118, 118)
-                    assertTrue("Mirror differed from LCD window ${i + 1}", tile.sameAs(mirrored))
+                    assertTrue("Mirror differed from LCD window ${i + 1}",
+                        sameThroughKeyWindow(tile, preview, region.x, region.y))
                     val gridTile = frame.keys[i].toGridTile(true)
                     ui.onNodeWithContentDescription(requireNotNull(gridTile.accessibleName)).assertHeightIsAtLeast(84.dp)
                 }

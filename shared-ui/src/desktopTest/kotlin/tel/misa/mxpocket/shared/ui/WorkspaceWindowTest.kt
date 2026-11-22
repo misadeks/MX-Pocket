@@ -54,7 +54,8 @@ class WorkspaceWindowTest {
         ui.onNodeWithContentDescription("Key 1, Start, Focus").performClick()
         assertEquals(listOf(PocketScreenEvent.VirtualKey(0)), events)
         events.clear()
-        ui.onNodeWithText("Keypad").performClick()
+        ui.onNodeWithText("Profiles").performClick()
+        ui.onNodeWithText("Swap keys").performScrollTo().performClick()
         ui.onNodeWithContentDescription("Key 1,", substring = true).performClick()
         ui.onNodeWithTag("key-label").performTextReplacement("New label")
         ui.runOnIdle { width = 900.dp }
