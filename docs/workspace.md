@@ -131,12 +131,15 @@ it, and removing a choice from the guide does not revoke access. Each step
 checks Android's current state; you can finish with steps still pending.
 
 Showing the session notification does not allow reading notifications.
-**MX Pocket media sessions** authorizes richer player controls and artwork;
-**MX Pocket Teams calls** is a separate listener for call notices. Setup and
-the plugin access screens open the selected service's detail page where
-supported. If Android instead shows two indistinguishable **MX Pocket**
-entries, back out rather than guessing or enabling both. Basic media keys
-and manual Teams pages work without these grants.
+In Android’s **Notification access**, there is one **MX Pocket** entry.
+Setup and each feature’s access screen open that same entry, or the list if
+Android doesn't support its detail page. Granting access does not turn on
+any feature. Choose **Enable music sessions** under Audio, **Enable Teams
+call status** under Teams setup, or **Show caller and call controls** under
+Settings → Phone calls. Each choice is independent. After upgrading from the
+three separate listeners, grant the new entry and enable just the uses you want.
+Basic media keys, manual Teams pages and the Phone-permission-only ringing
+view do not require notification access.
 
 Studio camera keys, one-press shortcuts and foreground profile switching
 have their own app settings as well as Android grants. Reviewing an already

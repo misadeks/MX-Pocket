@@ -64,6 +64,7 @@ class ForegroundAppTest {
     }
 
     @Test fun openingTeamsSelectsWorkWithoutAMappingOrAnActionAndRespectsOverrides() {
+        NotificationAccess(app).teams = true
         val session = PocketSession(app, usageDispatcher = Dispatchers.Main.immediate, usageTimeMillis = ::usageTime)
         val screen = object : PocketSession.Screen {
             override fun render() {}
