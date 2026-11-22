@@ -44,7 +44,7 @@ class Copy(internal val en: String, internal val fr: String, internal val sr: St
         return if (args.isEmpty()) template else slot.replace(template) { args[it.groupValues[1].toInt()].toString() }
     }
 
-    internal companion object { val slot = Regex("""\{(\d+)}""") }
+    internal companion object { val slot = Regex("""\{(\d+)\}""") }
 }
 
 class PluralCopy(val one: Copy, val few: Copy, val other: Copy) {
