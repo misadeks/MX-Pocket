@@ -88,6 +88,13 @@ fun DeckCommand.legend(): KeyGlyph? = when (this) {
     DeckCommand.DOWN -> NavigationGlyph.DOWN
     DeckCommand.REVERSE -> NavigationGlyph.PREVIOUS_FOCUS
     DeckCommand.FORWARD -> NavigationGlyph.NEXT_FOCUS
+    DeckCommand.DIRECTION_UP -> NavigationGlyph.DIRECTION_UP
+    DeckCommand.DIRECTION_DOWN -> NavigationGlyph.DIRECTION_DOWN
+    DeckCommand.DIRECTION_LEFT -> NavigationGlyph.DIRECTION_LEFT
+    DeckCommand.DIRECTION_RIGHT -> NavigationGlyph.DIRECTION_RIGHT
+    DeckCommand.NOTIFICATIONS -> DeckGlyph.FOLDER
+    DeckCommand.ALL_APPS -> DeckGlyph.GRID
+    DeckCommand.LONG_PRESS -> NavigationGlyph.SELECT
     DeckCommand.ACTIVATE -> NavigationGlyph.SELECT
     DeckCommand.NAV_ACCESS -> NavigationGlyph.ACCESS_INFO
     else -> null

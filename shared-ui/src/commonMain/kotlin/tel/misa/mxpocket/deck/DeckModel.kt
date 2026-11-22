@@ -126,11 +126,8 @@ object DeckLimits {
 }
 
 // plugin.key indices are persisted action identities; only their physical placement changes.
-val navigationFactorySlots get() = listOf(
-    0, 3, 1, // Back, Scroll up, Home
-    6, 4, 8, // Previous, Select, Next
-    2, 5, 7, // Recents, Scroll down, Access
-)
+private val navigationFactorySlots = listOf(0, 1, 2, 6, 4, 8, 3, 5, 7)
+private val previousNavigationSlots = listOf(0, 3, 1, 6, 4, 8, 2, 5, 7)
 
 private fun pluginRoot(id: String, name: String, slots: Iterable<Int> = 0..8) = DeckPage("root", name, slots.map { index ->
     DeckKey(action = ActionCall("plugin.key", mapOf("pluginId" to id, "index" to index.toString())))
@@ -138,16 +135,35 @@ private fun pluginRoot(id: String, name: String, slots: Iterable<Int> = 0..8) = 
 
 const val ACCESSIBILITY_PAGE = "accessibility"
 private fun navigationPages(): List<DeckPage> {
-    val old = pluginRoot("navigation", "Navigation", navigationFactorySlots)
+    val root = pluginRoot("navigation", "Navigation", navigationFactorySlots)
+    val open = DeckKey(label = "More", action = ActionCall(DeckActions.PAGE, mapOf(DeckActions.PAGE_ID to ACCESSIBILITY_PAGE)))
+    val tools = listOf(DeckCommand.NOTIFICATIONS, DeckCommand.ALL_APPS, DeckCommand.LONG_PRESS)
+        .map { DeckKey(action = ActionCall(it.id)) } + listOf(
+        DeckKey(label = "TalkBack menu", enabled = false),
+        DeckKey(label = "Previous reading control", enabled = false),
+        DeckKey(label = "Next reading control", enabled = false)) +
+        listOf(DeckCommand.TALKBACK_SETTINGS, DeckCommand.NAV_ACCESS).map { DeckKey(action = ActionCall(it.id)) }
+    return listOf(root.copy(keys = root.keys.dropLast(1) + open), DeckPage(ACCESSIBILITY_PAGE, "Accessibility",
+        tools + DeckKey(label = "Back to Navigation", action = ActionCall(DeckActions.ROOT))))
+}
+
+internal fun DeckState.upgradeNavigationControls(): DeckState {
+    val previous = pluginRoot("navigation", "Navigation", previousNavigationSlots)
     val open = DeckKey(action = ActionCall(DeckActions.PAGE, mapOf(DeckActions.PAGE_ID to ACCESSIBILITY_PAGE)))
-    val tools = listOf(DeckCommand.TALKBACK_SETTINGS, DeckCommand.CAPTION_SETTINGS, DeckCommand.NIGHT_LIGHT_SETTINGS,
+    val oldRoot = previous.copy(keys = previous.keys.dropLast(1) + open)
+    val oldTools = listOf(DeckCommand.TALKBACK_SETTINGS, DeckCommand.CAPTION_SETTINGS, DeckCommand.NIGHT_LIGHT_SETTINGS,
         DeckCommand.ACCESSIBILITY_SHORTCUT, DeckCommand.NAV_ACCESS).map { DeckKey(action = ActionCall(it.id)) }
-    return listOf(old.copy(keys = old.keys.dropLast(1) + open), DeckPage(ACCESSIBILITY_PAGE, "Accessibility",
-        tools + List(3) { DeckKey() } + DeckKey(label = "Back to Navigation", action = ActionCall(DeckActions.ROOT))))
+    val oldPage = DeckPage(ACCESSIBILITY_PAGE, "Accessibility",
+        oldTools + List(3) { DeckKey() } + DeckKey(label = "Back to Navigation", action = ActionCall(DeckActions.ROOT)))
+    val owner = profiles.find { it.id == "navigation" && it.rootPageId == oldRoot.id &&
+        oldRoot in it.pages && oldPage in it.pages } ?: return this
+    val (root, tools) = navigationPages()
+    return copy(profiles = profiles.map { profile -> if (profile != owner) profile else
+        profile.copy(pages = profile.pages.map { when (it) { oldRoot -> root; oldPage -> tools; else -> it } }) })
 }
 
 internal fun DeckState.withAccessibilityPage(): DeckState {
-    val oldRoot = pluginRoot("navigation", "Navigation", navigationFactorySlots)
+    val oldRoot = pluginRoot("navigation", "Navigation", previousNavigationSlots)
     val owner = profiles.find { it.id == "navigation" && it.rootPageId == oldRoot.id && oldRoot in it.pages } ?: return this
     if (owner.pages.size >= DeckLimits.PAGES || owner.pages.any { it.id == ACCESSIBILITY_PAGE }) return this
     val (root, tools) = navigationPages()
@@ -159,7 +175,7 @@ internal fun DeckState.upgradeStockNavigationRoot(): DeckState {
     val legacy = pluginRoot("navigation", "Navigation")
     val owner = profiles.find { it.id == "navigation" && it.rootPageId == legacy.id && legacy in it.pages } ?: return this
     val updated = owner.copy(pages = owner.pages.map { page ->
-        if (page == legacy) page.copy(keys = navigationFactorySlots.map(page.keys::get)) else page
+        if (page == legacy) page.copy(keys = previousNavigationSlots.map(page.keys::get)) else page
     })
     return copy(profiles = profiles.map { if (it.id == owner.id) updated else it })
 }

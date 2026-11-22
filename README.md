@@ -10,7 +10,8 @@ or hold both to play Tic Tac Toe. To try MX Pocket without hardware, use the
 Windows simulator.
 
 On the **Music** layout, press the center key to pause the track.
-Switch to **Navigate**: that same key becomes **Select**. With
+Switch to **Navigate**: that same key becomes **Select**. The bottom-right key
+opens **More**; press it again to return. With
 [Android navigation access](docs/android-decks.md) enabled, you can move focus
 between controls in supported apps without swiping the phone.
 
