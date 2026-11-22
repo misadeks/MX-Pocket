@@ -29,7 +29,7 @@
     <string name="teams_toolbar_access">MX Pocket Teams call controls</string>
     <string name="teams_toolbar_description">Checks the visible Teams call controls with a connected keypad and the Teams option enabled. A physical center key press can operate the labeled meeting microphone. Does not read chat text, join, answer, or hang up.</string>
     <string name="navigation_access">MX Pocket navigation</string>
-    <string name="navigation_description">Responds to navigation keys for scrolling, focus and activation. A key you assign can run your Android accessibility shortcut. With the separate Studio camera-controls option, a physical Studio key can click a labeled shutter, record or stop button in your default camera. Does not record screen content, keystrokes or notifications.</string>
+    <string name="navigation_description">Responds to navigation keys for scrolling, focus and activation. When touch exploration is on, Previous and Next send swipes to TalkBack and may interrupt an ongoing gesture. A key you assign can run your Android accessibility shortcut. With the separate Studio camera-controls option, a physical Studio key can click a labeled shutter, record or stop button in your default camera. Does not record screen content, keystrokes or notifications.</string>
     <string name="phone">Phone</string>
     <string name="xo">Tic Tac Toe</string>
     <string name="onenote">OneNote</string>

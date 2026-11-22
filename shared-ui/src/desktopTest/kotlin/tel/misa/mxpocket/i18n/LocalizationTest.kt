@@ -3,6 +3,7 @@ package tel.misa.mxpocket.i18n
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Test
+import tel.misa.mxpocket.deck.factoryProfiles
 
 class LocalizationTest {
     private val previous = AppLocale.current
@@ -27,6 +28,17 @@ class LocalizationTest {
         AppLocale.update(AppLanguage.FRENCH, emptyList())
         assertEquals("un", count.text(0))
         assertEquals("autres", count.text(2))
+    }
+
+    @Test fun morePageCaptionsAreLocalizedOnlyOnTheOriginalNavigationBindings() {
+        val nav = factoryProfiles().single { it.id == "navigation" }
+        val (root, more) = nav.pages
+        AppLocale.update(AppLanguage.FRENCH, emptyList())
+        assertEquals("Plus", nav.displayKeyLabel(root, root.keys.last()))
+        assertEquals("Menu TalkBack", nav.displayKeyLabel(more, more.keys[3]))
+        assertEquals("More", nav.copy(id = "copy").displayKeyLabel(root, root.keys.last()))
+        val custom = root.copy(keys = root.keys.dropLast(1) + root.keys.last().copy(action = null))
+        assertEquals("More", nav.displayKeyLabel(custom, custom.keys.last()))
     }
 
     @Test fun catalogsHaveCompleteLatinTextAndPreserveFormatArguments() {

@@ -27,11 +27,13 @@ switching by app needs Android's Usage Access; the page buttons don't.
 MX Pocket. To use those keys in another app, unlock the phone and enable
 **MX Pocket navigation** in Android Accessibility. **Select** presses the
 focused control if the app marks it clickable. **Scroll down** works where
-the app exposes a scrollable area. TalkBack, not MX Pocket, supplies speech.
+the app exposes a scrollable area. With touch exploration on, **Previous** and
+**Next** request swipes for TalkBack, which supplies the speech. The bottom-right
+key opens **More**; press it again to return.
 
 **TalkBack settings** opens Android's Accessibility settings; it does not turn
 on the screen reader. On an unlocked Android 12+ phone with navigation access,
-a separate key can run [Android's volume-key accessibility shortcut](docs/android-decks.md#a-talkback-key-and-other-accessibility-shortcuts)
+you can assign a key to run [Android's volume-key accessibility shortcut](docs/android-decks.md#a-talkback-key-and-other-accessibility-shortcuts)
 if the phone offers it. Choose TalkBack as the only target for a dedicated
 TalkBack key; with multiple targets, Android can show a chooser.
 

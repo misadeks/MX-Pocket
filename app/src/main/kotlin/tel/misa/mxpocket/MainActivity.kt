@@ -505,7 +505,8 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             DeckCommand.MEDIA_ACCESS, DeckCommand.NAV_ACCESS -> DeckAccessActivity.intent(this, command)
             DeckCommand.HOME -> Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
             DeckCommand.BACK -> { onBackPressedDispatcher.onBackPressed(); return ok(D.Back.text()) }
-            DeckCommand.UP, DeckCommand.DOWN, DeckCommand.FORWARD, DeckCommand.REVERSE, DeckCommand.ACTIVATE ->
+            DeckCommand.UP, DeckCommand.DOWN, DeckCommand.FORWARD, DeckCommand.REVERSE, DeckCommand.ACTIVATE,
+            DeckCommand.DIRECTION_UP, DeckCommand.DIRECTION_DOWN, DeckCommand.DIRECTION_LEFT, DeckCommand.DIRECTION_RIGHT ->
                 return navigateVisibleWorkspace(command)
             DeckCommand.RECENTS -> return unavailable(D.RecentAccess.text())
             else -> return unavailable(D.NotScreenAction.text())
@@ -537,6 +538,10 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             DeckCommand.UP -> KeyEvent.KEYCODE_PAGE_UP
             DeckCommand.DOWN -> KeyEvent.KEYCODE_PAGE_DOWN
             DeckCommand.REVERSE, DeckCommand.FORWARD -> KeyEvent.KEYCODE_TAB
+            DeckCommand.DIRECTION_UP -> KeyEvent.KEYCODE_DPAD_UP
+            DeckCommand.DIRECTION_DOWN -> KeyEvent.KEYCODE_DPAD_DOWN
+            DeckCommand.DIRECTION_LEFT -> KeyEvent.KEYCODE_DPAD_LEFT
+            DeckCommand.DIRECTION_RIGHT -> KeyEvent.KEYCODE_DPAD_RIGHT
             DeckCommand.ACTIVATE -> KeyEvent.KEYCODE_ENTER
             else -> return unavailable(D.UnsupportedNavigation.text())
         }
