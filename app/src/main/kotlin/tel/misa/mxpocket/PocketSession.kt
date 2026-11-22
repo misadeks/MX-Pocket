@@ -903,8 +903,10 @@ internal class PocketSession(
                 val service = OneNoteAccessService.connected
                 message(when {
                     service == null -> "Enable MX Pocket OneNote tools in Android Accessibility settings."
-                    service.selectToolById(action.text) -> "Requested ${action.text} in OneNote."
-                    else -> "Open OneNote and show the ${action.text} control first."
+                    service.selectToolById(action.text) -> if ((action.text.startsWith("text:") || action.text.startsWith("style:") || action.text.startsWith("size:"))) "Requested formatting in OneNote."
+                        else "Requested ${action.text} in OneNote."
+                    else -> if ((action.text.startsWith("text:") || action.text.startsWith("style:") || action.text.startsWith("size:"))) "Open OneNote and show the formatting toolbar first."
+                        else "Open OneNote and show the ${action.text} control first."
                 })
             }
             is PluginAction.OneNoteSetting -> {

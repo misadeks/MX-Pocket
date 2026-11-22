@@ -157,6 +157,7 @@ class BuiltInPluginsTest {
         tap(4)
         assertEquals("Yellow", engine.render().keys[0].label)
         assertEquals("1 / 2", engine.render().keys[7].label)
+        assertEquals(0xff008c3a.toInt(), engine.render().keys[7].background)
         tap(8)
         assertEquals("Plum", engine.render().keys[0].label)
         assertEquals("2 / 2", engine.render().keys[7].label)
@@ -164,6 +165,81 @@ class BuiltInPluginsTest {
         assertEquals("Color", engine.render().keys[4].label)
         tap(4); tap(8); tap(0)
         assertEquals(PluginAction.OneNoteSetting(color = "Plum"), actions.last())
+        engine.close()
+    }
+
+    @Test fun oneNoteTextToolbarPagesAccentsColorsAndDraw() = runTest {
+        val actions = mutableListOf<PluginAction>()
+        val labels = listOf("Font size", "Bold", "Italic", "Underline", "Strikethrough", "Font color", "Highlight", "Bullets",
+            "Numbering", "Indent −", "Indent +", "Align left", "Align center", "Align right", "Styles")
+        var toolbar = labels.mapIndexed { i, label -> "text:${if (i == 1) "selected:" else ""}tool$i" to label }
+        var settings: OneNoteSettings? = null
+        val engine = PluginEngine(BuiltInPlugins.create("Focus", "Audio", "Phone"), this,
+            { testScheduler.currentTime }, { AudioSnapshot(0, 15) },
+            { action, _ -> actions += action }, {}, { _, error -> throw AssertionError(error) },
+            MutableStateFlow(DeckState()), readToolBar = { toolbar }, readOneNoteSettings = { settings })
+        fun tap(index: Int) { engine.key(PluginKeyEvent(index, true)); engine.key(PluginKeyEvent(index, false)) }
+        engine.select("onenote"); engine.setEnabled(true); runCurrent()
+        assertEquals(labels.take(8) + "Next", engine.render().keys.map { it.label })
+        assertEquals(0xffa56eff.toInt(), engine.render().keys[1].background)
+        tap(0); assertEquals(PluginAction.AccessibilityClick("text:tool0"), actions.last())
+        tap(8); assertEquals(labels.drop(8) + listOf("Draw", "Previous"), engine.render().keys.map { it.label })
+        tap(7); assertEquals(PluginAction.AccessibilityClick("text:draw"), actions.last())
+        settings = OneNoteSettings(listOf("Red", "Blue"), "Red", 0f, 0f, 1f, textColor = true)
+        testScheduler.advanceTimeBy(251); runCurrent()
+        assertEquals("Red", engine.render().keys[0].label)
+        assertEquals(0xffe71225.toInt(), engine.render().keys[7].background)
+        tap(0); assertEquals(PluginAction.OneNoteSetting(color = "Red"), actions.last())
+        tap(7); assertEquals(PluginAction.OneNoteSetting(close = true), actions.last())
+        settings = null
+        toolbar = listOf("Stroke Eraser" to "Stroke Eraser")
+        testScheduler.advanceTimeBy(251); runCurrent()
+        assertEquals("Stroke Eraser", engine.render().keys[0].label)
+        engine.close()
+    }
+    @Test fun oneNoteStylesShowsVisibleChoicesAndNavigation() = runTest {
+        val actions = mutableListOf<PluginAction>()
+        val toolbar = listOf("style:Heading1" to "Heading1", "style:Heading2" to "Heading2",
+            "" to "", "" to "", "" to "", "" to "", "style:previous" to "Previous",
+            "style:cancel" to "Cancel", "style:next" to "Next")
+        val engine = PluginEngine(BuiltInPlugins.create("Focus", "Audio", "Phone"), this,
+            { testScheduler.currentTime }, { AudioSnapshot(0, 15) },
+            { action, _ -> actions += action }, {}, { _, error -> throw AssertionError(error) },
+            MutableStateFlow(DeckState()), readToolBar = { toolbar })
+        fun tap(index: Int) { engine.key(PluginKeyEvent(index, true)); engine.key(PluginKeyEvent(index, false)) }
+        engine.select("onenote"); engine.setEnabled(true); runCurrent()
+        assertEquals("Heading1", engine.render().keys[0].label)
+        assertFalse(engine.render().keys[2].enabled)
+        listOf(0, 6, 7, 8).forEach(::tap)
+        assertEquals(listOf("style:Heading1", "style:previous", "style:cancel", "style:next")
+            .map { PluginAction.AccessibilityClick(it) }, actions)
+        engine.close()
+    }
+
+    @Test fun oneNoteFontSizesAndDuplicateHighlightColors() = runTest {
+        val actions = mutableListOf<PluginAction>()
+        var toolbar = listOf("size:11" to "11", "size:12" to "12", "" to "", "" to "", "" to "", "" to "",
+            "size:previous" to "Previous", "size:cancel" to "Cancel", "size:next" to "Next")
+        var settings: OneNoteSettings? = null
+        val engine = PluginEngine(BuiltInPlugins.create("Focus", "Audio", "Phone"), this,
+            { testScheduler.currentTime }, { AudioSnapshot(0, 15) },
+            { action, _ -> actions += action }, {}, { _, error -> throw AssertionError(error) },
+            MutableStateFlow(DeckState()), readToolBar = { toolbar }, readOneNoteSettings = { settings })
+        fun tap(index: Int) { engine.key(PluginKeyEvent(index, true)); engine.key(PluginKeyEvent(index, false)) }
+        engine.select("onenote"); engine.setEnabled(true); runCurrent()
+        assertEquals("Font size", engine.render().keys[0].footer)
+        listOf(1, 6, 7, 8).forEach(::tap)
+        assertEquals(listOf("size:12", "size:previous", "size:cancel", "size:next")
+            .map { PluginAction.AccessibilityClick(it) }, actions)
+        settings = OneNoteSettings(listOf("Blue", "Blue"), "Blue", 0f, 0f, 1f, textColor = true,
+            colorIds = listOf("color:0:Blue", "color:1:Blue"),
+            colorValues = listOf(0xff0000ff.toInt(), 0xff000080.toInt()), selectedIndex = 1)
+        testScheduler.advanceTimeBy(251); runCurrent()
+        val keys = engine.render().keys
+        assertEquals(0xff0000ff.toInt(), keys[0].background)
+        assertEquals(0xff000080.toInt(), keys[1].background)
+        assertEquals(keys[1].background, keys[7].background)
+        tap(1); assertEquals(PluginAction.OneNoteSetting(color = "color:1:Blue"), actions.last())
         engine.close()
     }
 

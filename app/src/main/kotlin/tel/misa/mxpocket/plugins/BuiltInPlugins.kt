@@ -85,11 +85,14 @@ class OneNotePlugin(title: String) : PocketPlugin {
     private var page = 0
     private var colorsOpen = false
     private var opening = false
+    private var textPage = 0
 
     override fun onActivate(host: PluginHost) {
         host.scope.launch {
             while (true) {
-                settings = host.oneNoteSettings
+                val updated = host.oneNoteSettings
+                if (updated?.textColor == true && settings?.textColor != true) page = 0
+                settings = updated
                 if (settings == null && !opening) {
                     colorsOpen = false
                     tools = host.toolBar
@@ -108,15 +111,15 @@ class OneNotePlugin(title: String) : PocketPlugin {
         val current = settings
         if (current != null) {
             val purple = 0xff7719aa.toInt()
-            if (colorsOpen) {
+            if (colorsOpen || current.textColor) {
                 val pages = ((current.colors.size + 5) / 6).coerceAtLeast(1)
                 val visiblePage = page.coerceIn(0, pages - 1)
                 return PluginFrame(List(9) { i ->
                     val color = current.colors.getOrNull(visiblePage * 6 + i)
                     when {
-                        i < 6 -> KeyTile(color.orEmpty(), "", colorValue(color), enabled = color != null)
+                        i < 6 -> KeyTile(color.orEmpty(), "", current.colorValues.getOrNull(visiblePage * 6 + i) ?: colorValue(color), enabled = color != null)
                         i == 6 -> KeyTile("Previous", "", purple, enabled = visiblePage > 0)
-                        i == 7 -> KeyTile("${visiblePage + 1} / $pages", "Cancel", purple)
+                        i == 7 -> KeyTile("${visiblePage + 1} / $pages", "Cancel", (current.colorValues.getOrNull(current.selectedIndex) ?: colorValue(current.selectedColor)))
                         else -> KeyTile("Next", "", purple, enabled = visiblePage + 1 < pages)
                     }
                 })
@@ -128,6 +131,24 @@ class OneNotePlugin(title: String) : PocketPlugin {
                     if (i == 4) colorValue(current.selectedColor) else purple,
                     enabled = i in listOf(0, 1, 2, 4, 7), readOnly = i == 1,
                     levelFraction = fraction.takeIf { i == 1 })
+            })
+        }
+        if (tools.any { it.first.startsWith("style:") || it.first.startsWith("size:") }) {
+            return PluginFrame(List(9) { index ->
+                val item = tools.getOrNull(index)
+                KeyTile(item?.second.orEmpty(), if (tools.any { it.first.startsWith("size:") }) "Font size" else "Styles", 0xff7719aa.toInt(), enabled = !item?.first.isNullOrEmpty())
+            })
+        }
+        if (tools.any { it.first.startsWith("text:") }) {
+            val displayed = if (textPage == 0) tools.take(8) else tools.drop(8).take(7) + ("text:draw" to "Draw")
+            return PluginFrame(List(9) { index ->
+                if (index == 8) KeyTile(if (textPage == 0) "Next" else "Previous", "${textPage + 1} / 2", 0xff7719aa.toInt())
+                else {
+                    val item = displayed.getOrNull(index)
+                    val selected = item?.first?.startsWith("text:selected:") == true
+                    KeyTile(item?.second.orEmpty(), "ONENOTE", if (selected) 0xffa56eff.toInt() else 0xff7719aa.toInt(),
+                        enabled = !item?.first.isNullOrEmpty())
+                }
             })
         }
         val labels = MutableList(9) { "" }
@@ -143,14 +164,14 @@ class OneNotePlugin(title: String) : PocketPlugin {
         if (!event.pressed || event.synthetic) return
         val current = settings
         if (current != null) {
-            if (colorsOpen) {
+            if (colorsOpen || current.textColor) {
                 when (event.index) {
                     in 0..5 -> current.colors.getOrNull(page * 6 + event.index)?.let {
-                        host.dispatch(PluginAction.OneNoteSetting(color = it))
+                        host.dispatch(PluginAction.OneNoteSetting(color = current.colorIds.getOrNull(page * 6 + event.index) ?: it))
                         colorsOpen = false
                     }
                     6 -> page = (page - 1).coerceAtLeast(0)
-                    7 -> colorsOpen = false
+                    7 -> if (current.textColor) host.dispatch(PluginAction.OneNoteSetting(close = true)) else colorsOpen = false
                     8 -> page = (page + 1).coerceAtMost((current.colors.size - 1).coerceAtLeast(0) / 6)
                 }
             } else when (event.index) {
@@ -160,6 +181,18 @@ class OneNotePlugin(title: String) : PocketPlugin {
                 7 -> host.dispatch(PluginAction.OneNoteSetting(close = true))
             }
             host.invalidate()
+            return
+        }
+        if (tools.any { it.first.startsWith("style:") || it.first.startsWith("size:") }) {
+            val item = tools.getOrNull(event.index)
+            if (!item?.first.isNullOrEmpty()) host.dispatch(PluginAction.AccessibilityClick(item!!.first))
+            return
+        }
+        if (tools.any { it.first.startsWith("text:") }) {
+            if (event.index == 8) { textPage = 1 - textPage; host.invalidate(); return }
+            val item = if (textPage == 0) tools.getOrNull(event.index)
+                else if (event.index == 7) "text:draw" to "Draw" else tools.getOrNull(event.index + 8)
+            if (!item?.first.isNullOrEmpty()) host.dispatch(PluginAction.AccessibilityClick(item!!.first))
             return
         }
         val tool = selectable().getOrNull(event.index) ?: return
@@ -175,10 +208,12 @@ class OneNotePlugin(title: String) : PocketPlugin {
         }
     }
 
-    override fun onDeactivate() { settings = null; colorsOpen = false; opening = false }
+    override fun onDeactivate() { settings = null; colorsOpen = false; opening = false; textPage = 0 }
 
     private fun colorValue(name: String?): Int = when (name?.lowercase()) {
-        "yellow" -> 0xff705201; "orange" -> 0xffb94909; "pink" -> 0xffff0066
+        "dark red" -> 0xff8b0000; "gold" -> 0xffffc000; "lime" -> 0xff92d050
+        "dark green" -> 0xff008000; "turquoise" -> 0xff00b0b0; "navy blue" -> 0xff002060
+        "dark purple" -> 0xff7030a0; "yellow" -> 0xff705201; "orange" -> 0xffb94909; "pink" -> 0xffff0066
         "red" -> 0xffe71225; "indigo" -> 0xffd0b9e9; "purple" -> 0xffff66e3
         "plum" -> 0xffff52a8; "dark blue" -> 0xff75bfff; "sky blue" -> 0xff007399
         "light blue" -> 0xff00526b; "green" -> 0xff008c3a; "light green" -> 0xff306100

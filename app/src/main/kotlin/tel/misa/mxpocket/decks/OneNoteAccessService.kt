@@ -38,6 +38,32 @@ class OneNoteAccessService : AccessibilityService() {
      * toolbar is hidden, so open the Draw tab first when the tool is not found.
      */
     internal fun selectToolById(id: String): Boolean = withRoot { root ->
+        if (id.startsWith("style:") || id.startsWith("size:")) {
+            val prefix = id.substringBefore(':')
+            val listId = if (prefix == "style") "stylesList" else "fontSizeList"
+            val list = findNode(root) { it.viewIdResourceName?.endsWith(":id/$listId") == true }
+                ?: return@withRoot false
+            val result = when (id) {
+                "$prefix:previous" -> list.performAction(Node.ACTION_SCROLL_BACKWARD)
+                "$prefix:next" -> list.performAction(Node.ACTION_SCROLL_FORWARD)
+                "$prefix:cancel" -> performGlobalAction(GLOBAL_ACTION_BACK)
+                else -> {
+                    val item = findNode(list) { it.viewIdResourceName?.endsWith(":id/textView") == true &&
+                        it.text?.toString() == id.removePrefix("$prefix:") }
+                    item?.let { clickNode(it, Node.ACTION_CLICK) } ?: false
+                }
+            }
+            list.recycle()
+            return@withRoot result
+        }
+        if (id == "text:draw") return@withRoot clickTab(root, "draw")
+        if (id.startsWith("text:")) {
+            val ribbon = findNode(root) { it.viewIdResourceName?.endsWith(":id/home_ribbon") == true }
+                ?: return@withRoot false
+            val control = findNode(ribbon) { it.viewIdResourceName == id.removePrefix("text:").removePrefix("selected:") && it.isEnabled }
+            ribbon.recycle()
+            return@withRoot control?.let { clickNode(it, Node.ACTION_CLICK) } ?: false
+        }
         var target = findNode(root) { it.contentDescription?.toString() == id }
         if (target == null && clickTab(root, "draw")) {
             target = findNode(root) { it.contentDescription?.toString() == id }
@@ -51,6 +77,38 @@ class OneNoteAccessService : AccessibilityService() {
 
     /** The ink toolbar's tools as (description, description); the description is the stable identity. */
     internal fun toolBar(): List<Pair<String, String>> = withRoot { root ->
+        val styles = findNode(root) { it.viewIdResourceName?.endsWith(":id/stylesList") == true ||
+            it.viewIdResourceName?.endsWith(":id/fontSizeList") == true }
+        if (styles != null) {
+            val prefix = if (styles.viewIdResourceName?.endsWith(":id/fontSizeList") == true) "size" else "style"
+            val entries = findNodes(styles) { it.viewIdResourceName?.endsWith(":id/textView") == true }
+            val items = entries.mapNotNull { it.text?.toString()?.takeIf(String::isNotBlank) }.take(6)
+                .map { "$prefix:$it" to it }.toMutableList()
+            entries.forEach { it.recycle() }
+            while (items.size < 6) items.add("" to "")
+            val actions = styles.actionList.map { it.id }
+            items.add(if (Node.ACTION_SCROLL_BACKWARD in actions) "$prefix:previous" to "Previous" else "" to "")
+            items.add("$prefix:cancel" to "Cancel")
+            items.add(if (Node.ACTION_SCROLL_FORWARD in actions) "$prefix:next" to "Next" else "" to "")
+            styles.recycle()
+            return@withRoot items
+        }
+        val ribbon = findNode(root) { it.viewIdResourceName?.endsWith(":id/home_ribbon") == true }
+        if (ribbon != null) {
+            val ids = listOf("button_fontsize", "button_bold", "button_italic", "button_underline", "button_strikethrough",
+                "button_fontcolor", "button_highlight", "button_bulletlist", "button_numberlist", "button_decreaseindent",
+                "button_increaseindent", "button_leftalign", "button_centeralign", "button_rightalign", "button_styles")
+            val labels = listOf("Font size", "Bold", "Italic", "Underline", "Strikethrough", "Font color", "Highlight",
+                "Bullets", "Numbering", "Indent −", "Indent +", "Align left", "Align center", "Align right", "Styles")
+            val nodes = findNodes(ribbon) { node -> ids.any { node.viewIdResourceName?.endsWith(":id/$it") == true } }
+            val result = ids.mapIndexed { index, id ->
+                val node = nodes.firstOrNull { it.viewIdResourceName?.endsWith(":id/$id") == true && it.isEnabled }
+                if (node == null) "" to "" else "text:${if (node.isSelected || node.isChecked) "selected:" else ""}${node.viewIdResourceName}" to labels[index]
+            }
+            nodes.forEach { it.recycle() }
+            ribbon.recycle()
+            return@withRoot result
+        }
         findNodes(root) { isToolDesc(it.contentDescription?.toString()) }.map {
             val desc = it.contentDescription.toString()
             it.recycle()
@@ -60,7 +118,28 @@ class OneNoteAccessService : AccessibilityService() {
 
     internal fun settings(): OneNoteSettings? = withRoot { root ->
         val slider = findNode(root) { it.viewIdResourceName?.endsWith(":id/stroke_width_modern") == true }
-            ?: return@withRoot null
+        if (slider == null) {
+            val nodes = findNodes(root) { it.viewIdResourceName?.endsWith(":id/color_preview_holder") == true }
+            val named = nodes.filter { !it.text.isNullOrBlank() }
+            val colors = named.map { it.text.toString() }
+            val selectedIndex = named.indexOfFirst { it.isSelected }
+            val highlight = colors.any { it in setOf("Lemon Lime", "Rose", "Pale Blue", "Lavender") }
+            val ids = colors.mapIndexed { index, name -> "color:$index:$name" }
+            val values = if (highlight) colors.mapIndexed { index, name ->
+                val occurrence = colors.take(index).count { it == name }
+                when (name) {
+                    "Yellow" -> 0xffffff00; "Lemon Lime" -> 0xff00ff00; "Aqua" -> 0xff00ffff
+                    "Pink" -> 0xffff00ff; "Blue" -> if (occurrence == 0) 0xff0000ff else 0xff000080
+                    "Red" -> 0xffff0000; "Green" -> 0xff008000; "Dark Purple" -> 0xff800080
+                    "Light Yellow" -> 0xffffff99; "Light Green" -> if (occurrence == 0) 0xffccffcc else 0xff92d050
+                    "Sky Blue" -> 0xffccffff; "Rose" -> 0xffff99cc; "Pale Blue" -> 0xff99ccff
+                    "Teal" -> 0xff33cccc; "Lavender" -> 0xffcc99ff; else -> 0xff7719aa
+                }.toInt()
+            } else emptyList()
+            nodes.forEach { it.recycle() }
+            return@withRoot if (colors.isEmpty()) null else OneNoteSettings(colors, colors.getOrNull(selectedIndex),
+                0f, 0f, 1f, textColor = true, colorIds = ids, colorValues = values, selectedIndex = selectedIndex)
+        }
         val range = slider.rangeInfo
         val current = range?.current
         val min = range?.min
@@ -76,7 +155,19 @@ class OneNoteAccessService : AccessibilityService() {
 
     internal fun changeSetting(color: String?, delta: Int, close: Boolean): Boolean = withRoot { root ->
         val slider = findNode(root) { it.viewIdResourceName?.endsWith(":id/stroke_width_modern") == true }
-            ?: return@withRoot false
+        if (slider == null) {
+            val nodes = findNodes(root) { it.viewIdResourceName?.endsWith(":id/color_preview_holder") == true }
+            if (nodes.isEmpty()) return@withRoot false
+            val parts = color?.split(':', limit = 3)
+            val target = if (parts?.size == 3 && parts[0] == "color") {
+                nodes.filter { !it.text.isNullOrBlank() }.getOrNull(parts[1].toIntOrNull() ?: -1)
+                    ?.takeIf { it.text?.toString() == parts[2] }
+            } else nodes.firstOrNull { it.text?.toString() == color }
+            val result = if (close) performGlobalAction(GLOBAL_ACTION_BACK)
+                else if (target != null) target.performAction(Node.ACTION_CLICK) else false
+            nodes.forEach { it.recycle() }
+            return@withRoot result
+        }
         if (close) {
             slider.recycle()
             return@withRoot performGlobalAction(GLOBAL_ACTION_BACK)
