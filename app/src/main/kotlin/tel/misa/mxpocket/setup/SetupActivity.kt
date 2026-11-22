@@ -23,10 +23,12 @@ import tel.misa.mxpocket.i18n.AccessCopy
 import tel.misa.mxpocket.i18n.AppLocale
 import tel.misa.mxpocket.i18n.Copy
 import tel.misa.mxpocket.isUnlockedAndInteractive
+import tel.misa.mxpocket.decks.observeTeamsProfiles
 import tel.misa.mxpocket.keypad
 import tel.misa.mxpocket.requestKeypadAccess
 import tel.misa.mxpocket.shared.ui.SetupAction
 import tel.misa.mxpocket.shared.ui.SetupEvent
+import tel.misa.mxpocket.shared.ui.SetupOption
 import tel.misa.mxpocket.shared.ui.SetupFeature as Feature
 import tel.misa.mxpocket.shared.ui.SetupScreen
 import tel.misa.mxpocket.shared.ui.SetupScreenState
@@ -47,7 +49,8 @@ class SetupActivity : ComponentActivity() {
     private val choices by lazy { SetupChoices(this) }
     private val access by lazy { SetupAccess(this, choices) }
     private var selected by mutableStateOf(emptySet<Feature>())
-    private val options get() = access.options()
+    private var options by mutableStateOf(emptyList<SetupOption>())
+    private lateinit var profiles: BroadcastReceiver
     private var reviewing by mutableStateOf(false)
     private var steps by mutableStateOf(emptyList<SetupStep>())
     private var notice by mutableStateOf<Notice?>(null)
@@ -82,6 +85,8 @@ class SetupActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        options = access.options()
+        profiles = observeTeamsProfiles(::refresh)
         val firstRun = intent.getBooleanExtra("firstRun", false)
         selected = (savedInstanceState?.getStringArrayList("selected")?.let(SetupChoices::decode)
             ?: if (firstRun) emptySet() else choices.load(access::existingFeatures))
@@ -135,11 +140,13 @@ class SetupActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        unregisterReceiver(profiles)
         unregisterReceiver(changes)
         super.onDestroy()
     }
 
     private fun refresh() {
+        options = access.options()
         if (reviewing) steps = access.steps(selected, usbName)
     }
 

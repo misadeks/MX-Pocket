@@ -76,7 +76,6 @@ fun LayoutEditor(
     val decision by repo.decision.collectAsState()
     val scope = rememberCoroutineScope()
     val writer = remember(repo, scope) { LayoutWriter(scope, repo) }
-    // The editor always edits the profile on the keypad, so the Profiles carousel and this picker agree.
     val profile = deck.visibleProfiles.find { it.id == deck.activeProfileId } ?: return
     if (live?.activeId == GAME_PROFILE || live?.activeId in deck.disabledPluginIds) return
     // A profile created or copied here goes on the keypad once its write has finished.
@@ -232,7 +231,6 @@ fun LayoutEditor(
             text = {
                 Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     EditorNote(LayoutCopy.SwapHint.text())
-                    // Taps and drags only edit the layout; key execution stays on Home and the keypad.
                     KeypadGrid(gridTiles(), { i, down -> if (!down && !writer.busy) pickKey(i) },
                         Modifier.widthIn(max = 360.dp).testTag("swap-grid"),
                         onSwap = { from, to -> if (writable) writer.edit(DeckEdit.Swap(profile.id, page.id, from, to)) })

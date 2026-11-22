@@ -9,11 +9,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /** The user's appearance choice; [SYSTEM] follows the platform's dark setting. */
@@ -51,11 +53,44 @@ private fun PocketPalette.scheme(): ColorScheme {
 @Composable internal fun WorkspaceTitle(text: String) = Text(text, Modifier.semantics { heading() },
     color = PocketColors.title, style = MaterialTheme.typography.headlineSmall)
 
-@Composable internal fun WorkspaceColumn(wide: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+/**
+ * Page spacing for the navigation-rail layout. Every tab places its title [gutter] from the rail and from the
+ * window top, and starts its content [titleGap] below the title. Both follow the window width at a fixed ratio.
+ * Null in the compact layout, which keeps its own spacing.
+ */
+internal class PageFrame(val gutter: Dp) {
+    val titleGap: Dp get() = gutter * TITLE_GAP_RATIO
+
+    companion object {
+        private const val GUTTER_RATIO = .025f
+        private const val TITLE_GAP_RATIO = .5f
+        fun of(contentWidth: Dp) = PageFrame((contentWidth * GUTTER_RATIO).coerceIn(16.dp, 64.dp))
+    }
+}
+
+internal val LocalPageFrame = compositionLocalOf<PageFrame?> { null }
+
+private val ContentSpacing = 12.dp
+
+/** A framed page starts at the rail's side; otherwise the column is centered as before. */
+internal fun PageFrame?.alignment() = if (this == null) Alignment.TopCenter else Alignment.TopStart
+
+@Composable internal fun WorkspaceColumn(
+    wide: Boolean = false,
+    title: (@Composable ColumnScope.() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    val frame = LocalPageFrame.current
+    Box(Modifier.fillMaxSize(), contentAlignment = frame.alignment()) {
+        val padding = if (frame == null) PaddingValues(horizontal = 16.dp, vertical = 12.dp) else PaddingValues(frame.gutter)
         Column(Modifier.widthIn(max = if (wide) 1152.dp else 800.dp).fillMaxWidth()
-            .verticalScroll(rememberScrollState()).imePadding().padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
+            .verticalScroll(rememberScrollState()).imePadding().padding(padding)) {
+            if (title != null) {
+                Column(verticalArrangement = Arrangement.spacedBy(ContentSpacing), content = title)
+                Spacer(Modifier.height(frame?.titleGap ?: ContentSpacing))
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(ContentSpacing), content = content)
+        }
     }
 }
 

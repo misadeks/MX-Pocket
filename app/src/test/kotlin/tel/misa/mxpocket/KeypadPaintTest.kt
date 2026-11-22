@@ -2,6 +2,8 @@ package tel.misa.mxpocket
 
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.Typeface
 import android.hardware.usb.UsbConfiguration
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
@@ -12,6 +14,9 @@ import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.os.Looper
 import android.provider.Settings
+import androidx.compose.ui.graphics.Canvas
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
@@ -31,6 +36,10 @@ import tel.misa.mxpocket.plugins.PhoneApp
 import tel.misa.mxpocket.decks.ok
 import tel.misa.mxpocket.driver.KeyEvent
 import tel.misa.mxpocket.deck.importLegacyPhone
+import tel.misa.mxpocket.i18n.AppLanguage
+import tel.misa.mxpocket.i18n.AppLocale
+import tel.misa.mxpocket.i18n.displayName
+import tel.misa.mxpocket.plugins.paintKeyFace
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -38,6 +47,52 @@ import tel.misa.mxpocket.deck.importLegacyPhone
 class KeypadPaintTest {
     private val app get() = RuntimeEnvironment.getApplication() as PocketApplication
     private val main get() = shadowOf(Looper.getMainLooper())
+
+    @Test fun teamsHomeMirrorShowsTheSameCenteredFallbackAsTheLcd() {
+        val session = app.session
+        val index = session.deck.operatingState.value.activePage.keys.indexOfFirst {
+            it.action?.params?.get(DeckActions.PROFILE_ID) == "teams"
+        }
+        val tile = session.frame().keys[index]
+        val lcd = session.keyImage(index, tile)
+        assertTrue(lcd.sameAs(session.homeTiles()[index].image!!.asAndroidBitmap()))
+        val rows = (0 until lcd.height).filter { y -> (0 until lcd.width).any { x -> lcd.getPixel(x, y) != tile.background } }
+        val endOfMark = rows.zipWithNext().first { (a, b) -> b > a + 1 }
+        assertEquals(rows.first().toDouble(), (endOfMark.second - endOfMark.first - 1).toDouble(), 2.0)
+    }
+
+    @Test fun stockNavigateTitleFitsOneLcdLineInEveryLanguage() {
+        val session = app.session
+        val home = session.deck.operatingState.value
+        val index = home.activePage.keys.indexOfFirst { it.action?.params?.get(DeckActions.PROFILE_ID) == "navigation" }
+        val profile = home.profiles.single { it.id == "navigation" }
+        val previous = AppLocale.current
+        val canvas = Canvas(Bitmap.createBitmap(118, 118, Bitmap.Config.ARGB_8888).asImageBitmap())
+        try {
+            for ((locale, title) in mapOf(AppLanguage.ENGLISH to "Navigate", AppLanguage.FRENCH to "Naviguer",
+                AppLanguage.SERBIAN_LATIN to "Kretanje")) {
+                AppLocale.update(locale, emptyList())
+                val tile = session.frame().keys[index]
+                assertEquals(title, profile.displayName())
+                assertEquals(title, session.homeTiles()[index].label)
+                assertEquals("My keys", profile.copy(name = "My keys").displayName())
+                val captions = mutableListOf<String>()
+                canvas.paintKeyFace(index, tile) { caption, _ ->
+                    captions += caption.text
+                    if (caption.text == title) {
+                        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                            textSize = caption.size
+                            typeface = if (caption.bold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+                        }
+                        val width = paint.measureText(title)
+                        assertTrue("$title needs $width px of the 104 px LCD caption", width in 1f..104f)
+                    }
+                    caption.center
+                }
+                assertTrue("Missing $title on LCD", title in captions)
+            }
+        } finally { AppLocale.update(previous, emptyList()) }
+    }
 
     /** One ACK per release; keep native pixels to detect visually stale but logically equal tiles. */
     private inner class Panel(val supportsGrid: Boolean = false) {
@@ -338,8 +393,7 @@ class KeypadPaintTest {
             main.idle()
         }
         try {
-            // The factory player has a single volume readout. Exercise multi-key fairness on
-            // a saved layout with another explicit volume binding, not the old factory order.
+            // With two volume readouts, each volume change requires more than one LCD update.
             p.session.deck.setKey("audio", "root", 8, tel.misa.mxpocket.deck.DeckKey(
                 action = tel.misa.mxpocket.actions.ActionCall("media.volume-level"))).getOrThrow()
             p.session.selectProfile("audio"); volume(1)

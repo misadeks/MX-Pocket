@@ -17,9 +17,8 @@ layouts, workflows or key labels, or change exported files.
 see device details and the session log. On Android, Back returns to Settings.
 On Windows, Diagnostics opens in a separate window you can close independently.
 
-On Android and Windows, the **Home** tab shows the current keypad. Use the
-page arrows to cycle through Home and the available layouts, even when
-disconnected. To choose a saved profile directly, open **Profiles**.
+On Android and Windows, the page arrows cycle through Home and the available
+layouts, even when disconnected. To choose a saved profile directly, open **Profiles**.
 Switching tabs does not change the keypad layout. Android system Back
 returns from other top-level tabs to Home or leaves the Activity from Home.
 It does not select a keypad profile.
@@ -310,8 +309,6 @@ results without identifiers or media metadata.
   Revoke special access and repeat: now only tapping the latest notification
   should open its favorite.
 
-The debug `UiPreviewActivity` is a fixture: taps change fixture state or record
-UI events only. It cannot substitute for the executable simulator or hardware
-checks. Brightness and periodic ownership commands are not sent without a
-supported protocol. No notification center, Tasker, Home Assistant or enhanced
-accessibility integration is included.
+The debug `UiPreviewActivity` only changes fixture state or records UI events.
+It cannot verify hardware behavior. The driver does not send brightness or
+periodic ownership commands.

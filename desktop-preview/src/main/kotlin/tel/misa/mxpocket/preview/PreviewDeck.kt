@@ -176,7 +176,7 @@ class PreviewDeck(val repository: DeckRepository, private val sendMedia: (MediaK
             native != null -> native.footer
             !available && assigned != null -> K.Unavailable.text()
             else -> ""
-        }, available)
+        }, available, onHome = deck.activeProfileId == PROFILE_HOME)
     }
 
     data class Board(val faces: List<KeyTile>, val grid: VirtualGrid)

@@ -15,7 +15,7 @@ writes it to this profile and page. Unavailable keys retain their status styling
 | App Launcher | Choose **Edit favorites**, check apps, then **Done**. Up to seven alphabetical favorites, an edit key and a page key fit on each keypad page. **Next apps** wraps. Real launcher icons appear on both the phone and LCD keys. | No permission prompt. Only exported, currently available `MAIN`/`LAUNCHER` activities in this Android profile are eligible. Removed/deselected targets do not launch. |
 | Media Deck (`audio`) | Top: volume down, mute/unmute, volume up. Middle: previous, play/pause, next. Bottom: back 10 seconds, Now playing, forward 10 seconds. The title is a readout, not a shortcut. Open **Plugins → Audio → Media access** on the phone for optional session access. | Without access, the center transport shows a combined play/pause symbol and sends a standard media key. Volume and mute follow Android's local music stream, not a cast device. An unavailable 10-second seek key shows only the background or cover art. Other unsupported controls stay visible but dimmed. |
 | Pocket Studio | **Open Camera** requests the default photo viewfinder; **Open Video** requests video mode. Neither captures. For keypad input choose **Plugins > Studio > Camera controls** on the phone, enable keypad camera controls and enable **MX Pocket navigation** in Android Accessibility. | With the unlocked camera visible, press **Shutter**, **Record** or **Stop** on the physical Studio deck. Unsupported modes, labels or layouts do nothing. Use the camera's own controls instead. MX Pocket never confirms a saved photo or a recording state. |
-| Navigation and Accessibility | Use **Previous**, **Select** and **Next** to navigate items, and the bottom row to scroll or open **More**. | With **System nav off**, Back, focus, Select and scrolling operate in the visible MX Pocket screen; Home opens the launcher. With the optional service connected, supported cross-app actions become available. Reading order follows the exposed accessibility tree and may differ from TalkBack's order. Password elements, Android settings and system permission surfaces remain excluded from element actions. |
+| Navigate | Use **Previous**, **Select** and **Next** to navigate items. With touch exploration on, Previous and Next request TalkBack swipes. The bottom row scrolls or opens **More**. **Back** goes back, not to the previous focus target. | With **System nav off**, Back, focus, select and scroll operate in the visible MX Pocket screen; Home opens the launcher. **Recents** shows **Needs access** and is disabled. With the optional service connected, supported cross-app actions become available. Screens without a suitable target can still reject a press. Password elements, Android settings and system permission surfaces remain excluded from element actions. |
 | Tic Tac Toe | Select **1 Player** (play X against the computer) or **2 Players** (take turns on the same keypad). The nine LCD keys become board squares; empty squares show their key numbers. After a win or draw, tap any key to choose a mode again. | No phone touchscreen, game-specific permission or network access is needed during play. An active keypad session is required. |
 
 The factory navigation pad reads left to right: **Back / Home / Recents**,
@@ -122,13 +122,19 @@ and revocable in Android settings.
 
 In **Settings → Phone calls**, turn on **Show calls on the keypad** and grant
 the optional Android Phone permission (`READ_PHONE_STATE`). On Android 12+
-this reads ringing, off-hook or idle for active mobile subscriptions. It does
-not read the call log, contacts, microphone or phone number. A call temporarily
-replaces the layout on an authorized USB keypad while the phone is unlocked
-and its screen is on. You do not need a Phone layout, the Phone shortcuts plugin,
+this switches the physical keypad as soon as Android reports a single ringing
+mobile line, without waiting for a name or for the call to be answered. Outgoing
+calls and connecting mid-conversation do not open it. It does not read the
+call log, contacts, microphone or incoming-number extra. The same setting
+works with the phone locked or its screen off. You do not need a Phone layout, the Phone shortcuts plugin,
 a profile rule or notification access. A pinned layout or active
 game stays in place. Settings explains when the view is blocked.
 “Dialing or active” does **not** mean the other person answered.
+
+Connect and authorize the keypad first. Screen-off operation needs the phone
+to keep USB host power and the connected-device session running. Some phones
+cut OTG power, restrict USB data while locked, or suspend the app. MX Pocket
+does not wake the phone, dismiss the keyguard or override those policies.
 
 Either page key leaves immediately, without accepting or declining. You can
 also choose a layout in the app. Updates for that call won't pull you back;
@@ -139,23 +145,48 @@ is saved. There is no phone popup or Android overlay.
 On Android 14+, **Show caller and call controls** is a second, independent
 opt-in. If not already granted, allow **MX Pocket** in Android’s **Notification
 access**. Basic ringing does not need this grant. Android's grant can expose notifications from other apps.
-MX Pocket checks the publisher and Android user before reading the default
-Phone app's [CallStyle](https://developer.android.com/reference/android/app/Notification.CallStyle)
-fields. It uses the display label (name or number) and an embedded bitmap
-if supplied; it doesn't resolve caller URIs, download a photo, look up a
-contact, or store caller data. Home and the desktop simulator do not display
-the caller's identity or photo.
+MX Pocket reads [CallStyle](https://developer.android.com/reference/android/app/Notification.CallStyle)
+fields only from the current user's default Phone app or its verified Samsung
+in-call publisher. When Samsung Phone (`com.samsung.android.dialer`) is the
+default, `com.samsung.android.incallui` may post the call itself. Android must
+identify both as system or updated system apps with matching signatures.
+Notifications posted on behalf of another package are not accepted.
+
+The caller’s picture is at top center and the dialer’s display label
+(name or number) is in the center. A saved contact is not enough: the dialer
+must supply the label in its call-person field. When it does not, the keypad
+says **Caller details unavailable**; it does not assume a withheld number.
+An embedded caller bitmap takes priority over a dialer-supplied large bitmap.
+MX Pocket doesn’t resolve caller URIs, download photos, inspect notification
+titles/text, look up contacts or store caller data. Home and the desktop
+simulator do not display caller identity or photos.
 
 **Key 7 Accept** and **key 9 Decline** appear only while ringing, for a single
-matching Phone notification with two distinct Phone-owned actions. A press
+matching Phone notification with two distinct actions owned by the posting
+package and UID. A press
 must match the acknowledged LCD face and a fresh check of the notification
 and carrier state. There is no Hang up key. Use the system Phone app if the
 notification is absent, ambiguous, filtered, unsupported or lacks controls.
-Without usable caller details the keypad says **Private / unknown**. Android
-12–13 supports the state-only view; Android 9–11 needs the system Phone app.
-Lock, disconnect, or loss of Phone permission withdraws the view; loss of
-notification access removes caller details and actions. Both options default
-off. No dialer-role change is required.
+While locked or screen-off, anyone at the authorized keypad can see the
+permitted caller details and use eligible controls. If Android hides the
+notification or its contents, or visibility cannot be established, only call
+state is available. This includes Samsung calls marked **Secret**, or **Private**
+when private lock-screen content is hidden. Recognizing the publisher does not
+change visibility or add caller fields or actions the dialer omitted.
+Actions must also be identifiable in the displayed
+notification and must not require authentication. Unlock and use Phone when
+the keypad has no controls. Disconnecting or losing Phone permission withdraws
+the view; losing notification access removes details and controls. Both existing
+options start off; there’s no extra screen-off switch. Android 12–13 supports
+the state-only view; Android 9–11 needs the system Phone app.
+
+**WhatsApp and Viber:** there is no app-specific incoming-call detector.
+Android’s [`isInCall`](https://developer.android.com/reference/android/telecom/TelecomManager#isInCall())
+can report a call registered with Telecom, but not which app owns it or
+whether it is incoming, outgoing or answered. That signal alone never switches
+your layout. If only that signal remains on an already-open call view, it shows
+**Call**, without identity or controls. No WhatsApp/Viber notifications are read
+and no dialer role is requested.
 
 ## Teams on this phone
 
@@ -188,10 +219,10 @@ Android grant stops all three uses.
 | Readout | What it means |
 | --- | --- |
 | **No signal / Check filters** | No eligible Teams notice is visible. This is not a “No call” result. See the filter check below. |
-| **Call notice / Type unknown** | Teams posted a call-category notification without a supported call type. Use the controls in Teams. Incoming and screening notices also never switch pages. |
+| **Call notice / Type unknown** | Teams posted a call notice without a supported type. If you have joined, bring Teams to the foreground and show the **Mic** and **Hang up** buttons. The keypad can confirm the meeting only while those controls remain visible. |
 | **Call notice / Show controls** | Teams reported an ongoing call. Open the meeting on this phone and show its controls; the notice alone does not prove you joined. |
-| **Call notice / This profile** | Multiple Android profiles are present. Only a notice posted in MX Pocket's own profile is observed. No window inspection, auto-switch or mic control is permitted. |
-| **In call / This phone** | A typed ongoing Teams notice and the joined toolbar were both observed on this phone. A hidden or unsupported mic still cannot be operated. |
+| **Call notice / This profile** | Teams posted a call notice in MX Pocket's own profile, but Android did not confirm that only the personal profile is active. MX Pocket does not inspect the Teams window, switch to the call page or operate the mic. |
+| **In call / This phone** | A local Teams call notice and the joined toolbar were both observed on this phone. A hidden or unsupported mic still cannot be operated. |
 
 If access is already on but Teams shows **No signal**, open **Notification
 access** in Teams setup → **MX Pocket**. Where Android offers filter
@@ -201,16 +232,24 @@ the Teams call type. MX Pocket does not reset your choices. Some phones hide the
 update or re-enabling access is not a guaranteed reset. If no supported notice
 arrives, use Teams directly.
 
-For automatic entry on a **single-profile** phone, also allow accessibility
-access to **MX Pocket Teams call controls**. Entry requires **both** one
-[typed ongoing CallStyle](https://developer.android.com/develop/ui/compose/notifications/call-style)
-from Teams in the same Android user and the visible joined meeting controls.
+For automatic entry, use the personal Android profile and allow accessibility
+access to **MX Pocket Teams call controls**. A paused work profile may stay
+listed on the phone. It doesn't block controls if Android confirms that every
+other listed profile is paused. Resuming work drops the meeting and mic
+confirmation. After pausing work again, show the joined toolbar to confirm
+the meeting again. MX Pocket never changes a profile's state.
+
+Entry requires **both** exactly one eligible call notification from Teams in the
+same Android user and the visible joined meeting controls. Explicit incoming
+and screening notices never qualify, even with the toolbar visible.
 The foreground check looks for the English **Mic** and **Hang up** buttons
 together in the same control group, as named in
 [Microsoft's Android TalkBack guide](https://support.microsoft.com/en-us/accessibility/teams/use-a-screen-reader-to-join-a-meeting-in-microsoft-teams).
 The Mic need not be actionable to recognize this pair. Hang up is never pressed.
-Once confirmed, the same notification can maintain
-the page with Teams in the background; hidden controls cannot be pressed.
+Only a [typed ongoing CallStyle](https://developer.android.com/develop/ui/compose/notifications/call-style)
+can maintain a confirmed page with Teams in the background. With an untyped
+call-category notice, hiding the meeting controls restores the previous page.
+Hidden controls cannot be pressed.
 No presence, media activity, chat content or caller identity is used. No
 call data or automatic page selection is written to a backup.
 
@@ -230,8 +269,7 @@ Automatic detection and mic dispatch are tested with synthetic Android
 notifications, accessibility buttons and keypad input, **not a live Teams
 client**. There is no verified client/version combination yet. Missing or
 ambiguous controls, another language, an unrecognized notification or an
-administrator restriction can limit the readout. With multiple profiles,
-call notices are read-only. A real, user-controlled call and a physical
+administrator restriction can limit the readout. A real, user-controlled call and a physical
 LCD/TalkBack check are still required before claiming support for a client.
 Verify that ringing/pre-join does not switch the page, showing the joined
 toolbar changes key 8, one center press changes the mic in Teams, and leaving

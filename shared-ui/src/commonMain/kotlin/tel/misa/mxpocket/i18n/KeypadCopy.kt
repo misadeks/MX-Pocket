@@ -8,7 +8,7 @@ object KeypadCopy {
     val Launcher = Copy("Launcher", "Lanceur", "Pokretač")
     val Studio = Copy("Studio", "Studio", "Studio")
     val Navigation = Copy("Navigation", "Navigation", "Navigacija")
-    val NavigationAndAccessibility = Copy("Navigation and Accessibility", "Navigation et accessibilité", "Navigacija i pristupačnost")
+    val Navigate = Copy("Navigate", "Naviguer", "Kretanje")
     val Accessibility = Copy("Accessibility", "Accessibilité", "Pristupačnost")
     val BackToNavigation = Copy("Back to Navigation", "Retour à la navigation", "Nazad na navigaciju")
     val TicTacToe = Copy("Tic Tac Toe", "Morpion", "Iks-oks")

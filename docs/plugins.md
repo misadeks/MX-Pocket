@@ -1,9 +1,7 @@
 # Compiled-in Kotlin plugins
 
-MX Pocket's extension point is a `PocketPlugin` compiled into the Android app.
-It is not an external APK/plugin marketplace, downloaded code loader, WebHID
-runtime or permission/security sandbox. Contributors add normal reviewed Kotlin
-source and register it in `BuiltInPlugins.create()` through a PR.
+MX Pocket plugins implement `PocketPlugin` and compile into the Android app.
+Register them in `BuiltInPlugins.create()`. The app does not load external plugins.
 
 Workspace identity is keyed by the stable ID in `PocketStyle`, never by the
 translated or editable title. Focus is blue, Audio green, Phone violet,
@@ -36,13 +34,11 @@ It deliberately uses logical state rather than Bitmaps or USB reports:
 A `KeyTile` contains a label, footer and ARGB background color. Ordinary keys
 keep their key number unless an icon is supplied. The built-in Audio page uses
 monochrome player symbols instead. Labels remain available to accessibility
-even on icon-only controls. Read-only tiles display state without dispatching input.
-Home mirrors the LCDs, including user backgrounds, without dispatching input.
-The Android Profiles editor shows saved bindings rather than transient plugin state;
-selecting a key edits it without dispatching input. With a physical keypad, Home mirrors
-the live LCD images as a display only, rather than a second set of tappable
-keys. The independent
-driver scales, JPEG-encodes and uploads images. Plugins must not
+even on icon-only controls. Read-only tiles do not dispatch input.
+On Android Home, the nine tiles mirror the live LCDs, including user
+backgrounds, without sending key presses. Tapping a key in Profiles edits
+its saved binding rather than running it.
+The driver scales, JPEG-encodes and uploads images. Plugins must not
 allocate/recycle host images or import `MxKeypad`/raw USB.
 
 Resolve built-in face text from `KeypadCopy` when rendering, not when registering
@@ -67,10 +63,8 @@ nine counters, increments on presses, changes a held key's background color,
 shows active elapsed seconds, and clears held state on release/deactivation.
 Its ticking coroutine is cancelled by the engine.
 
-Add the import and instance to `BuiltInPlugins.kt`:
-
-Import `tel.misa.mxpocket.plugins.examples.CounterPlugin` and append
-`CounterPlugin()` to the list returned by `BuiltInPlugins.create()`.
+In `BuiltInPlugins.kt`, import `tel.misa.mxpocket.plugins.examples.CounterPlugin`
+and append `CounterPlugin()` to the list returned by `BuiltInPlugins.create()`.
 
 To exercise it, include a layout whose nine actions are `plugin.key` with
 `pluginId=example.counter` and `index=0` through `8`. Select that profile, connect a wired
@@ -91,12 +85,10 @@ override fun onChord(chord: KeyChord, host: PluginHost) {
 }
 ```
 
-Register Counter as above and use a page where physical LCD keys 1 and 9 have
-`plugin.key` bindings to `example.counter` indices `0` and `8`. Other page
-positions can bind those slots instead. On a connected keypad, press either
-key and then the other while the first is still down. Tapping the keys on the
-phone still increments individual counters; phone input never joins a USB pair.
-There is no factory shortcut or change to the layout JSON.
+Bind physical LCD keys 1 and 9 to `example.counter` slots `0` and `8` with
+`plugin.key`, or use any two physical keys for those slots. On the connected
+keypad, hold one and press the other. This chord is not a factory shortcut
+and needs no change to the layout format.
 
 - Only an enabled, acknowledged slot with an available, enabled, acknowledged
   partner waits for a chord. Singles without a Hold binding otherwise remain
@@ -220,7 +212,9 @@ Transient plugin state may be lost on process death; saved layouts and workflow
 definitions are independent of the activation. A background `OpenApp` dispatched
 synchronously for a real LCD key press offers a one-tap notification for that
 app. The tap requires a current request, USB grant and plugin page on an unlocked
-phone. With direct shortcuts explicitly enabled and Android special access
+phone. Changing the layout or retiring the pressed key's LCD receipt withdraws
+the offer; a tap already in flight cannot launch a replacement. With direct
+shortcuts explicitly enabled and Android special access
 granted, a fresh physical press can request a legacy Phone shortcut, a saved
 favorite's launcher activity, or a camera viewfinder (Phone: Camera, Pocket
 Studio, or the default camera favorite). Opening a viewfinder does not authorize capture.

@@ -33,9 +33,9 @@ internal object TeamsCallCopy {
     val UnsupportedOsDetail = Copy("Call status needs Android 14 or later.",
         "L’état des appels nécessite Android 14 ou une version ultérieure.",
         "Za prikaz stanja poziva potreban je Android 14 ili noviji.")
-    val ProfileNoticeDetail = Copy("Teams posted an ongoing call notification in this Android profile. With multiple profiles, MX Pocket cannot verify the call or operate the mic.",
-        "Teams a publié une notification d’appel en cours dans ce profil Android. En présence de plusieurs profils, MX Pocket ne peut ni confirmer l’appel ni commander le micro.",
-        "Teams je objavio obaveštenje o pozivu u toku na ovom Android profilu. Kada postoji više profila, MX Pocket ne može da potvrdi poziv niti da upravlja mikrofonom.")
+    val ProfileNoticeDetail = Copy("Teams posted a call notice in this profile. MX Pocket can’t verify that only the personal profile is active. Use the mic in Teams.",
+        "Teams a publié un avis d’appel dans ce profil. MX Pocket ne peut pas vérifier que seul le profil personnel est actif. Utilisez le micro dans Teams.",
+        "Teams je objavio obaveštenje o pozivu na ovom profilu. MX Pocket ne može da potvrdi da je aktivan samo lični profil. Koristi mikrofon u aplikaciji Teams.")
     val NotInstalledDetail = Copy("No launchable Teams app was found in this Android profile.",
         "Aucune appli Teams pouvant être ouverte n’a été trouvée dans ce profil Android.",
         "Na ovom Android profilu nije pronađena aplikacija Teams koja se može pokrenuti.")
@@ -51,18 +51,18 @@ internal object TeamsCallCopy {
     val DisconnectedDetail = Copy("Teams notification access is on, but the listener is not connected. Check the service in Android settings.",
         "L’accès aux notifications Teams est activé, mais le service d’écoute n’est pas connecté. Vérifiez le service dans les paramètres Android.",
         "Pristup Teams obaveštenjima je uključen, ali servis za obaveštenja nije povezan. Proveri servis u Android podešavanjima.")
-    val ToolbarOffDetail = Copy("Teams posted an ongoing call notification. The Teams accessibility service is off; it is optional for read-only status.",
-        "Teams a publié une notification d’appel en cours. Le service d’accessibilité Teams est désactivé ; il est facultatif pour la simple consultation de l’état.",
-        "Teams je objavio obaveštenje o pozivu u toku. Servis pristupačnosti za Teams je isključen; nije obavezan ako samo pratiš stanje poziva.")
-    val ToolbarDisconnectedDetail = Copy("Teams posted an ongoing call notification. Accessibility access is on, but its service is not connected.",
-        "Teams a publié une notification d’appel en cours. L’accès aux fonctions d’accessibilité est activé, mais le service n’est pas connecté.",
-        "Teams je objavio obaveštenje o pozivu u toku. Pristupačnost je omogućena, ali njen servis nije povezan.")
+    val ToolbarOffDetail = Copy("Teams posted a call notification. The Teams accessibility service is off; it is optional for read-only status.",
+        "Teams a publié une notification d’appel. Le service d’accessibilité Teams est désactivé ; il est facultatif pour la simple consultation de l’état.",
+        "Teams je objavio obaveštenje o pozivu. Servis pristupačnosti za Teams je isključen; nije obavezan ako samo pratiš stanje poziva.")
+    val ToolbarDisconnectedDetail = Copy("Teams posted a call notification. Accessibility access is on, but its service is not connected.",
+        "Teams a publié une notification d’appel. L’accès aux fonctions d’accessibilité est activé, mais le service n’est pas connecté.",
+        "Teams je objavio obaveštenje o pozivu. Pristupačnost je omogućena, ali njen servis nije povezan.")
     val UnavailableDetail = Copy("No unique call signal is available. Check the call in Teams.",
         "Aucun signal ne permet d’identifier un appel unique. Vérifiez l’appel dans Teams.",
         "Nema signala koji jednoznačno određuje poziv. Proveri poziv u aplikaciji Teams.")
-    val UntypedDetail = Copy("Teams posted a call notification without a supported call type. Check the call in Teams.",
-        "Teams a publié une notification d’appel sans type d’appel pris en charge. Vérifiez l’appel dans Teams.",
-        "Teams je objavio obaveštenje o pozivu bez podržanog tipa poziva. Proveri poziv u aplikaciji Teams.")
+    val UntypedDetail = Copy("The Teams notice doesn’t say whether you’ve joined. If you’re in the meeting, bring Teams to the foreground and keep the Mic and Hang up buttons visible.",
+        "L’avis Teams ne précise pas si vous avez rejoint la réunion. Si vous y participez, affichez Teams au premier plan et gardez les boutons « Mic » et « Hang up » visibles.",
+        "Teams obaveštenje ne pokazuje da li si na sastanku. Ako jesi, otvori sastanak u aplikaciji Teams i ostavi dugmad „Mic“ i „Hang up“ vidljiva.")
     val IncomingDetail = Copy("Teams reports an incoming call, not a joined call.",
         "Teams signale un appel entrant, pas un appel rejoint.",
         "Teams prijavljuje dolazni poziv, a ne poziv kojem si se pridružio.")

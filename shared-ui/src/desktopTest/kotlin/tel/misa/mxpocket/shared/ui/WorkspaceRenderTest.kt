@@ -73,7 +73,6 @@ class WorkspaceRenderTest {
         }
         onNodeWithText("USB connected").assertExists()
         onNodeWithContentDescription("Disconnect device").assertHasClickAction()
-        // Home is the live keypad; the old summary, maintenance buttons, panel note and virtual switch are gone.
         onNodeWithContentDescription("Key 1, Start, Focus").assertHasNoClickAction()
         onNodeWithText("KEYPAD SHOWS:").assertDoesNotExist()
         onNodeWithText("Repaint all nine LCDs").assertDoesNotExist()

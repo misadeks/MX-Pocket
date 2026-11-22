@@ -20,8 +20,7 @@ import androidx.compose.ui.unit.dp
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun PluginSettingsList(plugins: List<PluginItem>, event: (PocketScreenEvent) -> Unit) {
-    WorkspaceColumn {
-        WorkspaceTitle(W.Plugins.text())
+    WorkspaceColumn(title = { WorkspaceTitle(W.Plugins.text()) }) {
         Text(W.PluginsAndroid.text(),
             style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         for (plugin in plugins) {
@@ -55,16 +54,17 @@ internal fun PluginSettingsList(plugins: List<PluginItem>, event: (PocketScreenE
 @Composable
 internal fun PluginsScreen(plugins: List<PluginItem>, event: (PocketScreenEvent) -> Unit) {
     val (available, unavailable) = remember(plugins) { plugins.partition { it.unavailableReason == null } }
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+    val frame = LocalPageFrame.current
+    Box(Modifier.fillMaxSize(), contentAlignment = frame.alignment()) {
         BoxWithConstraints(Modifier.widthIn(max = 1200.dp).fillMaxSize()) {
             val wide = maxWidth >= 760.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)
-            LazyColumn(Modifier.fillMaxSize().imePadding(), contentPadding = PaddingValues(
-                horizontal = if (wide) 28.dp else 16.dp, vertical = if (wide) 24.dp else 12.dp)) {
+            LazyColumn(Modifier.fillMaxSize().imePadding(), contentPadding = frame?.let { PaddingValues(it.gutter) }
+                ?: PaddingValues(horizontal = if (wide) 28.dp else 16.dp, vertical = if (wide) 24.dp else 12.dp)) {
                 item("heading") {
                     WorkspaceTitle(W.Plugins.text())
                     if (available.any { it.canToggle }) Text(H.Enable.text(),
-                        Modifier.padding(top = 4.dp), style = MaterialTheme.typography.bodyMedium, color = PocketColors.muted)
-                    if (plugins.isEmpty()) Text(H.NoPlugins.text(), Modifier.padding(top = 12.dp))
+                        Modifier.padding(top = frame?.titleGap ?: 4.dp), style = MaterialTheme.typography.bodyMedium, color = PocketColors.muted)
+                    if (plugins.isEmpty()) Text(H.NoPlugins.text(), Modifier.padding(top = frame?.titleGap ?: 12.dp))
                 }
                 for ((label, group) in listOf(H.Available.text() to available, tel.misa.mxpocket.i18n.KeypadCopy.Unavailable.text() to unavailable)) {
                     if (group.isEmpty()) continue

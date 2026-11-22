@@ -1,6 +1,7 @@
 package tel.misa.mxpocket.decks
 
 import android.content.ActivityNotFoundException
+import android.content.BroadcastReceiver
 import android.os.Build
 import android.os.Bundle
 import androidx.compose.runtime.collectAsState
@@ -18,19 +19,22 @@ class TeamsAccessActivity : DeckActivity() {
     private val access by lazy { TeamsAccess(this) }
     private val session get() = (application as PocketApplication).session
     private var problem by mutableStateOf<Copy?>(null)
+    private lateinit var profiles: BroadcastReceiver
     private var state by mutableStateOf(TeamsSetupState(false, false, false, false))
     private fun refresh() {
         state = TeamsSetupState(access.enabled, access.granted, access.toolbarGranted,
-            Build.VERSION.SDK_INT >= 34, access.singleProfile)
+            Build.VERSION.SDK_INT >= 34, access.toolbarProfileEligible)
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        profiles = observeTeamsProfiles(::refresh)
         page({ AccessCopy.TeamsControls.text() }) {
             val deck by session.deckState.collectAsState()
             TeamsSetupScreen(state.copy(message = problem?.text().orEmpty()), deck.teams.status, ::act)
         }
     }
     override fun onResume() { super.onResume(); refresh() }
+    override fun onDestroy() { unregisterReceiver(profiles); super.onDestroy() }
     private fun act(action: TeamsSetupAction) {
         if (action == TeamsSetupAction.DONE) { finish(); return }
         if (!isUnlockedAndInteractive()) return
