@@ -150,14 +150,15 @@ fun LayoutEditor(
             val library: @Composable () -> Unit = {
                 WorkspaceTitle("Layouts")
                 EditorNote("Choosing a profile puts it on the keypad. Choosing a page only opens it here for editing.")
-                LibraryGroup("Profile", deck.profiles.map { it.id to it.name }, profile.id, !writer.busy, ::selectProfile,
+                LibraryGroup("Profile", deck.profiles.map { p -> live?.profiles?.find { it.id == p.id } ?: ProfileChoice(p.id, p.name) },
+                    profile.id, !writer.busy, ::selectProfile,
                     listOf(Command.CREATE_PROFILE, Command.COPY_PROFILE, Command.RENAME_PROFILE, Command.DELETE_PROFILE),
                     allowed = { cmd -> writable && when (cmd) {
                         Command.CREATE_PROFILE, Command.COPY_PROFILE -> deck.profiles.size < DeckLimits.PROFILES
                         Command.DELETE_PROFILE -> deck.profiles.size > 1
                         else -> true
                     } }, choose = { command = it })
-                LibraryGroup("Page", profile.pages.map { it.id to it.name }, page.id, !writer.busy, ::selectPage,
+                LibraryGroup("Page", profile.pages.map { ProfileChoice(it.id, it.name) }, page.id, !writer.busy, ::selectPage,
                     listOf(Command.CREATE_PAGE, Command.COPY_PAGE, Command.RENAME_PAGE, Command.DELETE_PAGE),
                     allowed = { cmd -> writable && when (cmd) {
                         Command.CREATE_PAGE, Command.COPY_PAGE -> profile.pages.size < DeckLimits.PAGES
@@ -175,6 +176,10 @@ fun LayoutEditor(
                     else Text("${profile.name} / ${page.name}", style = MaterialTheme.typography.titleMedium)
                     PocketButton("Swap keys", { show(Pane.PREVIEW); swapping = true }, Modifier.fillMaxWidth(),
                         ShellIcon.SWAP, PocketTone.ACCENT, enabled = writable)
+                    if (wide && live?.simulator != null) {
+                        KeypadGrid(gridTiles(), { i, down -> if (!down) pickKey(i) },
+                            Modifier.widthIn(max = 360.dp).align(Alignment.CenterHorizontally))
+                    }
                 }
                 if (!wide || index != null) PocketButton("Profile settings and rules", { show(Pane.SETTINGS) },
                     Modifier.fillMaxWidth(), ShellIcon.SETTINGS, enabled = !writer.busy)
@@ -192,7 +197,9 @@ fun LayoutEditor(
                     }
                 } else {
                     if (!wide) TextButton(onClick = { show(Pane.PREVIEW) }) { Text("Back to preview") }
-                    PocketCard { ProfileSettings(profile, deck, decision, writable) { writer.edit(it) } }
+                    PocketCard { ProfileSettings(profile, deck, decision, writable,
+                        live?.profiles?.find { it.id == profile.id }?.unavailableReason == null,
+                        ruleEngine = live?.simulator == null) { writer.edit(it) } }
                     PocketCard { RuleSection(profile, deck.profiles, signals, writable, foreground, addApp = { pkg, done ->
                         writer.edit(DeckEdit.Rules(profile.id, profile.rules, profile.rules +
                             DeckRule(tel.misa.mxpocket.FOREGROUND_APP, pkg, tel.misa.mxpocket.APP_RULE_WEIGHT)), done)
@@ -279,14 +286,16 @@ private fun EditorPane(modifier: Modifier, bounded: Boolean, content: @Composabl
 
 @Composable
 private fun LibraryGroup(
-    title: String, items: List<Pair<String, String>>, selected: String, enabled: Boolean, select: (String) -> Unit,
+    title: String, items: List<ProfileChoice>, selected: String, enabled: Boolean, select: (String) -> Unit,
     commands: List<Command>, allowed: (Command) -> Boolean, choose: (Command) -> Unit,
 ) {
     HorizontalDivider()
     Text(title, style = MaterialTheme.typography.titleMedium)
-    items.forEach { (id, name) ->
-        NavigationDrawerItem(label = { Text(name) }, selected = id == selected, onClick = { if (enabled) select(id) },
-            shape = MaterialTheme.shapes.small)
+    items.forEach { (id, name, reason) ->
+        if (reason != null) UnavailableRow(name, reason)
+        else if (!enabled) UnavailableRow(name, "Saving changes…")
+        else NavigationDrawerItem(label = { Text(name) }, selected = id == selected, onClick = { select(id) },
+            shape = MaterialTheme.shapes.small, modifier = Modifier.pocketFocusRing(MaterialTheme.shapes.small))
     }
     Box {
         var menu by remember { mutableStateOf(false) }
@@ -302,7 +311,7 @@ private fun LibraryGroup(
 
 @Composable
 private fun ProfileSettings(profile: DeckProfile, deck: DeckState, decision: DeckDecision,
-                            writable: Boolean, edit: (DeckEdit) -> Unit) {
+                            writable: Boolean, available: Boolean, ruleEngine: Boolean, edit: (DeckEdit) -> Unit) {
     EditorHeading("Profile selection")
     val pinned = profile.id == deck.pinnedProfileId
     val defaultName = deck.profiles.first { it.id == deck.defaultProfileId }.name
@@ -310,12 +319,13 @@ private fun ProfileSettings(profile: DeckProfile, deck: DeckState, decision: Dec
     EditorNote("Default: $defaultName · " + (pinnedName?.let { "Pinned: $it" } ?: "Not pinned"))
     EditorActions {
         PocketButton(if (pinned) "Unpin profile" else "Pin this profile", { edit(DeckEdit.Pin(if (pinned) null else profile.id)) },
-            icon = ShellIcon.PIN, tone = PocketTone.ACCENT, enabled = writable)
+            icon = ShellIcon.PIN, tone = PocketTone.ACCENT, enabled = writable && (available || pinned))
         PocketButton("Set as default", { edit(DeckEdit.Default(profile.id)) }, icon = ShellIcon.STAR,
-            enabled = writable && profile.id != deck.defaultProfileId)
+            enabled = writable && available && profile.id != deck.defaultProfileId)
     }
-    EditorSwitch("Automatic profile switching", deck.automatic, writable) { edit(DeckEdit.Automatic(it)) }
-    EditorSwitch("Include ${profile.name} in automatic switching", profile.automatic, writable) {
+    if (!ruleEngine) EditorNote("Automatic switching runs on Android. Saved rules are kept.")
+    EditorSwitch("Automatic profile switching", deck.automatic, writable && ruleEngine) { edit(DeckEdit.Automatic(it)) }
+    EditorSwitch("Include ${profile.name} in automatic switching", profile.automatic, writable && ruleEngine) {
         edit(DeckEdit.ProfileAutomatic(profile.id, it))
     }
     if (!profile.automatic) EditorNote("Automatic switching won’t enter this profile or leave it while it’s active.")

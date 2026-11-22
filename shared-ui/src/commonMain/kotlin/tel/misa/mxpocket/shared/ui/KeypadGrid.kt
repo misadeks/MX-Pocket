@@ -50,13 +50,17 @@ fun KeyTile.toGridTile(inputEnabled: Boolean, image: ImageBitmap? = null): Keypa
 @Composable
 private fun KeyFaceWindow(index: Int, tile: KeypadTile, modifier: Modifier) {
     tile.image?.let { Image(it, null, modifier, contentScale = ContentScale.FillBounds); return }
-    val measurer = rememberTextMeasurer()
-    val direction = LocalLayoutDirection.current
     val face = tile.face ?: KeyTile(tile.label, tile.footer, tile.color.toArgb(), icon = tile.icon,
         enabled = tile.enabled, readOnly = tile.readOnly)
-    // Virtual/editor faces use the LCD painter at panel resolution, not at the
-    // current zoom. Android's live adapter supplies the already composited image.
-    val pixels = remember(index, face, direction, measurer) {
+    Image(rememberKeyPixels(index, face), null, modifier, contentScale = ContentScale.FillBounds)
+}
+
+/** The mirror and the Windows JPEG encoder consume the same panel-resolution pixels. */
+@Composable
+fun rememberKeyPixels(index: Int, face: KeyTile): ImageBitmap {
+    val measurer = rememberTextMeasurer()
+    val direction = LocalLayoutDirection.current
+    return remember(index, face, direction, measurer) {
         val bitmap = ImageBitmap(118, 118)
         val canvas = Canvas(bitmap)
         canvas.drawRect(0f, 0f, 118f, 118f, Paint().apply { color = Color(face.background) })
@@ -71,7 +75,6 @@ private fun KeyFaceWindow(index: Int, tile: KeypadTile, modifier: Modifier) {
         }
         bitmap
     }
-    Image(pixels, null, modifier, contentScale = ContentScale.FillBounds)
 }
 
 /** Positions in the approved SVG's 480 x 561 viewBox, not in LCD panel coordinates. */

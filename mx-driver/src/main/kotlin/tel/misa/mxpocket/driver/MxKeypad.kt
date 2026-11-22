@@ -8,7 +8,6 @@ import java.io.IOException
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 /** No Activity, UI, automation or media dependency. Call suspend operations from a caller-owned scope. */
@@ -110,16 +109,7 @@ class MxKeypad private constructor(
             }
             try {
                 withContext(Dispatchers.IO) { usb.start() }
-                delay(100)
-                val root = session.command(0, 0, 0x1b, 0x04)
-                if (root.size < 7 || root.u8(4) == 0) throw IOException("Reprogrammable controls feature unavailable")
-                val feature = root.u8(4)
-                onLog("Discovered HID++ 0x1b04 index=0x${feature.toString(16)}")
-                decoder.set(KeyInput(feature))
-                for (id in listOf(0x01a1, 0x01a2)) {
-                    session.command(feature, 3, id shr 8, id and 255, 3)
-                    onLog("Divert page control 0x${id.toString(16)}: acknowledged")
-                }
+                session.initializeKeypad(decoder::set, onLog)
                 onLog("Using source-supported LCD VLP index=2, 480x480 panel / nine 118x118 regions")
                 return MxKeypad(session, onLog)
             } catch (e: Exception) {

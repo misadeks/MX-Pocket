@@ -18,26 +18,32 @@ import tel.misa.mxpocket.shared.ui.PocketScreenEvent
 
 class PreviewDeckTest {
     @get:Rule val folder = TemporaryFolder()
-    @Test fun manualTeamsPageNeverSimulatesALiveMeetingOrMicToggle() {
+    private fun PreviewDeck.press(slot: Int, now: Long, hold: Boolean = false): String =
+        press(PocketScreenEvent.VirtualKey(slot, board(now).grid, hold), now)!!
+
+    @Test fun importedTeamsLayoutIsPreservedButNeverExecuted() {
         val repo = DeckRepository(File(folder.root, "deck.json"))
-        val deck = PreviewDeck(repo)
-        deck.select("teams")
+        repo.selectProfile("teams").getOrThrow()
+        val before = repo.exportJson()
+        val deck = PreviewDeck(repo).apply { simulator = true }
+        check(deck.tiles(0).none { it.enabled })
         deck.press(7, 0)
-        assertEquals("In call", repo.state.value.activePage.name)
+        assertEquals(before, repo.exportJson())
+        repo.openPage(repo.state.value.activeProfile.pages.single { it.name == "In call" }.id).getOrThrow()
         val status = deck.tiles(0)[7]
-        check(status.readOnly && status.label == "Call status" && status.footer == "Android only")
+        check(status.readOnly && status.label == "Call status" && !status.enabled)
         val mic = deck.tiles(0)[4]
         assertEquals("Mic unavailable", mic.label)
         check(!mic.enabled)
         deck.press(4, 0)
         assertEquals(mic, deck.tiles(0)[4])
-        deck.press(8, 0)
-        assertEquals("Work", repo.state.value.activePage.name)
+        deck.cycle(1)
+        assertEquals("focus", deck.profileId)
     }
 
     @Test fun holdUsesItsOwnActionAndAvailabilityWithoutFallingBackToTap() {
         val repo = DeckRepository(File(folder.root, "deck.json"))
-        val deck = PreviewDeck(repo)
+        val deck = PreviewDeck(repo).apply { simulator = true }
         deck.select("audio")
         val key = DeckKey(action = ActionCall(DeckCommand.LOUDER.id))
         fun bind(hold: DeckCommand) = repo.setKey("audio", "root", 0, key.copy(holdAction = ActionCall(hold.id))).getOrThrow()
@@ -59,7 +65,7 @@ class PreviewDeckTest {
 
     @Test fun holdOnlyPluginUsesFallbackOwnerAndRejectsEventsFromAnEarlierBoard() {
         val repo = DeckRepository(File(folder.root, "deck.json"))
-        val deck = PreviewDeck(repo)
+        val deck = PreviewDeck(repo).apply { simulator = true }
         val page = repo.createPage("focus", "Hold only").getOrThrow()
         val audio = DeckKey(holdAction = ActionCall("plugin.key", mapOf("pluginId" to "audio", "index" to "2")))
         repo.setKey("focus", page, 0, audio).getOrThrow()
@@ -85,7 +91,7 @@ class PreviewDeckTest {
 
     @Test fun legacyOwnerAndExplicitMediaCommandsKeepTheirMeaningsOnEditedPages() {
         val repo = DeckRepository(File(folder.root, "deck.json"))
-        val deck = PreviewDeck(repo)
+        val deck = PreviewDeck(repo).apply { simulator = true }
         fun bind(i: Int, command: DeckCommand, migrated: Boolean = false) {
             val owner = if (migrated) mapOf(DeckActions.LEGACY_SLOT_OWNER to "audio") else emptyMap()
             repo.setKey("focus", "root", i, DeckKey(action = ActionCall(command.id, owner))).getOrThrow()
@@ -133,21 +139,20 @@ class PreviewDeckTest {
     }
 
     @Test fun navigationUsesFactoryBindingsAndNeverClaimsAndroidAccess() {
-        val deck = PreviewDeck(DeckRepository(File(folder.root, "deck.json")))
-        deck.select("navigation")
+        val deck = PreviewDeck(DeckRepository(File(folder.root, "deck.json"))).apply { simulator = true }
+        deck.repository.selectProfile("navigation").getOrThrow()
         val up = factoryKeyBindings.single { it.label == "Navigation key 2: Scroll up" }
         assertEquals(deck.repository.state.value.activePage.keys[1].action, up.call)
         val tiles = deck.tiles(0)
         check(tiles.map { it.label } == listOf("Back", "Scroll up", "Home", "Prev focus", "Select",
             "Next focus", "Recents", "Scroll down", "Access info"))
         check(tiles.none { it.enabled && !it.readOnly })
-        check(tiles[6].let { !it.enabled && it.label == "Recents" && it.footer == "Needs access" })
-        check(tiles.last().footer == "System nav off")
+        check(tiles[6].let { !it.enabled && it.label == "Recents" && it.footer.contains("Android") })
         tiles.forEachIndexed { index, tile -> check(deck.press(index, 0).startsWith(tile.label)) }
     }
 
     @Test fun factoryNavigationTimerAndSimulatedAudio() {
-    val deck = PreviewDeck(DeckRepository(File(folder.root, "deck.json")))
+    val deck = PreviewDeck(DeckRepository(File(folder.root, "deck.json"))).apply { simulator = true }
     fun label(key: Int, now: Long = 0) = deck.tiles(now)[key - 1].label
     check(deck.profileName == "Focus")
     deck.press(6, 0) // 15-minute preset
@@ -155,18 +160,12 @@ class PreviewDeckTest {
     check(label(2, 1_000) == "14:59")
 
     deck.cycle(-1)
-    check(deck.profileId == "teams")
-    deck.cycle(-1)
     check(deck.profileId == "game.xo")
     deck.cycle(-1)
-    check(deck.profileName == "Navigation")
-    check(deck.press(1, 1_000).contains("No system action"))
-    deck.cycle(3)
+    check(deck.profileName == "Audio")
+    deck.cycle(-1)
     check(label(1, 1_000) == "Pause")
-    deck.cycle(2)
-    check(deck.profileName == "Phone")
-    check(deck.press(0, 1_000).contains("No phone action"))
-    deck.press(7, 1_000) // Phone's Audio shortcut
+    deck.cycle(1)
     check(deck.profileName == "Audio")
     fun mute() = deck.tiles(0)[1]
     check(mute().label == "Mute" && mute().footer == "6 / 15")
@@ -182,7 +181,7 @@ class PreviewDeckTest {
     check(before[7].readOnly)
     for (slot in 6..8) { check(!before[slot].enabled || before[slot].readOnly); deck.press(slot, 1_000) }
     check(before == deck.tiles(0))
-    repeat(deck.repository.state.value.profiles.sumOf { it.pages.size }) {
+    repeat(3) {
         check(deck.tiles(1_000).size == 9)
         deck.cycle(1)
     }
@@ -190,7 +189,7 @@ class PreviewDeckTest {
     }
 
     @Test fun xoUsesThePlayableAndroidBoard() {
-        val deck = PreviewDeck(DeckRepository(File(folder.root, "deck.json")))
+        val deck = PreviewDeck(DeckRepository(File(folder.root, "deck.json"))).apply { simulator = true }
         deck.select("game.xo")
         fun press(slot: Int) = deck.press(slot, 0)
         fun label(slot: Int) = deck.tiles(0)[slot].label
@@ -208,5 +207,44 @@ class PreviewDeckTest {
         deck.cycle(-1)
         press(4)
         check(label(2) == "2 Players")
+    }
+
+    @Test fun physicalAudioIsAllowlistedAndSimulatorNeverEmitsWindowsInput() {
+        val sent = mutableListOf<MediaKey>()
+        val repo = DeckRepository(File(folder.root, "deck.json"))
+        val deck = PreviewDeck(repo) { sent += it; "Sent ${it.label} to Windows." }
+        deck.select("audio")
+        fun fire(slot: Int) = deck.physical(slot, deck.board(0).grid, 0, false)
+        for (slot in 0..8) fire(slot)
+        assertEquals((0..5).map(MediaKey::forSlot), sent)
+        check(deck.tiles(0).drop(6).none { it.enabled })
+        for (command in listOf(DeckCommand.MUTE, DeckCommand.UNMUTE, DeckCommand.MEDIA_ACCESS, DeckCommand.VOLUME_LEVEL)) {
+            repo.setKey("audio", "root", 0, DeckKey(action = ActionCall(command.id))).getOrThrow()
+            check(!deck.tiles(0)[0].enabled)
+            fire(0)
+        }
+        val stale = deck.board(0).grid
+        check(deck.press(PocketScreenEvent.VirtualKey(2, stale), 0) == null)
+        deck.simulator = true
+        assertNull(deck.physical(2, stale, 0, false))
+        check(deck.press(2, 0).contains("Windows media is unchanged"))
+        assertEquals(6, sent.size)
+    }
+
+    @Test fun physicalReleaseDoesNotRetargetAHeldKeyOrExecuteOnDisconnect() {
+        val repo = DeckRepository(File(folder.root, "deck.json"))
+        val sent = mutableListOf<MediaKey>()
+        val deck = PreviewDeck(repo) { sent += it; it.label }
+        deck.select("audio")
+        repo.setKey("audio", "root", 0, DeckKey(action = ActionCall(DeckCommand.LOUDER.id),
+            holdAction = ActionCall(DeckCommand.QUIETER.id))).getOrThrow()
+        val input = PhysicalKeys(deck)
+        fun edge(down: Boolean, at: Long, synth: Boolean = false) =
+            input.accept(tel.misa.mxpocket.driver.KeyEvent(1, down, synth), deck.board(at).grid, at)
+        edge(true, 0); edge(true, 10); edge(false, 100); edge(false, 110)
+        edge(true, 200); edge(false, 800)
+        edge(true, 900); edge(false, 1600, synth = true)
+        edge(true, 1700); deck.resetInput(); edge(false, 1750)
+        assertEquals(listOf(MediaKey.LOUDER, MediaKey.QUIETER), sent)
     }
 }

@@ -9,13 +9,13 @@ import androidx.compose.ui.awt.ComposeWindow
 import java.io.File
 import java.nio.file.Files
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.*
 import tel.misa.mxpocket.decks.DeckCommand
 import tel.misa.mxpocket.shared.ui.*
 
-private fun now() = System.nanoTime() / 1_000_000
-private const val DEVICE_LIMIT = "Windows simulator: no USB connection, phone apps, camera, media sessions or Android access grants."
+private const val SIM_LIMIT = "The virtual keypad runs locally. It never sends USB or Windows media commands."
 
 private fun chooseBackup(owner: ComposeWindow, repo: DeckRepository, save: Boolean): String? {
     val picker = FileDialog(owner, if (save) "Export layouts" else "Import layouts",
@@ -49,13 +49,12 @@ fun main() = application {
     var themeMode by remember {
         mutableStateOf(ThemeMode.entries.find { it.name == appearance.get("theme", null) } ?: ThemeMode.SYSTEM)
     }
-    var simulating by remember { mutableStateOf(true) }
-    var message by remember { mutableStateOf("Virtual keypad connected. No USB messages are sent.") }
-    var time by remember { mutableLongStateOf(now()) }
+    var message by remember { mutableStateOf("Connect the wired keypad, or choose the virtual keypad in Settings.") }
+    var time by remember { mutableLongStateOf(monotonicMs()) }
     var revision by remember { mutableIntStateOf(0) }
     val history = remember { mutableStateListOf<String>() }
-    var setup by remember { mutableStateOf(false) }
-    var setupReview by remember { mutableStateOf(false) }
+    var repaint by remember { mutableIntStateOf(0) }
+    val scope = rememberCoroutineScope()
     var nestedBack by remember { mutableStateOf<(() -> Unit)?>(null) }
     val registerBack: @Composable (Boolean, () -> Unit) -> Unit = { enabled, back ->
         val current by rememberUpdatedState(back)
@@ -71,43 +70,57 @@ fun main() = application {
         if (history.size > 60) history.removeAt(0)
         revision++
     }
-    LaunchedEffect(simulating) {
-        if (simulating) while (true) {
-            time = now()
-            if (host.tick(time)) status("Focus timer finished. No tone played.")
+    val usb = remember { DesktopUsb(scope, host, ::status) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            if (host.timerRunning) {
+                time = monotonicMs()
+                if (host.tick(time)) status("Focus timer finished. No tone played.")
+            }
             delay(1_000)
         }
     }
-    Window(::exitApplication, title = "${deck.activeProfile.name} - MX Pocket",
+    Window({ scope.launch { usb.close(); exitApplication() }; Unit }, title = "${deck.activeProfile.name} - MX Pocket",
         state = rememberWindowState(width = 1120.dp, height = 760.dp),
         onPreviewKeyEvent = {
             if (it.type == KeyEventType.KeyUp && it.key == Key.Escape) {
                 when {
-                    setup -> { setup = false; true }
                     nestedBack != null -> { nestedBack?.invoke(); true }
                     tab != WorkspaceTab.HOME -> { tab = WorkspaceTab.HOME; true }
                     else -> false
                 }
             } else false
         }) {
-        val profiles = deck.profiles.map { ProfileChoice(it.id, it.name) }
-        val board = remember(deck, time, revision, simulating) { host.board(time, deck) }
-        val tiles = board.faces.map { it.toGridTile(simulating) }
+        val simulating = host.simulator
+        val profiles = remember(deck.profiles) { deck.profiles.map { ProfileChoice(it.id, it.name, profileReason(it.id)) } }
+        val board = remember(deck, time, revision, simulating, usb.ready) { host.board(monotonicMs(), deck) }
+        val pixels = board.faces.mapIndexed { i, face -> rememberKeyPixels(i, face) }
+        LaunchedEffect(usb.ready, board.grid, pixels, repaint) {
+            if (usb.ready) usb.submit(board.grid, pixels, repaint)
+        }
+        val tiles = board.faces.mapIndexed { i, face -> face.toGridTile(simulating, pixels[i]) }
         val state = PocketScreenState(status = message, pluginTitle = if (deck.activeProfile.name == deck.activePage.name)
             deck.activeProfile.name else "${deck.activeProfile.name} / ${deck.activePage.name}",
             tiles = tiles, profiles = profiles, activeId = deck.activeProfileId, reason = deck.selectionReason,
-            connectionLabel = if (simulating) "Virtual keypad" else "Disconnected", diagnostics = "No USB diagnostics: Windows has no HID adapter.",
-            log = history.joinToString("\n"), simulator = DesktopSimulator(DEVICE_LIMIT, board.grid.takeIf { simulating }),
+            connectionLabel = when { simulating -> "Virtual keypad"; usb.ready -> "USB ready"; usb.active -> "Connecting"; else -> "Disconnected" },
+            usbReady = usb.ready, connectionActive = usb.active, diagnostics = usb.diagnostics,
+            log = history.joinToString("\n"), simulator = DesktopSimulator(SIM_LIMIT, board.grid.takeIf { simulating }, supportsUsb = true),
             activePageId = deck.activePage.id, themeMode = themeMode)
-        val plugins = defaultDeck().profiles.map {
-            PluginItem(it.id, it.name, true, "Local simulation", when (it.id) {
-                "focus" -> "Timer and presets run locally. No completion sound."
-                "audio" -> "Volume and playback are simulated. Windows media is unchanged."
-                "game.xo" -> "Play against the computer or a second player on this keypad."
-                else -> "Android device actions do not run on Windows."
-            }, profiles.any { profile -> profile.id == it.id }, it.id == deck.defaultProfileId, null, canToggle = false)
-        }
-        val options = buildList {
+        val plugins = remember(profiles, simulating, deck.defaultProfileId) { defaultDeck().profiles.map {
+            val reason = pluginReason(it.id)
+            PluginItem(it.id, it.name, reason == null, when (it.id) {
+                "audio" -> if (simulating) "Virtual audio" else "Windows media"
+                else -> "On this computer"
+            }, when (it.id) {
+                "focus" -> "Start, pause or reset a focus session. Choose a preset or adjust by five minutes."
+                "audio" -> if (simulating) "Simulated volume and playback. Windows audio is unchanged."
+                    else "Use the wired keys for volume, mute and playback in a compatible media app."
+                "game.xo" -> "Play locally against the computer or a second player."
+                else -> reason.orEmpty()
+            }, profiles.any { profile -> profile.id == it.id }, it.id == deck.defaultProfileId, null,
+                canToggle = false, unavailableReason = reason)
+        } }
+        val options = remember(profiles, workflowState.definitions, simulating) { buildList {
             add(BindingOption("Back", ActionCall(DeckActions.BACK)))
             add(BindingOption("Return to root", ActionCall(DeckActions.ROOT)))
             DeckCommand.entries.filter { it.deck in setOf("audio", "navigation", "teams") }.forEach {
@@ -118,36 +131,27 @@ fun main() = application {
                 add(BindingOption("Workflow: ${it.name} (Android execution)", ActionCall("workflow.run", mapOf("workflowId" to it.id))))
             }
             addAll(factoryKeyBindings)
-        }
+        }.map { it.copy(unavailableReason = bindingReason(it.call, simulating)) } }
         val backup = { save: Boolean ->
             try { chooseBackup(window, repo, save)?.let(::status) }
             catch (e: Exception) { status("Layout backup failed: ${e.message}") }
             Unit
         }
         PocketTheme(themeMode) {
-            if (setup) {
-                SetupScreen(SetupScreenState(emptySet(), setupReview, emptyList(), "", false,
-                    options = SetupFeature.entries.map { SetupOption(it, unavailableReason = "Requires the Android host.") },
-                    introduction = DEVICE_LIMIT, reviewHint = "No Android setup steps on this host.")) {
-                    when (it) {
-                        SetupEvent.Review -> setupReview = true
-                        SetupEvent.Edit -> setupReview = false
-                        else -> setup = false
-                    }
-                }
-            } else PocketWorkspace(tab, { tab = it }, state, plugins, event = { event ->
+            PocketWorkspace(tab, { tab = it }, state, plugins, event = { event ->
                 try {
                     when (event) {
-                        PocketScreenEvent.EnterPreview -> { host.resetInput(); simulating = true; status("Virtual keypad connected.") }
-                        PocketScreenEvent.StopPreview -> { host.resetInput(); simulating = false; status("Virtual keypad disconnected.") }
+                        PocketScreenEvent.ToggleConnection -> usb.toggle()
+                        PocketScreenEvent.EnterPreview -> if (!usb.active) { host.simulator = true; status(SIM_LIMIT) }
+                        PocketScreenEvent.StopPreview -> { host.simulator = false; status("Virtual keypad disconnected.") }
                         is PocketScreenEvent.SelectPlugin -> { host.select(event.id); status("Selected ${host.profileName}.") }
                         is PocketScreenEvent.ChangePage -> { host.cycle(event.delta); status("Selected ${host.profileName}.") }
-                        is PocketScreenEvent.VirtualKey -> if (simulating && tab == WorkspaceTab.HOME && !setup)
-                            host.press(event, now())?.let(::status)
-                        is PocketScreenEvent.DefaultProfile -> repo.setDefault(event.id).getOrThrow()
-                        PocketScreenEvent.FeatureSetup -> { setupReview = false; setup = true }
+                        is PocketScreenEvent.VirtualKey -> if (host.simulator && !usb.active && tab == WorkspaceTab.HOME)
+                            host.press(event, monotonicMs())?.let(::status)
+                        is PocketScreenEvent.DefaultProfile -> if (profileReason(event.id) == null) repo.setDefault(event.id).getOrThrow()
+                        PocketScreenEvent.Repaint -> if (usb.ready) { repaint++; status("Redrawing LCD keys.") }
                         is PocketScreenEvent.SetTheme -> { themeMode = event.mode; appearance.put("theme", event.mode.name) }
-                        else -> status(DEVICE_LIMIT)
+                        else -> status("This operation is unavailable on Windows.")
                     }
                 } catch (e: Exception) { status(e.message ?: "Workspace operation failed.") }
             }, editor = {

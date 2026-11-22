@@ -12,8 +12,8 @@ import tel.misa.mxpocket.shared.ui.PocketScreenEvent
 import tel.misa.mxpocket.shared.ui.VirtualGrid
 import tel.misa.mxpocket.shared.ui.virtualGrid
 
-/** Uses the same saved deck and folder histories as the editor. Device effects never leave this host. */
-class PreviewDeck(val repository: DeckRepository) {
+/** Owns the local plugins; only a physical-input dispatch may call the Windows adapter. */
+class PreviewDeck(val repository: DeckRepository, private val sendMedia: (MediaKey) -> String = ::sendWindowsMedia) {
     private val deck get() = repository.state.value
     private val focus = FocusTimer()
     private val xo = TicTacToeGame()
@@ -26,6 +26,8 @@ class PreviewDeck(val repository: DeckRepository) {
     private var lastSnapshot: DeckState? = null
     private var generation = 0L
     fun resetInput() { generation++ }
+    var simulator = false
+        set(value) { if (field != value) { field = value; resetInput() } }
 
     val profileName get() = deck.activeProfile.name
     val profileIndex get() = deck.profiles.indexOf(deck.activeProfile)
@@ -34,14 +36,23 @@ class PreviewDeck(val repository: DeckRepository) {
     val profiles get() = deck.profiles.map { it.id to it.name }
 
     fun select(id: String) {
+        profileReason(id)?.let { throw IllegalArgumentException(it) }
         repository.selectProfile(id).getOrThrow()
     }
 
     fun cycle(delta: Int) {
-        repository.changePage(delta).getOrThrow()
+        val pages = deck.activeProfile.pages
+        if (profileReason(profileId) == null && (pages.size > 1 || delta < 0 && deck.histories.getValue(profileId).size > 1)) {
+            repository.changePage(delta).getOrThrow()
+        } else {
+            val step = if (delta < 0) -1 else 1
+            (1..profileCount).asSequence().map { deck.profiles[Math.floorMod(profileIndex + it * step, profileCount)].id }
+                .firstOrNull { profileReason(it) == null }?.let(::select)
+        }
     }
 
     fun tick(now: Long) = focus.tick(now)
+    val timerRunning get() = focus.running
 
     private fun labels(plugin: String, now: Long): List<String> = when (plugin) {
         "focus" -> focus.present(now).keys.map { it.label }
@@ -95,7 +106,15 @@ class PreviewDeck(val repository: DeckRepository) {
             "phone" -> phoneFrame().keys[action.index].let { tile ->
                 if (action.index in 6..7 || tile.readOnly) tile else tile.copy(enabled = false, footer = "Android only")
             }
-            "audio" -> {
+            "audio" -> if (!simulator) {
+                val control = MediaKey.forSlot(action.index)
+                val glyph = listOf(PlayerGlyph.VOLUME_DOWN, PlayerGlyph.MUTE, PlayerGlyph.VOLUME_UP,
+                    PlayerGlyph.PREVIOUS, PlayerGlyph.PLAY_PAUSE, PlayerGlyph.NEXT).getOrNull(action.index)
+                KeyTile(action.command?.label ?: control?.label ?: when (action.index) {
+                    6 -> "Seek back"; 8 -> "Seek forward"; else -> "Track"
+                }, "Windows media", 0xff303438.toInt(), glyph = glyph, playerFace = glyph != null,
+                    showLabel = glyph == null, showFooter = false, enabled = control != null)
+            } else {
                 val i = action.index
                 val level = VolumeLevel(if (muted) 0 else volume, 15, muted)
                 val glyph = listOf(PlayerGlyph.VOLUME_DOWN, when (action.command) {
@@ -131,9 +150,11 @@ class PreviewDeck(val repository: DeckRepository) {
         val navigation = assigned?.id in setOf(DeckActions.PAGE, DeckActions.PROFILE, DeckActions.BACK, DeckActions.ROOT)
         val owner = assigned?.slotOwner()
         val ownerAvailable = owner == null || owner == selectedPlugin
-        val available = key.enabled && ownerAvailable && (navigation || native?.enabled == true && dynamic != "-")
+        val unavailableReason = profileReason(deck.activeProfileId) ?: assigned?.let { bindingReason(it, simulator) }
+        val available = key.enabled && unavailableReason == null && ownerAvailable && (navigation || native?.enabled == true && dynamic != "-")
         return key.present(native, name ?: "-", when {
             !key.enabled -> "Disabled"
+            unavailableReason != null -> unavailableReason
             !ownerAvailable -> "Unavailable"
             native != null -> native.footer
             !available && assigned != null -> "Unavailable"
@@ -163,11 +184,12 @@ class PreviewDeck(val repository: DeckRepository) {
     /** A stale Home callback is never reinterpreted as input to the currently displayed slot. */
     fun press(event: PocketScreenEvent.VirtualKey, now: Long): String? = synchronized(repository) {
         val current = board(now)
-        if (event.grid != current.grid) null else press(event.index, now, event.hold, current)
+        if (!simulator || event.grid != current.grid) null else press(event.index, now, event.hold, current)
     }
 
-    fun press(slot: Int, now: Long, hold: Boolean = false): String = synchronized(repository) {
-        press(slot, now, hold, board(now))
+    internal fun physical(slot: Int, grid: VirtualGrid, now: Long, hold: Boolean): String? = synchronized(repository) {
+        val current = board(now)
+        if (simulator || grid != current.grid) null else press(slot, now, hold, current)
     }
 
     private fun press(slot: Int, now: Long, hold: Boolean, current: Board): String {
@@ -209,7 +231,10 @@ class PreviewDeck(val repository: DeckRepository) {
                 6, 7, 8 -> focus.select(listOf(15, 25, 50)[index - 6])
                 else -> return "Focus timer: ${focus.label(now)} remaining."
             }
-            "audio" -> when (index) {
+            "audio" -> if (!simulator) {
+                val control = MediaKey.forSlot(index) ?: return "$label is unavailable."
+                return sendMedia(control)
+            } else when (index) {
                 -1 -> return if (command == DeckCommand.VOLUME_LEVEL) "Volume display only." else "Media access requires Android."
                 0, 2 -> {
                     volume = (volume + if (index == 2) 1 else -1).coerceIn(0, 15)
@@ -225,17 +250,7 @@ class PreviewDeck(val repository: DeckRepository) {
                 6, 8 -> return "Seeking is unavailable in this preview."
                 7 -> return "Now playing: ${tracks[track]}."
             }
-            "navigation" -> return when (index) {
-                2 -> "Recents needs Android navigation access. No system action sent."
-                7 -> "Access info: system navigation is off in this desktop preview. No settings opened."
-                else -> "$label is simulated. No system action sent."
-            }
-            "phone" -> if (index == 6 || index == 7) {
-                val target = if (index == 6) "focus" else "audio"
-                repository.selectProfile(target).getOrElse { return it.message ?: "Profile unavailable." }
-                return "Opened $profileName from Phone."
-            } else return "$label is simulated. No phone action sent."
-            else -> return "$label is simulated. No system action sent."
+            else -> return "$label is unavailable. No system action sent."
         }
         return if (plugin == "focus") "Focus timer: ${focus.label(now)} remaining."
             else "$label in preview only. Windows media is unchanged."

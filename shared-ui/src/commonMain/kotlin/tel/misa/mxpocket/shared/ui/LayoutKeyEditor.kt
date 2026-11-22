@@ -15,7 +15,7 @@ import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.*
 import tel.misa.mxpocket.decks.navigationCommands
 
-data class BindingOption(val label: String, val call: ActionCall)
+data class BindingOption(val label: String, val call: ActionCall, val unavailableReason: String? = null)
 
 val factoryKeyBindings = defaultDeck().profiles.flatMap { profile ->
     profile.pages.single { it.id == profile.rootPageId }.keys.mapIndexedNotNull { physical, key ->
@@ -31,8 +31,8 @@ fun localBindings(options: List<BindingOption>, pages: List<DeckPage>): List<Bin
     val pageOptions = options.filter { it.call.id == DeckActions.PAGE }.associateBy { it.call.params[DeckActions.PAGE_ID] }
     // The host knows the active deck; the editor can also prepare an inactive profile.
     return (pages.map { page ->
-        val call = pageOptions[page.id]?.call ?: ActionCall(DeckActions.PAGE, mapOf(DeckActions.PAGE_ID to page.id))
-        BindingOption("Open page: ${page.name}", call)
+        pageOptions[page.id]?.copy(label = "Open page: ${page.name}")
+            ?: BindingOption("Open page: ${page.name}", ActionCall(DeckActions.PAGE, mapOf(DeckActions.PAGE_ID to page.id)))
     } + options.filterNot { it.call.id == DeckActions.PAGE }).distinctBy { it.call }
 }
 
@@ -147,6 +147,7 @@ internal fun KeyFields(index: Int, draft: KeyDraft, options: List<BindingOption>
             modifier = Modifier.fillMaxWidth().testTag(if (target == BindingTarget.TAP) "choose-binding" else "choose-hold-binding")) {
             Text("${target.label}: ${bindingName(binding(target), options)}")
         }
+        options.find { it.call == binding(target)?.commandBinding() }?.unavailableReason?.let { EditorNote(it) }
     }
     EditorSwitch("Enabled on deck", enabled, writable) { enabled = it }
     if (attempted) error?.let { EditorError(it) }
@@ -186,8 +187,10 @@ internal fun BindingDialog(options: List<BindingOption>, draft: KeyDraft) {
                 }
                 if (filtered.isEmpty()) item { EditorNote("No matching actions.") }
                 items(filtered) { option ->
-                    DropdownMenuItem(text = { Text(if (selected == option.call) "✓ ${option.label}" else option.label) },
-                        onClick = { choose(option.call) })
+                    if (option.unavailableReason == null) {
+                        DropdownMenuItem(text = { Text(if (selected == option.call) "✓ ${option.label}" else option.label) },
+                            onClick = { choose(option.call) })
+                    } else UnavailableRow(option.label, option.unavailableReason)
                 }
             }
         }
