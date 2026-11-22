@@ -66,6 +66,7 @@ fun main() = application {
     val history = remember { mutableStateListOf<String>() }
     var setup by remember { mutableStateOf(false) }
     var setupReview by remember { mutableStateOf(false) }
+    var diagnosticsRequest by remember { mutableIntStateOf(0) }
     var nestedBack by remember { mutableStateOf<(() -> Unit)?>(null) }
     val registerBack: @Composable (Boolean, () -> Unit) -> Unit = { enabled, back ->
         val current by rememberUpdatedState(back)
@@ -135,6 +136,7 @@ fun main() = application {
             catch (e: Exception) { status(W.BackupFailed.text(e.message)) }
             Unit
         }
+        if (diagnosticsRequest != 0) DiagnosticsWindow(state, diagnosticsRequest) { diagnosticsRequest = 0 }
         PocketTheme(themeMode) {
             if (setup) {
                 SetupScreen(SetupScreenState(emptySet(), setupReview, emptyList(), "", false,
@@ -165,7 +167,22 @@ fun main() = application {
             }, editor = {
                 LayoutEditor(remember(repo) { repo.asEditorStore() }, options, emptyMap(), { backup(true) }, { backup(false) },
                     live = state, backHandler = registerBack)
-            }, workflows = { DesktopWorkflows(workflows, registerBack) })
+            }, workflows = { DesktopWorkflows(workflows, registerBack) }, openDiagnosticsWindow = { diagnosticsRequest++ })
         }
+    }
+}
+
+@Composable
+internal fun DiagnosticsWindow(screen: PocketScreenState, request: Int, onClose: () -> Unit) {
+    val windowState = rememberWindowState(width = 640.dp, height = 680.dp)
+    Window(onCloseRequest = onClose, title = "${W.Diagnostics.text()} - MX Pocket", state = windowState, onPreviewKeyEvent = {
+        if (it.type == KeyEventType.KeyUp && it.key == Key.Escape) { onClose(); true } else false
+    }) {
+        LaunchedEffect(request) {
+            windowState.isMinimized = false
+            window.toFront()
+            window.requestFocus()
+        }
+        PocketTheme(screen.themeMode) { DiagnosticsScreen(screen, onClose) {} }
     }
 }

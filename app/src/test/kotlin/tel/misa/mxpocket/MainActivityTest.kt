@@ -76,22 +76,22 @@ class MainActivityTest {
             ui.onNodeWithText("System").assertIsSelected()
             assertEquals("SYSTEM", app.getSharedPreferences("appearance", 0).getString("theme", null))
         }
+    }
 
-        @Test fun languageSelectorChangesNavigationAndMissingDeviceMessageAcrossRecreation() {
-            try {
-                ActivityScenario.launch(MainActivity::class.java).use { scene ->
-                    ui.onNodeWithText("Settings").performClick()
-                    ui.onNodeWithText("Language").performScrollTo().performClick()
-                    ui.onNodeWithText("Français").performClick()
-                    scene.recreate()
-                    ui.onNodeWithText("Accueil").performClick()
-                    ui.onNodeWithContentDescription("Connecter l’appareil").performClick()
-                    ui.onNodeWithText("Vérifiez le câble", substring = true).assertExists()
-                    assertEquals(AppLanguage.FRENCH, LanguagePreference.choice(app))
-                    assertNull(app.session.request)
-                }
-            } finally { LanguagePreference.set(app, null) }
-        }
+    @Test fun languageSelectorChangesNavigationAndMissingDeviceMessageAcrossRecreation() {
+        try {
+            ActivityScenario.launch(MainActivity::class.java).use { scene ->
+                ui.onNodeWithText("Settings").performClick()
+                ui.onNodeWithText("Language").performScrollTo().performClick()
+                ui.onNodeWithText("Français").performClick()
+                scene.recreate()
+                ui.onNodeWithText("Accueil").performClick()
+                ui.onNodeWithContentDescription("Connecter l’appareil").performClick()
+                ui.onNodeWithText("Vérifiez le câble", substring = true).assertExists()
+                assertEquals(AppLanguage.FRENCH, LanguagePreference.choice(app))
+                assertNull(app.session.request)
+            }
+        } finally { LanguagePreference.set(app, null) }
     }
 
     @Test fun staleLaunchAndRestoredAttemptCannotConnectOrDispatchDesktopInput() {

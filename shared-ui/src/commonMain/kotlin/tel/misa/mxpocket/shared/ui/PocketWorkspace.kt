@@ -23,6 +23,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import kotlinx.coroutines.launch
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -115,9 +116,18 @@ fun PocketWorkspace(
     tab: WorkspaceTab, select: (WorkspaceTab) -> Unit, state: PocketScreenState,
     plugins: List<PluginItem>, event: (PocketScreenEvent) -> Unit,
     editor: @Composable () -> Unit, workflows: @Composable () -> Unit,
+    openDiagnosticsWindow: (() -> Unit)? = null,
+    backHandler: @Composable (Boolean, () -> Unit) -> Unit = { _, _ -> },
 ) {
     val holder = rememberSaveableStateHolder()
+    var diagnosticsOpen by rememberSaveable(tab) { mutableStateOf(false) }
+    val closeDiagnostics = { diagnosticsOpen = false }
+    backHandler(diagnosticsOpen, closeDiagnostics)
     BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
+        if (diagnosticsOpen) {
+            DiagnosticsScreen(state, closeDiagnostics, event)
+            return@BoxWithConstraints
+        }
         val rail = maxWidth >= 840.dp
         Column {
             Row(Modifier.weight(1f)) {
@@ -136,7 +146,7 @@ fun PocketWorkspace(
                             WorkspaceTab.PROFILES -> ProfilesScreen(state, event, editor)
                             WorkspaceTab.PLUGINS -> PluginsScreen(plugins, event)
                             WorkspaceTab.WORKFLOWS -> workflows()
-                            WorkspaceTab.SETTINGS -> SettingsScreen(state, event)
+                            WorkspaceTab.SETTINGS -> SettingsScreen(state, event, openDiagnosticsWindow ?: { diagnosticsOpen = true })
                         }
                     }
                 }
@@ -155,7 +165,7 @@ fun PocketWorkspace(
 
 /**
  * Home mirrors the physical keypad: the nine tiles are the same LCD images, updated as they change.
- * Profile switching lives on the Profiles tab; display maintenance lives in Settings.
+ * Profile switching lives on the Profiles tab.
  */
 @Composable
 fun HomeScreen(state: PocketScreenState, event: (PocketScreenEvent) -> Unit) {
@@ -397,7 +407,7 @@ private fun PluginsScreen(plugins: List<PluginItem>, event: (PocketScreenEvent) 
 }
 
 @Composable
-private fun SettingsScreen(state: PocketScreenState, event: (PocketScreenEvent) -> Unit) {
+private fun SettingsScreen(state: PocketScreenState, event: (PocketScreenEvent) -> Unit, openDiagnostics: () -> Unit) {
     Section(W.Settings.text()) {
         PocketButton(W.Setup.text(), { event(PocketScreenEvent.FeatureSetup) }, Modifier.fillMaxWidth(), ShellIcon.SETTINGS, PocketTone.ACCENT)
         LanguageSelector(state.language) { event(PocketScreenEvent.SetLanguage(it)) }
@@ -435,22 +445,32 @@ private fun SettingsScreen(state: PocketScreenState, event: (PocketScreenEvent) 
                 Note(state.simulator.limitations)
             }
         }
-        PocketCard(W.Diagnostics.text(), ShellIcon.DOCUMENT, caps = true) {
-            PocketDivider()
-            PocketInner {
-                Text(listOf(state.pluginTitle, state.connectionLabel).filter { it.isNotBlank() }.joinToString("  |  "))
-                if (state.reason.isNotBlank()) Note(state.reason)
-            }
-            PocketInner { Text(W.DisplayProfile.text()) }
-            if (state.simulator == null) PocketButton(W.Refresh.text(), { event(PocketScreenEvent.RefreshDiagnostics) },
-                Modifier.fillMaxWidth(), ShellIcon.REFRESH, PocketTone.ACCENT)
-            PocketLabel(W.Descriptor.text())
-            PocketInner { SelectableReadout(state.diagnostics) }
-            if (state.simulator == null) PocketButton(W.ExportLog.text(), { event(PocketScreenEvent.SaveLog) },
-                Modifier.fillMaxWidth(), ShellIcon.DOWNLOAD)
-            PocketLabel(W.Log.text())
-            PocketInner { SelectableReadout(state.log.ifEmpty { W.NoEvents.text() }) }
+        PocketListRow(ShellIcon.DOCUMENT, W.Diagnostics.text(), W.DiagnosticsSummary.text(), openDiagnostics)
+    }
+}
+
+@Composable
+fun DiagnosticsScreen(state: PocketScreenState, onClose: () -> Unit, event: (PocketScreenEvent) -> Unit) {
+    WorkspaceColumn {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            WorkspaceTitle(W.Diagnostics.text())
+            if (state.simulator == null) PocketTextLink(W.BackToSettings.text(), onClose, ShellIcon.CHEVRON_LEFT)
+            else PocketTextLink(W.Close.text(), onClose)
         }
+        PocketInner {
+            Text(listOf(state.pluginTitle, state.connectionLabel).filter { it.isNotBlank() }.joinToString("  |  "))
+            if (state.status.isNotBlank()) Text(state.status, Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+            if (state.reason.isNotBlank()) Note(state.reason)
+        }
+        Note(W.DisplayProfile.text())
+        if (state.simulator == null) PocketButton(W.Refresh.text(), { event(PocketScreenEvent.RefreshDiagnostics) },
+            Modifier.fillMaxWidth(), ShellIcon.REFRESH, PocketTone.ACCENT)
+        PocketLabel(W.Descriptor.text())
+        PocketInner { SelectableReadout(state.diagnostics) }
+        if (state.simulator == null) PocketButton(W.ExportLog.text(), { event(PocketScreenEvent.SaveLog) },
+            Modifier.fillMaxWidth(), ShellIcon.DOWNLOAD)
+        PocketLabel(W.Log.text())
+        PocketInner { SelectableReadout(state.log.ifEmpty { W.NoEvents.text() }) }
     }
 }
 

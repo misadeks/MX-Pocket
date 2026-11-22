@@ -55,5 +55,6 @@ internal fun AndroidWorkspace(
                 }
             },
             backHandler = { enabled, back -> BackHandler(enabled, back) })
-    }, workflows = { WorkflowScreen(session.workflows) })
+    }, workflows = { WorkflowScreen(session.workflows) },
+        backHandler = { enabled, back -> BackHandler(enabled, back) })
 }
