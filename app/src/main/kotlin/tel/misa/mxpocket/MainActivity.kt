@@ -425,6 +425,18 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
         return true
     }
 
+    override fun openUri(uri: String): Boolean {
+        if (!resumed || !isUnlockedAndInteractive()) return false
+        launchShortcut(PocketSession.Target.Uri(uri))?.let(session::message)
+        return true
+    }
+
+    override fun shareText(text: String): Boolean {
+        if (!resumed || !isUnlockedAndInteractive()) return false
+        launchShortcut(PocketSession.Target.Share(text))?.let(session::message)
+        return true
+    }
+
     override fun deckAction(command: DeckCommand, component: String?): DeckResult {
         if (!resumed || !isUnlockedAndInteractive()) return unavailable("Open MX Pocket on the unlocked phone.")
         val intent = when (command) {

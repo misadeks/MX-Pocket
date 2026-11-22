@@ -14,7 +14,7 @@ class DeckPluginTest {
         val apps = (1..12).map { Favorite("sample/.App$it", "App $it") }
         val states = MutableStateFlow(DeckState(favorites = apps))
         val actions = mutableListOf<PluginAction>()
-        val engine = PluginEngine(BuiltInPlugins.create("Focus", "Media", "Phone"), this, { 0L },
+        val engine = PluginEngine(BuiltInPlugins.create("Focus", "Media", "Phone", oneNoteTitle = "OneNote"), this, { 0L },
             { AudioSnapshot(0, 0) }, { action, _ -> actions.add(action) }, {}, { _, e -> throw e }, states)
         engine.select("launcher")
         engine.setEnabled(true)
@@ -42,7 +42,7 @@ class DeckPluginTest {
     @Test fun studioHasSeparateOpenAndInputKeysAndNeverInfersRecordingFromAPress() = runTest {
         val states = MutableStateFlow(DeckState())
         val actions = mutableListOf<PluginAction>()
-        val engine = PluginEngine(BuiltInPlugins.create("Focus", "Media", "Phone"), this, { 0L },
+        val engine = PluginEngine(BuiltInPlugins.create("Focus", "Media", "Phone", oneNoteTitle = "OneNote"), this, { 0L },
             { AudioSnapshot(0, 0) }, { action, _ -> actions.add(action) }, {}, { _, e -> throw e }, states)
         engine.select("studio"); engine.setEnabled(true)
         val idle = engine.render().keys[1]
