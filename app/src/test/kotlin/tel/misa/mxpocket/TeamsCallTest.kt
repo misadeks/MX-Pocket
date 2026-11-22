@@ -25,7 +25,10 @@ import org.robolectric.*
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.annotation.Implementation
+import org.robolectric.annotation.Implements
 import org.robolectric.annotation.LooperMode
+import org.robolectric.shadows.ShadowUserManager
 import org.robolectric.util.ReflectionHelpers
 import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.DeckKey
@@ -67,6 +70,31 @@ class TeamsCallTest {
         assertSame(TeamsObservation.None, teamsObservation(emptyArray()))
         assertSame(TeamsObservation.Unavailable, teamsObservation(arrayOf(note(), note(id = 2))))
         assertTrue(teamsObservation(arrayOf(note("com.android.dialer"), note())) is TeamsObservation.Ongoing)
+    }
+
+    @Implements(UserManager::class)
+    class UnreadableProfile : ShadowUserManager() {
+        @Implementation override fun isQuietModeEnabled(user: UserHandle): Boolean =
+            throw SecurityException("Unavailable in this test")
+    }
+
+    @Test @Config(shadows = [UnreadableProfile::class])
+    fun unreadableProfileIsNotTreatedAsPaused() {
+        val access = TeamsAccess(app)
+        assertTrue(access.toolbarProfileEligible)
+        shadowOf(app.getSystemService(UserManager::class.java)).addProfile(0, 10, "Work", ShadowUserManager.FLAG_MANAGED_PROFILE)
+        assertFalse(access.toolbarProfileEligible)
+    }
+
+    @Test fun everyOtherProfileMustBePaused() {
+        val users = app.getSystemService(UserManager::class.java)
+        val access = TeamsAccess(app)
+        for (id in listOf(10, 11)) {
+            shadowOf(users).addProfile(0, id, "Work", ShadowUserManager.FLAG_MANAGED_PROFILE)
+            assertFalse(access.toolbarProfileEligible)
+            assertTrue(users.requestQuietModeEnabled(true, UserHandle.getUserHandleForUid(id * 100_000)))
+            assertTrue(access.toolbarProfileEligible)
+        }
     }
 
     @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -112,6 +140,11 @@ class TeamsCallTest {
         }
         shadowOf(usb).addOrUpdateUsbDevice(device, true)
         val session = app.session
+        val users = app.getSystemService(UserManager::class.java)
+        val work = UserHandle.getUserHandleForUid(1_010_000)
+        shadowOf(users).addProfile(0, 10, "Work", ShadowUserManager.FLAG_MANAGED_PROFILE)
+        assertTrue(users.requestQuietModeEnabled(true, work))
+        assertTrue(work in users.userProfiles)
         val notices = shadowOf(app.getSystemService(NotificationManager::class.java))
         val shared = app.enableMusicSessions()
         val call = note()
@@ -263,11 +296,33 @@ class TeamsCallTest {
             listener.onListenerConnected()
             signal()
             assertEquals("launcher", session.deck.state.value.activeProfileId)
-            val profiles = shadowOf(app.getSystemService(UserManager::class.java))
-            profiles.addProfile(0, 10, "Test profile", org.robolectric.shadows.ShadowUserManager.FLAG_MANAGED_PROFILE)
-            assertFalse(TeamsAccess(app).singleProfile)
-            val reads = window.rootReads
+            // Resume after the toolbar has been read but before the physical click. No
+            // callback/refresh can run in between these two synchronous authorization checks.
+            val controls = TeamsCall(app)
+            val joined = controls.refresh(true, true, true, true)
+            assertTrue(joined.joined)
+            var checks = 0
+            assertFalse(controls.pressMic(joined) {
+                if (++checks == 2) assertTrue(users.requestQuietModeEnabled(false, work))
+                true
+            }.success)
+            assertEquals(2, checks)
+            assertEquals(1, clicks)
+            window.root = null
+            assertTrue(users.requestQuietModeEnabled(true, work))
+            assertEquals(CallStatus.NOTIFICATION, controls.refresh(true, true, true, true).status)
+            // A rapid resume/pause between polling ticks must also drop background
+            // confirmation in the session, even though the same notice is still present.
+            main.idle()
+            assertEquals(CallStatus.NOTIFICATION, session.deckState.value.teams.status)
+            assertNull(session.deckState.value.teams.muted)
+            window.root = root
             signal()
+            assertTrue(session.deckState.value.teams.joined)
+            assertTrue(users.requestQuietModeEnabled(false, work))
+            assertFalse(TeamsAccess(app).toolbarProfileEligible)
+            val reads = window.rootReads
+            main.idle()
             assertEquals(CallStatus.PROFILE_NOTICE, session.deckState.value.teams.status)
             assertNull(session.deckState.value.teams.muted)
             assertEquals(reads, window.rootReads)
@@ -279,8 +334,10 @@ class TeamsCallTest {
             assertEquals(1, clicks)
             assertEquals(reads, window.rootReads)
             session.selectProfile("launcher")
+            assertTrue(users.requestQuietModeEnabled(true, work))
             listener.cancelAllNotifications()
-            shadowOf(listener).addActiveNotification(note(user = UserHandle.getUserHandleForUid(1_010_000))); signal()
+            shadowOf(listener).addActiveNotification(note(user = work))
+            shadowOf(listener).addActiveNotification(note("other.voip")); signal()
             assertEquals(CallStatus.NO_SIGNAL, session.deckState.value.teams.status)
             listener.onListenerDisconnected(); main.idle()
             assertFalse(session.deckState.value.teams.joined)
