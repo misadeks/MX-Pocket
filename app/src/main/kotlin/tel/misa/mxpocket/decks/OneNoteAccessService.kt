@@ -41,19 +41,27 @@ class OneNoteAccessService : AccessibilityService() {
             target = findNode(root) { it.contentDescription?.toString() == id }
         }
         if (target == null) return@withRoot false
-        val isActive = findNode(root, ::isActiveTool)?.contentDescription?.toString() == id
+        val active = findNode(root, ::isActiveTool)
+        val isActive = active?.contentDescription?.toString() == id
+        active?.recycle()
         clickNode(target, if (isActive) Node.ACTION_LONG_CLICK else Node.ACTION_CLICK)
     } ?: false
 
     /** The ink toolbar's tools as (description, description); the description is the stable identity. */
     internal fun toolBar(): List<Pair<String, String>> = withRoot { root ->
-        findNodes(root) { isToolDesc(it.contentDescription?.toString()) }
-            .map { it.contentDescription.toString() to it.contentDescription.toString() }
+        findNodes(root) { isToolDesc(it.contentDescription?.toString()) }.map {
+            val desc = it.contentDescription.toString()
+            it.recycle()
+            desc to desc
+        }
     } ?: emptyList()
 
     /** Content description of the currently selected draw tool, for the keypad display. */
     internal fun activeTool(): String? = withRoot { root ->
-        findNode(root, ::isActiveTool)?.contentDescription?.toString()
+        val node = findNode(root, ::isActiveTool)
+        val desc = node?.contentDescription?.toString()
+        node?.recycle()
+        desc
     }
 
     /** The active ribbon tab is also selected=true; only tool previews carry a tool description. */
@@ -121,7 +129,8 @@ class OneNoteAccessService : AccessibilityService() {
         var remaining = 128
         fun visit(node: Node, depth: Int): Node? {
             if (--remaining < 0 || depth > 12 || !node.isVisibleToUser) return null
-            if (predicate(node)) return node
+            // Return a copy: the caller's finally recycles the original node.
+            if (predicate(node)) return Node.obtain(node)
             val count = node.childCount
             for (i in 0 until minOf(count, remaining.coerceAtLeast(0))) {
                 val child = node.getChild(i) ?: continue

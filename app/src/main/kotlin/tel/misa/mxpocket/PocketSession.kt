@@ -1053,6 +1053,7 @@ internal class PocketSession(
     }
     fun message(text: String) { status = text; screen?.render() }
     fun fail(text: String, error: Throwable) {
+        android.util.Log.e("PocketSession", "ERROR $text", error)
         log("ERROR $text: ${error.message}")
         message("$text: ${error.message}. Check diagnostics and try again.")
     }
