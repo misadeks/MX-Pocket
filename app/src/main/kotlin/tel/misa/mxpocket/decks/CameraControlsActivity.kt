@@ -62,7 +62,7 @@ class CameraControlsActivity : DeckActivity() {
             }
             CameraControlsEvent.OpenSettings -> {
                 val message = try {
-                    startActivity(DeckAccessActivity.settings(false))
+                    startActivity(DeckAccessActivity.accessibilitySettings())
                     ""
                 } catch (_: ActivityNotFoundException) { "Accessibility settings unavailable." }
                 catch (_: SecurityException) { "Android restricted access to settings." }

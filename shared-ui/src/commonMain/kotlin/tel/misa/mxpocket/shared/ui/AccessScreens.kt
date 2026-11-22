@@ -25,6 +25,12 @@ data class TeamsSetupState(val enabled: Boolean, val notifications: Boolean, val
     val supported: Boolean, val singleProfile: Boolean = true, val message: String = "")
 enum class TeamsSetupAction { TOGGLE, NOTIFICATIONS, TOOLBAR, DONE }
 
+const val ListenerPickerHint = "If Android lists two entries named only MX Pocket, go back without choosing either. You do not need to enable both."
+const val MediaListenerHint = "For Audio, choose MX Pocket media sessions, not MX Pocket Teams calls. $ListenerPickerHint"
+const val TeamsListenerHint = "For Teams, choose MX Pocket Teams calls, not MX Pocket media sessions. $ListenerPickerHint"
+const val TeamsListenerDisclosure = "Android grants broad notification access. MX Pocket checks the posting app, profile and call notification type, not messages or caller names. No call details are saved."
+const val TeamsToolbarDisclosure = "For automatic switching on a single-profile phone, MX Pocket also checks for the visible Mic and Hang up buttons in Teams. Only a fresh physical center-key press can operate the mic. To allow this, select MX Pocket Teams call controls in Accessibility."
+
 @Composable
 fun TeamsSetupScreen(state: TeamsSetupState, status: CallStatus, onAction: (TeamsSetupAction) -> Unit) {
     SubsidiaryPage("Teams call controls", { onAction(TeamsSetupAction.DONE) }) {
@@ -32,7 +38,7 @@ fun TeamsSetupScreen(state: TeamsSetupState, status: CallStatus, onAction: (Team
             Text("Call status", style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
             Text(status.detail, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
             Text("With a wired keypad, show call notices from Teams in this Android profile. A confirmed call can switch the keypad to In call. Leaving restores your previous page unless you chose another.")
-            Text("Android grants broad notification access. MX Pocket checks the posting app, profile and call notification type, not messages or caller names. No call details are saved.")
+            Text(TeamsListenerDisclosure)
             if (!state.supported) Text("Call observation needs Android 14 or later. You can still use Work and open Call tools manually.")
             if (!state.singleProfile) Text("With multiple Android profiles, only notification status is available. MX Pocket does not inspect the Teams window, switch pages or operate the mic.")
             OutlinedButton({ onAction(TeamsSetupAction.TOGGLE) }, enabled = state.supported || state.enabled) {
@@ -40,10 +46,11 @@ fun TeamsSetupScreen(state: TeamsSetupState, status: CallStatus, onAction: (Team
             }
             Text("Call status is on by default. It cannot read notifications unless you allow MX Pocket Teams calls in Notification access. Audio access is separate.")
             if (state.notifications && status == CallStatus.NO_SIGNAL) Text("After an update, Android may keep an older filter. Open Notification access below. If available, check that Teams, Notifications (alerting), Silent and Conversations are allowed. If these choices are missing or Teams does not publish a call notice, use Teams directly.")
+            Text(TeamsListenerHint)
             OutlinedButton({ onAction(TeamsSetupAction.NOTIFICATIONS) }) {
                 Text("Notification access: ${if (state.notifications) "on" else "off"}")
             }
-            Text("For automatic switching on a single-profile phone, MX Pocket also checks for the visible Mic and Hang up buttons in Teams. Only a fresh physical center-key press can operate the mic. To allow this, select MX Pocket Teams call controls in Accessibility.")
+            Text(TeamsToolbarDisclosure)
             OutlinedButton({ onAction(TeamsSetupAction.TOOLBAR) }) {
                 Text("Accessibility access: ${if (state.toolbar) "on" else "off"}")
             }
@@ -85,11 +92,16 @@ internal fun SubsidiaryStatus(message: String) {
 
 /** Pass null for settings on a platform without this Android access mechanism. */
 @Composable
-fun DeckAccessScreen(access: DeckAccess, message: String, onOpenSettings: (() -> Unit)?, onDone: () -> Unit) {
+fun DeckAccessScreen(access: DeckAccess, message: String, onOpenSettings: (() -> Unit)?, onDone: () -> Unit,
+    mediaGranted: Boolean? = null) {
     SubsidiaryPage(access.title, onDone) {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (onOpenSettings != null) {
                 Text(access.disclosure)
+                if (access == DeckAccess.Media) {
+                    Text(MediaListenerHint)
+                    mediaGranted?.let { Text(if (it) "Media session access allowed" else "Media session access not granted") }
+                }
                 Text("Access is optional. You can turn it off in the same settings at any time.",
                     style = MaterialTheme.typography.bodyMedium)
                 OutlinedButton(onClick = onOpenSettings) { Text("Open Android settings") }

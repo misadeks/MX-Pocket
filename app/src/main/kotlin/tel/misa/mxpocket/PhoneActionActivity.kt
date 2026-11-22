@@ -68,8 +68,9 @@ internal class DirectShortcuts(private val context: Context) {
     private val prefs = context.getSharedPreferences("phone-shortcuts", Context.MODE_PRIVATE)
     // The old "direct" opt-in explicitly excluded ordinary saved favorites.
     private val consent = "direct-with-favorites"
+    val optedIn get() = prefs.getBoolean(consent, false)
     var enabled: Boolean
-        get() = prefs.getBoolean(consent, false) && Settings.canDrawOverlays(context)
+        get() = optedIn && Settings.canDrawOverlays(context)
         set(value) { prefs.edit().putBoolean(consent, value && Settings.canDrawOverlays(context)).apply() }
 }
 
