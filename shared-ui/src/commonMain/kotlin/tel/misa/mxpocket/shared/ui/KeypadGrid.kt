@@ -62,8 +62,9 @@ private fun KeyFaceWindow(index: Int, tile: KeypadTile, modifier: Modifier) {
 
 /** Images occupy the nine real LCD windows. Hit areas can extend into the gutters. */
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 fun KeypadGrid(tiles: List<KeypadTile>, onKey: (Int, Boolean) -> Unit,
-    modifier: Modifier = Modifier, panelArt: ImageBitmap? = null) {
+    modifier: Modifier = Modifier, panelArt: ImageBitmap? = null, onHold: Map<Int, () -> Unit> = emptyMap()) {
     require(tiles.size == 9) { "A keypad frame must have nine tiles" }
     val direction = LocalLayoutDirection.current
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
@@ -92,8 +93,13 @@ fun KeypadGrid(tiles: List<KeypadTile>, onKey: (Int, Boolean) -> Unit,
                         Box(Modifier.offset(x,y).size(keySize).background(Color.Black.copy(alpha = .35f)))
                     val description = tile.accessibleName ?: listOfNotNull("Key ${i + 1}".takeIf { tile.showNumber }, tile.label, tile.footer)
                         .filter(String::isNotBlank).joinToString(", ")
-                    val click = if (tile.readOnly) Modifier else Modifier.clickable(enabled = tile.enabled, role = Role.Button) {
-                        onKey(i, true); onKey(i, false)
+                    val tap = { onKey(i, true); onKey(i, false) }
+                    val hold = onHold[i]
+                    val click = when {
+                        tile.readOnly -> Modifier
+                        hold == null -> Modifier.clickable(enabled = tile.enabled, role = Role.Button, onClick = tap)
+                        else -> Modifier.combinedClickable(enabled = tile.enabled, role = Role.Button,
+                            onLongClickLabel = "Hold", onLongClick = hold, onClick = tap)
                     }
                     Box(Modifier.offset(x, targetTop).size(keySize, targetHeight).then(click).semantics {
                         contentDescription = description

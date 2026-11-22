@@ -21,6 +21,8 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.annotation.Implementation
+import org.robolectric.annotation.Implements
 import org.robolectric.annotation.LooperMode
 import org.robolectric.util.ReflectionHelpers
 import tel.misa.mxpocket.actions.ActionCall
@@ -32,12 +34,21 @@ import tel.misa.mxpocket.decks.ok
 import tel.misa.mxpocket.driver.KeyEvent
 import tel.misa.mxpocket.driver.KeyInput
 import tel.misa.mxpocket.plugins.*
+import tel.misa.mxpocket.workflow.TriggerKind
+import tel.misa.mxpocket.workflow.WorkflowOrigin
+import tel.misa.mxpocket.workflow.WorkflowTrigger
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @LooperMode(LooperMode.Mode.PAUSED)
 class ChordSessionTest {
+    @Implements(ViewConfiguration::class)
+    class LongAccessibilityDelay {
+        companion object {
+            @JvmStatic @Implementation fun getLongPressTimeout() = 2_700
+        }
+    }
     private val app get() = RuntimeEnvironment.getApplication() as PocketApplication
     private val main get() = shadowOf(Looper.getMainLooper())
     private val usb get() = app.getSystemService(UsbManager::class.java)
@@ -187,6 +198,15 @@ class ChordSessionTest {
         assertEquals(listOf("5+", "5-", "8+", "8-"), events)
     }
 
+    @Config(shadows = [LongAccessibilityDelay::class])
+    @Test fun longAccessibilityDelayIsNotClampedToTheFreshDownAuthorityWindow() {
+        bindHold(0, pluginSlot(5))
+        report(1); main.idleFor(Duration.ofMillis(2_699))
+        assertTrue(events.isEmpty())
+        main.idleFor(Duration.ofMillis(1)); report()
+        assertEquals(listOf("5+", "5-"), events)
+    }
+
     @Test fun otherDownsDoNotCancelIndependentHoldTimersAndHoldOnlyNeverTaps() {
         bindHold(3, pluginSlot(5), tap = null); bindHold(4, pluginSlot(6))
         report(4); report(); assertTrue(events.isEmpty())
@@ -227,6 +247,17 @@ class ChordSessionTest {
         effect = PluginAction.Deck(DeckCommand.SHUTTER)
         session.phoneKey(3, hold = true)
         assertEquals(0, captures)
+    }
+
+    @Test fun aVirtualHoldCannotStartAPhysicalOnlyWorkflowButAuthorizedPhysicalHoldCan() {
+        val flow = session.workflows.definitions.value.first { it.id == "keypad-check" }
+        assertNull(runBlocking { session.workflows.save(flow.copy(trigger = WorkflowTrigger(TriggerKind.PHYSICAL))) })
+        bindHold(3, ActionCall("workflow.run", mapOf("workflowId" to flow.id)))
+        session.phoneKey(3, hold = true)
+        assertNull(session.workflows.status.value)
+        event(4, true); main.idleFor(Duration.ofMillis(holdDelay)); event(4, false)
+        assertEquals(WorkflowOrigin.PHYSICAL, session.workflows.status.value?.origin)
+        assertTrue(events.isEmpty())
     }
 
     @Test fun tapTimeoutAndNonmatchingDownCommitInOrderButUnconfiguredKeysNeverWait() {

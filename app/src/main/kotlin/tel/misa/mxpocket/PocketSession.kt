@@ -255,14 +255,15 @@ internal class PocketSession(
 
     private fun visibleArtwork(state: MediaDeckState) = state.artwork?.takeIf { canShowTrack() }
 
-    fun frame(): PluginFrame {
+    fun frame(hold: Boolean = false): PluginFrame {
         val mediaState = deckState.value.media
         if ((mediaState.title.isNotEmpty() || mediaState.artwork != null) && !canShowTrack()) media.refreshDisplay()
         images.useArtwork(visibleArtwork(deckState.value.media))
         val native = plugins.render()
         val page = deck.state.value.activePage
         val keys = page.keys.mapIndexed { index, key ->
-            bindingFace(index, if (key.action == null && key.holdAction != null) key.copy(action = key.holdAction) else key, native)
+            val displayed = if (hold || key.action == null) key.holdAction else key.action
+            bindingFace(index, if (displayed == key.action) key else key.copy(action = displayed), native)
         }
         val hasPluginKeys = page.keys.any { key ->
             fun selected(action: ActionCall?) = action?.id == "plugin.key" && action.params["pluginId"] == plugins.selectedId
