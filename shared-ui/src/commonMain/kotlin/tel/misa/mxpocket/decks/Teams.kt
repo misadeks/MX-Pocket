@@ -4,6 +4,8 @@ import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.*
 import tel.misa.mxpocket.plugins.DeckGlyph
 import tel.misa.mxpocket.plugins.KeyTile
+import tel.misa.mxpocket.plugins.legend
+import tel.misa.mxpocket.shared.ui.PocketStyle
 import tel.misa.mxpocket.decks.DeckCommand as C
 
 const val TEAMS = "teams"
@@ -56,9 +58,9 @@ data class TeamsState(val installed: Boolean = false, val status: CallStatus = C
             C.TEAMS_MIC -> joined && muted != null
             else -> false
         }
-        return KeyTile(label, footer, 0xff393968.toInt(), enabled = available, primary = command == C.TEAMS_MIC,
+        return KeyTile(label, footer, PocketStyle.accent(TEAMS).fill, enabled = available, primary = command == C.TEAMS_MIC,
             inputToken = "${command.id}:$generation", readOnly = command == C.TEAMS_STATUS,
-            glyph = DeckGlyph.SETTINGS.takeIf { command == C.TEAMS_ACCESS })
+            glyph = if (command == C.TEAMS_ACCESS) DeckGlyph.SETTINGS else command.legend())
     }
 }
 

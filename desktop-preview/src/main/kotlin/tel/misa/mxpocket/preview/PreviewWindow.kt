@@ -9,6 +9,10 @@ import androidx.compose.ui.awt.ComposeWindow
 import java.io.File
 import java.nio.file.Files
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import androidx.compose.ui.graphics.ImageBitmap
+import tel.misa.mxpocket.plugins.IntegrationApp
 import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.*
 import tel.misa.mxpocket.decks.DeckCommand
@@ -16,6 +20,14 @@ import tel.misa.mxpocket.shared.ui.*
 
 private fun now() = System.nanoTime() / 1_000_000
 private const val DEVICE_LIMIT = "Windows simulator: no USB connection, phone apps, camera, media sessions or Android access grants."
+
+@Composable
+private fun PreviewTheme(mode: ThemeMode, content: @Composable () -> Unit) {
+    val icons by produceState<Map<IntegrationApp, ImageBitmap>>(emptyMap()) {
+        value = withContext(Dispatchers.IO) { windowsIntegrationIcons() }
+    }
+    CompositionLocalProvider(LocalIntegrationIcons provides icons) { PocketTheme(mode, content) }
+}
 
 private fun chooseBackup(owner: ComposeWindow, repo: DeckRepository, save: Boolean): String? {
     val picker = FileDialog(owner, if (save) "Export layouts" else "Import layouts",
@@ -100,12 +112,13 @@ fun main() = application {
             log = history.joinToString("\n"), simulator = DesktopSimulator(DEVICE_LIMIT, board.grid.takeIf { simulating }),
             activePageId = deck.activePage.id, themeMode = themeMode)
         val plugins = defaultDeck().profiles.map {
-            PluginItem(it.id, it.name, true, "Local simulation", when (it.id) {
+            val available = it.id in setOf("focus", "audio", "game.xo")
+            PluginItem(it.id, it.name, available, if (available) "Local simulation" else "Android only", when (it.id) {
                 "focus" -> "Timer and presets run locally. No completion sound."
                 "audio" -> "Volume and playback are simulated. Windows media is unchanged."
                 "game.xo" -> "Play against the computer or a second player on this keypad."
-                else -> "Android device actions do not run on Windows."
-            }, profiles.any { profile -> profile.id == it.id }, it.id == deck.defaultProfileId, null, canToggle = false)
+                else -> "Unavailable on Windows. Android device actions do not run here."
+            }, available && profiles.any { profile -> profile.id == it.id }, it.id == deck.defaultProfileId, null, canToggle = false)
         }
         val options = buildList {
             add(BindingOption("Back", ActionCall(DeckActions.BACK)))
@@ -124,7 +137,7 @@ fun main() = application {
             catch (e: Exception) { status("Layout backup failed: ${e.message}") }
             Unit
         }
-        PocketTheme(themeMode) {
+        PreviewTheme(themeMode) {
             if (setup) {
                 SetupScreen(SetupScreenState(emptySet(), setupReview, emptyList(), "", false,
                     options = SetupFeature.entries.map { SetupOption(it, unavailableReason = "Requires the Android host.") },

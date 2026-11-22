@@ -15,6 +15,7 @@ java {
 dependencies {
     implementation(project(":shared-ui"))
     implementation(compose.desktop.currentOs)
+    implementation("net.java.dev.jna:jna-platform:5.17.0")
     testImplementation(kotlin("test-junit"))
 }
 

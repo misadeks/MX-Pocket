@@ -156,7 +156,7 @@ fun LayoutEditor(
                         Command.CREATE_PROFILE, Command.COPY_PROFILE -> deck.profiles.size < DeckLimits.PROFILES
                         Command.DELETE_PROFILE -> deck.profiles.size > 1
                         else -> true
-                    } }, choose = { command = it })
+                    } }, choose = { command = it }, profileIcons = true)
                 LibraryGroup("Page", profile.pages.map { it.id to it.name }, page.id, !writer.busy, ::selectPage,
                     listOf(Command.CREATE_PAGE, Command.COPY_PAGE, Command.RENAME_PAGE, Command.DELETE_PAGE),
                     allowed = { cmd -> writable && when (cmd) {
@@ -171,7 +171,7 @@ fun LayoutEditor(
                 PocketCard {
                     PocketLabel("Profile / Page")
                     if (!wide) PocketButton("${profile.name} / ${page.name} ▾", { show(Pane.LIBRARY) },
-                        Modifier.fillMaxWidth(), PocketStyle.accent(profile.id).icon, enabled = !writer.busy)
+                        Modifier.fillMaxWidth(), identity = PocketStyle.accent(profile.id), enabled = !writer.busy)
                     else Text("${profile.name} / ${page.name}", style = MaterialTheme.typography.titleMedium)
                     PocketButton("Swap keys", { show(Pane.PREVIEW); swapping = true }, Modifier.fillMaxWidth(),
                         ShellIcon.SWAP, PocketTone.ACCENT, enabled = writable)
@@ -281,11 +281,13 @@ private fun EditorPane(modifier: Modifier, bounded: Boolean, content: @Composabl
 private fun LibraryGroup(
     title: String, items: List<Pair<String, String>>, selected: String, enabled: Boolean, select: (String) -> Unit,
     commands: List<Command>, allowed: (Command) -> Boolean, choose: (Command) -> Unit,
+    profileIcons: Boolean = false,
 ) {
     HorizontalDivider()
     Text(title, style = MaterialTheme.typography.titleMedium)
     items.forEach { (id, name) ->
         NavigationDrawerItem(label = { Text(name) }, selected = id == selected, onClick = { if (enabled) select(id) },
+            icon = if (profileIcons) ({ PocketIconTile(PocketStyle.accent(id), 28.dp) }) else null,
             shape = MaterialTheme.shapes.small)
     }
     Box {

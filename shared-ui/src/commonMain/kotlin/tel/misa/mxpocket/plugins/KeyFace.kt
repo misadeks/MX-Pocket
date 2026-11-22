@@ -29,7 +29,11 @@ fun Canvas.paintKeyFace(
     }
     when {
         tile.icon.isNotBlank() -> caption(FaceCaption(tile.icon, faceY, 24f, 1, true), captionInk)
-        iconImage != null -> drawImageRect(iconImage, dstOffset = IntOffset(40, 5), dstSize = IntSize(38, 38), paint = p)
+        iconImage != null -> {
+            if (glyph is IntegrationApp && !tile.enabled) p.alpha = .65f
+            drawImageRect(iconImage, dstOffset = IntOffset(40, 5), dstSize = IntSize(38, 38), paint = p)
+            p.alpha = 1f
+        }
         glyph != null -> {
             val diameter = if (player) 49.5f else if (footer) 35f else 48f
             val sampled = photoInk?.invoke(37, 31, 81, 75)

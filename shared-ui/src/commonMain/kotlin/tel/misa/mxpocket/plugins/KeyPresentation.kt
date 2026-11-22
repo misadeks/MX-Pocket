@@ -5,6 +5,7 @@ import tel.misa.mxpocket.deck.DeckKey
 import tel.misa.mxpocket.deck.DeckActions
 import tel.misa.mxpocket.decks.DeckCommand
 import tel.misa.mxpocket.decks.navigationCommands
+import tel.misa.mxpocket.shared.ui.PocketStyle
 
 sealed interface KeyGlyph
 enum class PlayerGlyph : KeyGlyph {
@@ -47,22 +48,20 @@ fun phoneFrame(): PluginFrame {
     val glyphs = listOf(DeckGlyph.CAMERA, DeckGlyph.SETTINGS, DeckGlyph.PHONE, DeckGlyph.WEB, null,
         DeckGlyph.TIMER, DeckGlyph.TIMER, PlayerGlyph.TRACK, DeckGlyph.REFRESH)
     return PluginFrame(listOf("Camera", "Settings", "Dialer", "Web", "Phone", "Alarm", "Focus", "Audio", "Repaint")
-        .mapIndexed { i, text -> KeyTile(text, "Phone", 0xff49345f.toInt(), glyph = glyphs[i],
+        .mapIndexed { i, text -> KeyTile(text, "Phone", PocketStyle.accent(when (i) {
+            6 -> "focus"; 7 -> "audio"; else -> "phone"
+        }).fill, glyph = glyphs[i],
             readOnly = i == 4, showFooter = false) })
 }
 
-fun DeckKey.bindingGlyph(): KeyGlyph? = when (action?.id) {
+private fun DeckKey.launcherIdentity() = when (action?.id) {
+    DeckActions.PROFILE -> PocketStyle.accent(action.params[DeckActions.PROFILE_ID].orEmpty())
+    "phone.open" -> if (action.params["app"] == "ONENOTE") PocketStyle.accent("onenote") else null
+    else -> null
+}
+
+fun DeckKey.bindingGlyph(): KeyGlyph? = launcherIdentity()?.keyGlyph ?: when (action?.id) {
     DeckActions.PAGE -> DeckGlyph.FOLDER
-    DeckActions.PROFILE -> when (action.params[DeckActions.PROFILE_ID]) {
-        "audio" -> PlayerGlyph.TRACK
-        "focus" -> DeckGlyph.TIMER
-        "phone" -> DeckGlyph.PHONE
-        "studio" -> DeckGlyph.CAMERA
-        "navigation" -> DeckGlyph.COMPASS
-        "launcher" -> DeckGlyph.GRID
-        "game.xo" -> DeckGlyph.GAME
-        else -> DeckGlyph.PROFILE
-    }
     DeckActions.BACK -> NavigationGlyph.BACK
     DeckActions.ROOT -> NavigationGlyph.HOME
     "workflow.run" -> DeckGlyph.FLOW
@@ -70,6 +69,7 @@ fun DeckKey.bindingGlyph(): KeyGlyph? = when (action?.id) {
 }
 
 fun DeckCommand.legend(): KeyGlyph? = when (this) {
+    DeckCommand.TEAMS_OPEN -> IntegrationApp.TEAMS
     DeckCommand.STUDIO, DeckCommand.SHUTTER, DeckCommand.PHOTO -> DeckGlyph.CAMERA
     DeckCommand.VIDEO, DeckCommand.START_VIDEO -> DeckGlyph.VIDEO
     DeckCommand.STOP_VIDEO -> DeckGlyph.STOP
@@ -122,7 +122,11 @@ fun DeckKey.bindingPreview(): KeyTile? {
     if (command.deck == "navigation") return command.navigationFace(null).copy(enabled = true, readOnly = false,
         footer = "", showFooter = false)
     val transport = command.legend() is PlayerGlyph
-    return KeyTile(command.label, "", if (transport) 0xff303438.toInt() else color, glyph = command.legend(),
+    return KeyTile(command.label, "", when {
+        command == DeckCommand.TEAMS_OPEN -> PocketStyle.accent(command.deck).fill
+        transport -> 0xff303438.toInt()
+        else -> color
+    }, glyph = command.legend(),
         playerFace = transport, showLabel = !transport, showFooter = false)
 }
 
@@ -137,6 +141,10 @@ fun DeckKey.present(native: KeyTile?, fallbackLabel: String, footer: String, ava
         showLabel = label.isNotBlank() || (action != null || native != null) && native?.showLabel != false,
         // Hide repeated deck names, not an explicit status update for this physical key.
         showFooter = native?.showFooter != false || !native.playerFace && footer.isNotBlank() && footer != native.footer,
-        background = if (!available) 0xff494c51.toInt() else if (color == DeckKey().color) native?.background ?: color else color,
+        background = when {
+            !available -> 0xff494c51.toInt()
+            color != DeckKey().color -> color
+            else -> launcherIdentity()?.fill ?: native?.background ?: color
+        },
         icon = icon.ifBlank { native?.icon.orEmpty() }, enabled = available)
 }
