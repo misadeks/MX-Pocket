@@ -25,11 +25,11 @@ class CallFaceLocaleTest {
             )) {
                 AppLocale.update(language, emptyList())
                 // A dialer-supplied label can look exactly like localizable UI copy.
-                val lcd = phoneCallFrame(line, "Private / unknown", true, 42).keys
+                val lcd = phoneCallFrame(line, "Incoming call", true, 42).keys
                 val home = phoneCallHomeFrame(line, true, 42).keys
-                assertEquals(incoming, lcd[0].label)
-                assertEquals("Private / unknown", lcd[4].label)
-                assertEquals(redacted, home[4].label)
+                assertEquals(incoming, lcd[CALL_IDENTITY].footer)
+                assertEquals("Incoming call", lcd[CALL_IDENTITY].label)
+                assertEquals(redacted, home[CALL_IDENTITY].label)
                 assertEquals(lcd.map { it.inputToken }, home.map { it.inputToken })
                 assertEquals("answer:42", lcd[CALL_ACCEPT].inputToken)
                 assertEquals("decline:42", lcd[CALL_DECLINE].inputToken)
@@ -46,8 +46,9 @@ class CallFaceLocaleTest {
             AppLocale.update(AppLanguage.SERBIAN_LATIN, emptyList())
             for (line in PhoneLine.entries) {
                 val keys = phoneCallFrame(line, null, controls = line != PhoneLine.RINGING, generation = 1).keys
-                assertEquals("Skriven / nepoznat", keys[4].label)
-                assertEquals("Na telefonu", keys[5].label)
+                val expected = if (line == PhoneLine.CALL || line == PhoneLine.MULTIPLE) line.label else "Ime nije dostupno"
+                assertEquals(expected, keys[CALL_IDENTITY].label)
+                assertTrue(keys.filterIndexed { i, _ -> i != CALL_IDENTITY }.all { it.label.isEmpty() })
                 assertTrue(keys.all { it.readOnly })
                 keys.forEach { assertNull(it.inputToken) }
             }

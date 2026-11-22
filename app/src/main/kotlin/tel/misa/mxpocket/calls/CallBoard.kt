@@ -32,15 +32,23 @@ internal class CallBoard(
             LineState.RINGING -> PhoneLine.RINGING
             LineState.OFF_HOOK -> PhoneLine.OFF_HOOK
             LineState.MULTIPLE -> PhoneLine.MULTIPLE
+            LineState.CALL -> PhoneLine.CALL
             else -> null
         }
         if (state == LineState.IDLE) {
             spent = false
             idleAt = System.currentTimeMillis()
         }
-        deck.showPhoneCall(if (state == LineState.UNKNOWN) null else next != null)
+        // Ringing opens the view. Off-hook, multiple lines or isInCall alone can only sustain it.
+        deck.showPhoneCall(when (state) {
+            LineState.UNKNOWN -> null
+            LineState.IDLE -> false
+            LineState.RINGING -> true
+            else -> true.takeIf { visible }
+        })
         if (!visible || next == null) { forget(); return }
-        val notice = if (next != PhoneLine.MULTIPLE) readNotice(state, null)?.takeIf { it.stamp.posted > idleAt } else null
+        val notice = if (next == PhoneLine.RINGING || next == PhoneLine.OFF_HOOK)
+            readNotice(state, null)?.takeIf { it.stamp.posted > idleAt } else null
         if (next == line && notice?.stamp == stamp && notice?.name == name) return
         line = next
         stamp = notice?.stamp

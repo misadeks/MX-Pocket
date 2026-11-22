@@ -27,6 +27,7 @@ fun Canvas.paintKeyFace(
     val captionInk = if (!tile.enabled && !tile.readOnly) subdued else ink
     val p = Paint()
     val faceY = when {
+        glyph == DeckGlyph.CALLER -> 59f
         player -> 53f
         glyph != null -> if (footer) 29f else 38f
         else -> if (label) 21f else 47f
@@ -76,11 +77,12 @@ fun Canvas.paintKeyFace(
         }
         caption(FaceCaption(tile.label, y, when {
             player -> 17f
+            tile.callIdentity -> if (tile.label.length <= 12) 22f else 17f
             (tile.readOnly || tile.quietFace) && glyph == null && tile.label.length <= 6 && tile.icon.isBlank() -> 28f
             else -> 19f
-        }, 2, true), captionInk)
+        }, if (tile.callIdentity) 3 else 2, true), captionInk)
     }
-    if (footer) caption(FaceCaption(tile.footer, if (label) 100f else 94f, 15f, 1, false), subdued)
+    if (footer) caption(FaceCaption(tile.footer, if (label) 100f else 94f, if (tile.callIdentity) 13f else 15f, 1, false), subdued)
     if (tile.enabled && (tile.selection == KeySelection.ON || tile.selection == KeySelection.UNKNOWN)) {
         val badgeInk = photoInk?.invoke(91, 6, 111, 23) ?: ink
         val center = androidx.compose.ui.geometry.Offset(101f, 16f)

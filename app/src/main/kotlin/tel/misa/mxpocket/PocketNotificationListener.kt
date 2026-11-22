@@ -1,11 +1,16 @@
 package tel.misa.mxpocket
 
+import android.app.Notification
+import android.app.NotificationManager
+import android.app.admin.DevicePolicyManager
 import android.os.BadParcelableException
 import android.os.Build
 import android.os.Process
+import android.provider.Settings
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.telecom.TelecomManager
+import androidx.annotation.RequiresApi
 import kotlinx.coroutines.flow.update
 import tel.misa.mxpocket.calls.DialerNotice
 import tel.misa.mxpocket.calls.LineState
@@ -52,6 +57,9 @@ class PocketNotificationListener : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification) = changed(sbn, removed = false)
     override fun onNotificationRemoved(sbn: StatusBarNotification) = changed(sbn, removed = true)
+    override fun onNotificationRankingUpdate(rankingMap: RankingMap) {
+        if (current === this && access.dialer && !isUnlockedAndInteractive()) refreshPhone?.invoke()
+    }
     private fun changed(sbn: StatusBarNotification, removed: Boolean) {
         if (current !== this || Build.VERSION.SDK_INT < 34) return
         val teams = TeamsEvents.refresh?.takeIf { access.teams }
@@ -87,8 +95,28 @@ class PocketNotificationListener : NotificationListenerService() {
         return try {
             val pkg = dialer() ?: return null
             val notes = activeNotifications ?: return null
-            dialerNotice(notes, pkg, state, phoneBoundary)?.takeIf { expectedKey == null || it.stamp.key == expectedKey }
+            dialerNotice(notes, pkg, state, phoneBoundary, !isUnlockedAndInteractive(), ::visibleOnLockScreen)
+                ?.takeIf { expectedKey == null || it.stamp.key == expectedKey }
         } catch (_: SecurityException) { null }
         catch (_: BadParcelableException) { null }
+    }
+
+    @RequiresApi(34)
+    private fun visibleOnLockScreen(sbn: StatusBarNotification): Boolean {
+        val rank = Ranking()
+        if (currentRanking?.getRanking(sbn.key, rank) != true || rank.isSuspended ||
+            rank.importance <= NotificationManager.IMPORTANCE_MIN || !rank.matchesInterruptionFilter()) return false
+        val channel = rank.channel ?: return false
+        if (listOf(rank.lockscreenVisibilityOverride, channel.lockscreenVisibility).any {
+                it != Ranking.VISIBILITY_NO_OVERRIDE && it != Notification.VISIBILITY_PUBLIC }) return false
+        val policy = getSystemService(DevicePolicyManager::class.java)?.getKeyguardDisabledFeatures(null) ?: return false
+        if (policy and DevicePolicyManager.KEYGUARD_DISABLE_SECURE_NOTIFICATIONS != 0 ||
+            Settings.Secure.getInt(contentResolver, "lock_screen_show_notifications", 0) != 1) return false
+        return when (sbn.notification.visibility) {
+            Notification.VISIBILITY_PUBLIC -> true
+            Notification.VISIBILITY_PRIVATE -> policy and DevicePolicyManager.KEYGUARD_DISABLE_UNREDACTED_NOTIFICATIONS == 0 &&
+                Settings.Secure.getInt(contentResolver, "lock_screen_allow_private_notifications", 0) == 1
+            else -> false
+        }
     }
 }

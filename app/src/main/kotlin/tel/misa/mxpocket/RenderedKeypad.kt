@@ -76,11 +76,11 @@ internal class RenderedKeypad(
         setKeyImage(index, bitmap, coverArt = false)
     }
 
-    suspend fun setKeyImage(index: Int, bitmap: Bitmap, coverArt: Boolean): Boolean {
+    suspend fun setKeyImage(index: Int, bitmap: Bitmap, coverArt: Boolean, current: () -> Boolean = { true }): Boolean {
         val key = JpegKey(bitmap, coverArt)
         val epoch = generation
         val jpeg = jpegs.get(key) ?: encode(index, bitmap, coverArt).also { if (epoch == generation) jpegs.put(key, it) }
-        if (epoch != generation) return false
+        if (epoch != generation || !current()) return false
         upload(index, jpeg)
         return true
     }

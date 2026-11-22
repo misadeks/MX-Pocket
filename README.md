@@ -10,14 +10,13 @@ or hold both to play Tic Tac Toe. To try MX Pocket without hardware, use the
 Windows simulator.
 
 On the **Music** layout, press the center key to pause the track.
-Switch to **Navigation and Accessibility**: that same key now says **Select**, and the key below
-it says **Scroll down**. The bottom-right key opens **Accessibility**; press it again
-to return to navigation. With [Android navigation access](docs/android-decks.md)
-enabled, you can keep reading in a supported app without swiping the screen.
+Switch to **Navigate**: that same key becomes **Select**. With
+[Android navigation access](docs/android-decks.md) enabled, you can move focus
+between controls in supported apps without swiping the phone.
 
-![Six views of the same nine-key keypad, in three rows: Music and Navigation; OneNote Draw tools and an incoming call with Accept on key 7 and Decline on key 9; the Home profile picker and a game of Tic Tac Toe.](docs/images/audio-and-navigation.png)
+![Six keypad layouts. Top: Music and Navigate, with Back, Home and Recents above Previous, Select and Next. Middle: OneNote Draw and an incoming call, with the caller’s picture above their name and Accept and Decline in the bottom corners. Bottom: the Home profile picker and Tic Tac Toe.](docs/images/audio-and-navigation.png)
 
-*Illustrated keypad layouts. The incoming call uses a fictional caller and shows the controls available from a supported dialer.*
+*Navigate previews the layout from [PR #77](https://github.com/misadeks/MX-Pocket/pull/77): scrolling and More share the bottom row. Incoming Call shows a fictional caller and both actions from a supported dialer.*
 
 The **wired Logitech MX Creative Keypad** (`046D:C354`) connects directly to
 your Android phone over USB-C. MX Pocket's Kotlin driver uses Android's USB
@@ -60,12 +59,14 @@ Black-and-white stripes mean the ink color is unknown. A corner check marks an
 observed selection, not a successful key press.
 
 For ordinary mobile calls, turn on **Settings → Phone calls → Show calls on the keypad**.
-The authorized **physical keypad** then shows call state while the phone is
-unlocked and its screen is on. Either page key leaves without affecting the
-call. For caller details or music session access, choose **MX Pocket** once in
-Android’s **Notification access**, then opt in to each feature you want inside
-the app. Camera, Dialer and other shortcuts
-remain available as key bindings. See [carrier call setup and supported controls](docs/android-decks.md#carrier-calls-on-the-keypad).
+The authorized **physical keypad** switches when the carrier line rings, even
+with the phone locked or its screen off, if USB stays powered. When the default
+Phone app supplies both actions, key 7 accepts and key 9 declines. Either
+physical page button leaves the layout without affecting the call. Caller
+details and controls respect lock-screen restrictions. For caller details or
+music session access, choose **MX Pocket** once in Android’s **Notification
+access**, then opt in to each feature you want inside the app.
+See [carrier call setup and supported controls](docs/android-decks.md#carrier-calls-on-the-keypad).
 
 ## Extending MX Pocket
 

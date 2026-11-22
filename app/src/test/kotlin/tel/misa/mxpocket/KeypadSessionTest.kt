@@ -53,6 +53,8 @@ import tel.misa.mxpocket.decks.NavigationService
 import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.DeckJson
 import tel.misa.mxpocket.deck.DeckKey
+import tel.misa.mxpocket.deck.DeckRepository
+import tel.misa.mxpocket.deck.DeckRule
 import tel.misa.mxpocket.deck.importLegacyPhone
 import tel.misa.mxpocket.decks.Favorite
 import tel.misa.mxpocket.workflow.StepKind
@@ -1007,6 +1009,83 @@ class KeypadSessionTest {
         val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
         pm.addResolveInfoForIntent(launcher, handler(name))
         pm.addResolveInfoForIntent(Intent(launcher).setPackage(name.packageName), handler(name))
+    }
+
+    private fun withPostedFavorite(test: (ComponentName, PendingIntent) -> Unit) {
+        val session = app.session
+        val name = ComponentName("sample.notes", "sample.notes.Entry")
+        registerLauncher(name)
+        session.favoriteApps.setSelected(name.flattenToString(), true)
+        session.selectProfile("launcher")
+        val keypad = device("test-keypad")
+        shadowOf(usb).addOrUpdateUsbDevice(keypad, true)
+        val service = Robolectric.buildService(KeypadService::class.java).create()
+        service.get().onStartCommand(KeypadService.command(app, session.reserve(keypad)!!), 0, 1)
+        try {
+            session.publishFavorites(listOf(Favorite(name.flattenToString(), name.className)))
+            main.idle()
+            press(1) // Both the physical down and the release/redraw have been processed.
+            assertNull(shadowOf(app).nextStartedActivity)
+            val note = shadowOf(app.getSystemService(NotificationManager::class.java)).getNotification(PHONE_NOTICE)
+            assertEquals(app.getString(R.string.phone_action_note), note.extras.getString(Notification.EXTRA_TEXT))
+            test(name, note.contentIntent)
+        } finally { session.disconnect(); service.destroy() }
+    }
+
+    private fun deliverShortcut(tap: PendingIntent): Intent? {
+        tap.send()
+        val entry = shadowOf(app).nextStartedActivity
+        assertEquals(PhoneActionActivity::class.java.name, entry.component?.className)
+        return Robolectric.buildActivity(PhoneActionActivity::class.java, entry).setup().use {
+            shadowOf(it.get()).nextStartedActivity
+        }
+    }
+
+    @Test fun postedFavoriteOpensExactAppOnceAfterReleaseAndHostLifecycle() = withPostedFavorite { name, tap ->
+        val deck = app.session.deck
+        deck.setDefault("focus").getOrThrow()
+        val now = SystemClock.elapsedRealtime()
+        deck.observe(emptyMap(), now).getOrThrow()
+        deck.observe(emptyMap(), now + DeckRepository.DEBOUNCE_MS).getOrThrow()
+        Robolectric.buildActivity(MainActivity::class.java).setup().use { }
+        main.idle()
+        assertEquals("launcher", deck.operatingState.value.activeProfileId)
+        val target = deliverShortcut(tap)
+        assertEquals(name, target?.component)
+        assertEquals(Intent.ACTION_MAIN, target?.action)
+        assertEquals(setOf(Intent.CATEGORY_LAUNCHER), target?.categories)
+        assertNull(shadowOf(app.getSystemService(NotificationManager::class.java)).getNotification(PHONE_NOTICE))
+        assertThrows(PendingIntent.CanceledException::class.java) { tap.send() }
+    }
+
+    @Test fun automaticLayoutChangeWithdrawsPostedFavorite() = withPostedFavorite { _, tap ->
+        val deck = app.session.deck
+        deck.setRules("focus", listOf(DeckRule(FOREGROUND_APP, "sample.reader"))).getOrThrow()
+        val match = mapOf(FOREGROUND_APP to "sample.reader")
+        val now = SystemClock.elapsedRealtime()
+        deck.observe(match, now).getOrThrow()
+        deck.observe(match, now + DeckRepository.DEBOUNCE_MS).getOrThrow()
+        main.idle()
+        assertEquals("focus", deck.operatingState.value.activeProfileId)
+        assertNull(shadowOf(app.getSystemService(NotificationManager::class.java)).getNotification(PHONE_NOTICE))
+        // A tap already sent by System UI can still arrive after withdrawal.
+        assertNull(deliverShortcut(tap))
+        assertEquals(app.getString(R.string.phone_action_stale), app.session.status)
+    }
+
+    @Test fun changingTheFavoriteInPlaceWithdrawsItsOfferWithoutConsumingTheReplacement() = withPostedFavorite { _, old ->
+        val other = ComponentName("sample.reader", "sample.reader.Entry")
+        registerLauncher(other)
+        app.session.favoriteApps.setSelected(other.flattenToString(), true)
+        app.session.publishFavorites(listOf(Favorite(other.flattenToString(), other.className)))
+        main.idle()
+        assertNull(shadowOf(app.getSystemService(NotificationManager::class.java)).getNotification(PHONE_NOTICE))
+        press(1)
+        val manager = shadowOf(app.getSystemService(NotificationManager::class.java))
+        val replacement = manager.getNotification(PHONE_NOTICE).contentIntent
+        assertNull(deliverShortcut(old))
+        assertEquals(replacement, manager.getNotification(PHONE_NOTICE).contentIntent)
+        assertEquals(other, deliverShortcut(replacement)?.component)
     }
 
     @Suppress("DEPRECATION")
