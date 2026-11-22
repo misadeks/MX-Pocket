@@ -29,6 +29,7 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.semantics.*
@@ -159,14 +160,18 @@ fun PocketWorkspace(
                                 indicatorColor = PocketColors.navIndicator))
                     }
                 }
-                Box(Modifier.fillMaxSize()) {
-                    holder.SaveableStateProvider(activeTab.name) {
-                        when (activeTab) {
-                            WorkspaceTab.HOME -> HomeScreen(state, event)
-                            WorkspaceTab.PROFILES -> profiles()
-                            WorkspaceTab.PLUGINS -> if (state.simulator == null) PluginSettingsList(plugins, event) else PluginsScreen(plugins, event)
-                            WorkspaceTab.WORKFLOWS -> workflows()
-                            WorkspaceTab.SETTINGS -> SettingsScreen(state, event, openDiagnosticsWindow ?: { diagnosticsOpen = true })
+                // Only the rail layout gets a shared page frame; the compact layout keeps each screen's own spacing.
+                BoxWithConstraints(Modifier.fillMaxSize().testTag("workspace-page")) {
+                    val frame = if (rail) PageFrame.of(maxWidth) else null
+                    CompositionLocalProvider(LocalPageFrame provides frame) {
+                        holder.SaveableStateProvider(activeTab.name) {
+                            when (activeTab) {
+                                WorkspaceTab.HOME -> HomeScreen(state, event)
+                                WorkspaceTab.PROFILES -> profiles()
+                                WorkspaceTab.PLUGINS -> if (state.simulator == null) PluginSettingsList(plugins, event) else PluginsScreen(plugins, event)
+                                WorkspaceTab.WORKFLOWS -> workflows()
+                                WorkspaceTab.SETTINGS -> SettingsScreen(state, event, openDiagnosticsWindow ?: { diagnosticsOpen = true })
+                            }
                         }
                     }
                 }
@@ -189,8 +194,7 @@ fun PocketWorkspace(
  */
 @Composable
 fun HomeScreen(state: PocketScreenState, event: (PocketScreenEvent) -> Unit) {
-    WorkspaceColumn(wide = true) {
-        HomeHeader(state, event)
+    WorkspaceColumn(wide = true, title = { HomeHeader(state, event) }) {
         Text(state.status, Modifier.semantics { liveRegion = LiveRegionMode.Polite },
             color = PocketColors.muted, style = MaterialTheme.typography.bodySmall)
         state.simulator?.takeUnless { it.supportsUsb }?.let { Note(it.limitations) }
@@ -333,10 +337,13 @@ private fun RoundPageButton(icon: ShellIcon, label: String, onClick: () -> Unit)
 /** Profiles: the infinite carousel switches what is on the keypad; the editor below edits its layout. */
 @Composable
 fun SimulatorProfiles(state: PocketScreenState, select: (String) -> Unit, editor: @Composable () -> Unit) {
-    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+    val frame = LocalPageFrame.current
+    BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = frame.alignment()) {
         val wide = maxWidth >= 720.dp
-        Column(Modifier.widthIn(max = 1440.dp).fillMaxSize()) {
+        val framed = if (frame == null) Modifier else Modifier.padding(start = frame.gutter, top = frame.gutter, end = frame.gutter)
+        Column(Modifier.widthIn(max = 1440.dp).fillMaxSize().then(framed)) {
             WorkspaceTitle(W.Profiles.text())
+            frame?.let { Spacer(Modifier.height(it.titleGap)) }
             if (state.simulator == null) ProfileCarousel(state.profiles, state.activeId, select)
             else if (!wide || state.activeId == GAME_PROFILE) ProfilePicker(state.profiles, state.activeId, select)
             if (state.activeId != GAME_PROFILE) Box(Modifier.weight(1f).fillMaxWidth()) { editor() }
@@ -512,12 +519,13 @@ private fun DesktopConnectionCard(state: PocketScreenState, event: (PocketScreen
 
 @Composable
 fun DiagnosticsScreen(state: PocketScreenState, onClose: () -> Unit, event: (PocketScreenEvent) -> Unit) {
-    WorkspaceColumn {
+    WorkspaceColumn(title = {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             WorkspaceTitle(W.Diagnostics.text())
             if (state.simulator == null) PocketTextLink(W.BackToSettings.text(), onClose, ShellIcon.CHEVRON_LEFT)
             else PocketTextLink(W.Close.text(), onClose)
         }
+    }) {
         PocketInner {
             Text(listOf(state.pluginTitle, state.connectionLabel).filter { it.isNotBlank() }.joinToString("  |  "))
             if (state.status.isNotBlank()) Text(state.status, Modifier.semantics { liveRegion = LiveRegionMode.Polite })
@@ -568,10 +576,7 @@ private fun LanguageSelector(selected: AppLanguage?, change: (AppLanguage?) -> U
 
 @Composable
 private fun Section(title: String, wide: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
-    WorkspaceColumn(wide) {
-        WorkspaceTitle(title)
-        content()
-    }
+    WorkspaceColumn(wide, title = { WorkspaceTitle(title) }, content = content)
 }
 
 @Composable private fun Heading(text: String) = Text(text, Modifier.semantics { heading() }, style = MaterialTheme.typography.titleLarge)
