@@ -13,6 +13,8 @@ enum class PlayerGlyph : KeyGlyph {
     VOLUME_DOWN, MUTE, UNMUTE, VOLUME_UP, PREVIOUS, PLAY, PAUSE, PLAY_PAUSE, NEXT, BACK_10, TRACK, FORWARD_10
 }
 
+private val KeyGlyph?.isTenSecondSeek get() = this == PlayerGlyph.BACK_10 || this == PlayerGlyph.FORWARD_10
+
 data class VolumeLevel(val current: Int, val maximum: Int, val muted: Boolean) {
     val fraction: Float? get() = if (maximum <= 0) null else if (muted) 0f else current.coerceIn(0, maximum).toFloat() / maximum
     val description: String get() = if (maximum > 0) "$current / $maximum" else K.VolumeUnknown.text()
@@ -24,7 +26,9 @@ data class KeyTile(val label: String, val footer: String, val background: Int,
     val readOnly: Boolean = false, val showLabel: Boolean = true, val showFooter: Boolean = true,
     val primary: Boolean = false, val volumeLevel: VolumeLevel? = null, val quietFace: Boolean = false,
     val playerFace: Boolean = false, val levelFraction: Float? = null, val selection: KeySelection? = null,
-    val detail: String = "")
+    val detail: String = "") {
+    val backgroundOnly get() = !enabled && glyph.isTenSecondSeek
+}
 
 data class PluginFrame(val keys: List<KeyTile>, val page: Int = 0) {
     init { require(keys.size == 9) { "A plugin frame must contain exactly nine keys" } }
@@ -147,10 +151,13 @@ val studioSlots = listOf(DeckCommand.SHUTTER, DeckCommand.START_VIDEO, DeckComma
 /** Identical override order for the LCD, phone mirror and offline desktop host. */
 fun DeckKey.present(native: KeyTile?, fallbackLabel: String, footer: String, available: Boolean): KeyTile {
     val title = label.ifBlank { native?.label ?: fallbackLabel }
+    // Some hosts supply only a label for an unsupported legacy Audio slot.
+    val glyph = native?.glyph ?: bindingGlyph() ?: if (!available && action?.params?.get("pluginId") == "audio")
+        bindingPreview()?.glyph?.takeIf { it.isTenSecondSeek } else null
     val unavailableNote = !available && action?.id == "plugin.key" && action.params["pluginId"] == "onenote" &&
         (native?.quietFace != true || label.isNotBlank())
     return (native ?: KeyTile(title, footer, color)).copy(label = title, footer = footer,
-        glyph = if (unavailableNote) OneNoteLegend(OneNoteMark.UNAVAILABLE) else native?.glyph ?: bindingGlyph(),
+        glyph = if (unavailableNote) OneNoteLegend(OneNoteMark.UNAVAILABLE) else glyph,
         selection = native?.selection?.takeIf { available }, detail = native?.detail.orEmpty().takeIf { available }.orEmpty(),
         quietFace = native?.quietFace == true || action == null && label.isBlank(),
         showLabel = label.isNotBlank() || (action != null || native != null) && native?.showLabel != false,
@@ -158,7 +165,7 @@ fun DeckKey.present(native: KeyTile?, fallbackLabel: String, footer: String, ava
         showFooter = !(native?.quietFace == true && action?.params?.get("pluginId") == "onenote" && label.isBlank()) &&
             (native?.showFooter != false || !native.playerFace && footer.isNotBlank() && footer != native.footer),
         background = when {
-            !available -> 0xff494c51.toInt()
+            !available && !glyph.isTenSecondSeek -> 0xff494c51.toInt()
             color != DeckKey().color -> color
             else -> launcherIdentity()?.fill ?: native?.background ?: color
         },
