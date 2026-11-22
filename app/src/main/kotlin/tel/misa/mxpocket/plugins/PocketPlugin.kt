@@ -33,7 +33,6 @@ data class PluginKeyEvent(val index: Int, val pressed: Boolean, val synthetic: B
 data class AudioSnapshot(val volume: Int, val maximum: Int)
 enum class VolumeChange { LOWER, RAISE, MUTE, UNMUTE }
 enum class MediaCommand { PLAY_PAUSE, PREVIOUS, NEXT }
-enum class PhoneApp { CAMERA, SETTINGS, DIALER, WEB, ALARMS, ONENOTE }
 
 data class OneNoteSettings(val colors: List<String>, val selectedColor: String?, val thickness: Float, val min: Float, val max: Float, val textColor: Boolean = false, val colorIds: List<String> = colors,
     val colorValues: List<Int?> = emptyList(), val selectedIndex: Int = -1)

@@ -10,7 +10,7 @@ translated or editable title. Focus is blue, Audio green, Phone violet,
 Launcher amber, Studio pink, Navigation teal, Tic-tac-toe (`game.xo`) orange,
 Teams indigo and OneNote orchid. **Work** is the root page of `teams`, not a
 second plugin. Unknown IDs, including copied/custom profiles, use neutral slate.
-These colors identify profiles and launcher keys; they do not replace status
+These colors identify profiles and their keys on Home; they do not replace status
 colors, drawing-tool swatches, user-selected key colors or LCD backgrounds.
 
 Teams and OneNote use icons from the current Android profile's installed
@@ -139,13 +139,22 @@ and focused tests, then open a PR.
 | Capability | Allowed host actions |
 | --- | --- |
 | `AUDIO` | Read music volume/max; Volume LOWER/RAISE/MUTE/UNMUTE; Media PLAY_PAUSE/PREVIOUS/NEXT |
-| `OPEN_APPS` | Open supported PhoneApp CAMERA/SETTINGS/DIALER/WEB/ALARMS/ONENOTE/ACCESSIBILITY; `OpenUri` for external URI schemes such as `onenote:` deep links; `ShareText` (ACTION_SEND text/plain) for share targets such as OneNote's quick note |
+| `OPEN_APPS` | Open supported PhoneApp CAMERA/SETTINGS/DIALER/WEB/ALARMS/ONENOTE; `OpenUri` for external URI schemes such as `onenote:` deep links; `ShareText` (ACTION_SEND text/plain) for share targets such as OneNote's quick note |
 | `ACCESSIBILITY` | `AccessibilityClick` taps a visible control by text through the user-enabled, OneNote-scoped `OneNoteAccessService` |
 | `NAVIGATION` | Select another registered plugin by ID |
 | `TONE` | Play the short completion tone |
 | `STUDIO` | Open the default photo/video viewfinder. Only the physical Studio deck may request a matching camera button with separate consent. |
 | `SYSTEM_NAVIGATION` | Basic local navigation; global/element actions only through the user-enabled service |
 | None | Repaint current frame and invalidate changed state |
+
+For saved Phone bindings, use `ActionCall.phoneActionLabel()` from
+`tel.misa.mxpocket.plugins` to describe either `phone.open` or a legacy Phone
+`plugin.key`. It returns a localized description, not a replacement binding.
+`newPhoneAppActions()` returns assignable `phone.open` calls for Android
+settings, the dialer, alarms and OneNote. `app=CAMERA` still opens the photo
+viewfinder (also available as `studio.open`); `app=WEB` still opens exactly
+`https://www.logitech.com/`, even if an imported call supplies a `url`
+parameter. Neither is a new picker choice.
 
 For example:
 
@@ -211,7 +220,9 @@ Transient plugin state may be lost on process death; saved layouts and workflow
 definitions are independent of the activation. A background `OpenApp` dispatched
 synchronously for a real LCD key press offers a one-tap notification for that
 app. The tap requires a current request, USB grant and plugin page on an unlocked
-phone. With direct shortcuts explicitly enabled and Android special access
+phone. Changing the layout or retiring the pressed key's LCD receipt withdraws
+the offer; a tap already in flight cannot launch a replacement. With direct
+shortcuts explicitly enabled and Android special access
 granted, a fresh physical press can request a legacy Phone shortcut, a saved
 favorite's launcher activity, or a camera viewfinder (Phone: Camera, Pocket
 Studio, or the default camera favorite). Opening a viewfinder does not authorize capture.

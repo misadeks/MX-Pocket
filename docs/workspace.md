@@ -12,29 +12,29 @@ choice is remembered; System follows your device's current theme.
 also expose this choice in the system's per-app language settings. The Windows
 simulator remembers its own choice. Changing language does not rename your
 layouts, workflows or key labels, or change exported files.
-**Plugins** turns features on or off, **Flows** lets you build and run workflows,
-and **Settings** contains USB preferences. Open **Settings → Diagnostics** to
+**Plugins** turns features on or off and **Settings** contains USB preferences.
+**Flows** is hidden while [Workflows are paused](workflows.md). Open **Settings → Diagnostics** to
 see device details and the session log. On Android, Back returns to Settings.
 On Windows, Diagnostics opens in a separate window you can close independently.
 
-On Android and Windows, open **Home → Switch layout** and select a profile to
-open its first page, even when disconnected. To get back to the nine-key
-launcher, choose **Switch layout → Profile launcher**. The **Home** tab shows
-the current keypad; switching tabs does not change its layout. Android system
-Back dismisses the open menu, returns from other top-level tabs to Home, or
-leaves the Activity from Home. It does not select a keypad profile.
+On Android and Windows, the **Home** tab shows the current keypad. Use the
+page arrows to cycle through Home and the available layouts, even when
+disconnected. To choose a saved profile directly, open **Profiles**.
+Switching tabs does not change the keypad layout. Android system Back
+returns from other top-level tabs to Home or leaves the Activity from Home.
+It does not select a keypad profile.
 
-On the physical launcher, press a profile key to open it. **More profiles**
+On the keypad’s **Home** grid, press a profile key to open it. **More profiles**
 shows the next group if there are more than nine. **Previous** and **Next**
-cycle through the launcher and available profile roots. A submenu opens with
+cycle through Home and available profile roots. A submenu opens with
 its assigned key; a **Back** binding retraces pages within the current profile,
-and **Return to root** opens that profile's first page, not the launcher.
+and **Return to root** opens that profile's first page, not Home.
 
-Press **Previous** and **Next** together and release to return to the keypad’s
-profile launcher. Keep both held instead to open Tic Tac Toe, if enabled.
+Press **Previous** and **Next** together and release to return to Home.
+Keep both held instead to open Tic Tac Toe, if enabled.
 The hold starts when the second button goes down and uses Android’s **Touch &
 hold delay** on Android. Release both, then press either one alone to exit the
-game. The game is not in the regular launcher or editor. In the Windows
+game. The game is not on the Home grid or in the editor. In the Windows
 simulator, use **Page Up** and **Page Down** on the Home tab for the same gestures.
 
 Turning off a plugin hides its own profile and pages from Home, Profiles and
@@ -56,10 +56,19 @@ swipe strip. **Plugins** lists controls supported by the current host first;
 unavailable plugins remain visible with the reason they cannot run. The key
 action picker also explains unavailable bindings without changing saved keys.
 
-To give a key a second action, open the key on its page, choose **Hold** under
-**Key actions**, pick an action, and save the key. **Tap** and **Hold** are
-independent; choose **Unassigned** for Hold and save to remove it. Existing
-layouts and factory keys have no Hold. Layout backups include assigned Holds.
+Under **Key actions**, choose **Tap** or **Hold**, then browse by task or search
+across categories. **Pages and profiles** navigates the keypad; **Android
+navigation** controls the phone. Opening a saved profile never imports keys
+from other profiles into its picker. For example, **Focus timer** is available
+when editing Focus, and **Toggle mute** is a live Audio control. App launches,
+media commands and explicit profile switches use named actions rather than
+factory key numbers.
+
+Choosing an action changes only that gesture. **Save key** applies the edit;
+**Unassigned** clears the chosen gesture. A legacy binding stays as saved until
+you replace it, including in imported layouts. In particular, **Open logitech.com**
+still opens that site; it is not a configurable browser shortcut. Readouts and
+controls tied to a physical camera or call key are not new assignments.
 
 On an operational key with Hold assigned, releasing early runs Tap. Keeping
 the key down until Android's **Touch & hold delay** runs Hold once instead;
@@ -94,7 +103,7 @@ Choose **Settings → Connect virtual keypad** for clickable Home keys with no
 USB I/O. Phone, Launcher, Studio, Navigation, Teams and OneNote require Android; they
 stay listed with reasons. Windows does not read volume levels, track metadata
 or seek positions, issue absolute mute/unmute commands, run workflows, apply
-foreground rules, or upload user background images. Layouts and workflows can
+foreground rules, or upload user background images. Layouts can
 be edited and backed-up layouts imported without enabling Android actions.
 Windows desktop data stays local and is not synchronized with the phone.
 
@@ -159,12 +168,9 @@ call doesn't require changing Android permissions. See
    *Open page: Tools*, and set its label, icon and color. Put *Back* or *Return
    to root* on Tools. Inspect both pages in Profiles. To exercise the bindings,
    choose **Profile settings and rules > Use on keypad**, connect the wired keypad and press its keys.
-3. In Flows duplicate **Keypad check**. Give the copy a name, change a delay
-   or add a step, then **Test run** and **Save workflow**. A test executes real
-   steps. In Profiles assign the saved workflow to a Tools key. Press that key
-   on the connected keypad to see the steps run. **Run history** shows origin,
-   result and progress. For confirmation steps open Flows and approve or
-   decline on the phone. Cancelling does not undo completed actions.
+3. If a layout was saved with a workflow binding, that assignment remains in
+   the layout but cannot start the workflow. You can replace it with another
+   action in Profiles; no change is needed to continue using other keys.
 4. In Plugins enable Audio; optional media access is explained before opening
    Android settings. Start playback in a player. In Profiles inspect the
    Audio rule `mediaActive = true`. While the app
@@ -177,7 +183,7 @@ call doesn't require changing Android permissions. See
    a pinned non-music profile keeps its own background.
 5. Inspect the selection reason, matched rules and observed values in Profiles.
    Create or change weighted rules for an observed app-owned activity, device,
-   local hour/range, media, plugin or workflow state. Pin Desk, change playback
+   local hour/range, media or plugin state. Pin Desk, change playback
    and verify it stays on Desk. Unpin to resume automatic selection. Disabling
    automatic switching for a profile prevents entering or leaving it by rule.
    Foreground app mappings are optional; see below.
@@ -276,13 +282,13 @@ results without identifiers or media metadata.
   notification. Disconnect from that notification and reopen the app: it should
   not reconnect until requested or reattached. An unrelated device should not
   start a session.
-- Repeat the Desk/Tools workflow above on hardware. Observe all nine 118x118
+- Repeat the Desk/Tools page-switching check above on hardware. Observe all nine 118x118
   regions of the single panel, confirm readability and persistence for 60 seconds.
   Switch pages while an image is transferring; a press against the unacknowledged
   page must not run the replacement action.
 - Start playback and confirm the selected media profile, physical Play/Pause,
-  corresponding playback-state redraw, then open a nested page. Run the saved
-  workflow with a physical key. Compare progress and result on phone and LCD.
+  corresponding playback-state redraw, then open a nested page. A saved
+  workflow binding should not execute or advance the workflow on the phone or LCD.
 - Lock the phone, then turn the screen off. Use the physical media keys without
   waking the screen. On authorized hardware, change tracks and check that
   the Audio title and cover follow the player. Switch profiles, then revoke

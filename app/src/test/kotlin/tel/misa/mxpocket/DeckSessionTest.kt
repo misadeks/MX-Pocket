@@ -19,6 +19,10 @@ import tel.misa.mxpocket.workflow.WorkflowDefinition
 import tel.misa.mxpocket.workflow.WorkflowOrigin
 import tel.misa.mxpocket.workflow.WorkflowStep
 import tel.misa.mxpocket.workflow.StepKind
+import tel.misa.mxpocket.workflow.TriggerKind
+import tel.misa.mxpocket.workflow.WorkflowLibrary
+import tel.misa.mxpocket.workflow.WorkflowStore
+import tel.misa.mxpocket.workflow.WorkflowTrigger
 import java.time.Duration
 import android.graphics.Bitmap
 
@@ -72,7 +76,9 @@ class DeckSessionTest {
     }
 
     @Test fun physicalKeypadRunsSavedWorkflowAfterReconnectingOnTheSamePage() {
+        app.workflowsEnabled = true
         val session = app.session
+        val workflows = checkNotNull(session.workflows)
         val repo = session.deck
         val id = repo.createProfile("Desk").getOrThrow()
         val child = repo.createPage(id,"Tools").getOrThrow()
@@ -86,19 +92,62 @@ class DeckSessionTest {
         assertEquals(child, repo.state.value.activePage.id)
         session.disconnect()
         app.press(2) // The old USB callback cannot start a workflow after disconnect.
-        assertNull(session.workflows.status.value)
+        assertNull(workflows.status.value)
         app.connectKeypad()
         assertEquals("Test",session.frame().keys[1].label)
         app.press(2)
-        assertEquals(WorkflowPhase.RUNNING,session.workflows.status.value?.phase)
-        assertEquals(WorkflowOrigin.PHYSICAL,session.workflows.status.value?.origin)
+        assertEquals(WorkflowPhase.RUNNING,workflows.status.value?.phase)
+        assertEquals(WorkflowOrigin.PHYSICAL,workflows.status.value?.origin)
         assertTrue(session.frame().keys[1].footer.contains("running"))
         main.idleFor(Duration.ofSeconds(3))
-        assertEquals(WorkflowPhase.SUCCESS,session.workflows.status.value?.phase)
+        assertEquals(WorkflowPhase.SUCCESS,workflows.status.value?.phase)
         assertTrue(session.frame().keys[1].footer.contains("success"))
         assertEquals(child,DeckRepository(app).state.value.activePage.id)
         session.disconnect()
         session.detach(screen)
+    }
+
+    @Test fun upgradedWorkflowBindingsStayDormantWithoutDisablingOrdinaryTapOrHold() {
+        val repo = DeckRepository(app)
+        val flow = WorkflowDefinition("legacy", "Old shortcut",
+            steps = listOf(WorkflowStep(StepKind.ACTION, target = DeckActions.PROFILE, params = mapOf("profileId" to "studio"))))
+        val library = WorkflowLibrary(1, listOf(flow, flow.copy(id = "connect", trigger = WorkflowTrigger(TriggerKind.CONNECTED))))
+        val store = WorkflowStore(app)
+        store.save(library)
+        val workflow = ActionCall("workflow.run", mapOf("workflowId" to flow.id))
+        val next = ActionCall(DeckActions.PROFILE, mapOf("profileId" to "audio"))
+        val keys = listOf(DeckKey(action = workflow), DeckKey(action = workflow, holdAction = next),
+            DeckKey(action = next, holdAction = workflow))
+        keys.forEachIndexed { i, key -> repo.setKey("focus", "root", i, key).getOrThrow() }
+
+        // A new session reads the existing deck; an imported copy follows the same dispatch path.
+        val session = app.session
+        session.deck.importJson(repo.exportJson()).getOrThrow()
+        session.attach(screen)
+        session.selectProfile("focus")
+        app.connectKeypad()
+        assertEquals("focus", session.deck.operatingState.value.activeProfileId)
+        assertFalse(session.frame().keys[0].enabled)
+        assertFalse(kotlinx.coroutines.runBlocking { session.actions.dispatch(workflow) }.success)
+        app.press(1)
+        app.press(2)
+        assertEquals("focus", session.deck.operatingState.value.activeProfileId)
+        fun hold(key: Int) {
+            app.emit(KeyEvent(key, true))
+            main.idleFor(Duration.ofMillis(android.view.ViewConfiguration.getLongPressTimeout().toLong() + 1))
+            app.emit(KeyEvent(key, false)); main.idle()
+        }
+        hold(2)
+        assertEquals("audio", session.deck.operatingState.value.activeProfileId)
+        session.selectProfile("focus"); main.idle()
+        hold(3)
+        assertEquals("focus", session.deck.operatingState.value.activeProfileId)
+        app.press(3)
+        assertEquals("audio", session.deck.operatingState.value.activeProfileId)
+        session.disconnect(); session.detach(screen)
+        assertEquals(library, store.load())
+        assertTrue(store.loadHistory().isEmpty())
+        assertEquals(keys, DeckRepository(app).state.value.profiles.single { it.id == "focus" }.pages.first().keys.take(3))
     }
 
     @Test fun changingOnlyTheActionRequiresANewReceiptEvenWhenThePixelsAreIdentical() {
@@ -163,6 +212,7 @@ class DeckSessionTest {
     }
 
     @Test fun delayedPhysicalWorkflowCannotNavigateOrLaunchWithoutSeparateApproval() {
+        app.workflowsEnabled = true
         val session = app.session
         var navigations = 0
         session.attach(object : PocketSession.Screen by screen {
@@ -172,7 +222,7 @@ class DeckSessionTest {
                 return tel.misa.mxpocket.decks.ok("Opened")
             }
         })
-        val runner = session.workflows
+        val runner = checkNotNull(session.workflows)
         val draft = WorkflowDefinition(name = "Delayed Home",steps = listOf(
             WorkflowStep(StepKind.WAIT,value = "1"), WorkflowStep(StepKind.ACTION,target = "navigation.home")))
         assertNotNull(runner.start(draft,WorkflowOrigin.PHYSICAL))

@@ -53,6 +53,8 @@ import tel.misa.mxpocket.decks.NavigationService
 import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.DeckJson
 import tel.misa.mxpocket.deck.DeckKey
+import tel.misa.mxpocket.deck.DeckRepository
+import tel.misa.mxpocket.deck.DeckRule
 import tel.misa.mxpocket.deck.importLegacyPhone
 import tel.misa.mxpocket.decks.Favorite
 import tel.misa.mxpocket.workflow.StepKind
@@ -77,7 +79,8 @@ class KeypadSessionTest {
         var closes = 0
         lateinit var emit: (KeyEvent) -> Unit
         val lcd = mutableMapOf<Int, Bitmap>()
-        override fun createSession() = PocketSession(this) { _, _, event, _, _ ->
+        var workflowsEnabled = tel.misa.mxpocket.workflow.WORKFLOWS_ENABLED
+        override fun createSession() = PocketSession(this, workflowsEnabled = workflowsEnabled) { _, _, event, _, _ ->
             emit = event
             claims++
             lcd.clear()
@@ -149,6 +152,7 @@ class KeypadSessionTest {
     }
 
     @Test fun authorizedAudioDisplaysAndControlsThePlayerWithScreenOffOrKeyguardLocked() {
+        app.workflowsEnabled = true
         val media = MediaSession(app,"external player")
         val player = media.controller
         val controller = shadowOf(player)
@@ -165,7 +169,8 @@ class KeypadSessionTest {
         val session = app.session
         session.selectProfile("audio")
         val flow = WorkflowDefinition(name = "Skip", steps = listOf(WorkflowStep(StepKind.ACTION, target = "media.next")))
-        assertNull(kotlinx.coroutines.runBlocking { session.workflows.save(flow) })
+        val workflows = checkNotNull(session.workflows)
+        assertNull(kotlinx.coroutines.runBlocking { workflows.save(flow) })
         session.deck.setKey("audio","root",0,DeckKey(action = ActionCall("workflow.run",mapOf("workflowId" to flow.id)))).getOrThrow()
         val service = Robolectric.buildService(KeypadService::class.java).create()
         service.get().onStartCommand(KeypadService.command(app,session.reserve(real)!!),0,1)
@@ -190,7 +195,7 @@ class KeypadSessionTest {
             assertFalse(session.actions.let { kotlinx.coroutines.runBlocking { it.dispatch(ActionCall("media.next")) } }.success)
             val controls = shadowOf(player.transportControls)
             press(5); assertEquals(P.ACTION_PAUSE,controls.lastPerformedAction)
-            press(1); assertEquals(WorkflowPhase.FAILED,session.workflows.status.value?.phase)
+            press(1); assertEquals(WorkflowPhase.FAILED,workflows.status.value?.phase)
             assertEquals(P.ACTION_PAUSE,controls.lastPerformedAction)
             state(false); tick()
             press(5); assertEquals(P.ACTION_PLAY,controls.lastPerformedAction)
@@ -592,6 +597,11 @@ class KeypadSessionTest {
             assertEquals(Intent.ACTION_DIAL, target?.action)
             assertEquals("tel:", target?.dataString)
             assertNull(tap(dialer))
+            press(4)
+            assertEquals("Open logitech.com", manager.getNotification(PHONE_NOTICE).extras.getString(Notification.EXTRA_TITLE))
+            val website = tap(shortcut())
+            assertEquals(Intent.ACTION_VIEW, website?.action)
+            assertEquals("https://www.logitech.com/", website?.dataString)
             press(1)
             val missing = shortcut()
             shadowOf(app).checkActivities(true)
@@ -761,6 +771,27 @@ class KeypadSessionTest {
         service.destroy()
     }
 
+    @Test fun savedPhoneOpenWebStillRequestsOnlyTheLogitechSiteInTheForeground() {
+        val session = app.session
+        val web = ActionCall("phone.open", mapOf("app" to "WEB", "url" to "https://example.com"))
+        val profile = session.deck.createProfile("Shortcuts").getOrThrow()
+        session.deck.setKey(profile, "root", 0, DeckKey(action = web)).getOrThrow()
+        session.selectProfile(profile)
+        app.connectKeypad()
+        try {
+            Robolectric.buildActivity(MainActivity::class.java).setup().use {
+                app.press(1)
+                val target = shadowOf(app).nextStartedActivity
+                assertEquals(Intent.ACTION_VIEW, target?.action)
+                assertEquals("https://www.logitech.com/", target?.dataString)
+            }
+            app.press(1)
+            assertNull(shadowOf(app).nextStartedActivity)
+        } finally {
+            session.disconnect()
+        }
+    }
+
     @Test fun customCameraBindingRequestsTheViewfinderButCannotCarryPhysicalAuthorityIntoAWorkflow() {
         val real = device("test-keypad")
         shadowOf(usb).addOrUpdateUsbDevice(real, true)
@@ -902,7 +933,8 @@ class KeypadSessionTest {
         try {
             Robolectric.buildActivity(MainActivity::class.java).setup().use { host ->
                 main.idle()
-                assertTrue(controls.all { (session.platformBindings().map { it.second }).contains(ActionCall(it.id)) })
+                val options = tel.misa.mxpocket.shared.ui.globalBindings(session.deck.state.value.visibleProfiles)
+                assertTrue(controls.all { command -> options.any { it.call == ActionCall(command.id) } })
                 assertTrue(controls.none { c -> session.platformWorkflowActions().any { it.id == c.id } })
                 app.press(2) // No system captioning activity: use Accessibility, never the third-party handler.
                 val fallback = shadowOf(host.get()).nextStartedActivity
@@ -977,6 +1009,83 @@ class KeypadSessionTest {
         val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
         pm.addResolveInfoForIntent(launcher, handler(name))
         pm.addResolveInfoForIntent(Intent(launcher).setPackage(name.packageName), handler(name))
+    }
+
+    private fun withPostedFavorite(test: (ComponentName, PendingIntent) -> Unit) {
+        val session = app.session
+        val name = ComponentName("sample.notes", "sample.notes.Entry")
+        registerLauncher(name)
+        session.favoriteApps.setSelected(name.flattenToString(), true)
+        session.selectProfile("launcher")
+        val keypad = device("test-keypad")
+        shadowOf(usb).addOrUpdateUsbDevice(keypad, true)
+        val service = Robolectric.buildService(KeypadService::class.java).create()
+        service.get().onStartCommand(KeypadService.command(app, session.reserve(keypad)!!), 0, 1)
+        try {
+            session.publishFavorites(listOf(Favorite(name.flattenToString(), name.className)))
+            main.idle()
+            press(1) // Both the physical down and the release/redraw have been processed.
+            assertNull(shadowOf(app).nextStartedActivity)
+            val note = shadowOf(app.getSystemService(NotificationManager::class.java)).getNotification(PHONE_NOTICE)
+            assertEquals(app.getString(R.string.phone_action_note), note.extras.getString(Notification.EXTRA_TEXT))
+            test(name, note.contentIntent)
+        } finally { session.disconnect(); service.destroy() }
+    }
+
+    private fun deliverShortcut(tap: PendingIntent): Intent? {
+        tap.send()
+        val entry = shadowOf(app).nextStartedActivity
+        assertEquals(PhoneActionActivity::class.java.name, entry.component?.className)
+        return Robolectric.buildActivity(PhoneActionActivity::class.java, entry).setup().use {
+            shadowOf(it.get()).nextStartedActivity
+        }
+    }
+
+    @Test fun postedFavoriteOpensExactAppOnceAfterReleaseAndHostLifecycle() = withPostedFavorite { name, tap ->
+        val deck = app.session.deck
+        deck.setDefault("focus").getOrThrow()
+        val now = SystemClock.elapsedRealtime()
+        deck.observe(emptyMap(), now).getOrThrow()
+        deck.observe(emptyMap(), now + DeckRepository.DEBOUNCE_MS).getOrThrow()
+        Robolectric.buildActivity(MainActivity::class.java).setup().use { }
+        main.idle()
+        assertEquals("launcher", deck.operatingState.value.activeProfileId)
+        val target = deliverShortcut(tap)
+        assertEquals(name, target?.component)
+        assertEquals(Intent.ACTION_MAIN, target?.action)
+        assertEquals(setOf(Intent.CATEGORY_LAUNCHER), target?.categories)
+        assertNull(shadowOf(app.getSystemService(NotificationManager::class.java)).getNotification(PHONE_NOTICE))
+        assertThrows(PendingIntent.CanceledException::class.java) { tap.send() }
+    }
+
+    @Test fun automaticLayoutChangeWithdrawsPostedFavorite() = withPostedFavorite { _, tap ->
+        val deck = app.session.deck
+        deck.setRules("focus", listOf(DeckRule(FOREGROUND_APP, "sample.reader"))).getOrThrow()
+        val match = mapOf(FOREGROUND_APP to "sample.reader")
+        val now = SystemClock.elapsedRealtime()
+        deck.observe(match, now).getOrThrow()
+        deck.observe(match, now + DeckRepository.DEBOUNCE_MS).getOrThrow()
+        main.idle()
+        assertEquals("focus", deck.operatingState.value.activeProfileId)
+        assertNull(shadowOf(app.getSystemService(NotificationManager::class.java)).getNotification(PHONE_NOTICE))
+        // A tap already sent by System UI can still arrive after withdrawal.
+        assertNull(deliverShortcut(tap))
+        assertEquals(app.getString(R.string.phone_action_stale), app.session.status)
+    }
+
+    @Test fun changingTheFavoriteInPlaceWithdrawsItsOfferWithoutConsumingTheReplacement() = withPostedFavorite { _, old ->
+        val other = ComponentName("sample.reader", "sample.reader.Entry")
+        registerLauncher(other)
+        app.session.favoriteApps.setSelected(other.flattenToString(), true)
+        app.session.publishFavorites(listOf(Favorite(other.flattenToString(), other.className)))
+        main.idle()
+        assertNull(shadowOf(app.getSystemService(NotificationManager::class.java)).getNotification(PHONE_NOTICE))
+        press(1)
+        val manager = shadowOf(app.getSystemService(NotificationManager::class.java))
+        val replacement = manager.getNotification(PHONE_NOTICE).contentIntent
+        assertNull(deliverShortcut(old))
+        assertEquals(replacement, manager.getNotification(PHONE_NOTICE).contentIntent)
+        assertEquals(other, deliverShortcut(replacement)?.component)
     }
 
     @Suppress("DEPRECATION")

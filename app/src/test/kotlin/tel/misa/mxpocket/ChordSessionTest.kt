@@ -127,7 +127,7 @@ class ChordSessionTest {
                 host.dispatch(PluginAction.Deck(DeckCommand.SHUTTER))
             }
         }
-        session = PocketSession(app, listOf(probe, chordStudio)) { _, _, event, _, _ ->
+        session = PocketSession(app, listOf(probe, chordStudio), workflowsEnabled = true) { _, _, event, _, _ ->
             emit = event
             object : GridOutput {
                 override fun close() {}
@@ -253,13 +253,14 @@ class ChordSessionTest {
     }
 
     @Test fun physicalOnlyWorkflowRequiresTheConfiguredHoldInsteadOfATap() {
-        val flow = session.workflows.definitions.value.first { it.id == "keypad-check" }
-        assertNull(runBlocking { session.workflows.save(flow.copy(trigger = WorkflowTrigger(TriggerKind.PHYSICAL))) })
+        val workflows = checkNotNull(session.workflows)
+        val flow = workflows.definitions.value.first { it.id == "keypad-check" }
+        assertNull(runBlocking { workflows.save(flow.copy(trigger = WorkflowTrigger(TriggerKind.PHYSICAL))) })
         bindHold(3, ActionCall("workflow.run", mapOf("workflowId" to flow.id)), tap = null)
         event(4, true); event(4, false)
-        assertNull(session.workflows.status.value)
+        assertNull(workflows.status.value)
         event(4, true); main.idleFor(Duration.ofMillis(holdDelay)); event(4, false)
-        assertEquals(WorkflowOrigin.PHYSICAL, session.workflows.status.value?.origin)
+        assertEquals(WorkflowOrigin.PHYSICAL, workflows.status.value?.origin)
         assertTrue(events.isEmpty())
     }
 
@@ -353,9 +354,10 @@ class ChordSessionTest {
         gate.complete(Unit); main.idle()
         event(9, true); report(); waitWindow()
         assertTrue(events.isEmpty())
-        assertNull(session.workflows.status.value)
+        val workflows = checkNotNull(session.workflows)
+        assertNull(workflows.status.value)
         report(9)
-        assertEquals("keypad-check", session.workflows.status.value?.workflowId)
+        assertEquals("keypad-check", workflows.status.value?.workflowId)
     }
 
     @Test fun changingOnlyReadOnlyRevokesBufferedInputAndRequiresAcknowledgmentBeforeRearming() {

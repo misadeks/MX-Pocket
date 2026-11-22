@@ -8,6 +8,7 @@ import tel.misa.mxpocket.i18n.WorkspaceCopy as W
 import tel.misa.mxpocket.i18n.WorkflowCopy
 
 import android.app.Application
+import android.app.NotificationManager
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.BroadcastReceiver
@@ -90,6 +91,7 @@ internal class PocketSession(
         app.getString(R.string.audio), app.getString(R.string.phone), app.getString(R.string.xo), app.getString(R.string.onenote), app.resources),
     private val usageDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val usageTimeMillis: () -> Long = System::currentTimeMillis,
+    workflowsEnabled: Boolean = WORKFLOWS_ENABLED,
     private val open: OpenKeypad = { manager, device, event, log, error ->
         RenderedKeypad(MxKeypad.connect(manager, device, event, log, error))
     },
@@ -219,7 +221,7 @@ internal class PocketSession(
     private var feedbackProfile: String? = null
     private var attachedUsb = emptySet<String>()
     val actions = ActionDispatcher { call -> execute(call, null) }
-    val workflows = WorkflowController(app, sessionScope, object : WorkflowHost {
+    val workflows = if (!workflowsEnabled) null else WorkflowController(app, sessionScope, object : WorkflowHost {
         override fun snapshot() = workflowContext()
         override fun actions() = workflowActions()
         override suspend fun execute(id: String, params: Map<String,String>): Boolean {
@@ -237,8 +239,10 @@ internal class PocketSession(
         sessionScope.launch {
             deck.operatingState.collect { physicalKeys.cancel(); syncLayout(); invalidate() }
         }
-        sessionScope.launch { workflows.status.collect { invalidate() } }
-        sessionScope.launch { workflows.definitions.collect { invalidate() } }
+        workflows?.let {
+            sessionScope.launch { it.status.collect { invalidate() } }
+            sessionScope.launch { it.definitions.collect { invalidate() } }
+        }
         sessionScope.launch { deckState.collect { invalidate() } }
     }
 
@@ -257,8 +261,7 @@ internal class PocketSession(
             if (lastLayout?.profile != layout.profile || lastLayout?.page?.id != layout.page.id)
                 screenGeneration++
             lastLayout = layout
-            receipts = LongArray(9)
-            pendingAction = null
+            retireReceipts()
             media.refreshDisplay()
         }
         if (feedbackPage != state.activePage || feedbackProfile != state.activeProfileId) {
@@ -296,7 +299,7 @@ internal class PocketSession(
 
     private fun retireCallPixels() {
         physicalKeys.cancel()
-        receipts = LongArray(9)
+        retireReceipts()
         lcd.fill(null)
         images.clear()
         (output as? RenderedKeypad)?.clearImages()
@@ -364,7 +367,7 @@ internal class PocketSession(
         val native = plugins.render()
         val page = deck.operatingState.value.activePage
         val keys = page.keys.mapIndexed { index, key ->
-            val displayed = if (hold || key.action == null) key.holdAction else key.action
+            val displayed = key.displayedAction(hold, workflowsEnabled = workflows != null)
             bindingFace(index, if (displayed == key.action) key else key.copy(action = displayed), native)
         }
         val hasPluginKeys = page.keys.any { key ->
@@ -396,7 +399,7 @@ internal class PocketSession(
             tile?.glyph == NavigationGlyph.ACCESS_INFO ||
                 tile?.glyph == NavigationGlyph.RECENTS && !tile.enabled -> tile.footer
             !available && call != null -> K.Unavailable.text()
-            call?.id == "workflow.run" && workflows.status.value?.workflowId == call.params["workflowId"] -> tile?.footer.orEmpty()
+            call?.id == "workflow.run" && workflows?.status?.value?.workflowId == call.params["workflowId"] -> tile?.footer.orEmpty()
             else -> feedback[index]?.invoke() ?: tile?.footer.orEmpty()
         }
         val state = deck.operatingState.value
@@ -494,8 +497,8 @@ internal class PocketSession(
             "usbDevice" to if (connected) "046D:C354" else "None",
             "hour" to time.hour.toString(),
             "weekday" to time.dayOfWeek.name, "profile" to state.activeProfileId,
-            "plugin" to (selectedPlugin(state.activePage) ?: "custom"),
-            "workflow" to (workflows.status.value?.phase?.name ?: "IDLE")) +
+            "plugin" to (selectedPlugin(state.activePage) ?: "custom")) +
+            workflows?.let { mapOf("workflow" to (it.status.value?.phase?.name ?: "IDLE")) }.orEmpty() +
             attachedUsb.associate { "usb.$it" to "true" } + platformSignals() +
             if (foregroundApp != null && foregroundApp in configuredApps(state, detectApps.value, disabled.value, teamsEnabled.value) &&
                 app.isUnlockedAndInteractive() && app.hasUsageAccess())
@@ -504,7 +507,7 @@ internal class PocketSession(
         deck.observe(snapshot, SystemClock.elapsedRealtime(),
             allowTeamsWork = teamsEnabled.value && TEAMS !in disabled.value && hasPlugin(TEAMS))
             .onFailure { fail(D.SelectLayout.text(), it) }
-        workflows.onContextChanged(workflowContext())
+        workflows?.onContextChanged(workflowContext())
     }
 
     fun observeUsb(devices: Set<String>) { attachedUsb = devices; sampleContext() }
@@ -542,15 +545,16 @@ internal class PocketSession(
         DeckActions.PAGE -> deck.state.value.activeProfile.let { profile ->
             profile.pages.find { it.id == call.params["pageId"] }?.let(profile::displayPageName) ?: K.Page.text()
         }
-        "workflow.run" -> workflows.definitions.value.find { it.id == call.params["workflowId"] }?.name ?: K.MissingWorkflow.text()
+        "workflow.run" -> if (workflows == null) WorkflowCopy.Workflow.text() else
+            workflows.definitions.value.find { it.id == call.params["workflowId"] }?.name ?: K.MissingWorkflow.text()
         "sound.play" -> K.PlaySound.text()
-        "phone.open" -> PhoneApp.entries.find { it.name == call.params["app"] }?.displayName() ?: K.Phone.text()
+        "phone.open" -> call.phoneAppTarget()?.displayName() ?: K.Phone.text()
         "keypad.status" -> K.SetKeyStatus.text()
         else -> call.id
     }
 
     private fun workflowTile(call: ActionCall?): KeyTile? {
-        if (call?.id != "workflow.run") return null
+        if (call?.id != "workflow.run" || workflows == null) return null
         val definition = workflows.definitions.value.find { it.id == call.params["workflowId"] }
             ?: return KeyTile(K.MissingWorkflow.text(), K.EditKey.text(), 0xff494c51.toInt(), enabled = false)
         val status = workflows.status.value?.takeIf { it.workflowId == definition.id }
@@ -616,7 +620,7 @@ internal class PocketSession(
                 } catch (_: RuntimeException) { ActionResult(false,D.NoTone.text()) }
             }
             "phone.open" -> {
-                val target = PhoneApp.entries.find { it.name == call.params["app"] }
+                val target = call.phoneAppTarget()
                 if (origin == WorkflowOrigin.PHYSICAL && target == PhoneApp.CAMERA) {
                     if (screen == null) {
                         val offered = offerPhysicalShortcut(Target.Phone(target))
@@ -634,6 +638,7 @@ internal class PocketSession(
                 else { feedback[index] = { text }; invalidate(); ActionResult(true, D.StatusUpdated.text()) }
             }
             "workflow.run" -> {
+                if (workflows == null) return ActionResult(false, K.Unavailable.text())
                 val ok = origin != null && workflows.run(call.params["workflowId"].orEmpty(),origin)
                 ActionResult(ok, if (ok) D.WorkflowStarted.text() else D.Busy.text())
             }
@@ -711,7 +716,7 @@ internal class PocketSession(
         hardwareScope = null
         output?.close()
         output = null
-        receipts = LongArray(9)
+        retireReceipts()
         lcd.fill(null)
         paintedTarget = null
         splitTarget = null
@@ -722,7 +727,6 @@ internal class PocketSession(
         paintedLayout = null
         scanLayout = null
         onHandoff = null
-        pendingAction = null
         val end = onEnd
         onEnd = null
         end?.invoke()
@@ -766,7 +770,7 @@ internal class PocketSession(
             refreshPhoneCall()
             return
         }
-        val tap = key.action
+        val tap = key.action?.takeUnless { it.id == "workflow.run" && workflows == null }
         val hold = key.holdAction
         val tiles = frame()
         fun actionable(latest: PluginFrame) = latest.keys[index].let { it.enabled && !it.readOnly } &&
@@ -849,7 +853,7 @@ internal class PocketSession(
         pageButtons.cancel()
         if (plugins.chords.isEmpty() && deck.operatingState.value.activePage.keys.none { it.holdAction != null }) return
         physicalKeys.cancel()
-        receipts = LongArray(9) // Also reject input posted from the USB thread before this boundary.
+        retireReceipts() // Also reject input posted from the USB thread before this boundary.
         invalidate()
     }
 
@@ -898,7 +902,7 @@ internal class PocketSession(
         if (splitTarget != target) splitTarget = null
 
         if (connected is GridOutput && splitTarget == null && (paintedTarget != target || dirty.size > 1)) {
-            receipts = LongArray(9)
+            retireReceipts()
             painting = scope.launch {
                 try {
                     val result = connected.writeGrid(art, keys.map { it.image }, gridHasArt) {
@@ -932,7 +936,7 @@ internal class PocketSession(
         // One transaction at a time. Re-read desired state after its ACK, continuing around the panel
         // rather than repeatedly starting at a rapidly changing first key.
         if (dirty.isNotEmpty()) {
-            receipts = receipts.copyOf().also { values -> dirty.forEach { values[it] = 0 } }
+            retireReceipts(dirty)
             val index = dirty.minBy { (it - nextKey + lcd.size) % lcd.size }
             nextKey = (index + 1) % lcd.size
             val key = keys[index]
@@ -970,6 +974,13 @@ internal class PocketSession(
     }
 
     private var receiptSequence = 0L
+
+    private fun retireReceipts(indices: List<Int>? = null) {
+        receipts = if (indices == null) LongArray(9)
+            else receipts.copyOf().also { values -> indices.forEach { values[it] = 0 } }
+        pendingAction?.let { if (indices == null || it.index in indices) clearPhoneAction() }
+    }
+
     private fun target(frame: PluginFrame) = GridTarget(screenGeneration, frame.page, repaintEpoch, images.artworkRevision)
 
     private fun desiredKey(layout: Layout, frame: PluginFrame, index: Int): LcdKey {
@@ -1261,7 +1272,12 @@ internal class PocketSession(
         val offer = onHandoff ?: return unavailable(D.NoSession.text())
         val action = PhoneAction(target, ticket, index, receipts[index], time)
         pendingAction = action
-        return offer(action)
+        return offer(action).also { if (!it.success && pendingAction == action) clearPhoneAction() }
+    }
+
+    private fun clearPhoneAction() {
+        pendingAction = null
+        app.getSystemService(NotificationManager::class.java).cancel(PHONE_NOTICE)
     }
 
     fun isCurrentShortcut(action: PhoneAction): Boolean =
@@ -1272,7 +1288,7 @@ internal class PocketSession(
         val pending = pendingAction ?: return null
         if (id != pending.id) return null // An older tap must not consume the replacement.
         val valid = isCurrentShortcut(pending) && SystemClock.elapsedRealtime() - pending.pressedAt in 0 until PHONE_ACTION_TTL
-        pendingAction = null
+        clearPhoneAction()
         return pending.takeIf { valid }
     }
     fun log(line: String) {

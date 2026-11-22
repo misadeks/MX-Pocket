@@ -1,5 +1,15 @@
 # Workflows
 
+**Workflows are disabled in this release on Android and Windows.** Flows and
+workflow assignment choices are hidden. Previously assigned keys do not run
+workflows, and Android cancels queued workflow jobs without affecting other
+work. Saved definitions, bindings, endpoints and history are kept. There is
+no Settings switch to enable them.
+
+The guide below applies to builds with `WORKFLOWS_ENABLED` set to `true` in
+`shared-ui`'s `WorkflowModel.kt`. In an enabled build, Android loads the saved
+library again and schedules the next daily occurrence, not missed runs.
+
 The Workflows screen builds an ordered sequence from local actions. Nothing runs
 when the editor opens. **Test run** executes the current draft for real without
 saving it. **Save workflow** validates and stores it on this phone. Duplicate

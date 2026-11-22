@@ -17,7 +17,7 @@ import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.DeckActions
 import tel.misa.mxpocket.deck.DeckKey
 import tel.misa.mxpocket.decks.DeckCommand
-import tel.misa.mxpocket.shared.ui.factoryKeyBindings
+import tel.misa.mxpocket.decks.navigationCommands
 import tel.misa.mxpocket.shared.ui.PocketScreenEvent
 import tel.misa.mxpocket.i18n.AppLanguage
 import tel.misa.mxpocket.i18n.AppLocale
@@ -26,6 +26,19 @@ class PreviewDeckTest {
     @get:Rule val folder = TemporaryFolder()
     private fun PreviewDeck.press(slot: Int, now: Long, hold: Boolean = false): String =
         press(PocketScreenEvent.VirtualKey(slot, board(now).grid, hold), now)!!
+
+    @Test fun legacyWorkflowTapDoesNotMaskAWorkingHoldOrRunItOnTap() {
+        val repo = DeckRepository(File(folder.root, "deck.json"))
+        val deck = PreviewDeck(repo).apply { simulator = true; select("focus") }
+        val key = DeckKey(action = ActionCall("workflow.run", mapOf("workflowId" to "old")),
+            holdAction = ActionCall(DeckActions.PROFILE, mapOf("profileId" to "audio")))
+        repo.setKey("focus", "root", 0, key).getOrThrow()
+        deck.press(0, 0)
+        assertEquals("focus", deck.profileId)
+        deck.press(0, 0, hold = true)
+        assertEquals("audio", deck.profileId)
+        assertEquals(key, repo.state.value.profiles.single { it.id == "focus" }.pages.first().keys.first())
+    }
 
     @Test fun switchingLanguageRepaintsWithoutRebindingOrRenamingSavedKeys() {
         val language = AppLocale.current
@@ -190,14 +203,14 @@ class PreviewDeckTest {
         check(deck.press(2, 0).startsWith("Invalid action parameters"))
         check(deck.tiles(0)[3].label == "5 / 15")
     }
-    @Test fun launcherPaginatesAndBrowseAlwaysOpensProfileRoots() {
+    @Test fun homePaginatesAndBrowseAlwaysOpensProfileRoots() {
         val repo = DeckRepository(File(folder.root, "deck.json"))
         val deck = PreviewDeck(repo).apply { simulator = true }
         val page = repo.createPage("focus", "Projects").getOrThrow()
         val extras = List(4) { repo.createProfile("Custom $it").getOrThrow() }
         check(deck.profileName == "Home")
         check(deck.tiles(0)[8].label == "More profiles")
-        deck.press(8, 0)
+        assertEquals("Home", deck.press(8, 0))
         val lastChoice = deck.tiles(0).indexOfFirst { it.label == "Custom 3" }
         check(lastChoice in 0..7)
         deck.press(lastChoice, 0)
@@ -228,8 +241,9 @@ class PreviewDeckTest {
     @Test fun navigationUsesFactoryBindingsAndNeverClaimsAndroidAccess() {
         val deck = PreviewDeck(DeckRepository(File(folder.root, "deck.json"))).apply { simulator = true }
         deck.repository.selectProfile("navigation").getOrThrow()
-        val up = factoryKeyBindings.single { it.label == "Navigate key 2: Scroll up" }
-        assertEquals(deck.repository.state.value.activePage.keys[1].action, up.call)
+        assertEquals("Navigate", deck.profileName)
+        val up = deck.repository.state.value.activePage.keys[1].action!!
+        assertEquals(DeckCommand.UP, navigationCommands[up.params.getValue("index").toInt()])
         val tiles = deck.tiles(0)
         check(tiles.map { it.label } == listOf("Back", "Scroll up", "Home", "Prev focus", "Select",
             "Next focus", "Recents", "Scroll down", "Accessibility"))

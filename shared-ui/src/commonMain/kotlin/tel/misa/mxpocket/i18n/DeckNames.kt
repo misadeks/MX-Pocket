@@ -39,11 +39,10 @@ private fun profileTitle(id: String?, name: String) = if (id == "navigation" && 
 fun DeckProfile.displayName(): String = profileTitle(id, name)
 
 fun DeckProfile.displayPageName(page: DeckPage): String = when {
-    id == PROFILE_HOME -> LauncherCopy.Launcher
     id == TEAMS && page.id == "root" -> K.Work
     id == TEAMS && page.id == IN_CALL -> K.InCall
     id == "navigation" && page.id == ACCESSIBILITY_PAGE -> K.Accessibility
-    page.id == "root" -> deckNames[id]
+    id == PROFILE_HOME || page.id == "root" -> deckNames[id]
     else -> null
 }.ifFactoryValue(page.name)
 

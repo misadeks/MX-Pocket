@@ -22,15 +22,6 @@ fun PluginCapability.displayName() = when (this) {
     PluginCapability.ACCESSIBILITY -> N.Accessibility
 }.text()
 
-fun PhoneApp.displayName() = when (this) {
-    PhoneApp.CAMERA -> K.Camera
-    PhoneApp.SETTINGS -> K.Settings
-    PhoneApp.DIALER -> K.Dialer
-    PhoneApp.WEB -> K.Web
-    PhoneApp.ALARMS -> K.Alarms
-    PhoneApp.ONENOTE -> N.Brand
-}.text()
-
 /** Registration order is the page-button order. Add your compiled-in plugin here. */
 object BuiltInPlugins {
     fun create(focusTitle: String, audioTitle: String, phoneTitle: String, xoTitle: String = TIC_TAC_TOE_TITLE, oneNoteTitle: String = "OneNote", resources: Resources? = null): List<PocketPlugin> =
@@ -81,17 +72,13 @@ class PhonePlugin(title: String) : PocketPlugin {
 
     override fun onKey(event: PluginKeyEvent, host: PluginHost) {
         if (!event.pressed || event.synthetic) return
-        val action = when (event.index) {
-            0 -> PluginAction.OpenApp(PhoneApp.CAMERA)
-            1 -> PluginAction.OpenApp(PhoneApp.SETTINGS)
-            2 -> PluginAction.OpenApp(PhoneApp.DIALER)
-            3 -> PluginAction.OpenApp(PhoneApp.WEB)
-            5 -> PluginAction.OpenApp(PhoneApp.ALARMS)
-            6, 7 -> tel.misa.mxpocket.deck.phoneShortcutProfile(event.index)?.let(PluginAction::SelectPlugin)
-            8 -> PluginAction.Repaint
-            else -> null
+        val action = when (val slot = legacyPhoneSlot(event.index)) {
+            is PhoneApp -> PluginAction.OpenApp(slot)
+            is PhoneSlot.SelectProfile -> PluginAction.SelectPlugin(slot.id)
+            PhoneSlot.Refresh -> PluginAction.Repaint
+            PhoneSlot.ReadOnlyLabel, null -> return
         }
-        action?.let(host::dispatch)
+        host.dispatch(action)
     }
 }
 

@@ -18,6 +18,7 @@ import tel.misa.mxpocket.plugins.*
 import tel.misa.mxpocket.shared.ui.PocketScreenEvent
 import tel.misa.mxpocket.shared.ui.VirtualGrid
 import tel.misa.mxpocket.shared.ui.virtualGrid
+import tel.misa.mxpocket.workflow.WORKFLOWS_ENABLED
 
 /** Owns the local plugins; only a physical-input dispatch may call the Windows adapter. */
 class PreviewDeck(val repository: DeckRepository, private val sendMedia: (MediaKey) -> String = ::sendWindowsMedia) {
@@ -187,7 +188,7 @@ class PreviewDeck(val repository: DeckRepository, private val sendMedia: (MediaK
         val owner = page.selectedSlotOwner(knownPlugins::contains)
         val pluginPage = if (owner == "game.xo") xo.interactionPage else 0
         fun frame(hold: Boolean) = PluginFrame(page.keys.map { key ->
-            val call = if (hold) key.holdAction else key.action ?: key.holdAction
+            val call = key.displayedAction(hold)
             face(snapshot, key, call, owner, now)
         }, pluginPage)
         val display = frame(false)
@@ -211,6 +212,7 @@ class PreviewDeck(val repository: DeckRepository, private val sendMedia: (MediaK
     private fun press(slot: Int, now: Long, hold: Boolean, current: Board): String {
         val key = current.grid.page.keys.getOrNull(slot) ?: return K.Unassigned.text()
         val call = (if (hold) key.holdAction else key.action) ?: return K.Unassigned.text()
+        if (!WORKFLOWS_ENABLED && call.id == "workflow.run") return K.Unavailable.text()
         if (DeckCommand.fromId(call.id)?.deck in setOf("audio", "navigation") && call.commandBinding().params.isNotEmpty())
             return K.InvalidParams.text()
         val chosen = if (hold) current.grid.holds?.get(slot) else current.grid.taps[slot]
@@ -231,7 +233,9 @@ class PreviewDeck(val repository: DeckRepository, private val sendMedia: (MediaK
             MORE_PROFILES -> repository.moreProfiles()
             else -> null
         }
-        if (navigation != null) return navigation.fold({ K.OnPage.text(profileName, deck.activeProfile.displayPageName(deck.activePage)) },
+        if (navigation != null) return navigation.fold({
+            if (profileId == PROFILE_HOME) profileName else K.OnPage.text(profileName, deck.activeProfile.displayPageName(deck.activePage))
+        },
             { it.message ?: K.CannotChangePage.text() })
         val (plugin, index, command) = binding(call)
             ?: return K.NotInSimulator.text(call.id)
