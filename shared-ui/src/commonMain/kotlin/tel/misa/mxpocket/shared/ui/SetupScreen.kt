@@ -42,10 +42,10 @@ data class SetupScreenState(
     val selected: Set<SetupFeature>, val reviewing: Boolean, val steps: List<SetupStep>,
     val message: String, val firstRun: Boolean,
     val options: List<SetupOption> = SetupFeature.entries.map { SetupOption(it) },
-    val introduction: String = "The virtual keypad, basic media keys and volume work without permissions. Pick the extras you want help setting up.",
+    val introduction: String = "Choose the features you want to set up. You can change these choices later in Settings.",
     val reviewHint: String = "Tap a step to change it. If Android restricts an option, leave it off. You can finish at any time.",
     val connectHint: String? = if (selected.any { it in setOf(SetupFeature.USB, SetupFeature.AUTO, SetupFeature.DIRECT) })
-        "When ready, use Connect keypad on Home to start the session." else null
+        "When ready, tap the connection button at the top of Home to start the session." else null
 )
 
 sealed interface SetupEvent {
@@ -55,7 +55,6 @@ sealed interface SetupEvent {
     data object Edit : SetupEvent
     data object Finish : SetupEvent
     data object Cancel : SetupEvent
-    data object TryVirtual : SetupEvent
 }
 
 @Composable
@@ -121,8 +120,9 @@ private fun SetupContent(state: SetupScreenState, onEvent: (SetupEvent) -> Unit)
                 Text(when { reviewing -> "Finish setup"; selected.isEmpty() -> "Continue without extras"; else -> "Review setup steps" })
             }
             if (reviewing) TextButton(onClick = { onEvent(SetupEvent.Edit) }, modifier = Modifier.fillMaxWidth()) { Text("Change choices") }
-            else if (firstRun) TextButton(onClick = { onEvent(SetupEvent.TryVirtual) }, modifier = Modifier.fillMaxWidth()) { Text("Skip and try virtual keypad") }
-            else TextButton(onClick = { onEvent(SetupEvent.Cancel) }, modifier = Modifier.fillMaxWidth()) { Text("Cancel") }
+            else TextButton(onClick = { onEvent(SetupEvent.Cancel) }, modifier = Modifier.fillMaxWidth()) {
+                Text(if (firstRun) "Not now" else "Cancel")
+            }
         }
     }
 }

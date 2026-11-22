@@ -23,7 +23,7 @@ A `KeyTile` contains a label, footer and ARGB background color. Ordinary keys
 keep their key number unless an icon is supplied. The built-in Audio page uses
 monochrome player symbols instead. Labels remain available to accessibility
 even on icon-only controls. Read-only tiles display state without dispatching input.
-The virtual keypad and the **Swap keys** editor use the same key faces
+Home and the **Swap keys** editor use the same key faces
 as the LCDs, including user backgrounds. With a physical keypad, Home mirrors
 the live LCD images as a display only, rather than a second set of tappable
 keys. The independent
@@ -52,8 +52,8 @@ Import `tel.misa.mxpocket.plugins.examples.CounterPlugin` and append
 `CounterPlugin()` to the list returned by `BuiltInPlugins.create()`.
 
 To exercise it, include a layout whose nine actions are `plugin.key` with
-`pluginId=example.counter` and `index=0` through `8`. Select that profile and choose **Settings > Connect
-virtual keypad**. No USB protocol or Activity change is needed. The
+`pluginId=example.counter` and `index=0` through `8`. Select that profile, connect a wired
+keypad on Home and press a key. No USB protocol or Activity change is needed. The
 example is compiled for tests but **not enabled in the default registry**.
 
 ### Bind physical LCD keys 1 + 9
@@ -104,8 +104,7 @@ chord wins, Android's system long-press timeout is measured from the original
 USB down, not from the end of the chord window. A selected `plugin.key` gets
 one down on selection and the matching up on release (immediately for a tap).
 Neither deferred choice is a fresh physical-down grant for launches or capture.
-Virtual Home actions retain virtual workflow origin; editor selection has no
-input authority at all.
+The Android Home mirror and editor selection have no keypad input authority.
 
 To author another plugin, copy the example into a named feature package, change
 its ID/title and implement its state, frame and input. Add a registry instance
@@ -162,7 +161,7 @@ inside that scope, then publish state/invalidate back on the owner dispatcher.
 Do not use `GlobalScope`, unowned threads, an application-wide static scope or a
 background service in a plugin.
 
-Selection change, disconnect, leaving the foreground with the virtual keypad, or engine close:
+Selection change, disconnect, or engine close:
 
 1. Invalidates the old activation generation and disables its host effects.
 2. Cancels its child scope.
@@ -208,7 +207,7 @@ ACK acceptance is distinct from physical LCD visibility.
 Synchronous callback/render failures and asynchronous scoped-task failures are
 attributed to the plugin ID, surfaced in the app's log/status, and stop its
 activation. The UI explicitly renders `Plugin error`, not a fabricated success
-frame. Reselect/reconnect/preview activation can retry. Cancellation is not
+frame. Reselecting or reconnecting can retry. Cancellation is not
 silently converted into successful work.
 
 Tests:

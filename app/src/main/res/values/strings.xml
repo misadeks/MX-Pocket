@@ -18,14 +18,11 @@
     <string name="phone_action_locked">Unlock the phone and press the keypad shortcut again.</string>
     <string name="phone_action_stale">Shortcut no longer available. Press the key on the connected keypad again.</string>
     <string name="refresh">Refresh USB diagnostics</string>
-    <string name="preview">Connect virtual keypad</string>
-    <string name="stop_simulator">Disconnect virtual keypad</string>
     <string name="import_image">Choose custom image for all nine keys</string>
     <string name="export_log">Save diagnostic log</string>
     <string name="diagnostics">USB diagnostics</string>
     <string name="log">Session log</string>
     <string name="not_connected">Not connected. USB permission and a compatible HID descriptor are required.</string>
-    <string name="preview_note">Virtual keypad connected. Keys perform real actions. No USB messages are sent.</string>
     <string name="profile_note">Source-supported profile: one 480x480 panel, nine 118x118 visible key regions. Physical behavior has not been verified on this phone.</string>
     <string name="focus">Focus</string>
     <string name="audio">Media Deck</string>

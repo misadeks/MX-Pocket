@@ -22,14 +22,14 @@ import kotlin.math.roundToInt
 
 /** At this width each SVG aperture rounds to exactly 118 screen pixels. */
 internal class ComposeMirror<R : TestRule, A : ComponentActivity>(
-    private val ui: AndroidComposeTestRule<R,A>, onTap: (Int) -> Unit = {},
+    private val ui: AndroidComposeTestRule<R,A>,
 ) {
     private var tiles by mutableStateOf(emptyList<KeypadTile>())
     init {
         ui.runOnIdle {
             ui.activity.setContent {
                 CompositionLocalProvider(LocalDensity provides Density(1f)) {
-                    if (tiles.size == 9) KeypadGrid(tiles, { i, down -> if (!down) onTap(i) },
+                    if (tiles.size == 9) KeypadGrid(tiles, { _, _ -> error("Read-only mirror received input") },
                         Modifier.requiredSize(534.dp, 624.dp).testTag("lcd"))
                 }
             }
@@ -38,7 +38,7 @@ internal class ComposeMirror<R : TestRule, A : ComponentActivity>(
 
     fun render(frame: List<KeyTile>, images: List<Bitmap>): Bitmap {
         ui.runOnIdle {
-            tiles = frame.mapIndexed { i, key -> key.toGridTile(true, images[i].asImageBitmap()) }
+            tiles = frame.mapIndexed { i, key -> key.toGridTile(true, images[i].asImageBitmap()).copy(readOnly = true) }
         }
         val bounds = ui.onNodeWithTag("lcd").fetchSemanticsNode().boundsInWindow
         return ui.runOnIdle {
