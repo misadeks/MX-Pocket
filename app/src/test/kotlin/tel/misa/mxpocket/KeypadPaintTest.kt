@@ -127,7 +127,7 @@ class KeypadPaintTest {
             expectGrids(0)
             p.session.selectProfile(profile); main.idle(); expectGrids(1)
             p.press(1); assertEquals(child, deck.state.value.activePage.id); expectGrids(2)
-            p.press(0x01a1); assertEquals("teams", deck.state.value.activeProfileId); expectGrids(3)
+            p.press(0x01a1); assertEquals("onenote", deck.state.value.activeProfileId); expectGrids(3)
             p.press(0x01a2); assertEquals("root", deck.state.value.activePage.id); expectGrids(4)
             p.press(1); assertEquals(child, deck.state.value.activePage.id); expectGrids(5)
             p.press(1); expectGrids(5) // Already on Tools.
