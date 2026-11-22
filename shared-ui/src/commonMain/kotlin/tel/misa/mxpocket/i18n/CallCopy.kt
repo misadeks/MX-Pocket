@@ -39,17 +39,17 @@ object CallCopy {
     val AllowPhoneState = Copy("Allow phone state", "Autoriser la lecture de l’état des appels", "Dozvoli čitanje stanja poziva")
     val ShowDetails = Copy("Show caller and call controls", "Afficher l’appelant et les commandes d’appel", "Prikaži pozivaoca i komande za poziv")
     val DetailsHint = Copy(
-        "Show the Phone app's caller label and picture on the physical keypad. Anyone nearby can see them. Home hides caller details.",
-        "Le pavé physique affiche le nom ou le numéro et la photo fournis par l’appli Téléphone. Toute personne à proximité peut les voir. L’accueil masque ces informations.",
-        "Na fizičkoj tastaturi prikazuju se ime ili broj i slika pozivaoca iz aplikacije Telefon. Svako u blizini može da ih vidi. Na početnom ekranu ti podaci su skriveni.")
+        "Use call notifications from this profile’s default Phone app to show the caller label, picture and available controls on the physical keypad. Anyone nearby can see them. Home hides caller details.",
+        "Utiliser les notifications d’appel de l’appli Téléphone par défaut de ce profil pour afficher l’appelant, sa photo et les commandes disponibles sur le pavé physique. Toute personne à proximité peut les voir. L’accueil masque les informations sur l’appelant.",
+        "Koristite obaveštenja o pozivu iz podrazumevane aplikacije Telefon na ovom profilu za prikaz pozivaoca, slike i dostupnih komandi na fizičkoj tastaturi. Svako u blizini može da ih vidi. Na početnom ekranu podaci o pozivaocu su skriveni.")
     val DetailsUnavailable = Copy(
         "Caller details and controls require Android 14 or later. Use Phone on this device.",
         "Les informations sur l’appelant et les commandes nécessitent Android 14 ou version ultérieure. Sur cet appareil, utilisez l’appli Téléphone.",
         "Za podatke o pozivaocu i komande potreban je Android 14 ili noviji. Na ovom uređaju koristite aplikaciju Telefon.")
     val NotificationHint = Copy(
-        "Android notification access can expose notifications from other apps. MX Pocket uses only this profile's default Phone app call notification. Nothing about the caller is saved. Accept and Decline appear only if Phone supplies both actions.",
-        "L’accès aux notifications Android peut rendre visibles les notifications d’autres applis. MX Pocket utilise uniquement la notification d’appel de l’appli Téléphone par défaut de ce profil. Aucune information sur l’appelant n’est enregistrée. Les touches Accepter et Refuser ne s’affichent que si l’appli Téléphone propose les deux actions.",
-        "Pristup Android obaveštenjima može da otkrije i obaveštenja drugih aplikacija. MX Pocket koristi samo obaveštenje o pozivu iz podrazumevane aplikacije Telefon u ovom profilu. Podaci o pozivaocu se ne čuvaju. Tasteri Prihvati i Odbij prikazuju se samo ako aplikacija Telefon nudi obe radnje.")
+        "Choose MX Pocket in Android’s Notification access. Android can expose notifications from other apps. Caller details use only this profile’s default Phone app. Nothing about the caller is saved. Accept and Decline appear only if Phone supplies both actions. This choice does not enable Music or Teams.",
+        "Choisissez MX Pocket dans la rubrique Accès aux notifications d’Android. Android peut exposer les notifications d’autres applis. Les informations sur l’appelant proviennent uniquement de l’appli Téléphone par défaut de ce profil et ne sont pas enregistrées. Accepter et Refuser ne s’affichent que si Téléphone fournit les deux actions. Ce choix n’active ni la musique ni Teams.",
+        "U Android podešavanjima za pristup obaveštenjima izaberite MX Pocket. Android može da otkrije obaveštenja drugih aplikacija. Podaci o pozivaocu potiču samo iz podrazumevane aplikacije Telefon na ovom profilu i ne čuvaju se. Prihvati i Odbij prikazuju se samo ako Telefon nudi obe radnje. Ovaj izbor ne uključuje muziku niti Teams.")
     val ManageAccess = Copy("Manage notification access", "Gérer l’accès aux notifications", "Podesi pristup obaveštenjima")
     val AllowAccess = Copy("Allow notification access", "Autoriser l’accès aux notifications", "Dozvoli pristup obaveštenjima")
 
@@ -58,9 +58,9 @@ object CallCopy {
         "L’accès à l’état des appels n’a pas été accordé. Utilisez l’appli Téléphone ou accordez l’autorisation Téléphone à MX Pocket dans les paramètres Android.",
         "Pristup stanju poziva nije odobren. Koristite aplikaciju Telefon ili u Android podešavanjima odobrite aplikaciji MX Pocket dozvolu za telefon.")
     val OpenAccessSettings = Copy(
-        "Open Android notification access settings for MX Pocket phone calls.",
-        "Dans les paramètres Android, ouvrez l’accès aux notifications pour « Appels téléphoniques de MX Pocket ».",
-        "U Android podešavanjima otvorite pristup obaveštenjima za „MX Pocket: telefonski pozivi“.")
+        "In Android settings, open Notification access and choose MX Pocket.",
+        "Dans les paramètres Android, ouvrez Accès aux notifications et choisissez MX Pocket.",
+        "U Android podešavanjima otvorite pristup obaveštenjima i izaberite MX Pocket.")
     val RestrictedAccess = Copy(
         "Android restricted notification access. Use Phone for call controls.",
         "Android a restreint l’accès aux notifications. Gérez l’appel dans l’appli Téléphone.",

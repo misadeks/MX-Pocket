@@ -35,7 +35,7 @@ class DeckRepositoryTest {
         assertFalse("phone" in choices(cold))
         assertFalse(cold.operatingState.value.activePage.keys.any { it.action?.targetProfileId() == "phone" })
         assertEquals(backup, cold.exportJson())
-        assertEquals(target, cold.state.value.activePage.keys.first())
+        assertEquals(target, cold.state.value.profiles.single { it.id == "focus" }.pages.first().keys.first())
         cold.selectProfile("audio").getOrThrow()
         cold.changePage(1).getOrThrow()
         assertEquals("launcher", cold.operatingState.value.activeProfileId)
@@ -57,6 +57,19 @@ class DeckRepositoryTest {
         assertTrue("phone" in choices(DeckRepository(file)))
         cold.restoreDefaults().getOrThrow()
         assertFalse(cold.state.value.profiles.any { it.id == "phone" })
+    }
+
+    @Test fun factoryDefaultsStartOnLauncherAndKeepStudioSelected() {
+        assertEquals("launcher", repo.state.value.activeProfileId)
+        assertEquals("launcher", repo.state.value.defaultProfileId)
+        assertFalse(repo.state.value.profiles.single { it.id == "studio" }.automatic)
+        repo.selectProfile("studio").getOrThrow()
+        repo.observe(emptyMap(), 0).getOrThrow()
+        repo.observe(emptyMap(), 3000).getOrThrow()
+        assertEquals("studio", repo.state.value.activeProfileId)
+        val restored = DeckRepository(file)
+        assertEquals("studio", restored.state.value.activeProfileId)
+        assertEquals("launcher", restored.state.value.defaultProfileId)
     }
 
     @Test fun localizedReasonsAndValidationNeverChangeExportsOrRuleValues() {
@@ -90,6 +103,7 @@ class DeckRepositoryTest {
         repo.showTeamsCall(false); observe(4000); observe(6000)
         assertEquals("audio", repo.state.value.activeProfileId)
         repo.observe(emptyMap(), 7000).getOrThrow()
+        repo.setProfileAutomatic("studio", true).getOrThrow()
         repo.setRules("studio", listOf(DeckRule("foregroundApp", "com.microsoft.teams", 5))).getOrThrow()
         observe(8000); observe(10000)
         assertEquals("studio", repo.state.value.activeProfileId)
@@ -139,6 +153,7 @@ class DeckRepositoryTest {
     }
 
     @Test fun callProjectionRestoresExactPageAndNeverOverwritesAnExplicitChoice() {
+        repo.setProfileAutomatic("studio", true).getOrThrow()
         val child = repo.createPage("studio", "Tools").getOrThrow()
         repo.selectProfile("studio").getOrThrow()
         repo.openPage(child).getOrThrow()
@@ -391,6 +406,7 @@ class DeckRepositoryTest {
     @Test fun removingAnAppMappingLeavesNoPackageInTheSavedOrExportedReason() {
         val pkg = "example.privateplayer"
         val rule = DeckRule("foregroundApp", pkg, 5)
+        repo.setProfileAutomatic("studio", true).getOrThrow()
         repo.setRules("studio", listOf(rule)).getOrThrow()
         for (time in listOf(0L, 2000L)) repo.observe(mapOf(rule.signal to pkg), time).getOrThrow()
         assertEquals("studio", repo.state.value.activeProfileId)
@@ -494,7 +510,7 @@ class DeckRepositoryTest {
 
         val exported = repo.exportJson()
         repo.restoreDefaults().getOrThrow()
-        assertEquals("focus", repo.state.value.activeProfileId)
+        assertEquals("launcher", repo.state.value.activeProfileId)
         repo.importJson(exported).getOrThrow()
         assertEquals(state, repo.state.value)
     }
@@ -637,6 +653,7 @@ class DeckRepositoryTest {
         repo.root().getOrThrow()
         assertTrue(repo.deletePage(duplicate, "root").isFailure)
         repo.setKey("focus", "root", 0, DeckKey(action = ActionCall("profile.switch", mapOf("profileId" to duplicate)))).getOrThrow()
+        repo.setDefault("focus").getOrThrow()
         repo.setPinned(duplicate).getOrThrow()
         repo.deleteProfile(duplicate).getOrThrow()
         assertEquals("focus", repo.state.value.activeProfileId)
@@ -648,6 +665,7 @@ class DeckRepositoryTest {
     @Test fun copyingRenamingAndRemovingTargetsPreservesIndependentTapAndHoldLinks() {
         fun page(id: String) = ActionCall(DeckActions.PAGE, mapOf(DeckActions.PAGE_ID to id))
         fun profile(id: String) = ActionCall(DeckActions.PROFILE, mapOf(DeckActions.PROFILE_ID to id))
+        repo.setDefault("focus").getOrThrow()
         val child = repo.createPage("focus", "Scene").getOrThrow()
         repo.setKey("focus", "root", 0, DeckKey(holdAction = page(child))).getOrThrow()
         val key = DeckKey(action = profile("focus"), holdAction = page(child))
@@ -675,6 +693,9 @@ class DeckRepositoryTest {
         val music = DeckRule("mediaActive", "true", 3)
         val overnight = DeckRule("hour", "22-5", 4)
         val dock = DeckRule("dock", "desk", 1)
+        repo.setDefault("focus").getOrThrow()
+        repo.selectProfile("focus").getOrThrow()
+        repo.setProfileAutomatic("studio", true).getOrThrow()
         repo.setRules("audio", listOf(music)).getOrThrow()
         repo.setRules("studio", listOf(overnight, dock)).getOrThrow()
         val media = mapOf("mediaActive" to "true")
@@ -713,6 +734,7 @@ class DeckRepositoryTest {
 
     @Test fun explicitSelectionPinAndOptOutCannotBeOverriddenByAnOldCandidate() {
         val media = mapOf("mediaActive" to "true")
+        repo.setDefault("focus").getOrThrow()
         repo.observe(media, 1).getOrThrow()
         repo.setPinned("studio").getOrThrow()
         repo.observe(media, 5000).getOrThrow()
@@ -738,6 +760,8 @@ class DeckRepositoryTest {
     }
 
     @Test fun oldMasterSwitchDoesNotGateRulesOrDisplaceManualLayoutsWithoutAMatch() {
+        repo.setProfileAutomatic("studio", true).getOrThrow()
+        repo.setDefault("focus").getOrThrow()
         repo.selectProfile("studio").getOrThrow()
         file.writeText(JSONObject(repo.exportJson()).put("automatic", false).toString())
         val upgraded = DeckRepository(file)

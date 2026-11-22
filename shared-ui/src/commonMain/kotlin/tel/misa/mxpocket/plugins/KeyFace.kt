@@ -3,9 +3,12 @@ package tel.misa.mxpocket.plugins
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import tel.misa.mxpocket.decks.TEAMS_PACKAGE
 
 /** Type and symbols are laid out in the LCD's native 118-unit square, never in screen dp. */
 data class FaceCaption(val text: String, val center: Float, val size: Float, val lines: Int, val bold: Boolean)
+
+private const val TEAMS_ARTWORK_OFFSET = 4
 
 fun Canvas.paintKeyFace(
     index: Int, tile: KeyTile, iconImage: ImageBitmap? = null,
@@ -32,17 +35,20 @@ fun Canvas.paintKeyFace(
         tile.icon.isNotBlank() -> caption(FaceCaption(tile.icon, faceY, 24f, 1, true), captionInk)
         iconImage != null -> {
             if (glyph is IntegrationApp && !tile.enabled) p.alpha = .65f
-            drawImageRect(iconImage, dstOffset = IntOffset(40, 5), dstSize = IntSize(38, 38), paint = p)
+            val teams = tile.iconComponent?.startsWith("$TEAMS_PACKAGE/") ?: (glyph == IntegrationApp.TEAMS)
+            val top = if (teams) 5 + TEAMS_ARTWORK_OFFSET else 5
+            drawImageRect(iconImage, dstOffset = IntOffset(40, top), dstSize = IntSize(38, 38), paint = p)
             p.alpha = 1f
         }
         glyph != null -> {
+            val glyphY = if (glyph == IntegrationApp.TEAMS) faceY + TEAMS_ARTWORK_OFFSET else faceY
             val diameter = if (player) 49.5f else if (footer) 35f else 48f
             val sampled = photoInk?.invoke(37, 31, 81, 75)
             val plate = !player && (sampled != null || tile.primary)
             val lightPlate = tile.primary && tile.enabled
             if (plate) {
                 p.color = if (lightPlate) Color.White else Color(0xdd17191c)
-                drawCircle(androidx.compose.ui.geometry.Offset(59f, faceY), diameter / 2 + 4f, p)
+                drawCircle(androidx.compose.ui.geometry.Offset(59f, glyphY), diameter / 2 + 4f, p)
             }
             val color = when {
                 !tile.enabled && !tile.readOnly -> if ((sampled ?: ink) == Color.Black) Color(0xff56585a) else Color(0xff999da0)
@@ -52,11 +58,11 @@ fun Canvas.paintKeyFace(
             if (player && sampled != null) {
                 save()
                 translate(0f, 1f)
-                symbol(glyph, faceY, diameter + 1.2f,
+                symbol(glyph, glyphY, diameter + 1.2f,
                     (if (color == Color.Black) Color.White else Color.Black).copy(alpha = .65f))
                 restore()
             }
-            symbol(glyph, faceY, diameter, color)
+            symbol(glyph, glyphY, diameter, color)
         }
         !tile.readOnly && !tile.quietFace ->
             caption(FaceCaption("${index + 1}", faceY, 20f, 1, false), subdued)

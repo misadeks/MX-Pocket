@@ -5,11 +5,12 @@ import tel.misa.mxpocket.i18n.KeypadCopy as K
 import android.content.Context
 import android.os.Build
 import tel.misa.mxpocket.isUnlockedAndInteractive
+import tel.misa.mxpocket.PocketNotificationListener
 
 /** Ephemeral identity, never displayed, persisted, exported or logged. */
 internal class TeamsCall(private val app: Context) {
     val access = TeamsAccess(app)
-    private var owner: TeamsCallListener? = null
+    private var owner: PocketNotificationListener? = null
     private var key: String? = null
     private var boundary = -1L
     private var posted = -1L
@@ -29,12 +30,12 @@ internal class TeamsCall(private val app: Context) {
             !access.enabled -> CallStatus.OFF
             !installed -> CallStatus.NOT_INSTALLED
             !access.granted -> CallStatus.NEEDS_ACCESS
-            TeamsCallListener.current == null -> CallStatus.DISCONNECTED
+            PocketNotificationListener.current == null -> CallStatus.DISCONNECTED
             else -> null
         }
-        val listener = TeamsCallListener.current.takeIf { blocked == null }
-        if (owner !== listener) owner?.forget()
-        val observation = listener?.snapshot() ?: TeamsObservation.Unavailable
+        val listener = PocketNotificationListener.current.takeIf { blocked == null }
+        if (owner !== listener) owner?.forgetTeams()
+        val observation = listener?.teamsSnapshot() ?: TeamsObservation.Unavailable
         val ongoing = observation as? TeamsObservation.Ongoing
         // The posting user is available on notifications, but not on accessibility nodes.
         val toolbarBlocked = when {
@@ -46,7 +47,7 @@ internal class TeamsCall(private val app: Context) {
         }
         val service = TeamsToolbarService.current.takeIf { ongoing != null && toolbarBlocked == null }
         val toolbar = service?.inspect()?.first
-        val newCall = owner !== listener || key != ongoing?.key || boundary != (listener?.boundary ?: -1L)
+        val newCall = owner !== listener || key != ongoing?.key || boundary != (listener?.teamsBoundary ?: -1L)
         if (newCall || service == null || toolbarService !== service) {
             confirmed = false
             waitingForChange = null
@@ -71,7 +72,7 @@ internal class TeamsCall(private val app: Context) {
         state = if (changed) next.copy(generation = state.generation + 1) else next
         owner = listener
         toolbarService = service
-        boundary = listener?.boundary ?: -1L
+        boundary = listener?.teamsBoundary ?: -1L
         key = ongoing?.key
         posted = stamp
         window = toolbar?.window
@@ -81,12 +82,12 @@ internal class TeamsCall(private val app: Context) {
     fun pressMic(expected: TeamsState, authorized: () -> Boolean): DeckResult {
         val service = toolbarService
         if (expected != state || !expected.joined || expected.muted == null || service == null || !authorized() ||
-            !access.singleProfile)
+            !access.enabled || !access.granted || !access.singleProfile)
             return unavailable(K.ChangedCallControls.text())
         val sent = service.inspect { toolbar ->
-            val current = TeamsCallListener.current
-            val call = current?.snapshot() as? TeamsObservation.Ongoing
-            current != null && current === owner && current.boundary == boundary && call != null &&
+            val current = PocketNotificationListener.current
+            val call = current?.teamsSnapshot() as? TeamsObservation.Ongoing
+            current != null && current === owner && current.teamsBoundary == boundary && call != null &&
                 call.key == key && call.posted == posted && service === TeamsToolbarService.current &&
                 toolbar.muted == expected.muted && toolbar.window == window && waitingForChange == null &&
                 access.enabled && access.granted && access.toolbarGranted && access.singleProfile && authorized()

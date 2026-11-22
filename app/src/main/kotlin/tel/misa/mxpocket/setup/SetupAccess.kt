@@ -17,13 +17,12 @@ import tel.misa.mxpocket.R
 import tel.misa.mxpocket.UsbAccess
 import tel.misa.mxpocket.decks.CameraControlsAccess
 import tel.misa.mxpocket.decks.DeckAccessActivity
-import tel.misa.mxpocket.decks.ListenerAccess
+import tel.misa.mxpocket.NotificationAccess
 import tel.misa.mxpocket.decks.NavigationService
 import tel.misa.mxpocket.decks.OneNoteAccessService
 import tel.misa.mxpocket.decks.TeamsAccess
 import tel.misa.mxpocket.decks.TeamsEvents
 import tel.misa.mxpocket.decks.TeamsToolbarService
-import tel.misa.mxpocket.decks.hasMediaSessionAccess
 import tel.misa.mxpocket.driver.UsbDiagnostics
 import tel.misa.mxpocket.i18n.AccessCopy
 import tel.misa.mxpocket.i18n.OneNoteCopy
@@ -40,6 +39,7 @@ internal class SetupAccess(private val host: Activity, private val choices: Setu
     private val shortcuts = DirectShortcuts(host)
     private val camera = CameraControlsAccess(host)
     private val teams = TeamsAccess(host)
+    private val listener = NotificationAccess(host)
     private val session get() = (host.application as PocketApplication).session
     private val notifications = host.getSystemService(NotificationManager::class.java)
     fun keypads() = usb.deviceList.values.filter(UsbDiagnostics::isKeypad)
@@ -64,7 +64,7 @@ internal class SetupAccess(private val host: Activity, private val choices: Setu
 
     fun existingFeatures() = buildSet {
         if (attach.automatic) add(Feature.AUTO)
-        if (host.hasMediaSessionAccess()) add(Feature.MUSIC)
+        if (listener.music && listener.granted) add(Feature.MUSIC)
         if (camera.enabled) add(Feature.STUDIO)
         if (shortcuts.optedIn) add(Feature.DIRECT)
         if (accessibilityAllowed(NavigationService::class.java)) add(Feature.NAVIGATION)
@@ -118,10 +118,19 @@ internal class SetupAccess(private val host: Activity, private val choices: Setu
             AccessCopy.AutoDetail.text(),
             attach.automatic, Action.AUTO)
 
+        val controls = Feature.TEAMS_CONTROLS in features && teams.singleProfile
+        val teamsGroup = if (Build.VERSION.SDK_INT >= 34) when {
+            Feature.TEAMS in features -> Feature.TEAMS
+            controls -> Feature.TEAMS_CONTROLS
+            else -> null
+        } else null
+        (Feature.MUSIC.takeIf { it in features } ?: teamsGroup)?.let { group ->
+            setting(group, AccessCopy.NotificationAccess.text(), AccessCopy.SharedListenerHint.text(),
+                listener.granted, Action.NOTIFICATION_ACCESS, AccessCopy.AndroidAllowed.text(), AccessCopy.AndroidNotAllowed.text())
+        }
         if (Feature.MUSIC in features) {
             plugin(Feature.MUSIC, "Audio", "audio", Action.AUDIO_PLUGIN)
-            setting(Feature.MUSIC, AccessCopy.MediaAccess.text(), DeckAccess.Media.disclosure + " " + MediaListenerHint,
-                host.hasMediaSessionAccess(), Action.MEDIA, AccessCopy.MediaAllowed.text(), AccessCopy.BasicMediaKeys.text())
+            setting(Feature.MUSIC, AccessCopy.MediaAccess.text(), DeckAccess.Media.disclosure, listener.music, Action.MUSIC)
         }
         if (Feature.STUDIO in features) {
             plugin(Feature.STUDIO, "Studio", "studio", Action.STUDIO_PLUGIN)
@@ -156,14 +165,10 @@ internal class SetupAccess(private val host: Activity, private val choices: Setu
                 accessibilityAllowed(OneNoteAccessService::class.java), Action.ONENOTE_ACCESS,
                 AccessCopy.AndroidAllowed.text(), AccessCopy.AndroidNotAllowed.text())
         }
-        val controls = Feature.TEAMS_CONTROLS in features && teams.singleProfile
-        if (Build.VERSION.SDK_INT >= 34 && (Feature.TEAMS in features || controls)) {
-            val group = if (Feature.TEAMS in features) Feature.TEAMS else Feature.TEAMS_CONTROLS
+        teamsGroup?.let { group ->
             plugin(group, "Teams", "teams", Action.TEAMS_PLUGIN)
-            setting(group, AccessCopy.TeamsStatus.text(), AccessCopy.TeamsStatusDetail.text(),
+            setting(group, AccessCopy.TeamsStatus.text(), AccessCopy.TeamsStatusDetail.text() + " " + AccessCopy.TeamsDisclosure.text(),
                 teams.enabled, Action.TEAMS)
-            setting(group, AccessCopy.TeamsNoticesAccess.text(), "$TeamsListenerDisclosure $TeamsListenerHint",
-                teams.granted, Action.TEAMS_NOTICES, AccessCopy.AndroidAllowed.text(), AccessCopy.AndroidNotAllowed.text())
             if (controls) setting(Feature.TEAMS_CONTROLS, AccessCopy.TeamsToolbarAccess.text(), TeamsToolbarDisclosure,
                 accessibilityAllowed(TeamsToolbarService::class.java), Action.TOOLBAR, AccessCopy.AndroidAllowed.text(), AccessCopy.AndroidNotAllowed.text())
         }
@@ -181,8 +186,8 @@ internal class SetupAccess(private val host: Activity, private val choices: Setu
             Action.NAV_PLUGIN -> session.setPluginEnabled("navigation", true)
             Action.TEAMS_PLUGIN -> session.setPluginEnabled("teams", true)
             Action.ONENOTE_PLUGIN -> session.setPluginEnabled("onenote", true)
-            Action.MEDIA -> ListenerAccess.MEDIA.open(host)
-            Action.TEAMS_NOTICES -> ListenerAccess.TEAMS.open(host)
+            Action.MUSIC -> listener.music = true
+            Action.NOTIFICATION_ACCESS -> listener.open(host)
             Action.APP_NOTICES -> host.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, host.packageName))
             Action.CHANNEL -> host.startActivity(Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
                 .putExtra(Settings.EXTRA_APP_PACKAGE, host.packageName).putExtra(Settings.EXTRA_CHANNEL_ID, KeypadService.CHANNEL))

@@ -85,7 +85,7 @@ class PhoneCallViewTest {
     @Test fun pinsDismissalAndUncertaintyNeverRearmAnEpisode() {
         val deck = session.deck
         fun current() = deck.operatingState.value.activeProfileId
-        deck.setProfileAutomatic("focus", false).getOrThrow()
+        deck.setProfileAutomatic(deck.state.value.activeProfileId, false).getOrThrow()
         deck.showPhoneCall(true)
         assertEquals(PHONE_CALL_VIEW, current())
         assertFalse(deck.exportJson().contains(PHONE_CALL_VIEW))
@@ -139,10 +139,10 @@ class PhoneCallViewTest {
         val access = session.phoneAccess
         access.enabled = true
         access.details = true
-        shadowOf(app.getSystemService(NotificationManager::class.java)).setNotificationListenerAccessGranted(access.listener, true)
-        val controller = Robolectric.buildService(PhoneCallListener::class.java).create()
+        val notices = shadowOf(app.getSystemService(NotificationManager::class.java))
+        val shared = NotificationAccess(app).component
+        val controller = Robolectric.buildService(PocketNotificationListener::class.java).create()
         val listener = controller.get()
-        listener.onListenerConnected()
         val bitmap = Bitmap.createBitmap(24, 24, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.MAGENTA) }
         val caller = Person.Builder().setName("Fixture caller").setIcon(Icon.createWithBitmap(bitmap)).build()
         fun post(n: StatusBarNotification) {
@@ -160,10 +160,22 @@ class PhoneCallViewTest {
             app.emit(KeyEvent(7, true)); main.idle()
             val previous = session.deck.operatingState.value.activeProfileId
             SystemClock.sleep(5)
-            state(TelephonyManager.CALL_STATE_RINGING); post(note(person = caller)); main.idle()
+            state(TelephonyManager.CALL_STATE_RINGING); main.idle()
             assertEquals(PHONE_CALL_VIEW, session.deck.operatingState.value.activeProfileId)
+            assertTrue(session.frame().keys[CALL_ACCEPT].readOnly) // Basic ringing requires no listener.
+            notices.setNotificationListenerAccessGranted(shared, true)
+            listener.onListenerConnected(); session.refreshPhoneCall()
+            post(note(person = caller)); main.idle()
             assertEquals("Fixture caller", session.frame().keys[4].label)
             assertEquals(Color.MAGENTA, app.lcd.getValue(CALL_PHOTO).getPixel(59, 59))
+            notices.setNotificationListenerAccessGranted(shared, false)
+            listener.onListenerDisconnected(); main.idle()
+            assertEquals(PHONE_CALL_VIEW, session.deck.operatingState.value.activeProfileId)
+            assertTrue(session.frame().keys[CALL_ACCEPT].readOnly)
+            assertFalse(session.frame().keys.any { it.label.contains("Fixture") })
+            assertNotEquals(Color.MAGENTA, app.lcd.getValue(CALL_PHOTO).getPixel(59, 59))
+            notices.setNotificationListenerAccessGranted(shared, true)
+            listener.onListenerConnected(); session.refreshPhoneCall(); main.idle()
             val home = session.homeTiles()
             assertFalse(home.any { it.label.contains("Fixture") })
             assertNotEquals(Color.MAGENTA, home[CALL_PHOTO].image!!.toPixelMap()[59, 59].toArgb())

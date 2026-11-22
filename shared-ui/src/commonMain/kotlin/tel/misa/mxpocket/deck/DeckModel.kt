@@ -149,7 +149,7 @@ fun factoryProfiles(): List<DeckProfile> {
         plugin("audio", "Audio", listOf(DeckRule("mediaActive", "true", 3))),
         stockPhoneProfile,
         plugin("launcher", "Launcher"),
-        plugin("studio", "Studio"),
+        plugin("studio", "Studio").copy(automatic = false),
         plugin("navigation", "Navigation", slots = navigationFactorySlots),
         plugin("game.xo", tel.misa.mxpocket.plugins.TIC_TAC_TOE_TITLE),
         tel.misa.mxpocket.decks.teamsProfile(),
@@ -160,7 +160,7 @@ fun factoryProfiles(): List<DeckProfile> {
 fun defaultDeck(): DeckState {
     val profiles = factoryProfiles().filterNot { it == stockPhoneProfile }
     return DeckState(
-        DeckLimits.VERSION, profiles, "focus", "focus", null,
+        DeckLimits.VERSION, profiles, "launcher", "launcher", null,
         profiles.associate { it.id to listOf(it.rootPageId) },
     )
 }

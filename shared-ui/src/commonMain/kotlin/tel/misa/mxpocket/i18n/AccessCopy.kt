@@ -79,12 +79,6 @@ object AccessCopy {
     val AutoOn = Copy("App option on; Android chooses the handler", "Option activée ; Android choisit l’application", "Opcija je uključena; Android bira aplikaciju")
     val AppOptionOff = Copy("App option off", "Option désactivée dans l’application", "Opcija u aplikaciji je isključena")
     val PlayerControls = Copy("Player controls and artwork", "Commandes du lecteur et pochette", "Komande plejera i omot albuma")
-    val MediaInstructions = Copy(
-        "In Notification access, select {0}. This is separate from showing session notifications.",
-        "Dans Accès aux notifications, sélectionnez « {0} ». Cet accès est distinct de l’affichage des notifications de session.",
-        "U odeljku Pristup obaveštenjima izaberite „{0}“. Ova dozvola je odvojena od prikaza obaveštenja o sesiji.")
-    val MediaAllowed = Copy("Media session access allowed", "Accès aux sessions multimédias autorisé", "Pristup multimedijalnim sesijama je dozvoljen")
-    val BasicMediaKeys = Copy("Basic media keys only", "Touches multimédias de base uniquement", "Dostupni su samo osnovni multimedijalni tasteri")
     val StudioControls = Copy("Studio camera controls", "Commandes de l’appareil photo dans Studio", "Komande kamere u profilu Studio")
     val KeypadControlsEnabled = Copy("Keypad controls enabled", "Commandes du pavé activées", "Komande tastature su uključene")
     val NavigationOff = Copy("Navigation service off", "Service de navigation désactivé", "Usluga navigacije je isključena")
@@ -120,9 +114,9 @@ object AccessCopy {
 
     val MediaAccess = Copy("Media session access", "Accès aux sessions multimédias", "Pristup multimedijalnim sesijama")
     val MediaDisclosure = Copy(
-        "Android grants broad notification access. The Audio service only queries active media sessions; it does not read, store or act on notifications. With Audio selected, the connected, authorized keypad shows track titles and local cover art even when the phone is locked. Switch profiles or revoke access to stop showing them. Basic media keys and volume work without access.",
-        "Android accorde un accès étendu aux notifications. Le service Audio consulte uniquement les sessions multimédias actives ; il ne lit pas les notifications, ne les conserve pas et n’agit pas sur elles. Lorsque le profil Audio est sélectionné, le pavé connecté et autorisé affiche les titres des morceaux et les pochettes disponibles localement, même si le téléphone est verrouillé. Pour ne plus les afficher, changez de profil ou retirez l’autorisation. Les touches multimédias de base et le réglage du volume fonctionnent sans cet accès.",
-        "Android odobrava širok pristup obaveštenjima. Usluga Audio proverava samo aktivne multimedijalne sesije. Ne čita niti čuva obaveštenja i ne preduzima radnje na osnovu njih. Kada je izabran profil Audio, povezana i odobrena tastatura prikazuje nazive numera i lokalne slike omota čak i kada je telefon zaključan. Da biste prekinuli prikaz, promenite profil ili ukinite pristup. Osnovni multimedijalni tasteri i podešavanje jačine zvuka rade i bez ovog pristupa.")
+        "Android grants broad notification access. Music uses active player sessions, not notification contents. On the Audio layout the authorized keypad shows track titles and local covers, even when the phone is locked. Turn off music sessions to stop this. Basic media keys and volume still work.",
+        "Android accorde un accès étendu aux notifications. La musique utilise les sessions des lecteurs actifs, pas le contenu des notifications. Sur le profil Audio, le pavé autorisé affiche les titres et les pochettes locales, même si le téléphone est verrouillé. Désactivez les sessions musicales pour arrêter cet affichage. Les touches multimédias de base et le réglage du volume restent disponibles.",
+        "Android odobrava širok pristup obaveštenjima. Za muziku se koriste aktivne sesije plejera, a ne sadržaj obaveštenja. Na rasporedu Audio odobrena tastatura prikazuje nazive numera i lokalne slike omota čak i kada je telefon zaključan. Isključite muzičke sesije da biste prekinuli prikaz. Osnovni medijski tasteri i podešavanje jačine zvuka i dalje rade.")
     val NavigationAccess = Copy("Navigation access", "Accès à la navigation", "Pristup navigaciji")
     val NavigationDisclosure = Copy(
         "The MX Pocket navigation accessibility service can inspect the current window and act across apps. On a key press it can go Back or Home, open Recents, scroll, move focus or activate an item. With a separate Studio opt-in it can press a labeled camera button. It does not read or store screen text, record keys or automate gestures. Without access, navigation stays inside MX Pocket.",
@@ -155,10 +149,6 @@ object AccessCopy {
         "Ako imate više Android profila, dostupno je samo stanje koje prijavljuju obaveštenja. MX Pocket ne pregleda prozor aplikacije Teams, ne menja stranice i ne upravlja mikrofonom.")
     val DisableTeams = Copy("Turn off Teams call status", "Désactiver le suivi des appels Teams", "Isključi praćenje stanja Teams poziva")
     val EnableTeams = Copy("Enable Teams call status", "Activer le suivi des appels Teams", "Uključi praćenje stanja Teams poziva")
-    val TeamsNotificationInstructions = Copy(
-        "Call status is on by default. It cannot read notifications unless you allow MX Pocket Teams calls in Notification access. Audio access is separate.",
-        "Le suivi des appels est activé par défaut. Il ne peut pas lire les notifications tant que vous n’avez pas autorisé « Appels Teams de MX Pocket » dans Accès aux notifications. L’accès pour le profil Audio est distinct.",
-        "Praćenje stanja poziva je podrazumevano uključeno. Obaveštenja ne može da čita dok u odeljku Pristup obaveštenjima ne odobrite pristup za „MX Pocket: Teams pozivi“. Pristup za profil Audio se podešava zasebno.")
     val TeamsFilterInstructions = Copy(
         "After an update, Android may keep an older filter. Open Notification access below. If available, check that Teams, Notifications (alerting), Silent and Conversations are allowed. If these choices are missing or Teams does not publish a call notice, use Teams directly.",
         "Après une mise à jour, Android peut conserver un ancien filtre. Ouvrez l’accès aux notifications ci-dessous. Si ces options sont proposées, vérifiez que Teams, les notifications avec alerte, les notifications silencieuses et les conversations sont autorisés. Si ces options sont absentes ou si Teams ne publie pas de notification d’appel, utilisez directement Teams.",
@@ -231,17 +221,19 @@ object AccessCopy {
     val FeatureMicSummary = Copy("Recognize the joined call toolbar and operate a visible mic button from the keypad.", "Reconnaître la barre d’outils de l’appel en cours et actionner le bouton du micro depuis le pavé lorsqu’il est visible.", "Prepoznajte traku sa alatkama tokom poziva i tasterom na tastaturi pritisnite vidljivo dugme mikrofona.")
     val OpenUsage = Copy("Open usage access settings", "Ouvrir l’accès aux données d’utilisation", "Otvori podešavanja pristupa podacima o korišćenju")
     val EnableDetection = Copy("Enable foreground detection", "Activer la détection de l’application au premier plan", "Uključi prepoznavanje aktivne aplikacije")
-    val OpenTeamsNotices = Copy("Open Teams notification access", "Ouvrir l’accès aux notifications pour Teams", "Otvori pristup obaveštenjima za Teams")
     val OpenTeamsToolbar = Copy("Open Teams accessibility settings", "Ouvrir les paramètres d’accessibilité pour Teams", "Otvori podešavanja pristupačnosti za Teams")
     val EnableAudio = Copy("Enable Audio", "Activer Audio", "Uključi Audio")
     val EnableStudio = Copy("Enable Studio", "Activer Studio", "Uključi Studio")
     val EnableNavigation = Copy("Enable Navigation", "Activer Navigation", "Uključi navigaciju")
     val EnableTeamsPlugin = Copy("Enable Teams", "Activer Teams", "Uključi Teams")
     val OptionalFeatures = Copy("Optional features", "Fonctionnalités facultatives", "Opcione funkcije")
-    val ListenerPickerHint = Copy("If Android lists two entries named only MX Pocket, go back without choosing either. You do not need to enable both.", "Si Android affiche deux entrées qui s’appellent simplement « MX Pocket », revenez en arrière sans en choisir aucune. Il n’est pas nécessaire d’activer les deux.", "Ako Android prikaže dve stavke koje se zovu samo „MX Pocket“, vratite se nazad i ne birajte nijednu. Nije potrebno uključiti obe.")
-    val MediaListenerHint = Copy("For Audio, choose MX Pocket media sessions, not MX Pocket Teams calls. {0}", "Pour Audio, choisissez « Sessions multimédias de MX Pocket », et non « Appels Teams de MX Pocket ». {0}", "Za Audio izaberite „MX Pocket: multimedijalne sesije“, a ne „MX Pocket: Teams pozivi“. {0}")
-    val TeamsListenerHint = Copy("For Teams, choose MX Pocket Teams calls, not MX Pocket media sessions. {0}", "Pour Teams, choisissez « Appels Teams de MX Pocket », et non « Sessions multimédias de MX Pocket ». {0}", "Za Teams izaberite „MX Pocket: Teams pozivi“, a ne „MX Pocket: multimedijalne sesije“. {0}")
-    val MediaNotAllowed = Copy("Media session access not granted", "Accès aux sessions multimédias non accordé", "Pristup multimedijalnim sesijama nije odobren")
+    val NotificationAccess = Copy("Notification access", "Accès aux notifications", "Pristup obaveštenjima")
+    val SharedListenerHint = Copy(
+        "Choose MX Pocket in Android’s Notification access. Music, Teams call notices and caller details each stay off until you turn them on in the app. Turning off Android access stops all three.",
+        "Choisissez MX Pocket dans la rubrique Accès aux notifications d’Android. La musique, les avis d’appel Teams et les informations sur l’appelant restent désactivés tant que vous ne les activez pas séparément dans l’appli. Retirer l’accès Android désactive les trois fonctions.",
+        "U Android podešavanjima za pristup obaveštenjima izaberite MX Pocket. Muzika, obaveštenja o Teams pozivima i podaci o pozivaocu ostaju isključeni dok ih zasebno ne uključite u aplikaciji. Ukidanje pristupa u Androidu zaustavlja sve tri funkcije.")
+    val EnableMusic = Copy("Enable music sessions", "Activer les sessions musicales", "Uključi muzičke sesije")
+    val DisableMusic = Copy("Turn off music sessions", "Désactiver les sessions musicales", "Isključi muzičke sesije")
     val UnsupportedCallStatus = Copy("Call status needs Android 14 or later. You can still open Call tools manually.", "L’état des appels nécessite Android 14 ou une version ultérieure. Vous pouvez toujours ouvrir les outils d’appel manuellement.", "Za prikaz stanja poziva potreban je Android 14 ili noviji. Alatke za pozive i dalje možete otvoriti ručno.")
     val MultiProfileNotices = Copy("With multiple Android profiles, only read-only Teams call notices are available.", "Avec plusieurs profils Android, seules les notifications d’appel Teams en lecture seule sont disponibles.", "Ako koristite više Android profila, obaveštenja o Teams pozivima možete samo da pregledate.")
     val OnInApp = Copy("On in MX Pocket", "Activé dans MX Pocket", "Uključeno u aplikaciji MX Pocket")
@@ -267,7 +259,6 @@ object AccessCopy {
     val DetectAppsDetail = Copy("Use the app on screen to find a matching profile.", "Trouver le profil associé à l’application affichée.", "Pronađite profil koji odgovara aplikaciji na ekranu.")
     val TeamsStatus = Copy("Teams call status", "État des appels Teams", "Stanje Teams poziva")
     val TeamsStatusDetail = Copy("Show call notices from Teams in this Android profile while a wired keypad is connected.", "Afficher les notifications d’appel de Teams dans ce profil Android lorsqu’un pavé est connecté par câble.", "Prikažite obaveštenja o Teams pozivima sa ovog Android profila dok je tastatura povezana kablom.")
-    val TeamsNoticesAccess = Copy("Teams notification access", "Accès aux notifications pour Teams", "Pristup obaveštenjima za Teams")
     val TeamsToolbarAccess = Copy("Teams toolbar access", "Accès à la barre d’outils Teams", "Pristup traci sa alatkama aplikacije Teams")
     val SettingChangeFailed = Copy("This setting could not be changed. Check your layout in Profiles.", "Impossible de modifier ce réglage. Vérifiez votre disposition dans Profils.", "Podešavanje nije promenjeno. Proverite raspored u odeljku Profili.")
     val SettingSaveFailed = Copy("MX Pocket could not save the setting. Check available storage and try again.", "MX Pocket n’a pas pu enregistrer le réglage. Vérifiez l’espace disponible et réessayez.", "MX Pocket nije uspeo da sačuva podešavanje. Proverite slobodan prostor i pokušajte ponovo.")

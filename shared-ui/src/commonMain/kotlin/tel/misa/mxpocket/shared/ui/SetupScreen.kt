@@ -38,11 +38,12 @@ enum class SetupFeature(private val titleCopy: Copy, private val summaryCopy: Co
 
 enum class SetupAction(private val copy: Copy) {
     USB(AccessCopy.AllowKeypad), POST(AccessCopy.AllowNotices), APP_NOTICES(AccessCopy.OpenNoticeSettings),
-    CHANNEL(AccessCopy.OpenChannel), AUTO(AccessCopy.EnableAuto), MEDIA(AccessCopy.OpenNotificationAccess),
+    CHANNEL(AccessCopy.OpenChannel), AUTO(AccessCopy.EnableAuto), NOTIFICATION_ACCESS(AccessCopy.OpenNotificationAccess),
+    MUSIC(AccessCopy.EnableMusic),
     CAMERA(AccessCopy.EnableCamera), OVERLAY(AccessCopy.OpenSpecialAccess),
     DIRECT(AccessCopy.EnableDirect), NAVIGATION(AccessCopy.OpenAccessibility),
     USAGE(AccessCopy.OpenUsage), DETECTION(AccessCopy.EnableDetection),
-    TEAMS(AccessCopy.EnableTeams), TEAMS_NOTICES(AccessCopy.OpenTeamsNotices), TOOLBAR(AccessCopy.OpenTeamsToolbar),
+    TEAMS(AccessCopy.EnableTeams), TOOLBAR(AccessCopy.OpenTeamsToolbar),
     AUDIO_PLUGIN(AccessCopy.EnableAudio), STUDIO_PLUGIN(AccessCopy.EnableStudio), NAV_PLUGIN(AccessCopy.EnableNavigation), TEAMS_PLUGIN(AccessCopy.EnableTeamsPlugin),
     ONENOTE_PLUGIN(OneNoteCopy.EnablePlugin), ONENOTE_ACCESS(OneNoteCopy.AccessSettings);
 

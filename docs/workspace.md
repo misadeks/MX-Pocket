@@ -17,10 +17,18 @@ and **Settings** contains USB preferences. Open **Settings → Diagnostics** to
 see device details and the session log. On Android, Back returns to Settings.
 On Windows, Diagnostics opens in a separate window you can close independently.
 
-Home starts on a nine-key profile launcher. Pick a profile to open its first
-page; **More profiles** shows the next group if there are more than nine.
-**Previous** and **Next** browse Home and the available profile roots. To
-open a submenu such as Teams Call tools, use its assigned key instead.
+On Android and Windows, open **Home → Switch layout** and select a profile to
+open its first page, even when disconnected. To get back to the nine-key
+launcher, choose **Switch layout → Profile launcher**. The **Home** tab shows
+the current keypad; switching tabs does not change its layout. Android system
+Back dismisses the open menu, returns from other top-level tabs to Home, or
+leaves the Activity from Home. It does not select a keypad profile.
+
+On the physical launcher, press a profile key to open it. **More profiles**
+shows the next group if there are more than nine. **Previous** and **Next**
+cycle through the launcher and available profile roots. A submenu opens with
+its assigned key; a **Back** binding retraces pages within the current profile,
+and **Return to root** opens that profile's first page, not the launcher.
 Press both page controls together to play Tic Tac Toe (**Page Up** and
 **Page Down** in the Windows simulator). Release both, then press either
 one to exit. The game is not in the regular launcher or editor.
@@ -39,8 +47,7 @@ reader actions. This edits saved bindings, not the live screen: it works
 disconnected, runs no keys and does not switch profiles. To switch explicitly,
 open the profile’s **Profile settings and rules > Use on keypad**.
 
-In a wide desktop window, **Home > Switch layout** selects a layout without leaving
-the keypad. The **Profiles** workshop shows a profile library instead of the
+In a wide desktop window, the **Profiles** workshop shows a profile library instead of the
 swipe strip. **Plugins** lists controls supported by the current host first;
 unavailable plugins remain visible with the reason they cannot run. The key
 action picker also explains unavailable bindings without changing saved keys.
@@ -124,12 +131,15 @@ it, and removing a choice from the guide does not revoke access. Each step
 checks Android's current state; you can finish with steps still pending.
 
 Showing the session notification does not allow reading notifications.
-**MX Pocket media sessions** authorizes richer player controls and artwork;
-**MX Pocket Teams calls** is a separate listener for call notices. Setup and
-the plugin access screens open the selected service's detail page where
-supported. If Android instead shows two indistinguishable **MX Pocket**
-entries, back out rather than guessing or enabling both. Basic media keys
-and manual Teams pages work without these grants.
+In Android’s **Notification access**, there is one **MX Pocket** entry.
+Setup and each feature’s access screen open that same entry, or the list if
+Android doesn't support its detail page. Granting access does not turn on
+any feature. Choose **Enable music sessions** under Audio, **Enable Teams
+call status** under Teams setup, or **Show caller and call controls** under
+Settings → Phone calls. Each choice is independent. After upgrading from the
+three separate listeners, grant the new entry and enable just the uses you want.
+Basic media keys, manual Teams pages and the Phone-permission-only ringing
+view do not require notification access.
 
 Studio camera keys, one-press shortcuts and foreground profile switching
 have their own app settings as well as Android grants. Reviewing an already
@@ -211,11 +221,11 @@ No root, firmware update or kernel change is part of setup.
 Android applies eligible context rules automatically, including for layouts
 saved with the old master switch off. Pin a profile to keep it on the keypad,
 or exclude individual profiles in **Profile settings and rules**.
-Teams has a built-in app match: once step 2 below is set
-up, opening Teams selects **Teams / Work** without a custom rule. This does
+Teams has a built-in app match: with **Teams call status** enabled and step 2
+set up, opening Teams selects **Teams / Work** without a custom rule. This does
 not join a call or press a key.
 
-1. In **Profiles**, open **Studio > Profile settings and rules**. Under **Context rules > Choose app**, tap **Camera** (Samsung Camera on a Galaxy). Open **Audio** and repeat for **YouTube Music**. You can choose a custom profile the same way. Saving a mapping does not enable detection, change key bindings or launch anything.
+1. In **Profiles**, open **Studio > Profile settings and rules**. Turn on **Include Studio in automatic switching** (off on fresh layouts). Under **Context rules > Choose app**, tap **Camera**. Open **Audio** and repeat for **YouTube Music**. You can choose a custom profile the same way. Saving a mapping does not enable detection, change key bindings or launch anything.
 2. Enable **Detect foreground apps**. Tap **Open usage access settings**, select **MX Pocket**, and allow Usage Access. No notification, accessibility or overlay access is needed for detection. Turn detection off here or revoke the Android grant at any time.
 3. With the physical keypad connected and the phone unlocked, open one app, then the other. After a stable match the keypad shows that profile’s last page. Opening Camera does **not** take a picture, and opening YouTube Music does **not** start playback. Studio’s optional physical shutter and recording controls require separate setup for the default camera; mapping Camera does not enable them.
 

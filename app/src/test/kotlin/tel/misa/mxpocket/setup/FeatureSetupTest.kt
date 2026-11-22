@@ -38,9 +38,9 @@ import tel.misa.mxpocket.KeypadSessionTest
 import tel.misa.mxpocket.MainActivity
 import tel.misa.mxpocket.PocketApplication
 import tel.misa.mxpocket.UsbAccess
-import tel.misa.mxpocket.decks.MediaSessionAccess
+import tel.misa.mxpocket.NotificationAccess
+import tel.misa.mxpocket.PocketNotificationListener
 import tel.misa.mxpocket.decks.TeamsAccess
-import tel.misa.mxpocket.decks.TeamsCallListener
 import tel.misa.mxpocket.decks.TeamsToolbarService
 import tel.misa.mxpocket.decks.NavigationService
 import tel.misa.mxpocket.decks.OneNoteAccessService
@@ -147,16 +147,20 @@ class FeatureSetupTest {
             tap(Feature.NAVIGATION.title)
             ui.onNodeWithText("Review setup steps").performClick()
             tap("Open notification access")
-            wizard.onActivity { assertListener(shadowOf(it).nextStartedActivity, MediaSessionAccess::class.java) }
+            wizard.onActivity { assertSharedListener(shadowOf(it).nextStartedActivity) }
             tap("Open accessibility settings")
             wizard.onActivity { assertEquals(Settings.ACTION_ACCESSIBILITY_SETTINGS, shadowOf(it).nextStartedActivity.action) }
             tap("Open special access")
             wizard.onActivity { assertEquals(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, shadowOf(it).nextStartedActivity.action) }
             wizard.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
             ShadowSettings.setCanDrawOverlays(true)
-            shadowOf(notices).setNotificationListenerAccessGranted(ComponentName(app, MediaSessionAccess::class.java), true)
+            shadowOf(notices).setNotificationListenerAccessGranted(NotificationAccess(app).component, true)
             wizard.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
-            ui.onNodeWithText("Media session access allowed").assertExists()
+            ui.onNodeWithText(SetupAction.NOTIFICATION_ACCESS.label).assertDoesNotExist()
+            assertFalse(NotificationAccess(app).music)
+            tap(SetupAction.MUSIC.label)
+            assertTrue(NotificationAccess(app).music)
+            assertFalse(TeamsAccess(app).enabled)
             assertFalse(DirectShortcuts(app).enabled)
             tap("Enable one-press shortcuts")
             assertTrue(DirectShortcuts(app).enabled)
@@ -226,8 +230,7 @@ class FeatureSetupTest {
             .putBoolean(Manifest.permission.POST_NOTIFICATIONS, true)
             .putStringSet("features", Feature.entries.map { it.name }.toSet()).apply()
         shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
-        shadowOf(notices).setNotificationListenerAccessGranted(ComponentName(app, MediaSessionAccess::class.java), true)
-        shadowOf(notices).setNotificationListenerAccessGranted(ComponentName(app, TeamsCallListener::class.java), true)
+        shadowOf(notices).setNotificationListenerAccessGranted(NotificationAccess(app).component, true)
         Settings.Secure.putString(app.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
             listOf(NavigationService::class.java, TeamsToolbarService::class.java, OneNoteAccessService::class.java)
                 .joinToString(":") { ComponentName(app, it).flattenToString() })
@@ -255,9 +258,10 @@ class FeatureSetupTest {
                 tap(Feature.ONENOTE.title)
                 ui.onNodeWithText("Review setup steps").performClick()
                 ui.onNodeWithText("This keypad is authorized").assertExists()
-                listOf(SetupAction.USB, SetupAction.POST, SetupAction.MEDIA, SetupAction.NAVIGATION, SetupAction.USAGE, SetupAction.ONENOTE_ACCESS)
+                listOf(SetupAction.USB, SetupAction.POST, SetupAction.NOTIFICATION_ACCESS, SetupAction.NAVIGATION, SetupAction.USAGE, SetupAction.ONENOTE_ACCESS)
                     .forEach { ui.onNodeWithText(it.label).assertDoesNotExist() }
                 ui.onNodeWithText(SetupAction.CAMERA.label).assertExists()
+                ui.onNodeWithText(SetupAction.MUSIC.label).assertExists()
                 ui.onNodeWithText(SetupAction.DETECTION.label).assertExists()
                 tap(SetupAction.ONENOTE_PLUGIN.label)
                 assertFalse("onenote" in app.session.disabledPlugins.value)
@@ -277,24 +281,25 @@ class FeatureSetupTest {
             app.applicationInfo.uid, app.packageName, AppOpsManager.MODE_IGNORED)
         app.session.setPluginEnabled("teams", false)
         TeamsAccess(app).enabled = false
-        shadowOf(notices).setNotificationListenerAccessGranted(ComponentName(app, MediaSessionAccess::class.java), true)
         ActivityScenario.launch<SetupActivity>(SetupActivity.intent(app, true)).use { wizard ->
             tap(Feature.PROFILES.title)
+            tap(Feature.MUSIC.title)
             tap(Feature.TEAMS.title)
             tap(Feature.TEAMS_CONTROLS.title)
             ui.onNodeWithText("Review setup steps").performClick()
-            tap(SetupAction.TEAMS_NOTICES.label)
-            wizard.onActivity { assertListener(shadowOf(it).nextStartedActivity, TeamsCallListener::class.java) }
+            tap(SetupAction.NOTIFICATION_ACCESS.label) // One action, even with both Music and Teams selected.
+            wizard.onActivity { assertSharedListener(shadowOf(it).nextStartedActivity) }
             wizard.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
-            shadowOf(notices).setNotificationListenerAccessGranted(ComponentName(app, TeamsCallListener::class.java), true)
+            shadowOf(notices).setNotificationListenerAccessGranted(NotificationAccess(app).component, true)
             Settings.Secure.putString(app.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
                 ComponentName(app, TeamsToolbarService::class.java).flattenToString())
             wizard.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
-            listOf(SetupAction.TEAMS_NOTICES, SetupAction.TOOLBAR).forEach { ui.onNodeWithText(it.label).assertDoesNotExist() }
+            listOf(SetupAction.NOTIFICATION_ACCESS, SetupAction.TOOLBAR).forEach { ui.onNodeWithText(it.label).assertDoesNotExist() }
             assertFalse(TeamsAccess(app).enabled)
             tap(SetupAction.TEAMS_PLUGIN.label)
             tap(SetupAction.TEAMS.label)
             assertTrue(TeamsAccess(app).enabled)
+            assertFalse(NotificationAccess(app).music)
             tap(SetupAction.DETECTION.label)
             ui.onNodeWithText("Enable profile switching").assertDoesNotExist()
             ui.onNodeWithText(SetupAction.USAGE.label).assertExists()
@@ -304,28 +309,31 @@ class FeatureSetupTest {
     }
 
     @Test @Config(sdk = [28, 35])
-    fun audioPluginOpensOnlyItsOwnDetailOrNamedFallbackAndRechecksOnReturn() {
-        shadowOf(notices).setNotificationListenerAccessGranted(ComponentName(app, TeamsCallListener::class.java), true)
+    fun audioPluginOpensSharedDetailOrListAndRechecksWithoutOptingIn() {
         ActivityScenario.launch<DeckAccessActivity>(DeckAccessActivity.intent(app, DeckCommand.MEDIA_ACCESS)).use { screen ->
-            ui.onNodeWithText("Media session access not granted").assertExists()
-            ui.onNodeWithText("go back without choosing either", substring = true).assertExists()
+            ui.onNodeWithText("Notification access: off").assertExists()
+            ui.onNodeWithText("Enable music sessions").assertExists()
             tap("Open Android settings")
             screen.onActivity {
                 val opened = shadowOf(it).nextStartedActivity
-                if (Build.VERSION.SDK_INT >= 30) assertListener(opened, MediaSessionAccess::class.java)
+                if (Build.VERSION.SDK_INT >= 30) assertSharedListener(opened)
                 else assertEquals(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS, opened.action)
             }
             screen.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
-            shadowOf(notices).setNotificationListenerAccessGranted(ComponentName(app, MediaSessionAccess::class.java), true)
+            shadowOf(notices).setNotificationListenerAccessGranted(NotificationAccess(app).component, true)
             screen.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
-            ui.onNodeWithText("Media session access allowed").assertExists()
+            ui.onNodeWithText("Notification access: on").assertExists()
+            tap("Enable music sessions")
+            assertTrue(NotificationAccess(app).music)
+            tap("Turn off music sessions")
+            assertFalse(NotificationAccess(app).music)
             screen.onActivity { assertNull(shadowOf(it).nextStartedActivity) }
         }
     }
 
-    private fun assertListener(intent: Intent, listener: Class<*>) {
+    private fun assertSharedListener(intent: Intent) {
         assertEquals(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS, intent.action)
-        assertEquals(ComponentName(app, listener).flattenToString(), intent.getStringExtra(Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME))
+        assertEquals(ComponentName(app, PocketNotificationListener::class.java).flattenToString(), intent.getStringExtra(Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME))
     }
 
     @Test fun upgradeDoesNotInterruptLauncher() {

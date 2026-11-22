@@ -31,13 +31,24 @@ class RenderedKeypadTest {
             pm.setApplicationIcon(pkg, android.graphics.drawable.ColorDrawable(color))
         }
         val icons = apps.integrationIcons()
-        val renderer = KeyImages(icons::get) { null }
+        val renderer = KeyImages(icons::get) { icons.getValue(IntegrationApp.TEAMS) }
         for ((id, color) in colors) {
             val face = KeyTile("My label", "", Color.BLACK, glyph = id)
-            assertEquals(color, renderer.image(0, face).getPixel(59, 21))
+            val image = renderer.image(0, face)
+            val top = if (id == IntegrationApp.TEAMS) 9 else 5
+            assertEquals(Color.BLACK, image.getPixel(59, top - 1))
+            assertEquals(color, image.getPixel(59, top))
+            assertEquals(color, image.getPixel(59, top + 37))
             val custom = face.copy(icon = "*")
             assertTrue(renderer.image(0, custom).sameAs(KeyImages { null }.image(0, custom)))
         }
+        val favorite = KeyTile("My label", "", Color.BLACK, iconComponent = "$TEAMS_PACKAGE/.Main")
+        val teams = renderer.image(0, favorite)
+        val namesake = renderer.image(0, favorite.copy(iconComponent = "$TEAMS_PACKAGE.other/.Main"))
+        assertEquals(Color.BLACK, teams.getPixel(59, 5))
+        assertEquals(Color.CYAN, teams.getPixel(59, 9))
+        assertEquals(Color.CYAN, namesake.getPixel(59, 5))
+        assertTrue(Bitmap.createBitmap(teams, 0, 48, 118, 70).sameAs(Bitmap.createBitmap(namesake, 0, 48, 118, 70)))
     }
 
     @Test @GraphicsMode(GraphicsMode.Mode.NATIVE)

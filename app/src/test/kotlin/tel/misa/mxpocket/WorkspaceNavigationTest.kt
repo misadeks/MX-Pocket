@@ -57,7 +57,7 @@ class WorkspaceNavigationTest {
         compose.waitUntil(10_000) { session.deck.state.value.profiles.first { it.id == "studio" }.rules.isNotEmpty() }
         assertEquals(before.copy(rules = listOf(DeckRule(FOREGROUND_APP, pkg, 5))),
             session.deck.state.value.profiles.first { it.id == "studio" })
-        assertEquals("focus", session.deck.state.value.activeProfileId)
+        assertEquals("launcher", session.deck.state.value.activeProfileId)
         assertFalse(session.detectForegroundApps.value)
         assertFalse(FOREGROUND_APP in session.signals.value)
     }

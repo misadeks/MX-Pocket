@@ -11,6 +11,7 @@ import tel.misa.mxpocket.i18n.AccessCopy
 import tel.misa.mxpocket.i18n.Copy
 import tel.misa.mxpocket.isUnlockedAndInteractive
 import tel.misa.mxpocket.PocketApplication
+import tel.misa.mxpocket.NotificationAccess
 import tel.misa.mxpocket.shared.ui.*
 
 class TeamsAccessActivity : DeckActivity() {
@@ -40,7 +41,7 @@ class TeamsAccessActivity : DeckActivity() {
             }
             TeamsSetupAction.NOTIFICATIONS, TeamsSetupAction.TOOLBAR -> try {
                 val notifications = action == TeamsSetupAction.NOTIFICATIONS
-                if (notifications) ListenerAccess.TEAMS.open(this)
+                if (notifications) NotificationAccess(this).open(this)
                 else startActivity(DeckAccessActivity.accessibilitySettings())
                 problem = null
             } catch (_: ActivityNotFoundException) { problem = AccessCopy.TeamsSettingsUnavailable }

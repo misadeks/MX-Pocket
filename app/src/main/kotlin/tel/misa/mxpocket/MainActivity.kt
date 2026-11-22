@@ -435,8 +435,7 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
                 callStatePermission.launch(Manifest.permission.READ_PHONE_STATE)
             PocketScreenEvent.CallerNotificationAccess -> if (Build.VERSION.SDK_INT >= 34 && resumed &&
                 session.phoneAccess.enabled && session.phoneAccess.details && isUnlockedAndInteractive()) try {
-                startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS).putExtra(
-                    Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, session.phoneAccess.listener.flattenToString()))
+                NotificationAccess(this).open(this)
             } catch (_: ActivityNotFoundException) {
                 session.message(CallCopy.OpenAccessSettings.text())
             } catch (_: SecurityException) {

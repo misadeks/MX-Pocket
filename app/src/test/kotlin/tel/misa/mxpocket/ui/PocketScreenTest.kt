@@ -78,7 +78,7 @@ class PocketScreenTest {
             val before = volume.getStreamVolume(AudioManager.STREAM_MUSIC)
             ui.onNodeWithContentDescription("Volume -").assertHasNoClickAction()
             assertEquals(before, volume.getStreamVolume(AudioManager.STREAM_MUSIC))
-            // Profiles are switched on the Profiles tab; Home's page buttons move to the next fixture.
+            // Home's page buttons move to the next fixture without running any platform action.
             ui.onNodeWithContentDescription("Next page").performClick()
             ui.onNodeWithContentDescription("Key 1, Camera", substring = true).assertHasNoClickAction()
             scene.onActivity { assertNull(shadowOf(it).nextStartedActivity) }

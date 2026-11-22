@@ -43,10 +43,14 @@ MX Pocket requests the verified viewfinder. For other favorites it requests
 only the exact selected, still-exported `MAIN`/`LAUNCHER` component.
 After a direct request the notification is a quiet retry, not proof of launch.
 
-Android requires a notification-listener grant to inspect active media
-sessions. It is broad at the OS level. The Audio service uses its component solely as
-authorization for `MediaSessionManager`; it does not retrieve, log, or act
-on notifications. Spotify and other players use the same Android interface:
+For richer player controls and artwork, choose **Enable music sessions** in
+Audio setup and allow **MX Pocket** in Android’s **Notification access**.
+This is a broad system grant shared with optional Teams notices and dialer
+details. With only Music enabled, MX Pocket uses the component solely to
+authorize `MediaSessionManager`: it does not inspect posted or removed
+notifications or query active notifications. After upgrading from separate
+listeners, grant the new entry and turn on each use you want; old grants and
+preferences do not opt you in. Spotify and other players use the same Android interface:
 there is no Spotify sign-in, SDK, playlist browser or downloaded artwork.
 While unlocked on **Audio**, the local cover spans the layout preview on Home
 and all nine LCD regions on a connected keypad, paused or playing. With hardware
@@ -109,8 +113,8 @@ view, the previous eligible layout returns when the call ends. No call view
 is saved. There is no phone popup or Android overlay.
 
 On Android 14+, **Show caller and call controls** is a second, independent
-opt-in. Grant notification access to **MX Pocket phone calls**, not the Teams
-or media listener. Android's grant can expose notifications from other apps.
+opt-in. If not already granted, allow **MX Pocket** in Android’s **Notification
+access**. Basic ringing does not need this grant. Android's grant can expose notifications from other apps.
 MX Pocket checks the publisher and Android user before reading the default
 Phone app's [CallStyle](https://developer.android.com/reference/android/app/Notification.CallStyle)
 fields. It uses the display label (name or number) and an embedded bitmap
@@ -139,21 +143,21 @@ The bottom-left key is unassigned. **Call tools** opens the call page without
 claiming a call is active. My chat and Meeting link are unassigned. Existing
 layouts are preserved: editing or deleting a Teams page isn't undone on upgrade.
 
-To show **Work** when Teams opens, enable **Detect foreground apps** and
-grant Android **Usage Access** to MX Pocket.
+To show **Work** when Teams opens, enable **Teams call status** and
+**Detect foreground apps**, and grant Android **Usage Access** to MX Pocket.
 Teams needs no app mapping. Opening the app never selects **In call** or
 presses a key. Pins, profile opt-outs and explicit app mappings still win;
 manually changing pages takes precedence while Teams remains in the foreground.
 
-**Teams call status** is on by default when you haven't saved a choice.
-Turn it off in **Plugins → Teams → Teams setup**; your choice is kept across
-restarts and updates. This setting does not grant Android permissions.
+**Teams call status** starts off. Turn it on in **Plugins → Teams → Teams
+setup**. This setting does not grant Android permissions.
 With an authorized wired keypad, unlocked phone and
-Android 14+, notification access for **MX Pocket Teams calls** allows read-only
+Android 14+, notification access for **MX Pocket** allows read-only
 status. It is a broad Android permission: the adapter first checks the posting
 app and Android user, then checks Teams notification categories and call types.
-It does not read messages, names or notification action labels. Audio and
-Navigation grants do not give Teams access. Turning off Teams leaves those features alone.
+It does not read messages, names or notification action labels. Turning off
+Teams in the app leaves Music and caller details alone; revoking the shared
+Android grant stops all three uses.
 
 **Read key 8 on Call tools, or the explanation at the top of Teams setup:**
 
@@ -165,13 +169,11 @@ Navigation grants do not give Teams access. Turning off Teams leaves those featu
 | **Call notice / This profile** | Multiple Android profiles are present. Only a notice posted in MX Pocket's own profile is observed. No window inspection, auto-switch or mic control is permitted. |
 | **In call / This phone** | A typed ongoing Teams notice and the joined toolbar were both observed on this phone. A hidden or unsupported mic still cannot be operated. |
 
-If access is already on, especially **after an upgrade**, open **Notification
-access** in Teams setup → **MX Pocket Teams calls**. Where Android offers filter
+If access is already on but Teams shows **No signal**, open **Notification
+access** in Teams setup → **MX Pocket**. Where Android offers filter
 controls, make sure Teams isn't excluded and review **Notifications** (alerting),
 **Silent** and **Conversations**. Android's listener delivery classes are *not*
-the Teams call type. The old “ongoing” default can exclude valid notices and
-Android [may keep a saved filter rather than apply a new default](https://developer.android.com/reference/android/service/notification/NotificationListenerService#META_DATA_DEFAULT_FILTER_TYPES).
-MX Pocket does not reset your choices. Some phones hide the controls; an
+the Teams call type. MX Pocket does not reset your choices. Some phones hide the controls; an
 update or re-enabling access is not a guaranteed reset. If no supported notice
 arrives, use Teams directly.
 
@@ -234,7 +236,8 @@ never requests a permission, persists a choice, or starts an external app.
 
 ```kotlin
 SetupScreen(state: SetupScreenState, onEvent: (SetupEvent) -> Unit)
-DeckAccessScreen(access: DeckAccess, message: String, onOpenSettings: (() -> Unit)?, onDone: () -> Unit)
+DeckAccessScreen(access: DeckAccess, message: String, onOpenSettings: (() -> Unit)?, onDone: () -> Unit,
+    listenerGranted: Boolean = false, musicEnabled: Boolean = false, onToggleMusic: (() -> Unit)? = null)
 CameraControlsScreen(state: CameraControlsState, onEvent: (CameraControlsEvent) -> Unit)
 FavoritesScreen(state: FavoritesState, onSetSelected: (String, Boolean) -> Unit, onDone: () -> Unit,
     loadIcon: (suspend (String) -> ImageBitmap?)? = null)
@@ -263,7 +266,7 @@ by the screen. Only its failure path needs the result screen.
    target. Background the app and verify one-shot notifications, grant
    revocation, expiry and lock rejection, including with direct shortcuts on.
 2. Start a player, test volume and media keys without listener access; then
-   grant access, change tracks and pause from the player. Confirm title and
+   grant the shared entry and enable music sessions, change tracks and pause from the player. Confirm title and
    playback state follow on the LCD. Try Spotify and a second player without
    skip. Change the cover without changing the title if possible. Check Audio
    paused/playing, including several Play presses: the cover should not flash

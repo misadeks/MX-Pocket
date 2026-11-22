@@ -49,6 +49,8 @@ class MainActivityTest {
             ui.onNodeWithText("Connect virtual keypad").assertDoesNotExist()
             ui.onNodeWithText("Disconnect virtual keypad").assertDoesNotExist()
             ui.onNodeWithText("Home").performClick()
+            ui.onNodeWithText("Choose a profile").assertDoesNotExist()
+            ui.onNodeWithText("Switch layout").performClick()
             ui.onNodeWithText("Focus").performClick()
             ui.onNodeWithContentDescription("Key 1, Start", substring = true).assertHasNoClickAction()
             ui.onNodeWithContentDescription("Next page").performScrollTo().performClick()
@@ -56,6 +58,9 @@ class MainActivityTest {
             ui.onNodeWithContentDescription("Play/Pause").assertExists()
             ui.onNodeWithContentDescription("Next page").performScrollTo().performClick()
             ui.onNodeWithContentDescription("Key 1, Camera", substring = true).assertHasNoClickAction()
+            ui.onNodeWithText("Switch layout").performScrollTo().performClick()
+            ui.onNodeWithText("Profile launcher").performClick()
+            assertEquals(tel.misa.mxpocket.deck.PROFILE_HOME, app.session.deck.operatingState.value.activeProfileId)
             assertFalse(app.session.ready)
         }
     }

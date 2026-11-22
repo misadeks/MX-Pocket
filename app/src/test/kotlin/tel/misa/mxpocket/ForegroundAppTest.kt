@@ -64,12 +64,14 @@ class ForegroundAppTest {
     }
 
     @Test fun openingTeamsSelectsWorkWithoutAMappingOrAnActionAndRespectsOverrides() {
+        NotificationAccess(app).teams = true
         val session = PocketSession(app, usageDispatcher = Dispatchers.Main.immediate, usageTimeMillis = ::usageTime)
         val screen = object : PocketSession.Screen {
             override fun render() {}
             override fun openApp(app: tel.misa.mxpocket.plugins.PhoneApp): Boolean = error("Unexpected key dispatch")
         }
         val deck = session.deck
+        deck.setDefault("focus").getOrThrow()
         fun tick() = main.idleFor(Duration.ofSeconds(4))
         fun openTeams() { event(TEAMS_PACKAGE, Event.MOVE_TO_FOREGROUND); tick() }
         fun leaveTeams() { event(TEAMS_PACKAGE, Event.MOVE_TO_BACKGROUND); tick() }
@@ -81,6 +83,7 @@ class ForegroundAppTest {
             assertNull(session.workflows.status.value)
         }
         deck.selectProfile(TEAMS).getOrThrow()
+        deck.setProfileAutomatic("studio", true).getOrThrow()
         deck.openPage(IN_CALL).getOrThrow()
         deck.selectProfile("focus").getOrThrow()
         session.attach(screen)
@@ -120,6 +123,7 @@ class ForegroundAppTest {
         val device = ReflectionHelpers.newInstance(UsbDevice::class.java)
         ReflectionHelpers.setField(device, "mName", "simulated")
         val deck = session.deck
+        deck.setDefault("focus").getOrThrow()
         val custom = deck.createProfile("Camera tools").getOrThrow()
         val page = deck.createPage(custom, "Controls").getOrThrow()
         deck.selectProfile(custom).getOrThrow()
@@ -218,6 +222,8 @@ class ForegroundAppTest {
             override fun openApp(app: tel.misa.mxpocket.plugins.PhoneApp) = false
         }
         val deck = session.deck
+        deck.setDefault("focus").getOrThrow()
+        deck.setProfileAutomatic("studio", true).getOrThrow()
         val lock = shadowOf(app.getSystemService(KeyguardManager::class.java))
         fun advance(ms: Long) = main.idleFor(Duration.ofMillis(ms))
         deck.setRules("studio", listOf(DeckRule(FOREGROUND_APP, camera, APP_RULE_WEIGHT))).getOrThrow()
@@ -292,6 +298,7 @@ class ForegroundAppTest {
             override fun openApp(app: tel.misa.mxpocket.plugins.PhoneApp) = false
         }
         val lock = shadowOf(app.getSystemService(KeyguardManager::class.java))
+        session.deck.setProfileAutomatic("studio", true).getOrThrow()
         session.deck.setRules("studio", listOf(DeckRule(FOREGROUND_APP, camera, APP_RULE_WEIGHT))).getOrThrow()
         session.setDetectForegroundApps(true)
         grant(true)

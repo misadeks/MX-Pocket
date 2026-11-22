@@ -1,7 +1,5 @@
 package tel.misa.mxpocket
 
-import android.app.NotificationManager
-import android.content.ComponentName
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.hardware.usb.UsbConfiguration
@@ -28,7 +26,6 @@ import org.robolectric.util.ReflectionHelpers
 import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.DeckActions
 import tel.misa.mxpocket.deck.DeckKey
-import tel.misa.mxpocket.decks.MediaSessionAccess
 import tel.misa.mxpocket.decks.DeckCommand
 import tel.misa.mxpocket.plugins.PhoneApp
 import tel.misa.mxpocket.decks.ok
@@ -295,8 +292,7 @@ class KeypadPaintTest {
     }
 
     @Test fun artworkChangesBetweenAcksCannotStarveTheLastEightKeys() {
-        shadowOf(app.getSystemService(NotificationManager::class.java)).setNotificationListenerAccessGranted(
-            ComponentName(app, MediaSessionAccess::class.java), true)
+        app.enableMusicSessions()
         val media = MediaSession(app, "test-player")
         val controller = shadowOf(media.controller)
         controller.setPlaybackState(PlaybackState.Builder().setState(PlaybackState.STATE_PLAYING, 0, 1f)
@@ -379,8 +375,7 @@ class KeypadPaintTest {
     }
 
     @Test fun oversizeCoverFallsBackOnceThenVolumeUsesOneKeyAndNewCoversUseGrids() {
-        shadowOf(app.getSystemService(NotificationManager::class.java)).setNotificationListenerAccessGranted(
-            ComponentName(app, MediaSessionAccess::class.java), true)
+        app.enableMusicSessions()
         val media = MediaSession(app, "panel")
         val player = shadowOf(media.controller)
         player.setPlaybackState(PlaybackState.Builder().setState(PlaybackState.STATE_PLAYING,0,1f)

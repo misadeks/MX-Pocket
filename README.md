@@ -59,9 +59,11 @@ edit profiles before connecting hardware.
 The **Teams** profile opens the Android client on this phone. Choose **Call
 tools** for its manual meeting page, or **Teams setup** for optional local call
 status and switching. A Teams call notice is not proof you joined. Key 8 and
-Teams setup distinguish a notice from a confirmed call. The in-app setting
-defaults to on, but Teams still needs its own Android permissions. You can
-turn call status off in Teams setup.
+Teams setup distinguish a notice from a confirmed call. In Android’s
+**Notification access**, choose **MX Pocket** once. Music sessions, Teams
+call notices and optional Phone caller details each need their own in-app
+opt-in, including after upgrading from separate listeners. The Teams mic
+key still needs its separate accessibility grant.
 See [Teams call controls and client limits](docs/android-decks.md#teams-on-this-phone).
 
 The **OneNote** profile uses a separate, optional accessibility service to
