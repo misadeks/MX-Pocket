@@ -25,9 +25,14 @@ class TicTacToeGame {
     fun cells(): List<Cell> {
         if (mode == null) return List(9) { index ->
             when (index) {
-                0 -> Cell(K.OnePlayer.text(), K.VsComputer.text(), 0xff194375.toInt())
-                2 -> Cell(K.TwoPlayers.text(), K.LocalDuel.text(), 0xff49345f.toInt())
-                4 -> Cell(K.TicTacToe.text(), K.ChooseMode.text(), 0xff303d48.toInt())
+                in TITLE_CELLS -> {
+                    val words = K.TicTacToe.text().split(' ')
+                    val word = if (words.size == 1) words.single().takeIf { index == 1 } else words.getOrNull(index)
+                    Cell(word.orEmpty(), "", 0xff303d48.toInt())
+                }
+                SOLO_KEY -> Cell(K.OnePlayer.text(), K.VsComputer.text(), 0xff194375.toInt())
+                PAIR_KEY -> Cell(K.TwoPlayers.text(), K.LocalDuel.text(), 0xff49345f.toInt())
+                4 -> Cell("", K.ChooseMode.text(), 0xff303d48.toInt())
                 else -> Cell("", "", 0xff303d48.toInt())
             }
         }
@@ -43,7 +48,7 @@ class TicTacToeGame {
 
     fun frame() = PluginFrame(cells().mapIndexed { index, cell ->
         val picking = mode == null
-        val inert = if (picking) index != 0 && index != 2 else result == Result.PLAYING && board[index] != EMPTY
+        val inert = if (picking) index != SOLO_KEY && index != PAIR_KEY else result == Result.PLAYING && board[index] != EMPTY
         val restart = result != Result.PLAYING && index == 7
         KeyTile(cell.label, if (restart) K.TapForModes.text() else cell.footer, cell.background, readOnly = inert, quietFace = true,
             showFooter = index == 4 || picking && !inert || restart, showLabel = cell.label.isNotBlank())
@@ -52,8 +57,8 @@ class TicTacToeGame {
     fun press(index: Int): Boolean {
         if (mode == null) {
             mode = when (index) {
-                0 -> Mode.SINGLE_PLAYER
-                2 -> Mode.ONE_VS_ONE
+                SOLO_KEY -> Mode.SINGLE_PLAYER
+                PAIR_KEY -> Mode.ONE_VS_ONE
                 else -> return false
             }
             resetBoard()
@@ -122,6 +127,9 @@ class TicTacToeGame {
     private fun hasWon(mark: Char) = WINS.any { line -> line.all { board[it] == mark } }
 
     private companion object {
+        val TITLE_CELLS = 0..2 // One title word per square in the top row.
+        const val SOLO_KEY = 6 // Bottom-left corner.
+        const val PAIR_KEY = 8 // Bottom-right corner.
         const val EMPTY = ' '
         const val PLAYER = 'X'
         const val COMPUTER = 'O'

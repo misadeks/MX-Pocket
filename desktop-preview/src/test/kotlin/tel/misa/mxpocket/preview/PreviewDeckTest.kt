@@ -245,21 +245,21 @@ class PreviewDeckTest {
         deck.repository.enterGame().getOrThrow()
         fun press(slot: Int) = deck.press(slot, 0)
         fun label(slot: Int) = deck.tiles(0)[slot].label
-        check(label(0) == "1 Player" && label(2) == "2 Players")
-        press(0)
+        check(label(6) == "1 Player" && label(8) == "2 Players")
+        press(6)
         press(0)
         check(label(0) == "X" && label(4) == "O")
         press(1)
         check(press(3).startsWith("CPU wins"))
         press(8)
-        press(2)
+        press(8)
         for (slot in listOf(0, 3, 1, 4)) press(slot)
         check(press(2).startsWith("X wins"))
         deck.cycle(1)
         check(deck.profileName == "Home")
         deck.repository.enterGame().getOrThrow()
         press(4)
-        check(label(2) == "2 Players")
+        check(label(8) == "2 Players")
     }
 
     @Test fun allPluginsOffLeavesAnEditableLayoutWithoutPruningTheBackup() {
