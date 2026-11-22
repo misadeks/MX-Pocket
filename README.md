@@ -76,9 +76,11 @@ highlighters a broad translucent band, and palette keys show a named swatch.
 Black-and-white stripes mean the ink color is unknown. A corner check marks an
 observed selection, not a successful key press.
 
-For ordinary mobile calls, **Settings → Phone calls** can temporarily show the
-caller on the **physical keypad**. Either page key leaves without affecting the
-call. See [carrier call setup and supported controls](docs/android-decks.md#carrier-calls-on-the-keypad).
+For ordinary mobile calls, turn on **Settings → Phone calls → Show calls on the keypad**.
+The authorized **physical keypad** then shows call state while the phone is
+unlocked and its screen is on. Caller details are a separate opt-in. Either
+page key leaves without affecting the call. Camera, Dialer and other shortcuts
+remain available as key bindings. See [carrier call setup and supported controls](docs/android-decks.md#carrier-calls-on-the-keypad).
 
 <a name="hardware-evidence-and-credits"></a>
 

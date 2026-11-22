@@ -29,7 +29,9 @@ fun SavedProfilesEditor(
     val writable = !writer.busy && repo.loadError == null
     var profileId by rememberSaveable { mutableStateOf<String?>(null) }
     val disabled = deck.disabledPluginIds + disabledProfiles
-    val profiles = deck.visibleProfiles.filterNot { it.id in disabledProfiles }
+    // A legacy pin must still be manageable even when its factory layout is no longer a choice.
+    val choices = deck.navigationProfiles
+    val profiles = deck.visibleProfiles.filter { it.id !in disabledProfiles && (it.id == deck.pinnedProfileId || it in choices) }
     val profile = profiles.find { it.id == profileId }
     val libraryScroll = rememberScrollState()
 

@@ -58,7 +58,6 @@ object LayoutCopy {
     val UnpinProfile = Copy("Unpin profile", "Désépingler le profil", "Otkači profil")
     val PinProfile = Copy("Pin this profile", "Épingler ce profil", "Zakači ovaj profil")
     val SetDefault = Copy("Set as default", "Définir par défaut", "Postavi kao podrazumevani")
-    val Automatic = Copy("Automatic profile switching", "Changement automatique de profil", "Automatska promena profila")
     val IncludeAutomatic = Copy("Include {0} in automatic switching", "Inclure {0} dans le changement automatique", "Uključi profil {0} u automatsku promenu")
     val AutomaticOff = Copy("Automatic switching won’t enter this profile or leave it while it’s active.", "Le changement automatique n’activera pas ce profil et, s’il est actif, ne le quittera pas.", "Automatska promena neće aktivirati ovaj profil niti ga napustiti dok je aktivan.")
     val SelectionReason = Copy("Selection reason: {0}", "Raison de la sélection : {0}", "Razlog izbora: {0}")

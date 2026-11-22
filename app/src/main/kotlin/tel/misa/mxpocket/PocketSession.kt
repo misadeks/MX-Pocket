@@ -269,15 +269,29 @@ internal class PocketSession(
     }
 
     private fun hasPlugin(id: String) = plugins.descriptors.any { it.id == id }
-    private fun phoneAuthorized() = phoneAccess.enabled && "phone" !in disabled.value &&
-        output != null && request?.let(app::hasKeypadAccess) == true && app.isUnlockedAndInteractive()
+    private fun phoneConnectionBlocker() = when {
+        output == null || request?.let(app::hasKeypadAccess) != true -> CallCopy.ConnectKeypad
+        !app.isUnlockedAndInteractive() -> CallCopy.UnlockPhone
+        else -> null
+    }
+
+    private fun phoneAuthorized() = phoneAccess.enabled && phoneConnectionBlocker() == null
+
+    private var phoneAccessBlocker: tel.misa.mxpocket.i18n.Copy? = null
+    val phoneCallBlocker get() = phoneAccessBlocker ?: deck.phoneCallBlocker
 
     fun refreshPhoneCall() {
-        val authorized = phoneAuthorized()
+        val enabled = phoneAccess.enabled
+        val blocker = if (enabled) phoneConnectionBlocker() else null
+        val authorized = enabled && blocker == null
         if (authorized && Build.VERSION.SDK_INT >= 34 && phoneAccess.details && phoneAccess.phoneGranted && phoneAccess.notificationGranted)
             PocketNotificationListener.refreshPhone = phoneUpdate
         else if (PocketNotificationListener.refreshPhone === phoneUpdate) PocketNotificationListener.refreshPhone = null
-        callBoard.refresh(authorized)
+        val line = if (authorized) phoneAccess.state() else LineState.UNKNOWN
+        val before = phoneCallBlocker
+        callBoard.refresh(line)
+        phoneAccessBlocker = blocker ?: CallCopy.LineUnavailable.takeIf { authorized && line == LineState.UNKNOWN }
+        if (before != phoneCallBlocker) invalidate()
     }
 
     private fun retireCallPixels() {
@@ -315,7 +329,6 @@ internal class PocketSession(
         deck.setDisabledPlugins(disabled.value)
         switches.edit().putStringSet("disabled", disabled.value).apply()
         if (id == TEAMS) refreshTeams()
-        if (id == "phone") refreshPhoneCall()
         syncLayout()
         invalidate()
     }
@@ -405,7 +418,7 @@ internal class PocketSession(
 
     private fun configuredApps(state: tel.misa.mxpocket.deck.DeckState, enabled: Boolean,
         disabledPlugins: Set<String>, teamsOn: Boolean): Set<String> =
-        if (!enabled || !state.automatic || !state.activeProfile.automatic || state.pinnedProfileId != null) emptySet()
+        if (!enabled || !state.activeProfile.automatic || state.pinnedProfileId != null) emptySet()
         else buildSet {
             for (profile in state.visibleProfiles.filter { it.automatic && it.id !in disabledPlugins }) {
                 profile.rules.filter { it.signal == FOREGROUND_APP }.forEach { add(it.value) }

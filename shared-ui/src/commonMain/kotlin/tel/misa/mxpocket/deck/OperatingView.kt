@@ -64,7 +64,7 @@ class PageButtons(
 }
 
 internal fun DeckState.homeProjection(batch: Int): DeckState {
-    val choices = visibleProfiles
+    val choices = navigationProfiles
     val batches = choices.chunked(if (choices.size <= 9) 9 else 8)
     val index = batch.coerceIn(batches.indices)
     val keys = batches[index].map { profile ->
