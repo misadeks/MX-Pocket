@@ -3,6 +3,7 @@ package tel.misa.mxpocket.decks
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.provider.MediaStore
 import android.view.accessibility.AccessibilityNodeInfo as Node
@@ -11,28 +12,50 @@ internal enum class CameraMode(val action: String) {
     PHOTO(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA), VIDEO(MediaStore.INTENT_ACTION_VIDEO_CAMERA)
 }
 
+private const val SAMSUNG_CAMERA = "com.sec.android.app.camera"
+
+private fun ActivityInfo.isFrameworkResolver() =
+    packageName == "android" && name == "com.android.internal.app.ResolverActivity"
+
+private fun ActivityInfo.availableComponent(): ComponentName? =
+    if (exported && enabled && applicationInfo?.enabled == true && !packageName.isNullOrEmpty() && !name.isNullOrEmpty())
+        ComponentName(packageName, name) else null
+
+@Suppress("DEPRECATION")
+private fun PackageManager.uniqueSamsungHandler(action: String): Intent? {
+    val intent = Intent(action).setPackage(SAMSUNG_CAMERA)
+    val target = queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+        .mapNotNull { it.activityInfo?.availableComponent() }
+        .filter { it.packageName == SAMSUNG_CAMERA }.singleOrNull() ?: return null
+    return intent.setComponent(target)
+}
+
 /** Resolve the default camera and only use an exported handler that declares the requested action. */
 @Suppress("DEPRECATION")
 internal fun Context.viewfinder(mode: CameraMode): Intent? {
     val intent = Intent(mode.action)
     val flags = PackageManager.MATCH_DEFAULT_ONLY
     val info = packageManager.resolveActivity(intent, flags)?.activityInfo ?: return null
-    val pkg = info.packageName ?: return null
+    if (mode == CameraMode.VIDEO && info.isFrameworkResolver()) {
+        // Some Galaxy builds have a concrete Photo default but no Video default. Never pick from the chooser.
+        if (viewfinder(CameraMode.PHOTO)?.component?.packageName != SAMSUNG_CAMERA ||
+            packageManager.uniqueSamsungHandler(mode.action) == null) return null
+        val capture = packageManager.uniqueSamsungHandler(MediaStore.ACTION_VIDEO_CAPTURE) ?: return null
+        val captureDefault = packageManager.resolveActivity(Intent(MediaStore.ACTION_VIDEO_CAPTURE), flags)?.activityInfo
+            ?: return null
+        return capture.takeIf { captureDefault.isFrameworkResolver() || captureDefault.availableComponent() == it.component }
+    }
+    val target = info.availableComponent() ?: return null
+    val pkg = target.packageName
     if (pkg in setOf(packageName, "android", "com.android.systemui", "com.android.settings") ||
-        pkg.endsWith(".permissioncontroller") || pkg.endsWith(".packageinstaller") || pkg.endsWith(".intentresolver") ||
-        !info.exported || !info.enabled || info.applicationInfo?.enabled != true) return null
-    val target = ComponentName(pkg, info.name ?: return null)
+        pkg.endsWith(".permissioncontroller") || pkg.endsWith(".packageinstaller") || pkg.endsWith(".intentresolver")) return null
     val handlesViewfinder = packageManager.queryIntentActivities(intent, flags).any { candidate ->
-        candidate.activityInfo?.let { it.packageName == pkg && it.name == target.className } == true
+        candidate.activityInfo?.availableComponent() == target
     }
     if (!handlesViewfinder) return null
-    if (mode == CameraMode.VIDEO && pkg == "com.sec.android.app.camera") {
+    if (mode == CameraMode.VIDEO && pkg == SAMSUNG_CAMERA) {
         // Samsung's video-viewfinder action can open Photo; its video capture handler opens Video.
-        val capture = Intent(MediaStore.ACTION_VIDEO_CAPTURE).setPackage(pkg)
-        val candidates = packageManager.queryIntentActivities(capture, flags).mapNotNull { it.activityInfo }
-            .filter { it.packageName == pkg && it.exported && it.enabled && it.applicationInfo?.enabled == true }
-        val handler = candidates.singleOrNull()
-        if (handler?.name != null) return capture.setComponent(ComponentName(pkg, handler.name))
+        packageManager.uniqueSamsungHandler(MediaStore.ACTION_VIDEO_CAPTURE)?.let { return it }
     }
     return intent.setComponent(target)
 }
@@ -62,7 +85,7 @@ internal fun clickCameraControl(
     var budget = 256
     fun actionable(node: Node) = node.isVisibleToUser && node.isEnabled && node.isClickable &&
         (node.className == "android.widget.Button" || node.className == "android.widget.ImageButton" ||
-            (pkg == "com.sec.android.app.camera" && node.className == "android.view.ViewGroup")) &&
+            (pkg == SAMSUNG_CAMERA && node.className == "android.view.ViewGroup")) &&
         Node.AccessibilityAction.ACTION_CLICK in node.actionList
     fun inspect(node: Node, depth: Int): Boolean {
         if (--budget < 0 || depth > 24) return false // An incomplete scan cannot establish uniqueness.
