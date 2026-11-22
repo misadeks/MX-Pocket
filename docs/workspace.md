@@ -1,36 +1,23 @@
 # Workspace walkthrough
 
-Home operates the current nine keys. Keypad edits them without executing
-anything. Plugins controls availability and optional Android access. Flows
-edits and runs workflows. Settings contains USB consent preferences, repaint,
-the session-only image picker and diagnostic log export.
+After [installing the Android app](../README.md#run-it-on-android), open
+**Home** to connect a keypad and choose a profile. With a wired keypad,
+**Keypad shows:** lists the nine labels; press the keys on the device.
+With the virtual keypad connected, tap the nine-key board on Home instead.
+**Plugins** turns features on or off, **Flows** lets you build and run workflows,
+and **Settings** contains USB preferences, background images and diagnostics.
 
-On a phone (including a narrow split-screen window), selecting a key in
-**Keypad** opens its editor; Back returns without firing the key. A wider
-window keeps profile/page navigation and the board alongside the detail pane.
-Controls on **Home** execute runtime actions; controls in **Keypad** edit only.
+**Keypad** edits the board. Its active-page preview uses the same key faces as
+the LCDs, including Audio transport symbols, the volume indicator and cover
+art when available. Selecting a key there edits its label, icon, color or
+action; it never runs the action. Other pages can be edited without activating
+their plugins. In a narrow window, Back returns from the key editor; a wider
+window keeps the board and key details side by side.
 
-Home groups the connection, profiles and current page. The physical Android
-host lists the nine LCD labels; connecting the virtual keypad shows the
-interactive board instead. On wide windows the controls sit beside the page;
-narrow windows stack them above it. Windows does not offer USB, image-upload
-or Android permission controls.
-
-The LCD and workspace draw the same key faces in the nine 118-pixel windows:
-transport symbols and a live mute rail for Audio, outlined symbols and names
-for navigation and folders, larger type for readouts. The active editor preview
-uses the live images, including cover art, but a click there always selects the
-slot for editing. Custom labels, icon text and colors belong to the saved key,
-not its position. Other pages can be edited without activating their plugins.
-
-Layout format 2 upgrades the factory Audio page to the music-player key order.
-On import or load, format 1 Audio slots on customized pages retain their old
-command meanings, labels, and icons. Existing `media.*` actions and workflows
-are not remapped. Format 3 also updates the untouched Navigation root from format
-1 or 2; importing a format 3 layout never rearranges the keys. Older app
-versions cannot import format 3 exports.
-
-Foreground-app mappings and Usage Access run only on Android; Windows can edit layouts without observing Android apps.
+The Windows simulator uses the same workspace and starts with the virtual
+keypad connected. It can save its own layouts, but has no USB connection,
+image upload, or Android permission and foreground-app detection controls.
+The walkthrough below uses the Android host.
 
 ## Choose features on first launch
 
@@ -40,18 +27,16 @@ keypad** to use the on-screen keys without hardware or permissions. Reopen
 it, and removing a choice from the guide does not revoke access. Each step
 checks Android's current state; you can finish with steps still pending.
 
-For physical keys, authorize the **attached keypad** and allow MX Pocket to
-show its session notification. Start the session with **Connect keypad** on
-Home. Automatic connection is separate: enable plug-in handling, reconnect
-the keypad and select MX Pocket if Android offers a handler choice.
 Optional **notification access** is for richer player controls and artwork,
 not for posting the session notification. Basic media keys still work without
-it. Physical Studio camera controls, one-press app opening and cross-app navigation each
-have their own steps. If Android restricts access, leave that option off.
+it. Physical Studio camera controls, one-press app opening and cross-app
+navigation each have their own steps. If Android restricts access, leave that
+option off; see [deck behavior without special access](android-decks.md).
 
 ## Run without hardware
 
-1. On Home choose **Connect virtual keypad** and press **Start** on Focus.
+1. On Home choose **Connect virtual keypad** if it isn't already connected
+   (first-run **Skip and try virtual keypad** connects it). Press **Start** on Focus.
    The first tile changes to **Pause** and the countdown advances. No USB
    permission or foreground service is needed. Disconnecting the virtual
    keypad disables input; reconnecting restores the selected page.
@@ -62,17 +47,18 @@ have their own steps. If Android restricts access, leave that option off.
 3. In Flows duplicate **Keypad check**. Give the copy a name, change a delay
    or add a step, then **Test run** and **Save workflow**. A test executes real
    steps. In Keypad assign the saved workflow to a Tools key. Press that key
-   on Home and watch its running/terminal state. **Run history** shows origin,
+   on Home to see the steps run. **Run history** shows origin,
    result and progress. For confirmation steps open Flows and approve or
    decline on the phone. Cancelling does not undo completed actions.
 4. In Plugins enable Audio; optional media access is explained before opening
    Android settings. Start playback in a player. In Keypad enable automatic
    switching and inspect the Audio rule `mediaActive = true`. While the app
    is visible or hosting a real session, a stable match selects Audio after
-   debounce. Supported players expose Play/Pause and title with consent;
+   a short delay. Supported players expose Play/Pause and title with consent;
    without it the app sends ordinary media keys and does not invent a title
-   or playback state. On Audio, an unlocked phone and the keypad show one inset
-   cover across the nine keys. The cover stays on Audio, even during playback;
+   or playback state. With artwork available on Audio, the unlocked phone's
+   virtual board shows one cover across the nine keys; a wired keypad shows
+   it on the LCDs. The cover stays on Audio, even during playback;
    a pinned non-music profile keeps its own background.
 5. Inspect the selection reason, matched rules and observed values in Keypad.
    Create or change weighted rules for an observed app-owned activity, device,
@@ -87,6 +73,36 @@ have their own steps. If Android restricts access, leave that option off.
    Workflows, permissions, favorites and capture files are separate; importing a
    workflow key does not import its code, grant access, or run it.
 
+Layout format 2 updated the factory Audio key order; customized pages keep
+the old Audio actions. Format 3 also updates an untouched Navigation root
+from format 1 or 2. Importing a format 3 layout keeps its key order. Older
+versions of the app cannot import format 3 exports.
+
+## Connect a wired keypad
+
+1. Plug **one wired MX Creative Keypad** into an Android phone with USB Host
+   support. In **Settings → Refresh USB diagnostics**, look for `046D:C354`.
+   If it's missing, try a data-capable cable or OTG adapter and, if the phone
+   cannot supply enough power, a powered hub.
+2. Tap **Connect keypad** and approve the attached device when Android prompts.
+   MX Pocket requires a visible session notification so **Disconnect** stays
+   available while another app is open. On Android 13+ allow notification
+   posting. If you denied it or blocked the session channel, enable it in the
+   app's Android notification settings and tap **Connect keypad** again.
+3. On the factory Focus page, press **Start**, then use a page button to switch
+   profiles. The notification's **Disconnect** ends the session. To connect
+   on future attachments, enable **Settings → Connect automatically on USB
+   attach**, unplug and reconnect, and choose MX Pocket if Android asks.
+   Auto-connect is off by default; Android controls handler selection. If it
+   doesn't start, unlock the phone and connect manually.
+
+**Found in diagnostics, but no controls?** Check the grant for this attachment.
+An interface claim can still fail because of the phone's USB driver. An
+unsupported descriptor, rejected image or missing acknowledgement is an error,
+not a successful upload. Note the first error and the phone model/Android
+version; don't post unredacted logs, device paths, serials or personal artwork.
+No root, firmware update or kernel change is part of setup.
+
 ## Show a profile when an app opens
 
 1. In **Keypad**, pick **Studio** in the **Profile** picker. Under **Context rules > Choose app**, tap **Camera** (Samsung Camera on a Galaxy). Pick **Audio** and repeat for **YouTube Music**. You can choose a custom profile the same way. Saving a mapping does not enable detection, change key bindings or launch anything.
@@ -97,30 +113,38 @@ The picker creates one ordinary `foregroundApp` rule for the chosen package, wit
 
 Detection reads local Android activity transitions, not media sessions or screen text. It runs only while MX Pocket is visible or hosting a connected keypad, unlocked, with an eligible mapping. The picker lists launchable apps visible in this Android user/profile. Usage events don’t identify the focused pane in multi-window mode; simultaneous resumed apps, missing events or an observation older than ten minutes give no app match. After granting access, unpinning, or unlocking, reopen the app if Android hasn't reported a fresh resume. Locked playback and authorized hardware media controls work as before. MX Pocket saves your mappings, not an app usage history.
 
-## Integrated controls
+## Open a shortcut while another app is visible
 
-| Profile | What to exercise | Platform boundary |
-| --- | --- | --- |
-| Phone | Select the factory **Phone** profile, connect an authorized physical keypad, opt in to **Open apps directly from keypad** in Settings and grant the explained Android special access. With the phone unlocked, background MX Pocket and press **Dialer**. | This legacy Phone shortcut can open immediately from one fresh physical press. Without the opt-in/grant it offers a notification instead. Virtual input and workflow steps never inherit this permission. |
-| Launcher | Edit favorites, choose installed apps, open one and page through additional favorites. Assign a favorite directly in a custom layout. | With direct shortcuts enabled and special access granted, a fresh physical press requests the exact saved launcher component or the resolved default camera's viewfinder. Removed/non-favorite components cannot launch. |
-| Audio | Start a player, adjust volume, skip and toggle playback. Observe the title and transport state. | Global metadata requires optional Android media-session access. Support for individual controls depends on the player. No notification inbox or message access features. |
-| Studio | Open the phone camera in photo or video mode. Optionally enable **Camera controls** and the Android navigation accessibility service to request Shutter, Record or Stop using the physical Studio deck. | Only a matching button in the visible default camera can respond. The camera owns media and reports its own state. No camera grant to MX Pocket is needed. |
-| Navigation | Try Back, Home, focus movement, activation and scrolling; inspect the optional navigation-access explanation. | System Recents/cross-app operations need explicit service activation. Apps and protected system screens may refuse actions; no gesture recording or scanning mode. |
-| Custom | Put different media, page, profile, favorite and workflow actions on adjacent keys. Disable one plugin and verify its assigned controls no longer run. | An import is configuration, not new code. Optional Android grants remain controlled by the OS. |
+With the phone unlocked and the physical keypad connected, try **Dialer** on
+the factory **Phone** profile. By default a background press offers a shortcut
+notification: tap it to open the app. Only the latest request is usable, for
+one minute on the same connected keypad and binding.
 
-In Flows, app/favorite launches and Android Home wait for separate approval on
-the visible, unlocked phone. A delay, schedule or physical workflow trigger
-does not turn these steps into a one-press Phone shortcut. Workflows cannot
-start recording, enable access or drive the navigation service.
+For one-press opening, turn on **Settings → Open apps directly from keypad**
+and grant **Display over other apps**. Android gives that setting broader
+powers than launching apps; MX Pocket does not draw overlays. A new physical
+press can request a Phone shortcut, a saved launcher favorite or the camera
+viewfinder, not a capture. If Android suppresses the launch, tap the retry
+notification. Turn off the option or revoke the grant to return to notifications.
+
+Virtual presses and [workflow steps](workflows.md) do not inherit this
+authority. App/favorite launches and Android Home in workflows wait for approval
+on the visible, unlocked phone. For media, camera, navigation and game controls,
+see [Android keypad decks](android-decks.md).
 
 ## Hardware acceptance (manual, not established by JVM tests)
 
-Use the [USB and foreground-service checklist](../README.md#background-sessions-and-automatic-connection)
-on a separately authorized host phone and keypad. Record Android version, handset,
-keypad model and outcomes without identifiers or media metadata.
+After [connecting the keypad](#connect-a-wired-keypad), check the following
+on your phone. Record Android version, handset model, keypad model and observed
+results without identifiers or media metadata.
 
 - Verify discovery, deny/retry/grant and notification consent. Connect one
   046D:C354, read all nine keys and both page controls, release a multi-key chord.
+- With automatic connection off, replug and confirm nothing starts until you
+  connect. With it on and MX Pocket selected as handler, check for one session
+  notification. Disconnect from that notification and reopen the app: it should
+  not reconnect until requested or reattached. An unrelated device should not
+  start a session.
 - Repeat the Desk/Tools workflow above on hardware. Observe all nine 118x118
   regions of the single panel, confirm readability and persistence for 60 seconds.
   Switch pages while an image is transferring; a press against the unacknowledged

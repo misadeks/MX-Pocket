@@ -9,7 +9,7 @@ profile. Virtual keys run real phone actions. The debug-only UI fixture does not
 | Media Deck (`audio`) | Top: volume down, mute/unmute, volume up. Middle: previous, play/pause, next. Bottom: back 10 seconds, Now playing, forward 10 seconds. The title is a readout, not a shortcut. Open **Plugins → Audio → Media access** on the phone for optional session access. | Without access, the center transport shows a combined play/pause symbol and sends a standard media key. Volume and mute follow Android's local music stream, not a cast device. Unsupported controls are dimmed. |
 | Pocket Studio | **Open Camera** requests the default photo viewfinder; **Open Video** requests video mode. Neither captures. For keypad input choose **Plugins > Studio > Camera controls** on the phone, enable keypad camera controls and enable **MX Pocket navigation** in Android Accessibility. | With the unlocked camera visible, press **Shutter**, **Record** or **Stop** on the physical Studio deck. Unsupported modes, labels or layouts do nothing. Use the camera's own controls instead. MX Pocket never confirms a saved photo or a recording state. |
 | Android Navigation | Use the keys beside **Select** to focus the previous or next item; use the keys above and below to scroll. **Back** goes back, not to the previous focus target. **Access info** opens the navigation disclosure on the phone; it does not grant or toggle access. | With **System nav off**, Back, focus, select and scroll operate in the visible MX Pocket screen; Home opens the launcher. **Recents** shows **Needs access** and is disabled. With the optional service connected, supported cross-app actions become available. Screens without a suitable focus or scroll target can still reject a press. Password elements, Android settings and system permission surfaces remain excluded from element actions. |
-| Tic Tac Toe | Select **1 Player** (play X against the computer) or **2 Players** (local 1v1) on the keypad. The nine LCD keys then become board squares; empty squares show their key numbers. After a win or draw, tap any key to choose a mode again. | No phone touchscreen, game-specific permission or network access is needed during play. An active keypad session is required. |
+| Tic Tac Toe | Select **1 Player** (play X against the computer) or **2 Players** (take turns on the same keypad). The nine LCD keys become board squares; empty squares show their key numbers. After a win or draw, tap any key to choose a mode again. | No phone touchscreen, game-specific permission or network access is needed during play. An active keypad session is required. |
 
 The factory navigation pad reads left to right: **Back / Scroll up / Home**,
 **Prev focus / Select / Next focus**, **Recents / Scroll down / Access info**.
@@ -47,8 +47,10 @@ sessions. It is broad at the OS level. This app uses the component solely as
 authorization for `MediaSessionManager`; it does not retrieve, log, or act
 on notifications. Spotify and other players use the same Android interface:
 there is no Spotify sign-in, SDK, playlist browser or downloaded artwork.
-While unlocked on **Audio**, the local cover spans Home's keypad and all nine
-LCD regions, paused or playing. A three-pixel black margin around the whole
+While unlocked on **Audio**, the local cover spans the virtual board on Home
+or all nine LCD regions on a wired keypad, paused or playing. With hardware
+connected, Home lists the labels; **Keypad** previews the active key faces
+without running their actions. A three-pixel black margin around the whole
 cover provides bezel clearance. Each label uses black or white against its own part of the picture.
 Other profiles keep their normal keys even during playback. Without usable
 art, the keys keep a neutral background (or the user's selected backdrop).
