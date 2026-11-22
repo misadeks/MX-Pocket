@@ -2,6 +2,12 @@ package tel.misa.mxpocket
 
 import android.app.Notification
 import android.app.NotificationManager
+import android.app.Person
+import android.graphics.Bitmap
+import android.graphics.Color
+import android.graphics.drawable.Icon
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.toPixelMap
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.ActivityInfo
@@ -18,6 +24,8 @@ import android.os.UserHandle
 import android.os.UserManager
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import android.telephony.SubscriptionManager
+import android.telephony.TelephonyManager
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -29,9 +37,15 @@ import org.robolectric.annotation.Implementation
 import org.robolectric.annotation.Implements
 import org.robolectric.annotation.LooperMode
 import org.robolectric.shadows.ShadowUserManager
+import org.robolectric.shadows.ShadowSubscriptionManager.SubscriptionInfoBuilder
 import org.robolectric.util.ReflectionHelpers
 import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.DeckKey
+import tel.misa.mxpocket.deck.TEAMS_INCOMING_VIEW
+import tel.misa.mxpocket.deck.PHONE_CALL_VIEW
+import tel.misa.mxpocket.deck.PROFILE_HOME
+import tel.misa.mxpocket.plugins.CALL_IDENTITY
+import tel.misa.mxpocket.plugins.CALL_PHOTO
 import tel.misa.mxpocket.decks.*
 import tel.misa.mxpocket.driver.KeyEvent
 import java.time.Duration
@@ -66,7 +80,7 @@ class TeamsCallTest {
         assertFalse((teamsObservation(arrayOf(note(styled = false))) as TeamsObservation.Notice).typedOngoing)
         assertFalse((teamsObservation(arrayOf(note(type = 0))) as TeamsObservation.Notice).typedOngoing)
         assertSame(TeamsObservation.Unavailable, teamsObservation(arrayOf(note(type = 0, kind = Notification.CATEGORY_MESSAGE))))
-        assertSame(TeamsObservation.Incoming, teamsObservation(arrayOf(note(type = Notification.CallStyle.CALL_TYPE_INCOMING))))
+        assertTrue(teamsObservation(arrayOf(note(type = Notification.CallStyle.CALL_TYPE_INCOMING))) is TeamsObservation.Incoming)
         assertSame(TeamsObservation.Screening, teamsObservation(arrayOf(note(type = Notification.CallStyle.CALL_TYPE_SCREENING))))
         assertSame(TeamsObservation.Unavailable, teamsObservation(arrayOf(note(), note(id = 2, styled = false))))
         assertSame(TeamsObservation.None, teamsObservation(emptyArray()))
@@ -99,8 +113,7 @@ class TeamsCallTest {
         }
     }
 
-    @GraphicsMode(GraphicsMode.Mode.NATIVE)
-    @Test fun typedEventAndJoinedToolbarDrivePhysicalPageMicAndRestore() {
+    private fun addTeamsLauncher() {
         val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
         val handler = ResolveInfo().apply { activityInfo = ActivityInfo().apply {
             packageName = TEAMS_PACKAGE; name = "$TEAMS_PACKAGE.TestLauncher"; enabled = true; exported = true
@@ -109,6 +122,112 @@ class TeamsCallTest {
         shadowOf(app.packageManager).addResolveInfoForIntent(launcher, handler)
         shadowOf(app.packageManager).addResolveInfoForIntent(Intent(launcher).setPackage(TEAMS_PACKAGE), handler)
         assertEquals(TEAMS_PACKAGE, app.teamsLauncher()?.component?.packageName)
+    }
+
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    @Test fun incomingNoticeAlertsOnceAndOnlyShowsConsentedCallStyleDetailsOnUsb() {
+        addTeamsLauncher()
+        val controller = Robolectric.buildService(PocketNotificationListener::class.java).create()
+        val listener = controller.get()
+        val access = TeamsAccess(app)
+        val session = app.session
+        val deck = session.deck
+        val lock = shadowOf(app.getSystemService(android.app.KeyguardManager::class.java))
+        val pixel = Bitmap.createBitmap(16, 16, Bitmap.Config.ARGB_8888).also { it.eraseColor(Color.MAGENTA) }
+        fun incoming(name: String? = null, icon: Icon? = null, styled: Boolean = true) =
+            note(type = Notification.CallStyle.CALL_TYPE_INCOMING, styled = styled).also {
+                it.notification.extras.putString(Notification.EXTRA_TITLE, "Not a caller field")
+                it.notification.extras.putParcelable(Notification.EXTRA_CALL_PERSON,
+                    Person.Builder().setName(name).setIcon(icon).build())
+            }
+        fun post(n: StatusBarNotification) {
+            listener.cancelNotification(n.key)
+            shadowOf(listener).addActiveNotification(n)
+            listener.onNotificationPosted(n)
+            main.idle()
+        }
+        fun remove(n: StatusBarNotification) {
+            listener.cancelNotification(n.key)
+            listener.onNotificationRemoved(n)
+            main.idle()
+        }
+        fun refresh() { TeamsEvents.refresh?.invoke(); main.idle() }
+        fun surface() = deck.operatingState.value.activeProfileId
+        fun face(name: String, photo: Boolean) {
+            assertEquals(TEAMS_INCOMING_VIEW, surface())
+            val keys = session.frame().keys
+            assertEquals(name, keys[CALL_IDENTITY].label)
+            assertEquals(listOf(CALL_PHOTO, CALL_IDENTITY), keys.indices.filter { !app.lcd.getValue(it).sameAs(app.lcd.getValue(0)) })
+            assertEquals(photo, app.lcd.getValue(CALL_PHOTO).getPixel(59, 59) == Color.MAGENTA)
+            assertTrue(keys.all { it.readOnly && !it.enabled && it.inputToken == null })
+            val home = session.homeTiles()
+            assertEquals("Teams", home[CALL_IDENTITY].label)
+            assertNotEquals(Color.MAGENTA, home[CALL_PHOTO].image!!.toPixelMap()[59, 59].toArgb())
+        }
+        val call = incoming("Fixture caller", Icon.createWithBitmap(pixel))
+        app.enableMusicSessions()
+        session.phoneAccess.details = true // Carrier consent is not Teams consent.
+        listener.onListenerConnected()
+        app.connectKeypad()
+        try {
+            for (attempt in 1..100) {
+                main.idle()
+                if (session.deckState.value.teams.installed) break
+                Thread.sleep(10)
+            }
+            val before = deck.exportJson()
+            post(call)
+            assertEquals(PROFILE_HOME, surface())
+            access.enabled = true; refresh()
+            face("Teams", false)
+            access.callerDetails = true; refresh()
+            face("Fixture caller", true)
+            post(incoming(null, Icon.createWithBitmap(pixel))); face("Teams", true)
+            post(incoming("Name only", Icon.createWithContentUri("content://unused"))); face("Name only", false)
+            post(incoming("Not CallStyle", Icon.createWithBitmap(pixel), styled = false)); face("Teams", false)
+            post(call); face("Fixture caller", true)
+            post(call.also { it.notification.visibility = Notification.VISIBILITY_SECRET }); face("Teams", false)
+            post(call.also { it.notification.visibility = Notification.VISIBILITY_PRIVATE })
+            access.callerDetails = false; refresh(); face("Teams", false)
+            access.callerDetails = true; refresh()
+            lock.setKeyguardLocked(true); refresh()
+            assertEquals(PROFILE_HOME, surface())
+            assertNotEquals(Color.MAGENTA, app.lcd.getValue(CALL_PHOTO).getPixel(59, 59))
+            lock.setKeyguardLocked(false); refresh(); face("Fixture caller", true)
+            app.press(0x01a2)
+            repeat(3) { post(call); assertEquals(PROFILE_HOME, surface()) }
+            remove(call)
+            post(call); face("Fixture caller", true)
+            shadowOf(app).grantPermissions(android.Manifest.permission.READ_PHONE_STATE)
+            val tel = app.getSystemService(TelephonyManager::class.java)
+            val sub = SubscriptionInfoBuilder.newBuilder().setId(10).setSimSlotIndex(0).buildSubscriptionInfo()
+            shadowOf(app.getSystemService(SubscriptionManager::class.java)).setActiveSubscriptionInfos(sub)
+            shadowOf(tel).setTelephonyManagerForSubscriptionId(10, tel)
+            session.phoneAccess.enabled = true
+            shadowOf(tel).setCallState(TelephonyManager.CALL_STATE_RINGING)
+            session.refreshPhoneCall(); post(call)
+            assertEquals(PHONE_CALL_VIEW, surface())
+            assertTrue(session.frame().keys.none { it.label == "Fixture caller" })
+            shadowOf(tel).setCallState(TelephonyManager.CALL_STATE_IDLE)
+            session.refreshPhoneCall(); refresh(); face("Fixture caller", true)
+            remove(call)
+            assertEquals(PROFILE_HOME, surface())
+            post(note(type = 0)); assertEquals(PROFILE_HOME, surface())
+            post(note(type = Notification.CallStyle.CALL_TYPE_SCREENING)); assertEquals(PROFILE_HOME, surface())
+            post(note(type = 0, id = 2)); post(call)
+            assertEquals(CallStatus.UNAVAILABLE, session.deckState.value.teams.status)
+            assertEquals(PROFILE_HOME, surface())
+            assertEquals(before, deck.exportJson())
+            assertFalse(session.logText().contains("Fixture caller"))
+        } finally {
+            session.disconnect()
+            controller.destroy()
+        }
+    }
+
+    @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    @Test fun typedEventAndJoinedToolbarDrivePhysicalPageMicAndRestore() {
+        addTeamsLauncher()
         val listenerController = Robolectric.buildService(PocketNotificationListener::class.java).create()
         val serviceController = Robolectric.buildService(TeamsToolbarService::class.java).create()
         val listener = listenerController.get()

@@ -40,13 +40,14 @@ fun Canvas.paintKeyFace(
     val player = tile.playerFace
     val label = tile.showLabel && tile.label.isNotBlank()
     val footer = tile.showFooter && tile.footer.isNotBlank() && tile.footer != tile.label
+    val callMark = tile.readOnly && !label && !footer && glyph == IntegrationApp.TEAMS
     val dark = Color(tile.background).luminance() < .179f
     val ink = if (dark) Color.White else Color.Black
     val subdued = if (dark) Color(0xffbec4ca) else Color(0xff42484e)
     val captionInk = if (!tile.enabled && !tile.readOnly) subdued else ink
     val p = Paint()
     val faceY = when {
-        glyph == DeckGlyph.CALLER -> 59f
+        glyph == DeckGlyph.CALLER || callMark -> 59f
         player -> 53f
         glyph != null -> if (footer) 29f else 38f
         else -> if (label) 21f else 47f
@@ -69,14 +70,14 @@ fun Canvas.paintKeyFace(
     when {
         tile.icon.isNotBlank() -> caption(FaceCaption(tile.icon, faceY, 24f, 1, true), captionInk)
         iconImage != null && (homeCenterY == null || homeOffset != null) -> {
-            if (glyph is IntegrationApp && !tile.enabled) p.alpha = .65f
+            if (glyph is IntegrationApp && !tile.enabled && !tile.readOnly) p.alpha = .65f
             val teams = tile.iconComponent?.startsWith("$TEAMS_PACKAGE/") ?: (glyph == IntegrationApp.TEAMS)
-            val top = if (teams) 5 + TEAMS_ARTWORK_OFFSET else 5
+            val top = if (callMark) (118 - APP_ICON_SIZE) / 2 else if (teams) 5 + TEAMS_ARTWORK_OFFSET else 5
             drawImageRect(iconImage, dstOffset = homeOffset ?: IntOffset(40, top), dstSize = IntSize(APP_ICON_SIZE, APP_ICON_SIZE), paint = p)
             p.alpha = 1f
         }
         glyph != null -> {
-            val glyphY = homeCenterY ?: if (glyph == IntegrationApp.TEAMS) faceY + TEAMS_ARTWORK_OFFSET else faceY
+            val glyphY = homeCenterY ?: if (glyph == IntegrationApp.TEAMS && !callMark) faceY + TEAMS_ARTWORK_OFFSET else faceY
             val diameter = if (homeCenterY != null) APP_ICON_SIZE.toFloat() else if (player) 49.5f else if (footer) 35f else 48f
             val sampled = photoInk?.invoke(37, 31, 81, 75)
             val plate = !player && (sampled != null || tile.primary)
@@ -104,7 +105,8 @@ fun Canvas.paintKeyFace(
             caption(FaceCaption("${index + 1}", faceY, 20f, 1, false), subdued)
     }
     if (title != null && homeCenterY == null) caption(title, captionInk)
-    if (footer) caption(FaceCaption(tile.footer, if (label) 100f else 94f, if (tile.callIdentity) 13f else 15f, 1, false), subdued)
+    if (footer) caption(FaceCaption(tile.footer, if (label) 100f else 94f, if (tile.callIdentity) 13f else 15f,
+        if (tile.callIdentity) 2 else 1, false), subdued)
     if (tile.enabled && (tile.selection == KeySelection.ON || tile.selection == KeySelection.UNKNOWN)) {
         val badgeInk = photoInk?.invoke(91, 6, 111, 23) ?: ink
         val center = androidx.compose.ui.geometry.Offset(101f, 16f)

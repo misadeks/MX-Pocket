@@ -29,6 +29,9 @@ internal class TeamsAccess(private val app: Context) {
         get() = notifications.teams
         set(value) { notifications.teams = value }
     val granted get() = notifications.granted
+    var callerDetails: Boolean
+        get() = notifications.teamsCaller
+        set(value) { notifications.teamsCaller = value }
     val toolbarGranted get() = app.getSystemService(AccessibilityManager::class.java)
         .getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK).any {
             val service = it.resolveInfo.serviceInfo
@@ -83,7 +86,7 @@ internal fun localTeams(sbn: StatusBarNotification) =
 internal sealed interface TeamsObservation {
     data object Unavailable : TeamsObservation
     data object None : TeamsObservation
-    data object Incoming : TeamsObservation
+    data class Incoming(val key: String, val posted: Long, val allowsDetails: Boolean) : TeamsObservation
     data object Screening : TeamsObservation
     data class Notice(val key: String, val posted: Long, val typedOngoing: Boolean) : TeamsObservation
 }
@@ -100,7 +103,9 @@ internal fun teamsObservation(notifications: Array<StatusBarNotification>): Team
     val n = calls.singleOrNull() ?: return TeamsObservation.None
     val type = n.notification.extras.getInt(Notification.EXTRA_CALL_TYPE)
     return when (type) {
-        Notification.CallStyle.CALL_TYPE_INCOMING -> TeamsObservation.Incoming
+        Notification.CallStyle.CALL_TYPE_INCOMING -> TeamsObservation.Incoming(n.key, n.postTime,
+            n.notification.callStyle() && (n.notification.visibility == Notification.VISIBILITY_PRIVATE ||
+                n.notification.visibility == Notification.VISIBILITY_PUBLIC))
         Notification.CallStyle.CALL_TYPE_SCREENING -> TeamsObservation.Screening
         else -> {
             val ongoing = n.notification.callStyle() && type == Notification.CallStyle.CALL_TYPE_ONGOING

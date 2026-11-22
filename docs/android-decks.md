@@ -206,7 +206,7 @@ With an authorized wired keypad, unlocked phone and
 Android 14+, notification access for **MX Pocket** allows read-only
 status. It is a broad Android permission: the adapter first checks the posting
 app and Android user, then checks Teams notification categories and call types.
-It does not read messages, names or notification action labels. Turning off
+Status alone does not read messages, names, photos or notification actions. Turning off
 Teams in the app leaves Music and caller details alone; revoking the shared
 Android grant stops all three uses.
 
@@ -214,6 +214,7 @@ Android grant stops all three uses.
 
 | Readout | What it means |
 | --- | --- |
+| **Incoming / Use Teams** | One Teams call notice explicitly says incoming. The keypad shows a read-only Teams call face. Either page key dismisses it without answering or declining; updates to the same call do not reopen it. A carrier call takes priority. |
 | **No signal / Check filters** | No eligible Teams notice is visible. This is not a “No call” result. See the filter check below. |
 | **Call notice / Type unknown** | Teams posted a call notice without a supported type. If you have joined, bring Teams to the foreground and show the **Mic** and **Hang up** buttons. The keypad can confirm the meeting only while those controls remain visible. |
 | **Call notice / Show controls** | Teams reported an ongoing call. Open the meeting on this phone and show its controls; the notice alone does not prove you joined. |
@@ -228,14 +229,20 @@ the Teams call type. MX Pocket does not reset your choices. Some phones hide the
 update or re-enabling access is not a guaranteed reset. If no supported notice
 arrives, use Teams directly.
 
-For automatic entry, use the personal Android profile and allow accessibility
+To see who is calling on the physical keypad, choose **Show Teams caller details**
+in Teams setup. This is separate from carrier caller details and off by default.
+The keypad shows the name and embedded photo independently, only when Teams supplies
+them in an incoming CallStyle notification on the unlocked phone. Missing details
+fall back to the Teams label or icon. The phone preview never shows the caller.
+
+For automatic entry to the **joined call controls**, use the personal Android profile and allow accessibility
 access to **MX Pocket Teams call controls**. A paused work profile may stay
 listed on the phone. It doesn't block controls if Android confirms that every
 other listed profile is paused. Resuming work drops the meeting and mic
 confirmation. After pausing work again, show the joined toolbar to confirm
 the meeting again. MX Pocket never changes a profile's state.
 
-Entry requires **both** exactly one eligible call notification from Teams in the
+Entry to those controls requires **both** exactly one eligible call notification from Teams in the
 same Android user and the visible joined meeting controls. Explicit incoming
 and screening notices never qualify, even with the toolbar visible.
 The foreground check looks for the English **Mic** and **Hang up** buttons

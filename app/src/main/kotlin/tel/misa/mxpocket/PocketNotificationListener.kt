@@ -14,6 +14,8 @@ import androidx.annotation.RequiresApi
 import kotlinx.coroutines.flow.update
 import tel.misa.mxpocket.calls.DialerNotice
 import tel.misa.mxpocket.calls.LineState
+import tel.misa.mxpocket.calls.CallerDetails
+import tel.misa.mxpocket.calls.embeddedCaller
 import tel.misa.mxpocket.calls.dialerNotice
 import tel.misa.mxpocket.calls.isFromDialer
 import tel.misa.mxpocket.decks.TEAMS_PACKAGE
@@ -93,8 +95,23 @@ class PocketNotificationListener : NotificationListenerService() {
             activeNotifications?.let(::teamsObservation) ?: TeamsObservation.Unavailable
         } catch (_: SecurityException) { TeamsObservation.Unavailable }
         catch (_: BadParcelableException) { TeamsObservation.Unavailable }
-        observedTeamsKey = (observation as? TeamsObservation.Notice)?.key
+        observedTeamsKey = when (observation) {
+            is TeamsObservation.Notice -> observation.key
+            is TeamsObservation.Incoming -> observation.key
+            else -> null
+        }
         return observation
+    }
+
+    internal fun teamsCaller(expected: TeamsObservation.Incoming): CallerDetails? {
+        if (Build.VERSION.SDK_INT < 34 || !expected.allowsDetails || current !== this || TeamsEvents.refresh == null ||
+            !access.teamsCaller || !access.granted || !isUnlockedAndInteractive()) return null
+        return try {
+            val notes = activeNotifications ?: return null
+            if (teamsObservation(notes) != expected) return null
+            notes.singleOrNull { it.key == expected.key }?.notification?.embeddedCaller()
+        } catch (_: BadParcelableException) { null }
+        catch (_: SecurityException) { null }
     }
 
     internal fun phoneSnapshot(state: LineState, expectedKey: String?): DialerNotice? {

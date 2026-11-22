@@ -136,9 +136,15 @@ object AccessCopy {
         "Avec un pavé connecté par câble, vous pouvez afficher les notifications d’appel Teams de ce profil Android. Seul un appel confirmé peut faire passer le pavé à la page « En appel ». À la fin de l’appel, vous retrouvez la page précédente, sauf si vous en avez choisi une autre.",
         "Kada je tastatura povezana kablom, možete da vidite obaveštenja o Teams pozivima sa ovog Android profila. Tastatura može da pređe na stranicu „U pozivu“ tek kada je poziv potvrđen. Po izlasku iz poziva vraćate se na prethodnu stranicu, osim ako ste izabrali drugu.")
     val TeamsDisclosure = Copy(
-        "Android grants broad notification access. MX Pocket checks the posting app, profile and call notification type, not messages or caller names. No call details are saved.",
-        "Android accorde un accès étendu aux notifications. MX Pocket vérifie quelle application a publié la notification, le profil concerné et le type de notification d’appel. Il ne consulte ni les messages ni les noms des appelants. Aucun détail d’appel n’est enregistré.",
-        "Android odobrava širok pristup obaveštenjima. MX Pocket proverava koja je aplikacija objavila obaveštenje, kom profilu pripada i kog je tipa obaveštenje o pozivu. Ne čita poruke ni imena pozivalaca. Detalji poziva se ne čuvaju.")
+        "Android grants broad notification access. For call status, MX Pocket checks only the posting app, profile and call type. It does not read messages or save call details.",
+        "Android accorde un accès étendu aux notifications. Pour suivre les appels, MX Pocket vérifie uniquement l’application, le profil et le type d’appel. Il ne lit pas les messages et ne conserve aucun détail d’appel.",
+        "Android odobrava širok pristup obaveštenjima. Za prikaz stanja poziva MX Pocket proverava samo aplikaciju, profil i tip poziva. Ne čita poruke i ne čuva podatke o pozivima.")
+    val TeamsCallerDisclosure = Copy(
+        "Optional: show the caller’s name and photo on the wired keypad when Teams includes them in an incoming call. These details stay off the phone preview and are hidden when the phone locks.",
+        "Facultatif : affichez le nom et la photo de l’appelant sur le pavé filaire si Teams les fournit pour un appel entrant. Ces détails sont masqués dans l’aperçu du téléphone et lorsque celui-ci est verrouillé.",
+        "Ako želiš, žična tastatura može da prikaže ime i sliku pozivaoca kada ih Teams pošalje uz dolazni poziv. Ti podaci se ne prikazuju u pregledu na telefonu niti kada je telefon zaključan.")
+    val ShowTeamsCaller = Copy("Show Teams caller details", "Afficher les détails de l’appelant Teams", "Prikaži podatke o Teams pozivaocu")
+    val HideTeamsCaller = Copy("Hide Teams caller details", "Masquer les détails de l’appelant Teams", "Sakrij podatke o Teams pozivaocu")
     val TeamsUnsupported = Copy(
         "Call observation needs Android 14 or later. You can still use Work and open Call tools manually.",
         "Le suivi des appels nécessite Android 14 ou une version ultérieure. Vous pouvez toujours utiliser « Travail » et ouvrir « Outils d’appel » manuellement.",
