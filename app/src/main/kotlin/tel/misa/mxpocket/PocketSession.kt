@@ -8,6 +8,7 @@ import tel.misa.mxpocket.i18n.WorkspaceCopy as W
 import tel.misa.mxpocket.i18n.WorkflowCopy
 
 import android.app.Application
+import android.app.NotificationManager
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.BroadcastReceiver
@@ -257,8 +258,7 @@ internal class PocketSession(
             if (lastLayout?.profile != layout.profile || lastLayout?.page?.id != layout.page.id)
                 screenGeneration++
             lastLayout = layout
-            receipts = LongArray(9)
-            pendingAction = null
+            retireReceipts()
             media.refreshDisplay()
         }
         if (feedbackPage != state.activePage || feedbackProfile != state.activeProfileId) {
@@ -296,7 +296,7 @@ internal class PocketSession(
 
     private fun retireCallPixels() {
         physicalKeys.cancel()
-        receipts = LongArray(9)
+        retireReceipts()
         lcd.fill(null)
         images.clear()
         (output as? RenderedKeypad)?.clearImages()
@@ -711,7 +711,7 @@ internal class PocketSession(
         hardwareScope = null
         output?.close()
         output = null
-        receipts = LongArray(9)
+        retireReceipts()
         lcd.fill(null)
         paintedTarget = null
         splitTarget = null
@@ -722,7 +722,6 @@ internal class PocketSession(
         paintedLayout = null
         scanLayout = null
         onHandoff = null
-        pendingAction = null
         val end = onEnd
         onEnd = null
         end?.invoke()
@@ -849,7 +848,7 @@ internal class PocketSession(
         pageButtons.cancel()
         if (plugins.chords.isEmpty() && deck.operatingState.value.activePage.keys.none { it.holdAction != null }) return
         physicalKeys.cancel()
-        receipts = LongArray(9) // Also reject input posted from the USB thread before this boundary.
+        retireReceipts() // Also reject input posted from the USB thread before this boundary.
         invalidate()
     }
 
@@ -898,7 +897,7 @@ internal class PocketSession(
         if (splitTarget != target) splitTarget = null
 
         if (connected is GridOutput && splitTarget == null && (paintedTarget != target || dirty.size > 1)) {
-            receipts = LongArray(9)
+            retireReceipts()
             painting = scope.launch {
                 try {
                     val result = connected.writeGrid(art, keys.map { it.image }, gridHasArt) {
@@ -932,7 +931,7 @@ internal class PocketSession(
         // One transaction at a time. Re-read desired state after its ACK, continuing around the panel
         // rather than repeatedly starting at a rapidly changing first key.
         if (dirty.isNotEmpty()) {
-            receipts = receipts.copyOf().also { values -> dirty.forEach { values[it] = 0 } }
+            retireReceipts(dirty)
             val index = dirty.minBy { (it - nextKey + lcd.size) % lcd.size }
             nextKey = (index + 1) % lcd.size
             val key = keys[index]
@@ -970,6 +969,13 @@ internal class PocketSession(
     }
 
     private var receiptSequence = 0L
+
+    private fun retireReceipts(indices: List<Int>? = null) {
+        receipts = if (indices == null) LongArray(9)
+            else receipts.copyOf().also { values -> indices.forEach { values[it] = 0 } }
+        pendingAction?.let { if (indices == null || it.index in indices) clearPhoneAction() }
+    }
+
     private fun target(frame: PluginFrame) = GridTarget(screenGeneration, frame.page, repaintEpoch, images.artworkRevision)
 
     private fun desiredKey(layout: Layout, frame: PluginFrame, index: Int): LcdKey {
@@ -1261,7 +1267,12 @@ internal class PocketSession(
         val offer = onHandoff ?: return unavailable(D.NoSession.text())
         val action = PhoneAction(target, ticket, index, receipts[index], time)
         pendingAction = action
-        return offer(action)
+        return offer(action).also { if (!it.success && pendingAction == action) clearPhoneAction() }
+    }
+
+    private fun clearPhoneAction() {
+        pendingAction = null
+        app.getSystemService(NotificationManager::class.java).cancel(PHONE_NOTICE)
     }
 
     fun isCurrentShortcut(action: PhoneAction): Boolean =
@@ -1272,7 +1283,7 @@ internal class PocketSession(
         val pending = pendingAction ?: return null
         if (id != pending.id) return null // An older tap must not consume the replacement.
         val valid = isCurrentShortcut(pending) && SystemClock.elapsedRealtime() - pending.pressedAt in 0 until PHONE_ACTION_TTL
-        pendingAction = null
+        clearPhoneAction()
         return pending.takeIf { valid }
     }
     fun log(line: String) {
