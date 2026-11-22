@@ -4,8 +4,10 @@ MX Pocket lets you control Android by feel. Link a keypad layout to an app
 and put actions where your fingers expect them. In supported apps, use physical
 keys to move between items, scroll and select without tapping a small button or
 making a precise swipe. Assign a workflow to one of the nine LCD keys, open a
-favorite app, start a focus timer or change tracks. Two page buttons switch
-layouts. To try MX Pocket without hardware, use the Windows simulator.
+favorite app, start a focus timer or change tracks. Previous and Next switch
+layouts. Press them together and release for the keypad’s profile launcher,
+or hold both to play Tic Tac Toe. To try MX Pocket without hardware, use the
+Windows simulator.
 
 When you join a Microsoft Teams call on the connected Android phone, the keypad
 switches to a meeting layout. Mute stays in the same spot, with keys for

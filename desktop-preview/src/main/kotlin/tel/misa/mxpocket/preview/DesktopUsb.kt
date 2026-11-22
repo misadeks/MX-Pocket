@@ -10,31 +10,26 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import org.jetbrains.skia.EncodedImageFormat
 import org.jetbrains.skia.Image
+import tel.misa.mxpocket.deck.PageButtons
 import tel.misa.mxpocket.driver.KeyEvent
 import tel.misa.mxpocket.preview.usb.WindowsKeypad
 import tel.misa.mxpocket.shared.ui.VirtualGrid
 
 internal fun monotonicMs() = System.nanoTime() / 1_000_000
 
-internal class PhysicalKeys(private val deck: PreviewDeck) {
+internal class PhysicalKeys(private val deck: PreviewDeck, private val pageButtons: PageButtons) {
     private data class Down(val grid: VirtualGrid, val at: Long)
     private val held = mutableMapOf<Int, Down>()
 
-    fun accept(key: KeyEvent, grid: VirtualGrid?, at: Long): String? {
+    fun accept(key: KeyEvent, grid: VirtualGrid?, at: Long, stillPainted: () -> Boolean = { true }): String? {
         val id = key.controlId
         val slot = id - 1
-        val down = if (!key.pressed || key.synthetic) held.remove(id) else null
         if (id == 0x01a1 || id == 0x01a2) {
-            val current = !key.synthetic && !deck.simulator && grid != null && grid == deck.board(at).grid
-            if (key.pressed && (!current || held.putIfAbsent(id, Down(grid!!, at)) != null)) return null
-            var message: String? = null
-            deck.pageButtons.input(if (id == 0x01a1) -1 else 1, key.pressed,
-                !current || !key.pressed && down?.grid != grid, { delta ->
-                    deck.cycle(delta)
-                    message = tel.misa.mxpocket.i18n.WorkspaceCopy.Selected.text(deck.profileName)
-                }, { deck.repository.enterGame().onFailure { message = it.message } })
-            return message
+            fun current() = stillPainted() && !deck.simulator && grid != null && grid == deck.board(at).grid
+            pageButtons.input(if (id == 0x01a1) -1 else 1, key.pressed, key.synthetic || !current(), at, ::current)
+            return null
         }
+        val down = if (!key.pressed || key.synthetic) held.remove(id) else null
         if (grid == null || key.synthetic || deck.simulator || grid != deck.board(at).grid) return null
         if (key.pressed) {
             if (held.putIfAbsent(id, Down(grid, at)) != null) return null
@@ -68,7 +63,7 @@ internal class DesktopUsb(
         frames?.trySend(Frame(grid, tiles, repaint))
     }
 
-    fun toggle() {
+    fun toggle(longPressMs: Long) {
         if (active) { job?.cancel(); return }
         if (deck.simulator) return
         active = true
@@ -98,10 +93,12 @@ internal class DesktopUsb(
                 ready = true
                 report(H.Initialized.text())
                 coroutineScope {
-                    val input = PhysicalKeys(deck)
+                    val input = PhysicalKeys(deck, deck.pageButtons(this, longPressMs, status))
                     launch {
                         for (edge in edges) if (!failed.isCompleted) {
-                            input.accept(edge.key, edge.grid, edge.time)?.let(status)
+                            input.accept(edge.key, edge.grid, edge.time) {
+                                !failed.isCompleted && painted.get() == edge.grid
+                            }?.let(status)
                         }
                     }
                     launch {

@@ -25,6 +25,8 @@ import android.os.Build
 import android.os.Looper
 import android.os.SystemClock
 import android.provider.MediaStore
+import android.view.ViewConfiguration
+import java.time.Duration
 import tel.misa.mxpocket.shared.ui.PocketScreenEvent
 import kotlinx.coroutines.CompletableDeferred
 import org.junit.Assert.*
@@ -123,6 +125,27 @@ class KeypadSessionTest {
         .putExtra(UsbManager.EXTRA_DEVICE, device)
     private fun deliver(intent: Intent) {
         Robolectric.buildActivity(MainActivity::class.java, intent).setup().use { /* no button press */ }
+    }
+
+    @Test fun inactiveOneNoteKeysAreGrayAndDisabledWithoutUnavailableMarkers() {
+        val session = app.session
+        app.connectKeypad()
+        try {
+            session.selectProfile("onenote")
+            main.idle()
+            val action = ActionCall("plugin.key", mapOf("pluginId" to "onenote", "index" to "0"))
+            session.deck.setKey("onenote", "root", 0, DeckKey(label = "My pen", action = action)).getOrThrow()
+            main.idle()
+            val keys = session.frame().keys
+            assertTrue(keys.filterIndexed { index, _ -> index != 4 }.all { !it.enabled && it.background == 0xff494c51.toInt() })
+            assertTrue(keys[4].enabled)
+            assertTrue(keys.all { it.footer.isEmpty() })
+            assertEquals("My pen", keys[0].label)
+            assertNull(keys[0].glyph)
+            val status = session.status
+            app.press(1)
+            assertEquals(status, session.status)
+        } finally { session.disconnect() }
     }
 
     @Test fun authorizedAudioDisplaysAndControlsThePlayerWithScreenOffOrKeyguardLocked() {
@@ -367,7 +390,8 @@ class KeypadSessionTest {
 
     private fun press(control: Int) = app.press(control)
 
-    @Test fun physicalPageButtonsBrowseRootsAndConsumeTheGameChordInEitherOrder() {
+    @Config(shadows = [ChordSessionTest.LongAccessibilityDelay::class])
+    @Test fun physicalPageButtonsBrowseRootsTapHomeAndHoldForGameInEitherOrder() {
         app.connectKeypad()
         val session = app.session
         val repo = session.deck
@@ -380,21 +404,61 @@ class KeypadSessionTest {
         session.setPluginEnabled("audio", false)
         val ids = listOf("launcher", "studio", "navigation", "teams", "onenote", "@home", "focus")
         ids.forEach { press(0x01a2); expectProfile(it) }
+        val hold = ViewConfiguration.getLongPressTimeout().toLong()
         for ((first, second) in listOf(0x01a1 to 0x01a2, 0x01a2 to 0x01a1)) {
             val backup = repo.exportJson()
             app.emit(KeyEvent(first, true)); main.idle(); expectProfile("focus")
-            app.emit(KeyEvent(second, true)); main.idle(); expectProfile("game.xo")
-            app.emit(KeyEvent(first, false)); app.emit(KeyEvent(second, false)); main.idle()
+            main.idleFor(Duration.ofMillis(hold))
+            app.emit(KeyEvent(second, true)); main.idle()
+            main.idleFor(Duration.ofMillis(hold - 1)); expectProfile("focus")
+            app.emit(KeyEvent(first, false)); main.idle(); expectProfile("@home")
+            app.emit(KeyEvent(second, false)); main.idle()
+            main.idleFor(Duration.ofMillis(hold)); expectProfile("@home")
+            press(1); expectProfile("focus")
+
+            app.emit(KeyEvent(first, true)); app.emit(KeyEvent(second, true)); main.idle()
+            main.idleFor(Duration.ofMillis(hold - 1)); expectProfile("focus")
+            main.idleFor(Duration.ofMillis(1)); expectProfile("game.xo")
+            app.emit(KeyEvent(second, false)); app.emit(KeyEvent(first, false)); main.idle()
             expectProfile("game.xo")
             press(first); expectProfile("focus")
             assertEquals(backup, repo.exportJson())
         }
         session.setPluginEnabled("game.xo", false)
-        app.emit(KeyEvent(0x01a1, true)); app.emit(KeyEvent(0x01a2, true))
+        app.emit(KeyEvent(0x01a1, true)); app.emit(KeyEvent(0x01a2, true)); main.idle()
+        main.idleFor(Duration.ofMillis(hold))
         app.emit(KeyEvent(0x01a2, false)); app.emit(KeyEvent(0x01a1, false)); main.idle()
         expectProfile("focus")
-        app.emit(KeyEvent(0x01a2, true)); app.emit(KeyEvent(0x01a2, false, synthetic = true)); main.idle()
-        expectProfile("focus")
+        app.emit(KeyEvent(0x01a1, true)); app.emit(KeyEvent(0x01a2, true))
+        app.emit(KeyEvent(0x01a2, false)); app.emit(KeyEvent(0x01a1, false)); main.idle()
+        expectProfile("@home")
+        session.disconnect()
+    }
+
+    @Test fun cancelledPageButtonChordNeverNavigatesEvenAfterReconnect() {
+        val session = app.session
+        app.connectKeypad()
+        press(1)
+        val before = session.deck.operatingState.value
+        val hold = Duration.ofMillis(ViewConfiguration.getLongPressTimeout().toLong())
+        fun chord() { app.emit(KeyEvent(0x01a1, true)); app.emit(KeyEvent(0x01a2, true)) }
+        fun expectUnchanged() { main.idleFor(hold); assertEquals(before, session.deck.operatingState.value) }
+        chord(); main.idle()
+        app.emit(KeyEvent(0x01a1, false, synthetic = true)); main.idle()
+        expectUnchanged()
+        app.emit(KeyEvent(0x01a2, false)); main.idle()
+        chord(); main.idle(); session.cancelPhysicalGesture()
+        app.emit(KeyEvent(0x01a2, false)); app.emit(KeyEvent(0x01a1, false))
+        expectUnchanged()
+        chord(); session.cancelPhysicalGesture() // Both USB downs already posted, but not handled yet.
+        expectUnchanged()
+        app.emit(KeyEvent(0x01a2, false)); app.emit(KeyEvent(0x01a1, false)); main.idle()
+        chord(); main.idle()
+        val oldInput = app.emit
+        session.disconnect(); app.connectKeypad()
+        oldInput(KeyEvent(0x01a2, false)); oldInput(KeyEvent(0x01a1, false))
+        expectUnchanged()
+        press(0x01a2); assertEquals("audio", session.deck.operatingState.value.activeProfileId)
         session.disconnect()
     }
 

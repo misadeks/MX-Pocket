@@ -2,6 +2,7 @@ package tel.misa.mxpocket.preview
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.CoroutineScope
 import tel.misa.mxpocket.FocusTimer
 import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.*
@@ -31,8 +32,12 @@ class PreviewDeck(val repository: DeckRepository, private val sendMedia: (MediaK
     private val knownPlugins = factoryProfiles().map { it.id }.toSet()
     private var lastSnapshot: DeckState? = null
     private var generation = 0L
-    val pageButtons = PageButtons()
-    fun resetInput() { generation++; pageButtons.reset() }
+    fun resetInput() { generation++ }
+    internal fun pageButtons(scope: CoroutineScope, longPressMs: Long, status: (String) -> Unit,
+        now: () -> Long = ::monotonicMs) = PageButtons(scope, now, { longPressMs }, { delta ->
+            cycle(delta)
+            status(tel.misa.mxpocket.i18n.WorkspaceCopy.Selected.text(profileName))
+        }, repository::showHome, { repository.enterGame().onFailure { status(it.message ?: K.Unavailable.text()) } })
     private var simulation by androidx.compose.runtime.mutableStateOf(false)
     var simulator: Boolean
         get() = simulation
