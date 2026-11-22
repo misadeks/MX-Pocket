@@ -24,6 +24,7 @@ enum class SetupFeature(val title: String, val summary: String) {
     DIRECT("Open apps with one press", "Open a supported shortcut from your physical keypad without a notification tap."),
     NAVIGATION("Navigate other apps", "Use keypad buttons for Back, Home, scrolling and focus."),
     PROFILES("Switch profiles when an app opens", "Show a matching keypad layout while the phone is unlocked."),
+    ONENOTE("Use OneNote drawing tools", "Use the keypad to select a pen or eraser while OneNote is on screen."),
     TEAMS("Show Teams call notices", "Show read-only call status on the keypad. No microphone control is needed."),
     TEAMS_CONTROLS("Use the Teams mic key", "Recognize the joined call toolbar and operate a visible mic button from the keypad.")
 }
@@ -35,7 +36,8 @@ enum class SetupAction(val label: String) {
     DIRECT("Enable one-press shortcuts"), NAVIGATION("Open accessibility settings"),
     USAGE("Open usage access settings"), DETECTION("Enable foreground detection"), SWITCHING("Enable profile switching"),
     TEAMS("Enable Teams call status"), TEAMS_NOTICES("Open Teams notification access"), TOOLBAR("Open Teams accessibility settings"),
-    AUDIO_PLUGIN("Enable Audio"), STUDIO_PLUGIN("Enable Studio"), NAV_PLUGIN("Enable Navigation"), TEAMS_PLUGIN("Enable Teams")
+    AUDIO_PLUGIN("Enable Audio"), STUDIO_PLUGIN("Enable Studio"), NAV_PLUGIN("Enable Navigation"), TEAMS_PLUGIN("Enable Teams"),
+    ONENOTE_PLUGIN("Enable OneNote"), ONENOTE_ACCESS("Open OneNote accessibility settings")
 }
 
 data class SetupStep(val feature: SetupFeature, val title: String, val detail: String, val status: String,

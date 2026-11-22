@@ -13,11 +13,13 @@ import android.provider.Settings
 import tel.misa.mxpocket.DirectShortcuts
 import tel.misa.mxpocket.KeypadService
 import tel.misa.mxpocket.PocketApplication
+import tel.misa.mxpocket.R
 import tel.misa.mxpocket.UsbAccess
 import tel.misa.mxpocket.decks.CameraControlsAccess
 import tel.misa.mxpocket.decks.DeckAccessActivity
 import tel.misa.mxpocket.decks.ListenerAccess
 import tel.misa.mxpocket.decks.NavigationService
+import tel.misa.mxpocket.decks.OneNoteAccessService
 import tel.misa.mxpocket.decks.TeamsAccess
 import tel.misa.mxpocket.decks.TeamsEvents
 import tel.misa.mxpocket.decks.TeamsToolbarService
@@ -63,6 +65,7 @@ internal class SetupAccess(private val host: Activity, private val choices: Setu
         if (shortcuts.optedIn) add(Feature.DIRECT)
         if (accessibilityAllowed(NavigationService::class.java)) add(Feature.NAVIGATION)
         if (session.detectForegroundApps.value) add(Feature.PROFILES)
+        if (accessibilityAllowed(OneNoteAccessService::class.java)) add(Feature.ONENOTE)
         if (teams.granted && teams.enabled) add(Feature.TEAMS)
         if (teams.granted && teams.enabled && accessibilityAllowed(TeamsToolbarService::class.java)) add(Feature.TEAMS_CONTROLS)
     }
@@ -142,6 +145,12 @@ internal class SetupAccess(private val host: Activity, private val choices: Setu
             setting(Feature.PROFILES, "Automatic profile switching", "Allow matching rules to select a layout. Manage app mappings, pins and individual profiles in Profiles.",
                 session.deck.state.value.automatic, Action.SWITCHING)
         }
+        if (Feature.ONENOTE in features) {
+            plugin(Feature.ONENOTE, "OneNote", "onenote", Action.ONENOTE_PLUGIN)
+            setting(Feature.ONENOTE, "OneNote accessibility access", host.getString(R.string.onenote_access_description) +
+                " Select MX Pocket OneNote tools in Accessibility.", accessibilityAllowed(OneNoteAccessService::class.java),
+                Action.ONENOTE_ACCESS, "Allowed in Android", "Not allowed in Android")
+        }
         val controls = Feature.TEAMS_CONTROLS in features && teams.singleProfile
         if (Build.VERSION.SDK_INT >= 34 && (Feature.TEAMS in features || controls)) {
             val group = if (Feature.TEAMS in features) Feature.TEAMS else Feature.TEAMS_CONTROLS
@@ -167,12 +176,13 @@ internal class SetupAccess(private val host: Activity, private val choices: Setu
             Action.STUDIO_PLUGIN -> session.setPluginEnabled("studio", true)
             Action.NAV_PLUGIN -> session.setPluginEnabled("navigation", true)
             Action.TEAMS_PLUGIN -> session.setPluginEnabled("teams", true)
+            Action.ONENOTE_PLUGIN -> session.setPluginEnabled("onenote", true)
             Action.MEDIA -> ListenerAccess.MEDIA.open(host)
             Action.TEAMS_NOTICES -> ListenerAccess.TEAMS.open(host)
             Action.APP_NOTICES -> host.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, host.packageName))
             Action.CHANNEL -> host.startActivity(Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
                 .putExtra(Settings.EXTRA_APP_PACKAGE, host.packageName).putExtra(Settings.EXTRA_CHANNEL_ID, KeypadService.CHANNEL))
-            Action.NAVIGATION, Action.TOOLBAR -> host.startActivity(DeckAccessActivity.accessibilitySettings())
+            Action.NAVIGATION, Action.TOOLBAR, Action.ONENOTE_ACCESS -> host.startActivity(DeckAccessActivity.accessibilitySettings())
             Action.OVERLAY -> host.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.fromParts("package", host.packageName, null)))
             Action.USAGE -> host.startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
             Action.USB, Action.POST -> error("Runtime request belongs to the visible setup activity")
