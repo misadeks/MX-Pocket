@@ -1,7 +1,11 @@
 package tel.misa.mxpocket.plugins
 
 import android.content.res.Resources
-import tel.misa.mxpocket.R
+import tel.misa.mxpocket.i18n.AccessCopy
+import tel.misa.mxpocket.i18n.AppLocale
+import tel.misa.mxpocket.i18n.KeypadCopy
+import tel.misa.mxpocket.i18n.OneNoteArtworkCopy as Artwork
+import tel.misa.mxpocket.i18n.OneNoteCopy
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -32,15 +36,16 @@ private val ribbonMarks = mapOf(
 )
 
 internal class OneNoteFaces(private val resources: Resources?) {
-    private val locale get() = resources?.configuration?.locales?.get(0) ?: Locale.getDefault()
-    private fun text(id: Int, otherwise: String, vararg args: Any) =
-        resources?.getString(id, *args) ?: String.format(locale, otherwise, *args)
-    private fun percent(value: Float) = NumberFormat.getPercentInstance(locale).apply { maximumFractionDigits = 2 }
-        .format(value / 100.0)
+    private fun percent(value: Float): String {
+        val app = Locale.forLanguageTag(AppLocale.current.tag)
+        val regional = resources?.configuration?.locales?.get(0) ?: Locale.getDefault()
+        val locale = regional.takeIf { it.language == app.language && (app.script.isEmpty() || it.script == app.script) } ?: app
+        return NumberFormat.getPercentInstance(locale).apply { maximumFractionDigits = 2 }.format(value / 100.0)
+    }
     private fun blank() = KeyTile("", "", PURPLE, enabled = false, quietFace = true, showLabel = false, showFooter = false)
     private fun stateDescription(state: KeySelection?) = when (state) {
-        KeySelection.ON -> text(R.string.note_selected, "Selected")
-        KeySelection.UNKNOWN -> text(R.string.note_unknown_selection, "Selection unknown")
+        KeySelection.ON -> Artwork.Selected.text()
+        KeySelection.UNKNOWN -> Artwork.SelectionUnknown.text()
         else -> ""
     }
     private fun face(label: String, glyph: KeyGlyph, footer: String = "", selected: KeySelection? = null,
@@ -67,11 +72,11 @@ internal class OneNoteFaces(private val resources: Resources?) {
             val ink = namedInk(name)
             val width = optionWidth.find(desc)?.groupValues?.get(1)?.replace(',', '.')?.toFloatOrNull()?.takeIf { it in 0f..100f }
             val label = if (kind == OneNoteMark.PEN) {
-                if (name == null) text(R.string.note_pen, "Pen") else text(R.string.note_named_pen, "%s pen", name)
+                if (name == null) Artwork.Pen.text() else OneNoteCopy.Pen.text(name)
             } else {
-                if (name == null) text(R.string.note_highlighter, "Highlighter") else text(R.string.note_named_highlighter, "%s highlighter", name)
+                if (name == null) Artwork.Highlighter.text() else Artwork.NamedHighlighter.text(name)
             }
-            val unknown = if (ink == null) text(R.string.note_unknown_ink, "Ink unknown") else ""
+            val unknown = if (ink == null) Artwork.InkUnknown.text() else ""
             face(label, OneNoteLegend(kind, ink, width), unknown, state, detail = width?.let(::percent).orEmpty())
         })
     }
@@ -92,11 +97,11 @@ internal class OneNoteFaces(private val resources: Resources?) {
             "previous" -> OneNoteMark.PREVIOUS; "next" -> OneNoteMark.NEXT; "cancel" -> OneNoteMark.CANCEL
             else -> if (size) OneNoteMark.SIZE else OneNoteMark.STYLES
         }
-        return face(item.second, OneNoteLegend(mark), if (size) text(R.string.note_size, "Font size") else text(R.string.note_styles, "Styles"))
+        return face(item.second, OneNoteLegend(mark), if (size) OneNoteCopy.FontSize.text() else OneNoteCopy.Styles.text())
     }
 
     fun pageKey(next: Boolean, enabled: Boolean = true, footer: String = "") = face(
-        if (next) text(R.string.note_next, "Next") else text(R.string.note_previous, "Previous"),
+        if (next) KeypadCopy.Next.text() else KeypadCopy.Previous.text(),
         OneNoteLegend(if (next) OneNoteMark.NEXT else OneNoteMark.PREVIOUS), footer, enabled = enabled)
 
     private fun OneNoteSettings.selectedOption(): Int? = selectedIndex.takeIf { it in colors.indices }
@@ -118,12 +123,12 @@ internal class OneNoteFaces(private val resources: Resources?) {
                     val state = when (selected) { null -> KeySelection.UNKNOWN; index -> KeySelection.ON; else -> KeySelection.OFF }
                     val ink = current.ink(index)
                     face(name, OneNoteLegend(OneNoteMark.SWATCH, ink), selected = state,
-                        detail = if (ink == null) text(R.string.note_unknown_ink, "Ink unknown") else "")
+                        detail = if (ink == null) Artwork.InkUnknown.text() else "")
                 }
                 i == 6 -> pageKey(false, page > 0)
                 i == 7 -> face("${page + 1} / $pages", OneNoteLegend(OneNoteMark.SWATCH,
                     if (selected != null) current.ink(selected) else namedInk(current.selectedColor?.takeIf { it !in current.colors })),
-                    text(R.string.note_cancel, "Cancel"), detail = current.selectedColor.orEmpty())
+                    AccessCopy.Cancel.text(), detail = current.selectedColor.orEmpty())
                 else -> pageKey(true, page + 1 < pages)
             }
         })
@@ -133,15 +138,15 @@ internal class OneNoteFaces(private val resources: Resources?) {
         val fraction = ((current.thickness - current.min) / (current.max - current.min)).takeIf {
             current.max > current.min && it.isFinite() && it in 0f..1f
         }
-        val thickness = text(R.string.note_thickness, "Thickness")
+        val thickness = OneNoteCopy.Thickness.text()
         return PluginFrame(List(9) { i -> when (i) {
             0 -> face("$thickness −", DeckGlyph.MINUS)
             1 -> KeyTile(thickness, "", PURPLE, readOnly = true, levelFraction = fraction,
                 detail = fraction?.let { percent(it * 100) }.orEmpty())
             2 -> face("$thickness +", DeckGlyph.PLUS)
-            4 -> face(text(R.string.note_color, "Color"), OneNoteLegend(OneNoteMark.SWATCH, namedInk(current.selectedColor)),
-                current.selectedColor ?: text(R.string.note_unknown_ink, "Ink unknown"))
-            7 -> face(text(R.string.note_back, "Back"), NavigationGlyph.BACK)
+            4 -> face(OneNoteCopy.Color.text(), OneNoteLegend(OneNoteMark.SWATCH, namedInk(current.selectedColor)),
+                current.selectedColor ?: Artwork.InkUnknown.text())
+            7 -> face(KeypadCopy.Back.text(), NavigationGlyph.BACK)
             else -> blank()
         } })
     }

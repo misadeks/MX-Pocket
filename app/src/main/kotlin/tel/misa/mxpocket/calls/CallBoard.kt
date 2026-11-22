@@ -25,7 +25,7 @@ internal class CallBoard(
         private set
     val visible get() = deck.operatingState.value.activeProfileId == PHONE_CALL_VIEW
     fun frame() = phoneCallFrame(line ?: PhoneLine.MULTIPLE, name, !spent && stamp?.accept != null, generation)
-    fun homeFrame() = phoneCallFrame(line ?: PhoneLine.MULTIPLE, "On keypad", !spent && stamp?.accept != null, generation)
+    fun homeFrame() = phoneCallHomeFrame(line ?: PhoneLine.MULTIPLE, !spent && stamp?.accept != null, generation)
 
     fun refresh(authorized: Boolean) {
         val state = if (authorized) readState() else LineState.UNKNOWN

@@ -20,17 +20,18 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import tel.misa.mxpocket.deck.*
 import tel.misa.mxpocket.i18n.*
+import tel.misa.mxpocket.plugins.KeyTile
 import tel.misa.mxpocket.plugins.present
 import tel.misa.mxpocket.plugins.bindingPreview
 
 private enum class Pane { LIBRARY, PREVIEW, SETTINGS, KEY }
-private enum class Command(val title: Copy) {
+internal enum class Command(val title: Copy) {
     CREATE_PROFILE(LayoutCopy.NewProfile), COPY_PROFILE(LayoutCopy.DuplicateProfile), RENAME_PROFILE(LayoutCopy.RenameProfile),
     DELETE_PROFILE(LayoutCopy.DeleteProfile), CREATE_PAGE(LayoutCopy.NewPage), COPY_PAGE(LayoutCopy.DuplicatePage),
     RENAME_PAGE(LayoutCopy.RenamePage), DELETE_PAGE(LayoutCopy.DeletePage), IMPORT(LayoutCopy.Import), RESTORE(LayoutCopy.RestoreFactory)
 }
 
-private class Writer(private val scope: CoroutineScope, private val repo: DeckEditorStore) {
+internal class LayoutWriter(private val scope: CoroutineScope, private val repo: DeckEditorStore) {
     var busy by mutableStateOf(false)
         private set
     var error by mutableStateOf<String?>(null)
@@ -74,16 +75,18 @@ fun LayoutEditor(
     val deck by repo.state.collectAsState()
     val decision by repo.decision.collectAsState()
     val scope = rememberCoroutineScope()
-    val writer = remember(repo, scope) { Writer(scope, repo) }
+    val writer = remember(repo, scope) { LayoutWriter(scope, repo) }
     // The editor always edits the profile on the keypad, so the Profiles carousel and this picker agree.
-    val profile = deck.activeProfile
+    val profile = deck.visibleProfiles.find { it.id == deck.activeProfileId } ?: return
+    if (live?.activeId == GAME_PROFILE || live?.activeId in deck.disabledPluginIds) return
     // A profile created or copied here goes on the keypad once its write has finished.
     var pendingSelect by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(pendingSelect, writer.busy) {
         val id = pendingSelect
         if (id != null && !writer.busy) {
             pendingSelect = null
-            if (id != repo.state.value.activeProfileId) writer.edit(DeckEdit.Select(id))
+            val latest = repo.state.value
+            if (id != latest.activeProfileId && latest.visibleProfiles.any { it.id == id }) writer.edit(DeckEdit.Select(id))
         }
     }
     var selectedPage by rememberSaveable(profile.id) { mutableStateOf(deck.histories.getValue(profile.id).last()) }
@@ -93,9 +96,7 @@ fun LayoutEditor(
         if (seenPage != deck.activePage.id) { seenPage = deck.activePage.id; selectedPage = deck.activePage.id }
     }
     val page = profile.pages.find { it.id == selectedPage } ?: profile.pages.first { it.id == profile.rootPageId }
-    val bindings = remember(profile, actions, AppLocale.current) {
-        localBindings(actions, profile.pages, profile::displayPageName)
-    }
+    val bindings = editorBindings(profile, actions, deck.disabledPluginIds)
     key(profile.id, page.id) {
         var pane by rememberSaveable { mutableStateOf(Pane.PREVIEW) }
         var index by rememberSaveable { mutableStateOf<Int?>(null) }
@@ -117,21 +118,16 @@ fun LayoutEditor(
         /** The same faces as the physical LCDs; the active page shows the live images. */
         fun gridTiles(): List<KeypadTile> = page.keys.mapIndexed { i, saved ->
             val tile = if (index == i && draft != null) draft.preview() else saved
-            val caption = profile.displayKeyLabel(page, tile)
-            val label = caption.ifBlank { bindingName(tile.action, bindings) }
-            val hint = if (!tile.enabled) LayoutCopy.Off.text() else ""
             val current = active?.tiles?.get(i)
             val visual = if (tile == saved && current != null) current else {
                 val base = current?.face?.takeIf {
                     saved.action == tile.action && saved.icon == tile.icon &&
                         !(saved.label.isNotBlank() && tile.label.isBlank()) && saved.color == tile.color
                 } ?: tile.bindingPreview()
-                tile.copy(label = caption).present(base, label, if (!tile.enabled) LayoutCopy.Disabled.text() else base?.footer.orEmpty(),
-                    tile.enabled && tile.action != null).toGridTile(true)
+                savedKeyFace(tile, profile.displayKeyLabel(page, tile), bindings, base)
             }
             // Editing or swapping a readout or unavailable slot must select it, never execute it.
-            visual.copy(enabled = !writer.busy, readOnly = false, selected = false,
-                accessibleName = listOf(LayoutCopy.Key.text(i + 1), tile.icon, visual.label, hint).filter(String::isNotBlank).joinToString(", "))
+            visual.forEditing(i, tile, !writer.busy)
         }
 
         BoxWithConstraints(modifier.fillMaxSize()) {
@@ -197,20 +193,9 @@ fun LayoutEditor(
                     }
                 } else {
                     if (!wide) TextButton(onClick = { show(Pane.PREVIEW) }) { Text(LayoutCopy.BackToPreview.text()) }
-                    PocketCard { ProfileSettings(profile, deck, decision, writable) { writer.edit(it) } }
-                    PocketCard { RuleSection(profile, deck.profiles, signals, writable, foreground, addApp = { pkg, done ->
-                        writer.edit(DeckEdit.Rules(profile.id, profile.rules, profile.rules +
-                            DeckRule(tel.misa.mxpocket.FOREGROUND_APP, pkg, tel.misa.mxpocket.APP_RULE_WEIGHT)), done)
-                    }, edit = { removingRule = false; rule = it },
-                        remove = { removingRule = true; rule = it }, disabledIds = deck.disabledPluginIds) }
-                    PocketCard(LayoutCopy.Backups.text(), ShellIcon.DOCUMENT) {
-                        EditorNote(LayoutCopy.ExportHint.text())
-                        EditorActions {
-                            PocketButton(LayoutCopy.Export.text(), onExport, icon = ShellIcon.DOWNLOAD, enabled = writable)
-                            PocketButton(LayoutCopy.Import.text(), { command = Command.IMPORT }, enabled = !writer.busy)
-                            PocketButton(LayoutCopy.RestoreFactory.text(), { command = Command.RESTORE }, tone = PocketTone.DANGER, enabled = !writer.busy)
-                        }
-                    }
+                    ProfileOptions(profile, deck, decision, signals, foreground, writer, writable,
+                        edit = { removingRule = false; rule = it }, remove = { removingRule = true; rule = it })
+                    LayoutBackups(writer, writable, onExport) { command = it }
                 }
             }
 
@@ -243,18 +228,7 @@ fun LayoutEditor(
             },
             confirmButton = { TextButton(onClick = ::finishSwap, enabled = !writer.busy) { Text(LayoutCopy.Done.text()) } })
         rule?.let { i ->
-            // Keep the baseline captured on opening. Never apply an old array index to a new ruleset.
-            val baseline = rememberSaveable(saver = rulesSaver) { profile.rules }
-            val close = { rule = null }
-            val original = baseline.getOrNull(i)
-            if (removingRule && original != null) EditorConfirm(LayoutCopy.RemoveRuleQuestion.text(),
-                LayoutCopy.RemoveRuleHint.text(original.signal, original.value, profile.displayName()),
-                LayoutCopy.Remove.text(), writable, close) {
-                writer.edit(DeckEdit.Rules(profile.id, baseline, baseline.filterIndexed { n, _ -> n != i }), close)
-            } else RuleDialog(original, signals, writable, close) { updated ->
-                val next = if (i == -1) baseline + updated else baseline.mapIndexed { n, old -> if (n == i) updated else old }
-                writer.edit(DeckEdit.Rules(profile.id, baseline, next), close)
-            }
+            ProfileRuleDialog(profile, signals, writer, writable, i, removingRule) { rule = null }
         }
         command?.let { cmd ->
             CommandDialog(cmd, profile, page, writer, writable, close = { command = null }, onImport,
@@ -262,9 +236,63 @@ fun LayoutEditor(
                 activeProfile = { repo.state.value.activeProfileId })
         }
     }
+    LayoutWriteError(writer)
+}
+
+internal fun savedKeyFace(tile: DeckKey, caption: String, bindings: List<BindingOption>,
+                         base: KeyTile? = tile.bindingPreview()): KeypadTile =
+    tile.copy(label = caption).present(base, caption.ifBlank { bindingName(tile.action, bindings) },
+        if (!tile.enabled) LayoutCopy.Disabled.text() else base?.footer.orEmpty(), tile.enabled && tile.action != null).toGridTile(true)
+
+internal fun KeypadTile.forEditing(index: Int, key: DeckKey, selectable: Boolean) =
+    copy(enabled = selectable, readOnly = false, selected = false, accessibleName = listOf(
+        LayoutCopy.Key.text(index + 1), key.icon, label, if (key.enabled) "" else LayoutCopy.Off.text())
+        .filter(String::isNotBlank).joinToString(", "))
+
+@Composable
+internal fun LayoutWriteError(writer: LayoutWriter) {
     writer.error?.let { message ->
         AlertDialog(onDismissRequest = { writer.error = null }, title = { Text(LayoutCopy.LayoutNotChanged.text()) },
             text = { EditorError(message) }, confirmButton = { TextButton(onClick = { writer.error = null }) { Text(LayoutCopy.OK.text()) } })
+    }
+}
+
+@Composable
+internal fun ProfileRuleDialog(profile: DeckProfile, signals: Map<String, String>, writer: LayoutWriter,
+                               writable: Boolean, i: Int, removing: Boolean, close: () -> Unit) {
+    // Keep the baseline captured on opening. Never apply an old array index to a new ruleset.
+    val baseline = rememberSaveable(saver = rulesSaver) { profile.rules }
+    val original = baseline.getOrNull(i)
+    if (removing && original != null) EditorConfirm(LayoutCopy.RemoveRuleQuestion.text(),
+        LayoutCopy.RemoveRuleHint.text(original.signal, original.value, profile.displayName()),
+        LayoutCopy.Remove.text(), writable, close) {
+        writer.edit(DeckEdit.Rules(profile.id, baseline, baseline.filterIndexed { n, _ -> n != i }), close)
+    } else RuleDialog(original, signals, writable, close) { updated ->
+        val next = if (i == -1) baseline + updated else baseline.mapIndexed { n, old -> if (n == i) updated else old }
+        writer.edit(DeckEdit.Rules(profile.id, baseline, next), close)
+    }
+}
+
+@Composable
+internal fun ProfileOptions(profile: DeckProfile, deck: DeckState, decision: DeckDecision, signals: Map<String, String>,
+                            foreground: ForegroundControls?, writer: LayoutWriter, writable: Boolean,
+                            edit: (Int) -> Unit, remove: (Int) -> Unit, disabledIds: Set<String> = deck.disabledPluginIds) {
+    PocketCard { ProfileSettings(profile, deck, decision, writable) { writer.edit(it) } }
+    PocketCard { RuleSection(profile, deck.profiles, signals, writable, foreground, addApp = { pkg, done ->
+        writer.edit(DeckEdit.Rules(profile.id, profile.rules, profile.rules +
+            DeckRule(tel.misa.mxpocket.FOREGROUND_APP, pkg, tel.misa.mxpocket.APP_RULE_WEIGHT)), done)
+    }, edit = edit, remove = remove, disabledIds = disabledIds) }
+}
+
+@Composable
+internal fun LayoutBackups(writer: LayoutWriter, writable: Boolean, onExport: () -> Unit, choose: (Command) -> Unit) {
+    PocketCard(LayoutCopy.Backups.text(), ShellIcon.DOCUMENT) {
+        EditorNote(LayoutCopy.ExportHint.text())
+        EditorActions {
+            PocketButton(LayoutCopy.Export.text(), onExport, icon = ShellIcon.DOWNLOAD, enabled = writable)
+            PocketButton(LayoutCopy.Import.text(), { choose(Command.IMPORT) }, enabled = !writer.busy)
+            PocketButton(LayoutCopy.RestoreFactory.text(), { choose(Command.RESTORE) }, tone = PocketTone.DANGER, enabled = !writer.busy)
+        }
     }
 }
 
@@ -295,9 +323,15 @@ private fun LibraryGroup(
             icon = if (profileIcons) ({ PocketIconTile(PocketStyle.accent(id), 28.dp) }) else null,
             shape = MaterialTheme.shapes.small)
     }
+    ManageMenu(manage, commands, enabled, allowed, choose)
+}
+
+@Composable
+internal fun ManageMenu(label: String, commands: List<Command>, enabled: Boolean, allowed: (Command) -> Boolean,
+                        choose: (Command) -> Unit) {
     Box {
         var menu by remember { mutableStateOf(false) }
-        TextButton(onClick = { menu = true }, enabled = enabled) { Text(manage) }
+        TextButton(onClick = { menu = true }, enabled = enabled) { Text(label) }
         DropdownMenu(menu, { menu = false }) {
             commands.forEach { command ->
                 DropdownMenuItem(text = { Text(command.title.text()) }, enabled = allowed(command),
@@ -334,35 +368,46 @@ private fun ProfileSettings(profile: DeckProfile, deck: DeckState, decision: Dec
 }
 
 @Composable
-private fun CommandDialog(cmd: Command, profile: DeckProfile, page: DeckPage, writer: Writer, writable: Boolean,
+internal fun CommandDialog(cmd: Command, profile: DeckProfile?, page: DeckPage?, writer: LayoutWriter, writable: Boolean,
                           close: () -> Unit, onImport: () -> Unit, selectProfile: (String) -> Unit,
                           selectPage: (String) -> Unit, activeProfile: () -> String) {
+    val title = cmd.title.text()
     when (cmd) {
-        Command.IMPORT -> EditorConfirm(LayoutCopy.ImportQuestion.text(), LayoutCopy.ImportHint.text(),
+        Command.IMPORT -> return EditorConfirm(LayoutCopy.ImportQuestion.text(), LayoutCopy.ImportHint.text(),
             LayoutCopy.ChooseFile.text(), !writer.busy, close) { close(); onImport() }
-        Command.RESTORE -> EditorConfirm(LayoutCopy.RestoreQuestion.text(), LayoutCopy.RestoreHint.text(),
+        Command.RESTORE -> return EditorConfirm(LayoutCopy.RestoreQuestion.text(), LayoutCopy.RestoreHint.text(),
             LayoutCopy.Restore.text(), !writer.busy, close) { writer.edit(DeckEdit.Restore) { close(); selectProfile(activeProfile()) } }
-        Command.DELETE_PROFILE -> EditorConfirm(LayoutCopy.DeleteQuestion.text(profile.displayName()), LayoutCopy.DeleteProfileHint.text(),
+        Command.CREATE_PROFILE -> return NameDialog(title, "", writable, close) { name ->
+            writer.create(DeckCreate.Profile(name)) { close(); selectProfile(it) }
+        }
+        else -> Unit
+    }
+    profile ?: return
+    when (cmd) {
+        Command.DELETE_PROFILE -> return EditorConfirm(LayoutCopy.DeleteQuestion.text(profile.displayName()), LayoutCopy.DeleteProfileHint.text(),
             LayoutCopy.DeleteProfile.text(), writable, close) { writer.edit(DeckEdit.DeleteProfile(profile.id)) { close(); selectProfile(activeProfile()) } }
+        Command.RENAME_PROFILE -> return NameDialog(title, profile.name, writable, close) { name ->
+            writer.edit(DeckEdit.RenameProfile(profile.id, name), close)
+        }
+        Command.COPY_PROFILE -> return NameDialog(title, LayoutCopy.CopyName.text(profile.displayName()), writable, close) { name ->
+            writer.create(DeckCreate.CopyProfile(profile.id, name)) { close(); selectProfile(it) }
+        }
+        Command.CREATE_PAGE -> return NameDialog(title, "", writable, close) { name ->
+            writer.create(DeckCreate.Page(profile.id, name)) { close(); selectPage(it) }
+        }
+        else -> Unit
+    }
+    page ?: return
+    when (cmd) {
         Command.DELETE_PAGE -> EditorConfirm(LayoutCopy.DeleteQuestion.text(profile.displayPageName(page)), LayoutCopy.DeletePageHint.text(),
             LayoutCopy.DeletePage.text(), writable, close) { writer.edit(DeckEdit.DeletePage(profile.id, page.id)) { close(); selectPage(profile.rootPageId) } }
-        else -> NameDialog(cmd.title.text(), when (cmd) {
-            Command.COPY_PROFILE -> LayoutCopy.CopyName.text(profile.displayName())
-            Command.COPY_PAGE -> LayoutCopy.CopyName.text(profile.displayPageName(page))
-            Command.RENAME_PROFILE -> profile.name
-            Command.RENAME_PAGE -> page.name
-            else -> ""
-        }, writable, close) { name ->
-            when (cmd) {
-                Command.CREATE_PROFILE -> writer.create(DeckCreate.Profile(name)) { close(); selectProfile(it) }
-                Command.COPY_PROFILE -> writer.create(DeckCreate.CopyProfile(profile.id, name)) { close(); selectProfile(it) }
-                Command.RENAME_PROFILE -> writer.edit(DeckEdit.RenameProfile(profile.id, name), close)
-                Command.CREATE_PAGE -> writer.create(DeckCreate.Page(profile.id, name)) { close(); selectPage(it) }
-                Command.COPY_PAGE -> writer.create(DeckCreate.CopyPage(profile.id, page.id, name)) { close(); selectPage(it) }
-                Command.RENAME_PAGE -> writer.edit(DeckEdit.RenamePage(profile.id, page.id, name), close)
-                else -> Unit
-            }
+        Command.RENAME_PAGE -> NameDialog(title, page.name, writable, close) { name ->
+            writer.edit(DeckEdit.RenamePage(profile.id, page.id, name), close)
         }
+        Command.COPY_PAGE -> NameDialog(title, LayoutCopy.CopyName.text(profile.displayPageName(page)), writable, close) { name ->
+            writer.create(DeckCreate.CopyPage(profile.id, page.id, name)) { close(); selectPage(it) }
+        }
+        else -> Unit
     }
 }
 

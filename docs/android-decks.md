@@ -1,8 +1,8 @@
 # Android keypad decks
 
-Choose a profile in **Profiles**, then use the connection button at the top of **Home**
-to connect an authorized USB keypad. Press the keys on the device. The phone's mirror
-and profile editor do not run key actions.
+Connect an authorized USB keypad at the top of **Home**. To change the active profile,
+choose **Profiles > [profile name] > Profile settings and rules > Use on keypad**.
+Browsing a saved profile does not switch it, and touching a face on the phone never runs it.
 
 | Deck | How to use it | If access is missing |
 | --- | --- | --- |
@@ -50,8 +50,8 @@ on notifications. Spotify and other players use the same Android interface:
 there is no Spotify sign-in, SDK, playlist browser or downloaded artwork.
 While unlocked on **Audio**, the local cover spans the layout preview on Home
 and all nine LCD regions on a connected keypad, paused or playing. With hardware
-connected, Home mirrors the live keys as a display only; **Profiles > Swap keys** shows
-the active key faces without running their actions. A three-pixel black margin around the whole
+connected, Home mirrors the live keys as a display only; opening a page under **Profiles**
+shows its saved bindings rather than the live playback state. A three-pixel black margin around the whole
 cover provides bezel clearance. Each label uses black or white against its own part of the picture.
 Other profiles keep their normal keys even during playback. Without usable
 art, the keys keep a neutral background (or the user's selected backdrop).

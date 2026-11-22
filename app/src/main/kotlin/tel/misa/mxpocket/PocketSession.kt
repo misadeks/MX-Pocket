@@ -376,7 +376,7 @@ internal class PocketSession(
             call?.id == "workflow.run" && workflows.status.value?.workflowId == call.params["workflowId"] -> tile?.footer.orEmpty()
             else -> feedback[index]?.invoke() ?: tile?.footer.orEmpty()
         }
-        val state = deck.state.value
+        val state = deck.operatingState.value
         val caption = state.activeProfile.displayKeyLabel(state.activePage, state.activePage.keys[index])
         return key.copy(label = caption).present(tile, actionLabel(call), footer, available)
     }
@@ -494,7 +494,7 @@ internal class PocketSession(
 
     fun openProfile(id: String) {
         if (id == PROFILE_HOME) deck.showHome()
-        else deck.openProfileRoot(id).onFailure { fail("Cannot open profile", it) }
+        else deck.openProfileRoot(id).onFailure { fail(D.SelectProfile.text(), it) }
         syncLayout()
         invalidate()
     }

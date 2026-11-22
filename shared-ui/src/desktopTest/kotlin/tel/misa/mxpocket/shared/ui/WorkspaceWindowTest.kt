@@ -119,7 +119,9 @@ class WorkspaceWindowTest {
                 Box(Modifier.requiredWidth(width).fillMaxHeight()) {
                     PocketTheme {
                         PocketWorkspace(tab, { tab = it }, screen, emptyList(), events::add,
-                            editor = { LayoutEditor(store, emptyList(), emptyMap(), {}, {}) }, workflows = {})
+                            profiles = { SimulatorProfiles(screen, { events += PocketScreenEvent.SelectPlugin(it) }) {
+                                LayoutEditor(store, emptyList(), emptyMap(), {}, {})
+                            } }, workflows = {})
                     }
                 }
             }

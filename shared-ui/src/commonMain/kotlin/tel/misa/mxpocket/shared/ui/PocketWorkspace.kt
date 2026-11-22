@@ -37,6 +37,7 @@ import tel.misa.mxpocket.deck.DeckPage
 import tel.misa.mxpocket.deck.DeckState
 import tel.misa.mxpocket.deck.GAME_PROFILE
 import tel.misa.mxpocket.deck.PROFILE_HOME
+import tel.misa.mxpocket.i18n.LauncherCopy
 import tel.misa.mxpocket.plugins.KeyTile
 import tel.misa.mxpocket.plugins.PluginFrame
 
@@ -125,7 +126,7 @@ sealed interface PocketScreenEvent {
 fun PocketWorkspace(
     tab: WorkspaceTab, select: (WorkspaceTab) -> Unit, state: PocketScreenState,
     plugins: List<PluginItem>, event: (PocketScreenEvent) -> Unit,
-    editor: @Composable () -> Unit, workflows: @Composable () -> Unit,
+    profiles: @Composable () -> Unit, workflows: @Composable () -> Unit,
     openDiagnosticsWindow: (() -> Unit)? = null,
     backHandler: @Composable (Boolean, () -> Unit) -> Unit = { _, _ -> },
 ) {
@@ -153,7 +154,7 @@ fun PocketWorkspace(
                     holder.SaveableStateProvider(tab.name) {
                         when (tab) {
                             WorkspaceTab.HOME -> HomeScreen(state, event)
-                            WorkspaceTab.PROFILES -> ProfilesScreen(state, event, editor)
+                            WorkspaceTab.PROFILES -> profiles()
                             WorkspaceTab.PLUGINS -> PluginsScreen(plugins, event)
                             WorkspaceTab.WORKFLOWS -> workflows()
                             WorkspaceTab.SETTINGS -> SettingsScreen(state, event, openDiagnosticsWindow ?: { diagnosticsOpen = true })
@@ -175,7 +176,7 @@ fun PocketWorkspace(
 
 /**
  * Home mirrors the physical keypad: the nine tiles are the same LCD images, updated as they change.
- * Profile switching lives on the Profiles tab.
+ * Browse saved profiles independently; using one on the keypad is explicit.
  */
 @Composable
 fun HomeScreen(state: PocketScreenState, event: (PocketScreenEvent) -> Unit) {
@@ -188,7 +189,7 @@ fun HomeScreen(state: PocketScreenState, event: (PocketScreenEvent) -> Unit) {
             val split = maxWidth >= 720.dp
             val summary: @Composable () -> Unit = {
                 NowOnKeypad(state, event)
-                if (state.activeId == PROFILE_HOME) PocketCard("Choose a profile") {
+                if (state.activeId == PROFILE_HOME) PocketCard(LauncherCopy.Choose.text()) {
                     state.profiles.chunked(2).forEach { row ->
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             row.forEach { profile ->
@@ -198,7 +199,7 @@ fun HomeScreen(state: PocketScreenState, event: (PocketScreenEvent) -> Unit) {
                             if (row.size == 1) Spacer(Modifier.weight(1f))
                         }
                     }
-                } else PocketButton("Profile launcher", { event(PocketScreenEvent.SelectPlugin(PROFILE_HOME)) },
+                } else PocketButton(LauncherCopy.Launcher.text(), { event(PocketScreenEvent.SelectPlugin(PROFILE_HOME)) },
                     Modifier.fillMaxWidth(), ShellIcon.HOME)
             }
             // With hardware the mirror is display-only: keys are pressed on the device, never twice.
@@ -310,7 +311,7 @@ private fun RoundPageButton(icon: ShellIcon, label: String, onClick: () -> Unit)
 
 /** Profiles: the infinite carousel switches what is on the keypad; the editor below edits its layout. */
 @Composable
-private fun ProfilesScreen(state: PocketScreenState, event: (PocketScreenEvent) -> Unit, editor: @Composable () -> Unit) {
+fun SimulatorProfiles(state: PocketScreenState, select: (String) -> Unit, editor: @Composable () -> Unit) {
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
             Column(Modifier.widthIn(max = 1152.dp).fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
@@ -322,7 +323,7 @@ private fun ProfilesScreen(state: PocketScreenState, event: (PocketScreenEvent) 
                 }
             }
         }
-        ProfileCarousel(state.profiles, state.activeId) { event(PocketScreenEvent.SelectPlugin(it)) }
+        ProfileCarousel(state.profiles, state.activeId, select)
         if (state.activeId != GAME_PROFILE) Box(Modifier.weight(1f).fillMaxWidth()) { editor() }
     }
 }

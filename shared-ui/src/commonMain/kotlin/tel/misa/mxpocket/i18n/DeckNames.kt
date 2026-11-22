@@ -3,6 +3,9 @@ package tel.misa.mxpocket.i18n
 import tel.misa.mxpocket.deck.DeckKey
 import tel.misa.mxpocket.deck.DeckPage
 import tel.misa.mxpocket.deck.DeckProfile
+import tel.misa.mxpocket.deck.PROFILE_HOME
+import tel.misa.mxpocket.deck.MORE_PROFILES
+import tel.misa.mxpocket.deck.DeckActions
 import tel.misa.mxpocket.decks.IN_CALL
 import tel.misa.mxpocket.decks.TEAMS
 import tel.misa.mxpocket.decks.teamsProfile
@@ -10,7 +13,7 @@ import tel.misa.mxpocket.i18n.KeypadCopy as K
 
 private val deckNames = mapOf("focus" to K.Focus, "audio" to K.Audio, "phone" to K.Phone,
     "launcher" to K.Launcher, "studio" to K.Studio, "navigation" to K.Navigation,
-    "game.xo" to K.TicTacToe, TEAMS to K.Teams)
+    "game.xo" to K.TicTacToe, PROFILE_HOME to WorkspaceCopy.Home, TEAMS to K.Teams)
 
 fun builtInDeckName(id: String): String = deckNames[id]?.text() ?: id
 
@@ -31,6 +34,7 @@ private fun Copy?.ifFactoryValue(raw: String) = if (this != null && raw == en) t
 fun DeckProfile.displayName(): String = deckNames[id].ifFactoryValue(name)
 
 fun DeckProfile.displayPageName(page: DeckPage): String = when {
+    id == PROFILE_HOME -> LauncherCopy.Launcher
     id == TEAMS && page.id == "root" -> K.Work
     id == TEAMS && page.id == IN_CALL -> K.InCall
     page.id == "root" -> deckNames[id]
@@ -41,6 +45,11 @@ private val teamsTemplate = teamsProfile()
 private val teamsCaptions = listOf(K.MyChat, K.MeetingLink, K.FocusTimer, K.CallTools, K.BackToWork)
 
 fun DeckProfile.displayKeyLabel(page: DeckPage, key: DeckKey): String {
+    if (id == PROFILE_HOME) return when (key.action?.id) {
+        MORE_PROFILES -> LauncherCopy.More.text()
+        DeckActions.PROFILE -> deckNames[key.action.params[DeckActions.PROFILE_ID]].ifFactoryValue(key.label)
+        else -> key.label
+    }
     if (id != TEAMS || key.label.isEmpty()) return key.label
     // Match the factory slot AND binding, not arbitrary user text with a familiar spelling.
     val slot = page.keys.indexOfFirst { it === key }.takeIf { it >= 0 }

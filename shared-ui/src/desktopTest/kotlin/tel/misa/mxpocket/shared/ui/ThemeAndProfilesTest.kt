@@ -35,7 +35,7 @@ class ThemeAndProfilesTest {
                 PocketWorkspace(tab, { tab = it }, state(mode), emptyList(), {
                     events += it
                     if (it is PocketScreenEvent.SetTheme) mode = it.mode
-                }, editor = {}, workflows = {})
+                }, profiles = {}, workflows = {})
             }
         }
         ui.onNodeWithContentDescription("Switch to light theme").assertDoesNotExist()
@@ -87,9 +87,11 @@ class ThemeAndProfilesTest {
             val surface = state().copy(activeId = live.activeProfileId,
                 profiles = live.visibleProfiles.map { ProfileChoice(it.id, it.name) })
             PocketTheme {
-                PocketWorkspace(WorkspaceTab.PROFILES, {}, surface, emptyList(), {
-                    if (it is PocketScreenEvent.SelectPlugin) repo.openProfileRoot(it.id).getOrThrow()
-                }, editor = { LayoutEditor(repo.asEditorStore(), emptyList(), emptyMap(), {}, {}) }, workflows = {})
+                PocketWorkspace(WorkspaceTab.PROFILES, {}, surface, emptyList(), {}, profiles = {
+                    SimulatorProfiles(surface, { repo.openProfileRoot(it).getOrThrow() }) {
+                        LayoutEditor(repo.asEditorStore(), emptyList(), emptyMap(), {}, {})
+                    }
+                }, workflows = {})
             }
         }
         ui.waitForIdle()

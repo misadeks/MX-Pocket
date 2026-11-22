@@ -453,7 +453,7 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             pluginTitle = if (page == profile) profile else "$profile / $page",
             tiles = session.homeTiles(),
             profiles = deck.visibleProfiles.map { ProfileChoice(it.id, it.displayName()) },
-            activeId = deck.activeProfileId, reason = displaySelectionReason(session.deck.reason.value),
+            activeId = deck.activeProfileId, reason = displaySelectionReason(deck.selectionReason),
             connectionLabel = session.connectionLabel,
             connectionActive = target != null || session.request != null,
             usbReady = session.ready, activePageId = deck.activePage.id,

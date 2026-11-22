@@ -14,6 +14,7 @@ import tel.misa.mxpocket.FOREGROUND_APP
 import tel.misa.mxpocket.APP_RULE_WEIGHT
 import tel.misa.mxpocket.decks.*
 import tel.misa.mxpocket.i18n.LayoutCopy
+import tel.misa.mxpocket.i18n.LauncherCopy
 
 /** Own one instance per app session. Successful edits replace the file before publishing the new snapshot. */
 class DeckRepository(private val file: File, disabledPluginIds: Set<String> = emptySet()) {
@@ -132,14 +133,14 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
     }
 
     @Synchronized fun moreProfiles(): Result<Unit> = runCatching {
-        check(home && !game && state.value.visibleProfiles.size > 9) { "No more launcher pages" }
+        check(home && !game && state.value.visibleProfiles.size > 9) { LauncherCopy.NoMore.text() }
         val count = (state.value.visibleProfiles.size + 7) / 8
         homeBatch = (homeBatch.coerceAtMost(count - 1) + 1) % count
         publish()
     }
 
     @Synchronized fun enterGame(): Result<Unit> = runCatching {
-        check(GAME_PROFILE !in saved.disabledPluginIds) { "Enable Tic Tac Toe first." }
+        check(GAME_PROFILE !in saved.disabledPluginIds) { LauncherCopy.EnableGame.text() }
         if (showingPhone) {
             showingPhone = false
             publish()
@@ -516,8 +517,8 @@ private fun DeckState.addBuiltIn(profile: DeckProfile): DeckState {
 
 private fun DeckState.profile(id: String) = profiles.firstOrNull { it.id == id } ?: error(LayoutCopy.UnknownProfile.text())
 private fun DeckState.availableProfile(id: String): DeckProfile {
-    require(id != GAME_PROFILE) { "Use Previous and Next together to open the game." }
-    require(id !in disabledPluginIds) { "Enable this plugin first." }
+    require(id != GAME_PROFILE) { LauncherCopy.GameKeys.text() }
+    require(id !in disabledPluginIds) { LauncherCopy.EnablePlugin.text() }
     return profile(id)
 }
 private fun DeckProfile.page(id: String) = pages.firstOrNull { it.id == id } ?: error(LayoutCopy.UnknownPage.text())

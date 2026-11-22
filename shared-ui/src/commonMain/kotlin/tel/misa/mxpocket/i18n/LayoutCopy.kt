@@ -269,6 +269,9 @@ private val scoreReason = Regex("""Automatic: score ([0-9]+) — ([a-zA-Z0-9][a-
 
 /** Deck JSON stores canonical reasons. Render only known forms, leaving rule values and imported text alone. */
 fun displaySelectionReason(reason: String): String = when (reason) {
+    "Choose a profile" -> LauncherCopy.Choose.text()
+    "Selected an available profile" -> LauncherCopy.Available.text()
+    "Previous or Next exits the game" -> LauncherCopy.ExitGame.text()
     "Default profile" -> LayoutCopy.DefaultReason.text()
     "Manually selected" -> LayoutCopy.ManualSelection.text()
     "Manually selected and pinned" -> LayoutCopy.ManualSelectionPinned.text()

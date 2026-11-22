@@ -173,7 +173,8 @@ fun main() = application {
                         else -> setup = false
                     }
                 }
-            } else PocketWorkspace(tab, { tab = it }, state, plugins, event = { event ->
+            } else {
+                val dispatch: (PocketScreenEvent) -> Unit = { event ->
                 try {
                     when (event) {
                         PocketScreenEvent.EnterPreview -> { host.resetInput(); simulating = true; status(W.VirtualConnected.text()) }
@@ -193,10 +194,14 @@ fun main() = application {
                         else -> status(DEVICE_LIMIT)
                     }
                 } catch (e: Exception) { status(e.message ?: W.Failed.text()) }
-            }, editor = {
+                }
+                PocketWorkspace(tab, { tab = it }, state, plugins, dispatch, profiles = {
+                    SimulatorProfiles(state, { dispatch(PocketScreenEvent.SelectPlugin(it)) }) {
                 LayoutEditor(remember(repo) { repo.asEditorStore() }, options, emptyMap(), { backup(true) }, { backup(false) },
                     live = state, backHandler = registerBack)
-            }, workflows = { DesktopWorkflows(workflows, registerBack) }, openDiagnosticsWindow = { diagnosticsRequest++ })
+                    }
+                }, workflows = { DesktopWorkflows(workflows, registerBack) }, openDiagnosticsWindow = { diagnosticsRequest++ })
+            }
         }
     }
 }
