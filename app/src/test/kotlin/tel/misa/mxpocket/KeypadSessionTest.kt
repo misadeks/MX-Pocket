@@ -79,6 +79,7 @@ class KeypadSessionTest {
         var closes = 0
         lateinit var emit: (KeyEvent) -> Unit
         val lcd = mutableMapOf<Int, Bitmap>()
+        var waitForPaint: CompletableDeferred<Unit>? = null
         var workflowsEnabled = tel.misa.mxpocket.workflow.WORKFLOWS_ENABLED
         override fun createSession() = PocketSession(this, workflowsEnabled = workflowsEnabled) { _, _, event, _, _ ->
             emit = event
@@ -86,7 +87,10 @@ class KeypadSessionTest {
             lcd.clear()
             object : KeypadOutput {
                 override fun close() { closes++; lcd.clear() }
-                override suspend fun setKeyImage(index: Int, bitmap: Bitmap) { lcd[index] = bitmap }
+                override suspend fun setKeyImage(index: Int, bitmap: Bitmap) {
+                    waitForPaint?.await()
+                    lcd[index] = bitmap
+                }
             }
         }
 
@@ -1056,6 +1060,75 @@ class KeypadSessionTest {
         assertEquals(setOf(Intent.CATEGORY_LAUNCHER), target?.categories)
         assertNull(shadowOf(app.getSystemService(NotificationManager::class.java)).getNotification(PHONE_NOTICE))
         assertThrows(PendingIntent.CanceledException::class.java) { tap.send() }
+    }
+
+    @Test fun notificationTapStillOpensFavoriteAcrossAnUnchangedKeyRepaint() = withPostedFavorite { name, _ ->
+        ShadowSettings.setCanDrawOverlays(true)
+        DirectShortcuts(app).enabled = true
+        press(1)
+        assertEquals(name, shadowOf(app).nextStartedActivity?.component) // A request, not proof of visibility.
+        val manager = shadowOf(app.getSystemService(NotificationManager::class.java))
+        val tap = manager.getNotification(PHONE_NOTICE).contentIntent
+        assertEquals("Retry on phone", app.session.frame().keys[0].footer)
+        // System UI already has the tap. MX Pocket is not resumed to make the launch.
+        val gate = CompletableDeferred<Unit>()
+        app.waitForPaint = gate
+        app.session.repaint()
+        main.idle()
+        try {
+            press(1) // An unacknowledged repaint cannot authorize another physical down.
+            assertNull(shadowOf(app).nextStartedActivity)
+            assertEquals(tap, manager.getNotification(PHONE_NOTICE).contentIntent)
+            assertEquals(name, deliverShortcut(tap)?.component)
+            assertThrows(PendingIntent.CanceledException::class.java) { tap.send() }
+        } finally { gate.complete(Unit); main.idle() }
+    }
+
+    @Test fun aFreshNotificationDeliveredToTheFailureActivityOpensItsOwnTarget() = withPostedFavorite { name, tap ->
+        Robolectric.buildActivity(PhoneActionActivity::class.java).setup().use { entry ->
+            assertEquals(app.getString(R.string.phone_action_stale), app.session.status)
+            entry.pause()
+            tap.send()
+            entry.newIntent(shadowOf(app).nextStartedActivity).resume()
+            assertEquals(name, shadowOf(entry.get()).nextStartedActivity?.component)
+            assertTrue(entry.get().isFinishing)
+        }
+    }
+
+    @Test fun dedicatedTeamsKeyOffersATapEvenWithDirectAccessAndSurvivesHostVisibilityChanges() {
+        val session = app.session
+        val pkg = tel.misa.mxpocket.decks.TEAMS_PACKAGE
+        val teams = ComponentName(pkg, "$pkg.Entry")
+        registerLauncher(teams)
+        val keypad = device("test-keypad")
+        shadowOf(usb).addOrUpdateUsbDevice(keypad, true)
+        val service = Robolectric.buildService(KeypadService::class.java).create()
+        service.get().onStartCommand(KeypadService.command(app, session.reserve(keypad)!!), 0, 1)
+        try {
+            session.selectProfile("teams")
+            Robolectric.buildActivity(MainActivity::class.java).setup().use { host ->
+                val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5)
+                while (!session.deckState.value.teams.installed && System.nanoTime() < deadline) {
+                    Thread.sleep(10); main.idle()
+                }
+                assertTrue(session.deckState.value.teams.installed)
+                ShadowSettings.setCanDrawOverlays(true)
+                DirectShortcuts(app).enabled = true
+                press(1)
+                assertEquals(teams, shadowOf(host.get()).nextStartedActivity?.component)
+                host.pause().stop(); main.idle()
+                press(1)
+                assertNull(shadowOf(app).nextStartedActivity)
+                val note = shadowOf(app.getSystemService(NotificationManager::class.java)).getNotification(PHONE_NOTICE)
+                assertEquals("Open Teams", note.extras.getString(Notification.EXTRA_TITLE))
+                assertEquals("Tap notification", session.frame().keys[0].footer)
+                assertTrue(session.frame().keys[0].showFooter)
+                host.start().resume(); main.idle()
+                host.pause().stop(); main.idle()
+                assertEquals(teams, deliverShortcut(note.contentIntent)?.component)
+                host.start().resume()
+            }
+        } finally { session.disconnect(); service.destroy() }
     }
 
     @Test fun automaticLayoutChangeWithdrawsPostedFavorite() = withPostedFavorite { _, tap ->

@@ -66,7 +66,8 @@ data class TeamsState(val installed: Boolean = false, val status: CallStatus = C
             else -> false
         }
         return KeyTile(label, footer, PocketStyle.accent(TEAMS).fill, enabled = available, primary = command == C.TEAMS_MIC,
-            inputToken = "${command.id}:$generation", readOnly = command == C.TEAMS_STATUS,
+            inputToken = if (command == C.TEAMS_OPEN) command.id else "${command.id}:$generation",
+            readOnly = command == C.TEAMS_STATUS,
             glyph = if (command == C.TEAMS_ACCESS) DeckGlyph.SETTINGS else command.legend())
     }
 }

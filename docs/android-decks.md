@@ -63,7 +63,12 @@ the default camera, or a saved favorite on an unlocked phone, including from
 custom pages. For a favorite in the resolved default still-camera package,
 MX Pocket requests the verified viewfinder. For other favorites it requests
 only the exact selected, still-exported `MAIN`/`LAUNCHER` component.
-After a direct request the notification is a quiet retry, not proof of launch.
+If the keypad says **Tap notification**, tap the latest **Open …** notification
+on the unlocked phone. The dedicated Teams key uses this path in the background
+even with direct shortcuts enabled. After a direct request, **Retry on phone**
+means you can tap the notification if the app did not appear. Repainting the
+same key does not cancel a tap already offered. A changed binding or page,
+disconnect, or one-minute expiry does; press the current key again.
 
 For richer player controls and artwork, choose **Enable music sessions** in
 Audio setup and allow **MX Pocket** in Android’s **Notification access**.
