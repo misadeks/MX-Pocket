@@ -21,6 +21,13 @@ internal class TeamsCall(private val app: Context) {
     var state = TeamsState()
         private set
 
+    fun forgetToolbar() {
+        confirmed = false
+        waitingForChange = null
+        window = null
+        toolbarService = null
+    }
+
     fun refresh(physical: Boolean, visible: Boolean, installed: Boolean, pluginEnabled: Boolean): TeamsState {
         val blocked = when {
             !pluginEnabled -> CallStatus.DISABLED
@@ -38,10 +45,11 @@ internal class TeamsCall(private val app: Context) {
         val observation = listener?.teamsSnapshot() ?: TeamsObservation.Unavailable
         val ongoing = observation as? TeamsObservation.Ongoing
         // The posting user is available on notifications, but not on accessibility nodes.
+        val toolbarGranted = ongoing != null && access.toolbarGranted
         val toolbarBlocked = when {
             ongoing == null -> null
-            !access.singleProfile -> CallStatus.PROFILE_NOTICE
-            !access.toolbarGranted -> CallStatus.TOOLBAR_OFF
+            !access.toolbarProfileEligible -> CallStatus.PROFILE_NOTICE
+            !toolbarGranted -> CallStatus.TOOLBAR_OFF
             TeamsToolbarService.current == null -> CallStatus.TOOLBAR_DISCONNECTED
             else -> null
         }
@@ -80,9 +88,14 @@ internal class TeamsCall(private val app: Context) {
     }
 
     fun pressMic(expected: TeamsState, authorized: () -> Boolean): DeckResult {
+        fun eligible(): Boolean {
+            if (access.toolbarProfileEligible) return true
+            forgetToolbar()
+            return false
+        }
         val service = toolbarService
         if (expected != state || !expected.joined || expected.muted == null || service == null || !authorized() ||
-            !access.enabled || !access.granted || !access.singleProfile)
+            !access.enabled || !access.granted || !access.toolbarGranted || !eligible())
             return unavailable(K.ChangedCallControls.text())
         val sent = service.inspect { toolbar ->
             val current = PocketNotificationListener.current
@@ -90,7 +103,7 @@ internal class TeamsCall(private val app: Context) {
             current != null && current === owner && current.teamsBoundary == boundary && call != null &&
                 call.key == key && call.posted == posted && service === TeamsToolbarService.current &&
                 toolbar.muted == expected.muted && toolbar.window == window && waitingForChange == null &&
-                access.enabled && access.granted && access.toolbarGranted && access.singleProfile && authorized()
+                access.enabled && access.granted && access.toolbarGranted && authorized() && eligible()
         }.second
         if (!sent) return unavailable(K.UseMeetingMic.text())
         waitingForChange = expected.muted

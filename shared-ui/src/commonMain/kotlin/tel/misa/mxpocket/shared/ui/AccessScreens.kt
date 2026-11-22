@@ -26,7 +26,7 @@ enum class DeckAccess(private val titleCopy: Copy, private val disclosureCopy: C
 }
 
 data class TeamsSetupState(val enabled: Boolean, val notifications: Boolean, val toolbar: Boolean,
-    val supported: Boolean, val singleProfile: Boolean = true, val message: String = "")
+    val supported: Boolean, val toolbarProfileEligible: Boolean = false, val message: String = "")
 enum class TeamsSetupAction { TOGGLE, NOTIFICATIONS, TOOLBAR, DONE }
 
 val TeamsToolbarDisclosure get() = AccessCopy.TeamsToolbarInstructions.text()
@@ -40,7 +40,7 @@ fun TeamsSetupScreen(state: TeamsSetupState, status: CallStatus, onAction: (Team
             Text(AccessCopy.TeamsSwitching.text())
             Text(AccessCopy.TeamsDisclosure.text())
             if (!state.supported) Text(AccessCopy.TeamsUnsupported.text())
-            if (!state.singleProfile) Text(AccessCopy.TeamsMultipleProfiles.text())
+            if (state.supported && !state.toolbarProfileEligible) Text(AccessCopy.TeamsProfileNotice.text())
             OutlinedButton({ onAction(TeamsSetupAction.TOGGLE) }, enabled = state.supported || state.enabled) {
                 Text(if (state.enabled) AccessCopy.DisableTeams.text() else AccessCopy.EnableTeams.text())
             }

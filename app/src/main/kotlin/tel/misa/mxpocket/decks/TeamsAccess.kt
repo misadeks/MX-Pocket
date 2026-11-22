@@ -1,15 +1,18 @@
 package tel.misa.mxpocket.decks
 
 import android.app.Notification
+import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.os.Build
 import android.os.Process
 import android.os.UserManager
 import android.service.notification.StatusBarNotification
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.view.accessibility.AccessibilityManager
+import androidx.core.content.ContextCompat
 import tel.misa.mxpocket.NotificationAccess
 
 @Suppress("DEPRECATION")
@@ -31,8 +34,42 @@ internal class TeamsAccess(private val app: Context) {
             val service = it.resolveInfo.serviceInfo
             ComponentName(service.packageName, service.name) == ComponentName(app, TeamsToolbarService::class.java)
         }
-    // Accessibility nodes do not expose their Android user. Do not click across a profile boundary.
-    val singleProfile get() = app.getSystemService(UserManager::class.java).userProfiles == listOf(Process.myUserHandle())
+    // Accessibility nodes have no user handle. Only the personal user may inspect them,
+    // and only if Android positively reports that every other listed profile is paused.
+    val toolbarProfileEligible: Boolean get() {
+        if (Build.VERSION.SDK_INT < 34) return false
+        return try {
+            val users = app.getSystemService(UserManager::class.java) ?: return false
+            val me = Process.myUserHandle()
+            val profiles = users.userProfiles
+            !users.isProfile && profiles.count { it == me } == 1 &&
+                profiles.all { it == me || users.isQuietModeEnabled(it) }
+        } catch (_: RuntimeException) {
+            // A denied/failed Android profile query leaves the toolbar's owner unknown.
+            false
+        }
+    }
+}
+
+/** A profile transition invalidates prior evidence, even if the next snapshot is already quiet again. */
+internal fun Context.observeTeamsProfiles(changed: () -> Unit): BroadcastReceiver {
+    val receiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) = changed()
+    }
+    val filter = IntentFilter().apply {
+        addAction(Intent.ACTION_MANAGED_PROFILE_AVAILABLE)
+        addAction(Intent.ACTION_MANAGED_PROFILE_UNAVAILABLE)
+        if (Build.VERSION.SDK_INT >= 34) {
+            addAction(Intent.ACTION_PROFILE_ADDED)
+            addAction(Intent.ACTION_PROFILE_REMOVED)
+        }
+        if (Build.VERSION.SDK_INT >= 35) {
+            addAction(Intent.ACTION_PROFILE_AVAILABLE)
+            addAction(Intent.ACTION_PROFILE_UNAVAILABLE)
+        }
+    }
+    ContextCompat.registerReceiver(this, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+    return receiver
 }
 
 /** Main-thread system callbacks only wake an active session. No listener retains a notification or action. */

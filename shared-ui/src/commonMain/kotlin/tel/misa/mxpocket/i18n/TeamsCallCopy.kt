@@ -33,9 +33,9 @@ internal object TeamsCallCopy {
     val UnsupportedOsDetail = Copy("Call status needs Android 14 or later.",
         "L’état des appels nécessite Android 14 ou une version ultérieure.",
         "Za prikaz stanja poziva potreban je Android 14 ili noviji.")
-    val ProfileNoticeDetail = Copy("Teams posted an ongoing call notification in this Android profile. With multiple profiles, MX Pocket cannot verify the call or operate the mic.",
-        "Teams a publié une notification d’appel en cours dans ce profil Android. En présence de plusieurs profils, MX Pocket ne peut ni confirmer l’appel ni commander le micro.",
-        "Teams je objavio obaveštenje o pozivu u toku na ovom Android profilu. Kada postoji više profila, MX Pocket ne može da potvrdi poziv niti da upravlja mikrofonom.")
+    val ProfileNoticeDetail = Copy("Teams posted an ongoing call notice in this profile. MX Pocket can’t verify that only the personal profile is active. Use the mic in Teams.",
+        "Teams a signalé un appel en cours dans ce profil. MX Pocket ne peut pas vérifier que seul le profil personnel est actif. Utilisez le micro dans Teams.",
+        "Teams je prijavio poziv u toku na ovom profilu. MX Pocket ne može da potvrdi da je aktivan samo lični profil. Koristi mikrofon u aplikaciji Teams.")
     val NotInstalledDetail = Copy("No launchable Teams app was found in this Android profile.",
         "Aucune appli Teams pouvant être ouverte n’a été trouvée dans ce profil Android.",
         "Na ovom Android profilu nije pronađena aplikacija Teams koja se može pokrenuti.")

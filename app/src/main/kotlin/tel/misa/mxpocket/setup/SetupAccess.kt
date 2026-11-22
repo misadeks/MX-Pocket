@@ -56,8 +56,8 @@ internal class SetupAccess(private val host: Activity, private val choices: Setu
         SetupOption(feature, unavailableReason = when {
             feature in setOf(Feature.TEAMS, Feature.TEAMS_CONTROLS) && Build.VERSION.SDK_INT < 34 ->
                 AccessCopy.UnsupportedCallStatus.text()
-            feature == Feature.TEAMS_CONTROLS && !teams.singleProfile ->
-                AccessCopy.MultiProfileNotices.text()
+            feature == Feature.TEAMS_CONTROLS && !teams.toolbarProfileEligible ->
+                AccessCopy.TeamsProfileNotice.text()
             else -> null
         })
     }
@@ -118,7 +118,7 @@ internal class SetupAccess(private val host: Activity, private val choices: Setu
             AccessCopy.AutoDetail.text(),
             attach.automatic, Action.AUTO)
 
-        val controls = Feature.TEAMS_CONTROLS in features && teams.singleProfile
+        val controls = Feature.TEAMS_CONTROLS in features && teams.toolbarProfileEligible
         val teamsGroup = if (Build.VERSION.SDK_INT >= 34) when {
             Feature.TEAMS in features -> Feature.TEAMS
             controls -> Feature.TEAMS_CONTROLS

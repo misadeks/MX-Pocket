@@ -1163,6 +1163,10 @@ internal class PocketSession(
                 }
                 ContextCompat.registerReceiver(app, phone, IntentFilter(android.telephony.TelephonyManager.ACTION_PHONE_STATE_CHANGED),
                     ContextCompat.RECEIVER_EXPORTED)
+                val profiles = app.observeTeamsProfiles {
+                    teams.forgetToolbar()
+                    refreshTeams()
+                }
                 try {
                     launch {
                         disabled.map { "audio" !in it }.distinctUntilChanged().collectLatest { enabled ->
@@ -1179,7 +1183,10 @@ internal class PocketSession(
                             cameraControls = cameraAccess.enabled)
                         delay(1000)
                     }
-                } finally { app.unregisterReceiver(phone); app.unregisterReceiver(power); app.unregisterReceiver(packages) }
+                } finally {
+                    app.unregisterReceiver(profiles)
+                    app.unregisterReceiver(phone); app.unregisterReceiver(power); app.unregisterReceiver(packages)
+                }
             }
         }
     }
