@@ -173,7 +173,9 @@ internal class PocketSession(
     private var physicalPressAt: Long? = null
     private var physicalIndex: Int? = null
     private var pendingAction: PhoneAction? = null
-    private val images = KeyImages(favoriteApps::icon)
+    private val installedIcons = MutableStateFlow(emptyMap<IntegrationApp, Bitmap>())
+    val integrationIcons = installedIcons.asStateFlow()
+    private val images = KeyImages({ installedIcons.value[it] }, favoriteApps::icon)
     private var repaintEpoch = 0L
     private var paintedLayout: Layout? = null
     private var scanLayout: Layout? = null
@@ -1015,13 +1017,16 @@ internal class PocketSession(
                 fun favoritesChanged() {
                     reload?.cancel()
                     reload = launch {
-                        val installed = withContext(Dispatchers.IO) { favoriteApps.discover() }
+                        val (installed, icons) = withContext(Dispatchers.IO) { favoriteApps.discover() to favoriteApps.integrationIcons() }
+                        val iconsChanged = icons.keys != installedIcons.value.keys ||
+                            icons.any { (id, image) -> !image.sameAs(installedIcons.value[id]) }
+                        if (iconsChanged) installedIcons.value = icons
                         teamsInstalled = installed.any { android.content.ComponentName.unflattenFromString(it.component)?.packageName == TEAMS_PACKAGE }
                         refreshTeams()
                         val hadIcons = decks.value.favorites.isNotEmpty()
                         favoriteApps.invalidateIcons()
                         publishFavorites(installed)
-                        if (hadIcons) { images.clear(); invalidate() }
+                        if (hadIcons || iconsChanged) { images.clear(); invalidate() }
                     }
                 }
                 val packages = object : BroadcastReceiver() {

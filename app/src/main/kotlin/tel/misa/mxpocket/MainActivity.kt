@@ -28,6 +28,9 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.remember
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -194,10 +197,13 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             PocketTheme(ThemePreference.current(this)) {
                 presentation?.let { state ->
                     BackHandler(tab != WorkspaceTab.HOME) { showTab(WorkspaceTab.HOME) }
-                    AndroidWorkspace(tab, ::showTab, session, state, ::handleScreenEvent,
-                        usageGranted = usageGranted, onUsageSettings = ::openUsageSettings,
-                        onExport = { layoutSaver.launch("mx-pocket-layouts.json") },
-                        onImport = { layoutPicker.launch(arrayOf("application/json","text/*","application/octet-stream")) })
+                    val icons by session.integrationIcons.collectAsState()
+                    CompositionLocalProvider(LocalIntegrationIcons provides remember(icons) { icons.mapValues { it.value.asImageBitmap() } }) {
+                        AndroidWorkspace(tab, ::showTab, session, state, ::handleScreenEvent,
+                            usageGranted = usageGranted, onUsageSettings = ::openUsageSettings,
+                            onExport = { layoutSaver.launch("mx-pocket-layouts.json") },
+                            onImport = { layoutPicker.launch(arrayOf("application/json","text/*","application/octet-stream")) })
+                    }
                 }
                 if (shortcutDisclosure) DirectShortcutConsentDialog(Settings.canDrawOverlays(this),
                     onConfirm = ::confirmDirectShortcuts, onDismiss = { shortcutDisclosure = false })

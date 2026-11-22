@@ -1,6 +1,7 @@
 package tel.misa.mxpocket.shared.ui
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,6 +28,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import tel.misa.mxpocket.plugins.IntegrationApp
 
 /** One workspace palette. Dark uses graphite greys with an orange accent; light uses white and pale grey with blue. */
 @Immutable
@@ -117,13 +119,20 @@ internal val PocketMono = TextStyle(fontFamily = FontFamily.Monospace, fontSize 
     ShellSymbol(id, tint, size)
 }
 
-/** Rounded square holding a plugin/profile icon in its accent color. */
+internal val PocketAccent.ink: Color @Composable get() = Color(if (PocketColors.dark) tint else fill)
+
+@Composable private fun IdentityIcon(accent: PocketAccent, size: Dp) {
+    val image = (accent.keyGlyph as? IntegrationApp)?.let { LocalIntegrationIcons.current[it] }
+    if (image != null) Image(image, null, Modifier.size(size))
+    else PocketIcon(accent.icon, accent.ink, size)
+}
+
 @Composable internal fun PocketIconTile(accent: PocketAccent, size: Dp = 44.dp) {
     val tile = if (PocketColors.dark) Color(accent.tile) else Color(accent.tint).copy(alpha = .12f)
     Box(Modifier.size(size).clip(RoundedCornerShape(12.dp)).background(tile)
         .border(1.dp, Color(accent.tint).copy(alpha = .25f), RoundedCornerShape(12.dp)),
         contentAlignment = Alignment.Center) {
-        PocketIcon(accent.icon, Color(accent.tint), size * .5f)
+        IdentityIcon(accent, size * .62f)
     }
 }
 
@@ -206,14 +215,18 @@ internal enum class PocketTone {
     enabled: Boolean = true,
     trailingIcon: ShellIcon? = null,
     compact: Boolean = false,
+    identity: PocketAccent? = null,
 ) {
     OutlinedButton(onClick = onClick, modifier = modifier, enabled = enabled,
         shape = RoundedCornerShape(12.dp), border = BorderStroke(1.dp, if (enabled) tone.stroke else PocketColors.cardStroke),
         colors = ButtonDefaults.outlinedButtonColors(containerColor = tone.fill, contentColor = tone.text,
             disabledContainerColor = PocketColors.chip, disabledContentColor = PocketColors.faint),
         contentPadding = PaddingValues(horizontal = if (compact) 6.dp else 14.dp, vertical = 8.dp)) {
-        icon?.let { PocketIcon(it, LocalContentColor.current, if (compact) 14.dp else 16.dp)
-            Spacer(Modifier.width(if (compact) 4.dp else 8.dp)) }
+        if (identity != null || icon != null) {
+            val side = if (compact) 14.dp else 18.dp
+            if (identity != null) IdentityIcon(identity, side) else icon?.let { PocketIcon(it, LocalContentColor.current, side) }
+            Spacer(Modifier.width(if (compact) 4.dp else 8.dp))
+        }
         Text(text, style = MaterialTheme.typography.labelLarge)
         trailingIcon?.let { Spacer(Modifier.width(6.dp)); PocketIcon(it, LocalContentColor.current, 16.dp) }
     }

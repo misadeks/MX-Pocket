@@ -13,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -24,6 +25,7 @@ import tel.misa.mxpocket.isUnlockedAndInteractive
 import tel.misa.mxpocket.shared.ui.FavoriteOption
 import tel.misa.mxpocket.shared.ui.FavoritesScreen
 import tel.misa.mxpocket.shared.ui.FavoritesState
+import tel.misa.mxpocket.plugins.IntegrationApp
 
 internal class FavoriteApps(private val app: Context) {
     private val pm get() = app.packageManager
@@ -53,6 +55,17 @@ internal class FavoriteApps(private val app: Context) {
         return if (available) Intent.makeMainActivity(name) else null
     }
     fun invalidateIcons() = icons.evictAll()
+
+    /** Read drawable resources only; neither integration needs to be launched or granted access. */
+    fun integrationIcons(): Map<IntegrationApp, Bitmap> = buildMap {
+        for ((id, pkg) in listOf(IntegrationApp.TEAMS to TEAMS_PACKAGE, IntegrationApp.ONENOTE to OneNoteAccessService.ONENOTE_PACKAGE)) {
+            val drawable = try { pm.getApplicationIcon(pkg) }
+                catch (_: PackageManager.NameNotFoundException) { continue }
+                catch (_: SecurityException) { continue }
+            put(id, drawable.toBitmap(64, 64, Bitmap.Config.ARGB_8888))
+        }
+    }
+
     fun icon(component: String): Bitmap? {
         icons.get(component)?.let { return it }
         val name = ComponentName.unflattenFromString(component) ?: return null

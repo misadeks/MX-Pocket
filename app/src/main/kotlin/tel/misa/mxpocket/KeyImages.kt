@@ -13,12 +13,13 @@ import android.text.TextUtils
 import android.util.LruCache
 import tel.misa.mxpocket.driver.KeypadProtocol
 import tel.misa.mxpocket.plugins.KeyTile
+import tel.misa.mxpocket.plugins.IntegrationApp
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toArgb
 import tel.misa.mxpocket.plugins.paintKeyFace
 
 /** Entries are immutable after drawing. Views and an in-flight upload may outlive a cache entry. */
-internal class KeyImages(private val appIcon: (String) -> Bitmap?) {
+internal class KeyImages(private val integrationIcon: (IntegrationApp) -> Bitmap? = { null }, private val appIcon: (String) -> Bitmap?) {
     private data class CacheKey(val index: Int, val tile: KeyTile)
     private val images = LruCache<CacheKey, Bitmap>(36)
     private var backdrop: Bitmap? = null
@@ -61,7 +62,8 @@ internal class KeyImages(private val appIcon: (String) -> Bitmap?) {
             canvas.drawColor(0xab000000.toInt())
         }
         val photo = art != null || backdrop != null
-        val appImage = tile.iconComponent?.takeIf { tile.icon.isBlank() }?.let(appIcon)
+        val appImage = if (tile.icon.isNotBlank()) null else tile.iconComponent?.let(appIcon)
+            ?: (tile.glyph as? IntegrationApp)?.let(integrationIcon)
         androidx.compose.ui.graphics.Canvas(bitmap.asImageBitmap()).paintKeyFace(index, tile, appImage?.asImageBitmap(),
             if (!photo) null else { l, t, r, b -> androidx.compose.ui.graphics.Color(contrastInk(bitmap, l, t, r, b)) }
         ) { text, ink ->

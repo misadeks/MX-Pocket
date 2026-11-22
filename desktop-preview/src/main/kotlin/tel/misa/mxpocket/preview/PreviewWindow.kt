@@ -16,6 +16,10 @@ import java.io.File
 import java.nio.file.Files
 import java.util.prefs.Preferences
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import androidx.compose.ui.graphics.ImageBitmap
+import tel.misa.mxpocket.plugins.IntegrationApp
 import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.*
 import tel.misa.mxpocket.decks.DeckCommand
@@ -25,6 +29,14 @@ import tel.misa.mxpocket.shared.ui.*
 
 private fun now() = System.nanoTime() / 1_000_000
 private val DEVICE_LIMIT get() = W.Simulator.text()
+
+@Composable
+private fun PreviewTheme(mode: ThemeMode, content: @Composable () -> Unit) {
+    val icons by produceState<Map<IntegrationApp, ImageBitmap>>(emptyMap()) {
+        value = withContext(Dispatchers.IO) { windowsIntegrationIcons() }
+    }
+    CompositionLocalProvider(LocalIntegrationIcons provides icons) { PocketTheme(mode, content) }
+}
 
 private fun chooseBackup(owner: ComposeWindow, repo: DeckRepository, save: Boolean): String? {
     val picker = FileDialog(owner, if (save) W.Export.text() else W.Import.text(),
@@ -124,12 +136,13 @@ fun main() = application {
             log = history.joinToString("\n"), simulator = DesktopSimulator(DEVICE_LIMIT, board.grid.takeIf { simulating }),
             activePageId = deck.activePage.id, themeMode = themeMode, language = language.choice)
         val plugins = registry.map {
-            PluginItem(it.id, it.displayName(), it.id !in deck.disabledPluginIds, W.Simulation.text(), when (it.id) {
+            val available = it.id in setOf("focus", "audio", "game.xo")
+            PluginItem(it.id, it.displayName(), available && it.id !in deck.disabledPluginIds, if (available) W.Simulation.text() else W.AndroidOnly.text(), when (it.id) {
                 "focus" -> W.TimerSimulation.text()
                 "audio" -> W.AudioSimulation.text()
                 "game.xo" -> W.GameSimulation.text()
                 else -> W.AndroidOnly.text()
-            }, profiles.any { profile -> profile.id == it.id }, it.id == deck.defaultProfileId, null)
+            }, available && profiles.any { profile -> profile.id == it.id }, it.id == deck.defaultProfileId, null, canToggle = available)
         }
         val options = buildList {
             add(BindingOption(LayoutCopy.Back.text(), ActionCall(DeckActions.BACK)))
@@ -149,7 +162,7 @@ fun main() = application {
             Unit
         }
         if (diagnosticsRequest != 0) DiagnosticsWindow(state, diagnosticsRequest) { diagnosticsRequest = 0 }
-        PocketTheme(themeMode) {
+        PreviewTheme(themeMode) {
             if (setup) {
                 SetupScreen(SetupScreenState(emptySet(), setupReview, emptyList(), "", false,
                     options = SetupFeature.entries.map { SetupOption(it, unavailableReason = W.HostRequired.text()) },

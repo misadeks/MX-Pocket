@@ -276,9 +276,13 @@ private fun NowOnKeypad(state: PocketScreenState, event: (PocketScreenEvent) -> 
             RoundPageButton(ShellIcon.CHEVRON_LEFT, W.PreviousPage.text()) { event(PocketScreenEvent.ChangePage(-1)) }
             Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(profileName, Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold, color = PocketColors.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (!pageName.isNullOrBlank()) Text(pageName, color = PocketColors.accent, style = type.titleMedium,
+                val accent = PocketStyle.accent(state.activeId)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    PocketIconTile(accent, 28.dp)
+                    Text(profileName, Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold, color = PocketColors.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                if (!pageName.isNullOrBlank()) Text(pageName, color = accent.ink, style = type.titleMedium,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (state.reason.isNotBlank()) Text(state.reason, style = type.bodyMedium, color = PocketColors.muted,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -378,8 +382,8 @@ internal fun ProfileCarousel(profiles: List<ProfileChoice>, activeId: String, se
                     scope.launch { list.animateScrollToItem(index) }
                     if (!selected) select(profile.id)
                 }, shape = RoundedCornerShape(16.dp),
-                    color = if (selected) PocketColors.accentSoft else PocketColors.card,
-                    border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) PocketColors.accent else PocketColors.cardStroke),
+                    color = if (selected && PocketColors.dark) Color(accent.tile) else PocketColors.card,
+                    border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) accent.ink else PocketColors.cardStroke),
                     modifier = Modifier.width(cardWidth)
                         .graphicsLayer { alpha = fade; scaleX = scale; scaleY = scale }
                         .blur(if (focused) 0.dp else 2.dp, BlurredEdgeTreatment.Unbounded)
@@ -389,7 +393,7 @@ internal fun ProfileCarousel(profiles: List<ProfileChoice>, activeId: String, se
                         PocketIconTile(accent, 40.dp)
                         Text(profile.name, maxLines = 1, overflow = TextOverflow.Ellipsis,
                             style = MaterialTheme.typography.titleMedium,
-                            color = if (selected) PocketColors.accent else PocketColors.title)
+                            color = if (selected) accent.ink else PocketColors.title)
                     }
                 }
             }
@@ -408,7 +412,7 @@ private fun PluginsScreen(plugins: List<PluginItem>, event: (PocketScreenEvent) 
                     PocketIconTile(PocketStyle.accent(plugin.id))
                     Column(Modifier.weight(1f)) {
                         Heading(plugin.title)
-                        Text(W.Capabilities.text(plugin.capabilities.ifBlank { W.None.text() }), color = PocketColors.faint, style = PocketMono)
+                        Text(W.Capabilities.text(plugin.capabilities.ifBlank { W.None.text() }), color = PocketColors.muted, style = PocketMono)
                     }
                     Switch(plugin.enabled, { event(PocketScreenEvent.EnablePlugin(plugin.id, it)) }, enabled = plugin.canToggle,
                         modifier = Modifier.semantics { contentDescription = plugin.title })

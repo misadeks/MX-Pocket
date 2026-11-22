@@ -7,6 +7,12 @@ import androidx.compose.ui.graphics.vector.PathParser
 /** Original 24-unit LCD legends. Physical and simulated keys draw these same paths. */
 enum class DeckGlyph : KeyGlyph { FOLDER, PROFILE, TIMER, RESET, MINUS, PLUS, CAMERA, VIDEO, STOP, SETTINGS, PHONE, WEB, REFRESH, FLOW, COMPASS, GRID, GAME }
 
+/** Original conversation and spiral-notebook outlines, used when the host has no installed icon. */
+enum class IntegrationApp(internal val outline: String) : KeyGlyph {
+    TEAMS("M3,4H18V13H10L6,17V13H3Z M12,16H16L20,20V16H22V8H21"),
+    ONENOTE("M6,3H20V21H6Z M3,7H8 M3,12H8 M3,17H8 M11,8H16 M11,12H16"),
+}
+
 private data class Mark(val data: String, val stroke: Float = 0f) {
     val path by lazy { PathParser().parsePathString(data).toPath() }
 }
@@ -44,6 +50,8 @@ private val noteSymbols = mapOf(
     OneNoteMark.CANCEL to "M5,5L19,19 M19,5L5,19",
 ).mapValues { Mark(it.value, 2.2f) }
 private val symbols: Map<KeyGlyph, List<Mark>> = mapOf(
+    IntegrationApp.TEAMS to outline(IntegrationApp.TEAMS.outline),
+    IntegrationApp.ONENOTE to outline(IntegrationApp.ONENOTE.outline),
     PlayerGlyph.VOLUME_DOWN to listOf(speaker, Mark("M16,12H23", 2f)),
     PlayerGlyph.VOLUME_UP to listOf(speaker, Mark("M16,12H23 M19.5,8.5V15.5", 2f)),
     PlayerGlyph.MUTE to listOf(speaker, Mark("M16,9L22,15 M22,9L16,15", 2f)),

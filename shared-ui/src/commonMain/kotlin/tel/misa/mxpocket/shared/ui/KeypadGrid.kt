@@ -58,11 +58,12 @@ private fun KeyFaceWindow(index: Int, tile: KeypadTile, modifier: Modifier) {
         enabled = tile.enabled, readOnly = tile.readOnly)
     // Virtual/editor faces use the LCD painter at panel resolution, not at the
     // current zoom. Android's live adapter supplies the already composited image.
-    val pixels = remember(index, face, direction, measurer) {
+    val appImage = (face.glyph as? IntegrationApp)?.let { LocalIntegrationIcons.current[it] }
+    val pixels = remember(index, face, direction, measurer, appImage) {
         val bitmap = ImageBitmap(118, 118)
         val canvas = Canvas(bitmap)
         canvas.drawRect(0f, 0f, 118f, 118f, Paint().apply { color = Color(face.background) })
-        canvas.paintKeyFace(index, face) { text, ink ->
+        canvas.paintKeyFace(index, face, appImage) { text, ink ->
             val layout = measurer.measure(AnnotatedString(text.text), TextStyle(color = ink, fontSize = text.size.sp,
                 fontWeight = if (text.bold) FontWeight.Bold else FontWeight.Normal, textAlign = TextAlign.Center),
                 maxLines = text.lines, overflow = TextOverflow.Ellipsis, density = Density(1f), layoutDirection = direction,
