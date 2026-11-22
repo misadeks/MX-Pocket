@@ -6,7 +6,6 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
-import android.graphics.Rect
 import android.graphics.Shader
 import android.media.MediaMetadata
 import androidx.activity.ComponentActivity
@@ -143,15 +142,8 @@ class PlayerRenderTest {
                 }
                 assertTrue("Key ${i+1} lost substantial strokes ($retained/$count)", count > 30 && retained >= count * .94)
             }
-            val mirror = board.render(tiles, decoded, back)
-            decoded.forEachIndexed { i,b ->
-                val r = KeypadProtocol.keyRegion(i)
-                val expected = IntArray(r.width * r.height)
-                val actual = IntArray(expected.size)
-                b.getPixels(expected,0,r.width,0,0,r.width,r.height)
-                mirror.getPixels(actual,0,r.width,r.x,r.y,r.width,r.height)
-                assertArrayEquals("Mirror region $i", expected, actual)
-            }
+            val mirror = board.render(tiles, decoded)
+            decoded.forEachIndexed { i, b -> assertAperturePixels(mirror, i, b) }
             if (back != null && back !== cover) continue
             if (back != null) {
                 val g = KeypadProtocol.keyGrid
@@ -160,7 +152,6 @@ class PlayerRenderTest {
                         val actual = BitmapFactory.decodeByteArray(bytes,0,bytes.size)
                         val r = KeypadProtocol.keyRegion(7)
                         checkCaption(tiles[7],actual,r.x-g.x,r.y-g.y)
-                        Canvas(mirror).drawBitmap(actual,null,Rect(g.x,g.y,g.x+g.width,g.y+g.height),null)
                     })
                 assertEquals(GridWrite.ACKNOWLEDGED,sink.writeGrid(back,native,false) { true })
             }

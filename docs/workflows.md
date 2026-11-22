@@ -8,22 +8,22 @@ makes a new editable copy with a separate ID; it does not copy a schedule.
 ## Try the keypad check
 
 1. In Workflows, edit **Keypad check**. Expand its first step. The two branches
-   put “Connected” or “Virtual keypad” on key 1 according to actual device state.
+   put “Connected” or “Not connected” on key 1 according to actual USB session state.
 2. Duplicate the workflow, change the wait to five seconds, then save. Use
    **Move up** / **Move down** to change the order inside a sequence or branch.
-3. Test it without USB: the virtual branch runs, the phone reports its current
+3. Test it without USB: the disconnected branch runs, the phone reports its current
    step, a short tone plays, and key 1 changes to “Ready”. Try **Cancel run**
    during the wait. Cancel stops later steps; it does not undo earlier actions.
 4. In the integrated profile editor, assign the saved workflow to another key.
-   Tap the assigned virtual key to run it through the same host. With an
-   authorized keypad connected, press that physical key and compare its run
+   With an authorized keypad connected, press that physical key and compare its run
    indicator with the phone. Inspect **Run history** for origin, step and outcome.
    The real LCD, physical presses and phone power behavior require a hardware check.
 
 ## Triggers, conditions and effects
 
-Manual runs and test runs are always available. Physical-only and virtual-only
-triggers filter which assigned key can start a run. Daily schedules use the local
+Manual runs and test runs are always available. Assign a workflow to a physical
+key to run it from the keypad. A **Manual only** workflow ignores physical key
+assignments; older virtual-only bindings keep this restriction. Daily schedules use the local
 clock and Android WorkManager, not an exact alarm; Android may defer them. Missed
 days are not replayed. Connection/disconnection and app-context triggers listen
 for transitions while the app’s session is alive, not initial snapshots. A run

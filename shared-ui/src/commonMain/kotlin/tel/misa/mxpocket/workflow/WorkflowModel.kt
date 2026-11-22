@@ -2,6 +2,7 @@ package tel.misa.mxpocket.workflow
 
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 data class WorkflowActionSpec(
@@ -34,7 +35,8 @@ data class WorkflowStatus(
 )
 
 enum class TriggerKind(val label: String) {
-    ON_DEMAND("Manual or assigned key"), PHYSICAL("Physical key only"), VIRTUAL("Virtual key only"),
+    ON_DEMAND("Manual or assigned key"), PHYSICAL("Physical key only"),
+    @SerialName("VIRTUAL") MANUAL_ONLY("Manual only"),
     DAILY("Daily schedule"), CONNECTED("Keypad connects"), DISCONNECTED("Keypad disconnects"),
     CONTEXT("App context becomes"),
 }
@@ -89,7 +91,7 @@ data class WorkflowDefinition(
     companion object {
         val demo = WorkflowDefinition("keypad-check", "Keypad check", steps = listOf(
             WorkflowStep(StepKind.IF, test = WorkflowTest(), yes = listOf(status("Connected")),
-                no = listOf(status("Virtual keypad"))),
+                no = listOf(status("Not connected"))),
             WorkflowStep(StepKind.WAIT, value = "2"),
             WorkflowStep(StepKind.ACTION, target = "sound.play"),
             status("Ready"),

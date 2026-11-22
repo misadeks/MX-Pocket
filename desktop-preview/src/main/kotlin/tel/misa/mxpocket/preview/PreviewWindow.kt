@@ -45,6 +45,10 @@ fun main() = application {
     val workflowState by workflows.state.collectAsState()
     val deck by repo.state.collectAsState()
     var tab by remember { mutableStateOf(WorkspaceTab.HOME) }
+    val appearance = remember { java.util.prefs.Preferences.userRoot().node("tel/misa/mxpocket") }
+    var themeMode by remember {
+        mutableStateOf(ThemeMode.entries.find { it.name == appearance.get("theme", null) } ?: ThemeMode.SYSTEM)
+    }
     var simulating by remember { mutableStateOf(true) }
     var message by remember { mutableStateOf("Virtual keypad connected. No USB messages are sent.") }
     var time by remember { mutableLongStateOf(now()) }
@@ -93,9 +97,8 @@ fun main() = application {
             deck.activeProfile.name else "${deck.activeProfile.name} / ${deck.activePage.name}",
             tiles = tiles, profiles = profiles, activeId = deck.activeProfileId, reason = deck.selectionReason,
             connectionLabel = if (simulating) "Virtual keypad" else "Disconnected", diagnostics = "No USB diagnostics: Windows has no HID adapter.",
-            log = history.joinToString("\n"), simulating = simulating, deviceLimit = DEVICE_LIMIT,
-            activePageId = deck.activePage.id, hardwareSummary = !simulating,
-            virtualGrid = board.grid.takeIf { simulating })
+            log = history.joinToString("\n"), simulator = DesktopSimulator(DEVICE_LIMIT, board.grid.takeIf { simulating }),
+            activePageId = deck.activePage.id, themeMode = themeMode)
         val plugins = defaultDeck().profiles.map {
             PluginItem(it.id, it.name, true, "Local simulation", when (it.id) {
                 "focus" -> "Timer and presets run locally. No completion sound."
@@ -121,7 +124,7 @@ fun main() = application {
             catch (e: Exception) { status("Layout backup failed: ${e.message}") }
             Unit
         }
-        PocketTheme {
+        PocketTheme(themeMode) {
             if (setup) {
                 SetupScreen(SetupScreenState(emptySet(), setupReview, emptyList(), "", false,
                     options = SetupFeature.entries.map { SetupOption(it, unavailableReason = "Requires the Android host.") },
@@ -143,6 +146,7 @@ fun main() = application {
                             host.press(event, now())?.let(::status)
                         is PocketScreenEvent.DefaultProfile -> repo.setDefault(event.id).getOrThrow()
                         PocketScreenEvent.FeatureSetup -> { setupReview = false; setup = true }
+                        is PocketScreenEvent.SetTheme -> { themeMode = event.mode; appearance.put("theme", event.mode.name) }
                         else -> status(DEVICE_LIMIT)
                     }
                 } catch (e: Exception) { status(e.message ?: "Workspace operation failed.") }

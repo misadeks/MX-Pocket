@@ -1,8 +1,17 @@
 # MX Pocket
 
-MX Pocket turns the **wired Logitech MX Creative Keypad** from a desktop
-accessory into nine tactile controls for your Android phone. Over USB-C, the
-phone changes what each key shows and does. No root or companion PC.
+MX Pocket lets you control Android by feel. Link a keypad layout to an app
+and put actions where your fingers expect them. In supported apps, use physical
+keys to move between items, scroll and select without tapping a small button or
+making a precise swipe. Assign a workflow to one of the nine LCD keys, open a
+favorite app, start a focus timer or change tracks. Two page buttons switch
+layouts. To try MX Pocket without hardware, use the on-screen keys.
+
+When you join a Microsoft Teams call on the connected Android phone, the keypad
+switches to a meeting layout. Mute stays in the same spot, with keys for
+captions, raising your hand and opening meeting chat where Teams supports those
+actions. When the call ends, the keypad returns to your previous layout unless
+you've selected another.
 
 On the **Music** layout, press the center key to pause the track.
 Switch to **Navigation**: that same key now says **Select**, and the key below
@@ -13,10 +22,12 @@ enabled, you can keep reading in a supported app without swiping the screen.
 
 *LCD layouts on an illustrated keypad.*
 
-The trick is under the keys: **one 480 × 480 LCD**, visible through nine
-windows. A native Kotlin driver runs in Android userspace, reads key presses
-over USB HID and sends JPEGs back to that panel. Two physical page buttons
-switch layouts. The driver targets the wired Keypad, not the wireless Dialpad.
+The **wired Logitech MX Creative Keypad** (`046D:C354`) connects directly to
+your Android phone over USB-C. MX Pocket's Kotlin driver uses Android's USB
+Host API to read key presses and update the labels behind the keys as layouts
+change. You can use the driver without the app. No root access or companion PC
+is needed. The wireless **Dialpad** sold with the keypad is not supported, and
+the Windows simulator does not drive hardware.
 
 ## Quick start
 
@@ -29,15 +40,17 @@ to JDK 17 or 21 (x64 on Windows ARM64), run:
 .\gradlew.bat :desktop-preview:run
 ```
 
-On **Home**, choose the profile with the music-note icon and click the center key to toggle playback.
-Choose **Navigation** to see the same key become **Select**. The simulator
+On **Profiles**, swipe the profile carousel to the music-note profile, then click the center key on **Home** to toggle playback.
+Swipe to **Navigation** to see the same key become **Select**. Choose System,
+Light or Dark in **Settings → Appearance**. The simulator
 needs no Android SDK, phone or keypad; it doesn't change Windows media,
 navigate other apps or drive USB hardware.
 
 <a name="run-it-on-android"></a>
 
 **[Try it on Android](docs/workspace.md#install-the-android-app)** with a
-wired keypad or on-screen keys. Both run real phone actions.
+wired keypad. Home mirrors the keys; it never executes their actions. You can
+edit profiles before connecting hardware.
 **[Reuse the Kotlin driver](docs/driver.md)** in your own Android app.
 
 <a name="guides"></a>

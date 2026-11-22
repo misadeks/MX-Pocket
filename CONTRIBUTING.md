@@ -78,6 +78,13 @@ insets, 48dp control/84dp key minimum heights, selectable diagnostics and live
 status announcements. The [Windows host](desktop-preview) can run the Focus
 timer and Tic Tac Toe, but does not call Android services.
 
+The shared grid uses `shared-ui/src/commonMain/artwork/mx-keypad-housing.svg`,
+exported from the project's `draw_keypad_hero.py` illustration without its LCD
+content. Gradle rasterizes that SVG for both Compose targets; do not maintain
+a separate Android drawable or desktop casing. Each of its nine openings shows
+the complete corresponding 118 × 118 key image, including any artwork already
+composited by the LCD renderer. Editor and focus outlines belong on the bezel.
+
 `MainActivity` remains the live state/event adapter: it owns visible consent and
 hands hardware sessions to `KeypadService`/`PocketSession`. Styling the phone
 must not require changing USB reports, the plugin API or keypad LCD composition.
@@ -93,12 +100,11 @@ adb -e shell am start -n tel.misa.mxpocket/.ui.UiPreviewActivity --es scene audi
 ```
 
 Scene IDs include `disconnected`, `focus`, `audio` and `phone`. Profile controls change
-fixtures; key and connection taps only display UI events. This host does not
+fixtures; keys are read-only and the connection button only displays a UI event. This host does not
 construct the live Activity/engine, register USB receivers, activate plugins,
 query USB/audio state or launch phone actions. It and its fixture data/manifest
-entry exist only in the debug build, not release builds. **Connect virtual
-keypad** in the live app still executes real phone controls; do not confuse it
-with this UI-only preview.
+entry exist only in the debug build, not release builds. Use the standalone
+Windows simulator to exercise on-screen keys; Android accepts keypad input only from USB.
 
 Use emulator light/dark mode, font scaling and screen sizes for visual checks.
 Run `:app:testDebugUnitTest --tests "tel.misa.mxpocket.ui.*"` for render/event and

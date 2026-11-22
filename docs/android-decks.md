@@ -1,7 +1,8 @@
 # Android keypad decks
 
-Select **Connect virtual keypad** or connect an authorized keypad, then select a
-profile. Virtual keys run real phone actions. The debug-only UI fixture does not.
+Choose a profile in **Profiles**, then use the connection button at the top of **Home**
+to connect an authorized USB keypad. Press the keys on the device. The phone's mirror
+and profile editor do not run key actions.
 
 | Deck | How to use it | If access is missing |
 | --- | --- | --- |
@@ -23,7 +24,7 @@ in-app camera remain accessible under **Camera controls > Open previous Studio
 captures** with a single-file read grant. Saved `studio.open` keys open the
 native camera; old explicit capture/timer/zoom/focus/torch/marker bindings stay
 unavailable, not silently remapped. Only the built-in Studio root page can send
-camera clicks, never virtual keys, imported capture actions or workflows.
+camera clicks, never imported capture actions or workflows.
 
 The camera-control service reads the active window only on demand. It requires
 the resolved camera package and a unique visible, enabled button with an exact
@@ -47,10 +48,10 @@ sessions. It is broad at the OS level. The Audio service uses its component sole
 authorization for `MediaSessionManager`; it does not retrieve, log, or act
 on notifications. Spotify and other players use the same Android interface:
 there is no Spotify sign-in, SDK, playlist browser or downloaded artwork.
-While unlocked on **Audio**, the local cover spans the virtual board on Home
-or all nine LCD regions on a wired keypad, paused or playing. With hardware
-connected, Home lists the labels; **Keypad** previews the active key faces
-without running their actions. A three-pixel black margin around the whole
+While unlocked on **Audio**, the local cover spans the layout preview on Home
+and all nine LCD regions on a connected keypad, paused or playing. With hardware
+connected, Home mirrors the live keys as a display only; **Profiles > Swap keys** shows
+the active key faces without running their actions. A three-pixel black margin around the whole
 cover provides bezel clearance. Each label uses black or white against its own part of the picture.
 Other profiles keep their normal keys even during playback. Without usable
 art, the keys keep a neutral background (or the user's selected backdrop).
@@ -81,7 +82,7 @@ The app doesn't wake the handset or draw over its lock screen. Without that
 keypad, lock hides playback details. Leaving Audio, losing the session or
 revoking access clears them. One fresh press on the authorized keypad can change music
 volume, mute, play/pause or skip without unlocking. Seeking stays disabled.
-Phone/simulator taps, workflow steps, settings and app launches do not get
+Workflow steps, settings and app launches do not get
 this exception. Player sessions can end or drop an action; MX Pocket does not
 wake the phone or start a player to compensate.
 

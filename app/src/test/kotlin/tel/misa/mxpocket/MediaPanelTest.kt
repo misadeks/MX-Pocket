@@ -22,7 +22,7 @@ import android.net.Uri
 import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.testTag
@@ -30,7 +30,6 @@ import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -45,7 +44,6 @@ import org.robolectric.util.ReflectionHelpers
 import tel.misa.mxpocket.decks.MediaSessionAccess
 import tel.misa.mxpocket.decks.SessionArtwork
 import tel.misa.mxpocket.driver.KeypadProtocol
-import tel.misa.mxpocket.driver.SimulatedKeypad
 import tel.misa.mxpocket.plugins.KeyTile
 import tel.misa.mxpocket.shared.ui.KeypadGrid
 import tel.misa.mxpocket.shared.ui.KeypadTile
@@ -61,7 +59,7 @@ import java.time.Duration
 class MediaPanelRenderingTest {
     @get:Rule val ui = createAndroidComposeRule<ComponentActivity>()
 
-    @Test fun oneCenterCropSpansHardwareRegionsSimulatedKeysAndThePhonePanel() {
+    @Test fun oneCenterCropSpansAllNineLcdWindowsAndTheReadOnlyPanel() {
         val app = RuntimeEnvironment.getApplication()
         val source = Bitmap.createBitmap(600,480,Bitmap.Config.ARGB_8888)
         val sourceEdge = Color.MAGENTA
@@ -84,11 +82,11 @@ class MediaPanelRenderingTest {
         val renderer = KeyImages { null }
         val tile = KeyTile("Play","Media",Color.BLACK)
         renderer.useArtwork(art)
-        val sim = SimulatedKeypad()
-        val tiles = colors.indices.map { i -> renderer.image(i,tile).also { runBlocking { sim.setKeyImage(i,it) } } }
+        val tiles = colors.indices.map { i -> renderer.image(i,tile) }
         ui.setContent {
             KeypadGrid(tiles.map { KeypadTile("Play", color = androidx.compose.ui.graphics.Color.Black,
-                image = it.asImageBitmap()) }, { _, _ -> }, Modifier.size(320.dp).testTag("panel"), art.asImageBitmap())
+                image = it.asImageBitmap(), readOnly = true) }, { _, _ -> error("Render must not send input") },
+                Modifier.width(320.dp).testTag("panel"))
         }
         val bounds = ui.onNodeWithTag("panel").fetchSemanticsNode().boundsInWindow
         // Robolectric does not complete PixelCopy's next-frame callback. Draw the actual window instead.
@@ -101,16 +99,15 @@ class MediaPanelRenderingTest {
             assertEquals(colors[i],art.getPixel(r.x+59,r.y+45))
             val pixel = tiles[i].getPixel(59,45)
             assertEquals(colors[i],pixel)
-            assertEquals(pixel,sim.renderedImage(i)!!.getPixel(59,45))
-            assertEquals(pixel,mirrored.getPixel((bounds.left + (r.x+59)*bounds.width/480).toInt(),
-                (bounds.top + (r.y+45)*bounds.height/480).toInt()))
+            val scale = bounds.width / 480
+            assertEquals(pixel, mirrored.getPixel((bounds.left + (115 + i % 3 * 125) * scale).toInt(),
+                (bounds.top + (63 + i / 3 * 125 + 45 * 106f / 118) * scale).toInt()))
             pixel
         }
         assertEquals(9,samples.distinct().size)
         val previous = tiles[0]
         renderer.useArtwork(null)
         assertNotSame(previous,renderer.image(0,tile))
-        sim.close()
     }
 }
 
@@ -498,17 +495,20 @@ class MediaPanelTest {
         } finally { finishRead.countDown(); session.detach(screen); session.disconnect(); playerSession.release() }
     }
 
-    @Test fun lockedSimulatorDoesNotReceiveEvenLateTrackDetails() {
+    @Test fun lockedScreenWithoutAKeypadDoesNotReceiveLateTrackDetails() {
         shadowOf(app).grantPermissions("tel.misa.mxpocket.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION")
         shadowOf(app.getSystemService(NotificationManager::class.java)).setNotificationListenerAccessGranted(
             ComponentName(app,MediaSessionAccess::class.java),true)
         val external = MediaSession(app,"player")
         val player = shadowOf(external.controller)
         player.setPlaybackState(P.Builder().setState(P.STATE_PLAYING,0,1f).build())
+        player.setMetadata(MediaMetadata.Builder().putString(MediaMetadata.METADATA_KEY_TITLE,"Visible").build())
         shadowOf(app.getSystemService(MediaSessionManager::class.java)).addController(external.controller)
         Robolectric.buildActivity(MainActivity::class.java).setup().use {
             val session = app.session
-            session.startPreview(); session.selectProfile("audio")
+            session.selectProfile("audio")
+            main.idle()
+            assertEquals("Visible",session.deckState.value.media.title)
             shadowOf(app.getSystemService(KeyguardManager::class.java)).setKeyguardLocked(true)
             app.sendBroadcast(Intent(Intent.ACTION_SCREEN_ON))
             player.executeOnMetadataChanged(MediaMetadata.Builder().putString(MediaMetadata.METADATA_KEY_TITLE,"Private")
@@ -517,7 +517,6 @@ class MediaPanelTest {
             assertEquals("",session.deckState.value.media.title)
             assertNull(session.panelArt)
             assertFalse(session.frame().keys.any { it.label == "Private" || it.footer == "Private" })
-            session.disconnect()
         }
         external.release()
     }

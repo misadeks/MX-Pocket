@@ -21,44 +21,45 @@ import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.DeckKey
 import tel.misa.mxpocket.decks.DeckAccessActivity
 import tel.misa.mxpocket.decks.NavigationService
-import tel.misa.mxpocket.driver.KeypadProtocol
 import tel.misa.mxpocket.shared.ui.toGridTile
 import java.time.Duration
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35], qualifiers = "w640dp-h800dp-mdpi")
+@Config(sdk = [35], qualifiers = "w640dp-h800dp-mdpi", application = KeypadSessionTest.FakeApp::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class NavigationPadTest {
     @get:Rule val ui = createAndroidComposeRule<MainActivity>()
-    @Test fun livePadMirrorsEachWindowAndAccessInfoNeverTogglesTheService() {
-        val app = RuntimeEnvironment.getApplication() as PocketApplication
+    @Test fun readOnlyPanelMirrorsLcdWritesAndPhysicalAccessKeyOpensOnlyInfo() {
+        val app = RuntimeEnvironment.getApplication() as KeypadSessionTest.FakeApp
         shadowOf(app).grantPermissions("tel.misa.mxpocket.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION")
         val session = app.session
         val main = shadowOf(Looper.getMainLooper())
         val activity = ui.activity
-        run {
-            session.startPreview(); session.selectProfile("navigation"); main.idle()
-            val board = ComposeMirror(ui, session::phoneKey)
+        session.selectProfile("navigation")
+        app.connectKeypad()
+        try {
+            val board = ComposeMirror(ui)
             fun key(name: String) = ui.onNodeWithContentDescription(name, substring = true)
             fun render(): Bitmap {
                 val frame = session.frame()
                 val bitmaps = frame.keys.mapIndexed(session::keyImage)
-                val preview = board.render(frame.keys, bitmaps)
-                bitmaps.forEachIndexed { i, tile ->
-                    val region = KeypadProtocol.keyRegion(i)
-                    val mirrored = Bitmap.createBitmap(preview, region.x, region.y, 118, 118)
-                    assertTrue("Mirror differed from LCD window ${i + 1}", tile.sameAs(mirrored))
+                val panel = board.render(frame.keys, bitmaps)
+                for (i in frame.keys.indices) {
+                    assertAperturePixels(panel, i, app.lcd.getValue(i))
                     val gridTile = frame.keys[i].toGridTile(true)
-                    ui.onNodeWithContentDescription(requireNotNull(gridTile.accessibleName)).assertHeightIsAtLeast(84.dp)
+                    ui.onNodeWithContentDescription(requireNotNull(gridTile.accessibleName))
+                        .assertHasNoClickAction().assertHeightIsAtLeast(84.dp)
                 }
-                return preview
+                return panel
             }
             val off = render()
             key("Back in MX Pocket").assertExists()
             key("Move focus backward").assertExists()
             key("Activate focused item").assertExists()
-            key("Recents, Needs access").assertIsNotEnabled()
-            key("Access info, System nav off").performClick()
+            key("Recents, Needs access").assertExists()
+            assertFalse(session.frame().keys[6].enabled)
+            key("Access info, System nav off").assertExists()
+            app.press(9)
             val opened = shadowOf(activity).nextStartedActivity
             assertEquals(DeckAccessActivity::class.java.name, opened.component?.className)
             assertEquals("navigation.access", opened.getStringExtra("access"))
@@ -77,14 +78,17 @@ class NavigationPadTest {
                 }
                 assertFalse(off.sameAs(on))
                 key("Access info, System nav on").assertExists()
-                key("Recents").assertIsEnabled().performClick()
+                assertTrue(session.frame().keys[6].enabled)
+                app.press(7)
                 assertEquals(listOf(AccessibilityService.GLOBAL_ACTION_RECENTS), shadowOf(service).globalActionsPerformed)
             } finally { connected.destroy() }
             main.idleFor(Duration.ofSeconds(1)); render()
-            key("Recents").assertIsNotEnabled()
+            key("Recents, Needs access").assertExists()
+            assertFalse(session.frame().keys[6].enabled)
             val custom = DeckKey(label = "My select", icon = "X", color = 0xff344879.toInt(),
                 action = ActionCall("navigation.activate"))
             session.deck.setKey("navigation", "root", 3, custom).getOrThrow()
+            main.idle()
             render()
             key("My select").assertExists()
             val tile = session.frame().keys[3]
@@ -93,6 +97,6 @@ class NavigationPadTest {
             val image = session.keyImage(3, tile)
             assertFalse(image.sameAs(session.keyImage(3, tile.copy(icon = ""))))
             assertTrue(image.sameAs(session.keyImage(3, tile.copy(glyph = tel.misa.mxpocket.plugins.NavigationGlyph.HOME))))
-        }
+        } finally { session.disconnect() }
     }
 }
