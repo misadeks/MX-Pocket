@@ -62,6 +62,7 @@ internal fun profileReason(id: String) = if (id in builtIns) pluginReason(id) el
 internal fun bindingReason(call: ActionCall, simulator: Boolean): String? {
     val command = DeckCommand.fromId(call.id)
     if (command != null && call.commandBinding().params.isNotEmpty()) return H.Invalid.text()
+    if (command?.accessibilityKey == true) return tel.misa.mxpocket.i18n.WorkspaceCopy.AndroidOnly.text()
     val plugin = if (call.id == "plugin.key") call.params["pluginId"] else command?.deck
     if (plugin != null) {
         pluginReason(plugin)?.let { return it }

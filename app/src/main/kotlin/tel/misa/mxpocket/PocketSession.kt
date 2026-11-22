@@ -107,6 +107,7 @@ internal class PocketSession(
         data class Phone(val app: PhoneApp) : Target
         data class FavoriteApp(val component: String) : Target
         data class Studio(val mode: CameraMode) : Target
+        data class SettingsPanel(val panel: AccessibilityPanel) : Target
         data class Uri(val uri: String) : Target
         data class Share(val text: String) : Target
         data object Teams : Target
@@ -1081,7 +1082,7 @@ internal class PocketSession(
             deckWatch?.cancel(); deckWatch = null
             images.useArtwork(null)
             images.clear()
-            decks.value = decks.value.copy(media = MediaDeckState(), navigationEnabled = false)
+            decks.value = decks.value.copy(media = MediaDeckState(), navigationEnabled = false, shortcutAvailable = false)
             return
         }
         if (deckWatch?.isActive == true) return
@@ -1146,7 +1147,9 @@ internal class PocketSession(
                     while (true) {
                         refreshPhoneCall()
                         refreshTeams()
-                        decks.value = decks.value.copy(navigationEnabled = NavigationService.connected != null,
+                        val navigation = NavigationService.connected
+                        decks.value = decks.value.copy(navigationEnabled = navigation != null,
+                            shortcutAvailable = navigation?.shortcutAvailable == true,
                             cameraControls = cameraAccess.enabled)
                         delay(1000)
                     }
@@ -1167,6 +1170,18 @@ internal class PocketSession(
         if (c.workflowSafe) return media.execute(c)
         if (!freshAuthorizedPress())
             return unavailable(D.UnlockKeypad.text())
+        if (c.accessibilityKey) {
+            // A plugin callback or workflow triggered by another key cannot borrow its press.
+            val index = physicalIndex ?: return unavailable(D.UnlockKeypad.text())
+            val key = layout().page.keys[index]
+            if (key.action?.commandBinding() != ActionCall(c.id) || key.holdAction != null ||
+                !acknowledged(index, receipts[index])) return unavailable(D.UnlockKeypad.text())
+            if (c == DeckCommand.ACCESSIBILITY_SHORTCUT)
+                return NavigationService.connected?.runAccessibilityShortcut()
+                    ?: unavailable(tel.misa.mxpocket.i18n.AccessCopy.ShortcutUnavailable.text())
+            screen?.let { return it.deckAction(c, null) }
+            return offerPhysicalShortcut(Target.SettingsPanel(checkNotNull(AccessibilityPanel.forCommand(c))))
+        }
         if (c.legacyCapture) return unavailable(D.OldCamera.text())
         if (c.deck == TEAMS) {
             if (c == DeckCommand.TEAMS_MIC) {

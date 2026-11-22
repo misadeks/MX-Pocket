@@ -4,6 +4,11 @@
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <queries>
+        <intent><action android:name="android.settings.ACCESSIBILITY_SETTINGS" /></intent>
+        <intent><action android:name="android.settings.CAPTIONING_SETTINGS" /></intent>
+        <intent><action android:name="android.settings.NIGHT_DISPLAY_SETTINGS" /></intent>
+        <intent><action android:name="android.settings.DISPLAY_SETTINGS" /></intent>
+        <intent><action android:name="android.settings.SETTINGS" /></intent>
         <intent><action android:name="android.media.action.STILL_IMAGE_CAMERA" /></intent>
         <intent><action android:name="android.media.action.VIDEO_CAMERA" /></intent>
         <intent><action android:name="android.media.action.VIDEO_CAPTURE" /></intent>

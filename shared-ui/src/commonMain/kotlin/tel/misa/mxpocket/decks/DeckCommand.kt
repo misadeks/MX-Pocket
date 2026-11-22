@@ -27,6 +27,10 @@ enum class DeckCommand(val id: String, private val copy: Copy, val deck: String)
     FORWARD("navigation.focus-next", K.NextFocus, "navigation"),
     REVERSE("navigation.focus-previous", K.PreviousFocus, "navigation"),
     ACTIVATE("navigation.activate", K.Select, "navigation"), NAV_ACCESS("navigation.access", K.NavAccess, "navigation"),
+    TALKBACK_SETTINGS("navigation.talkback-settings", K.TalkBackSettings, "navigation"),
+    CAPTION_SETTINGS("navigation.caption-settings", K.CaptionSettings, "navigation"),
+    NIGHT_LIGHT_SETTINGS("navigation.night-light-settings", K.NightLightSettings, "navigation"),
+    ACCESSIBILITY_SHORTCUT("navigation.accessibility-shortcut", K.SystemShortcut, "navigation"),
     TEAMS_OPEN("teams.open", K.OpenTeams, "teams"), TEAMS_ACCESS("teams.access", K.TeamsSetup, "teams"),
     TEAMS_MIC("teams.mic", K.MeetingMic, "teams"), TEAMS_HAND("teams.hand", K.RaiseHand, "teams"),
     TEAMS_CAPTIONS("teams.captions", K.Captions, "teams"), TEAMS_CHAT("teams.chat", K.MeetingChat, "teams"),
@@ -36,6 +40,8 @@ enum class DeckCommand(val id: String, private val copy: Copy, val deck: String)
     // The original label is also a legacy Studio binding guard. Never localize it in place.
     val label get() = copy.en
     val displayLabel get() = copy.text()
+    val accessibilityPanel get() = this == TALKBACK_SETTINGS || this == CAPTION_SETTINGS || this == NIGHT_LIGHT_SETTINGS
+    val accessibilityKey get() = accessibilityPanel || this == ACCESSIBILITY_SHORTCUT
 
     val nativeControl get() = this == SHUTTER || this == START_VIDEO || this == STOP_VIDEO
     val legacyCapture get() = deck == "studio" && !nativeControl && this != STUDIO && this != VIDEO && this != CAMERA_ACCESS
