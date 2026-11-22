@@ -141,9 +141,14 @@ is saved. There is no phone popup or Android overlay.
 On Android 14+, **Show caller and call controls** is a second, independent
 opt-in. If not already granted, allow **MX Pocket** in Android’s **Notification
 access**. Basic ringing does not need this grant. Android's grant can expose notifications from other apps.
-MX Pocket checks the publisher and Android user before reading the default
-Phone app's [CallStyle](https://developer.android.com/reference/android/app/Notification.CallStyle)
-fields. The caller’s picture is at top center and the dialer’s display label
+MX Pocket reads [CallStyle](https://developer.android.com/reference/android/app/Notification.CallStyle)
+fields only from the current user's default Phone app or its verified Samsung
+in-call publisher. When Samsung Phone (`com.samsung.android.dialer`) is the
+default, `com.samsung.android.incallui` may post the call itself. Android must
+identify both as system or updated system apps with matching signatures.
+Notifications posted on behalf of another package are not accepted.
+
+The caller’s picture is at top center and the dialer’s display label
 (name or number) is in the center. A saved contact is not enough: the dialer
 must supply the label in its call-person field. When it does not, the keypad
 says **Caller details unavailable**; it does not assume a withheld number.
@@ -153,14 +158,18 @@ titles/text, look up contacts or store caller data. Home and the desktop
 simulator do not display caller identity or photos.
 
 **Key 7 Accept** and **key 9 Decline** appear only while ringing, for a single
-matching Phone notification with two distinct Phone-owned actions. A press
+matching Phone notification with two distinct actions owned by the posting
+package and UID. A press
 must match the acknowledged LCD face and a fresh check of the notification
 and carrier state. There is no Hang up key. Use the system Phone app if the
 notification is absent, ambiguous, filtered, unsupported or lacks controls.
 While locked or screen-off, anyone at the authorized keypad can see the
 permitted caller details and use eligible controls. If Android hides the
 notification or its contents, or visibility cannot be established, only call
-state is available. Actions must also be identifiable in the displayed
+state is available. This includes Samsung calls marked **Secret**, or **Private**
+when private lock-screen content is hidden. Recognizing the publisher does not
+change visibility or add caller fields or actions the dialer omitted.
+Actions must also be identifiable in the displayed
 notification and must not require authentication. Unlock and use Phone when
 the keypad has no controls. Disconnecting or losing Phone permission withdraws
 the view; losing notification access removes details and controls. Both existing

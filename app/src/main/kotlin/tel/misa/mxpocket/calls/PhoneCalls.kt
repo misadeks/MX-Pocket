@@ -5,6 +5,7 @@ import android.app.Notification
 import android.app.PendingIntent
 import android.app.Person
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -83,10 +84,28 @@ internal data class CallStamp(val key: String, val posted: Long, val boundary: L
 internal class DialerNotice(val stamp: CallStamp, val name: String?, val icon: Icon?)
 
 @RequiresApi(34)
-internal fun dialerNotice(notes: Array<StatusBarNotification>, dialer: String, state: LineState, boundary: Long,
+internal fun StatusBarNotification.isFromDialer(dialer: String?, packages: PackageManager): Boolean {
+    if (user != Process.myUserHandle() || opPkg != packageName) return false
+    if (packageName == dialer) return true
+    if (dialer != "com.samsung.android.dialer" || packageName != "com.samsung.android.incallui") return false
+
+    // Samsung Phone posts calls from a separate system app, not on behalf of the dialer.
+    val flags = PackageManager.ApplicationInfoFlags.of(0)
+    val system = ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP
+    return try {
+        val publisher = packages.getApplicationInfo(packageName, flags)
+        publisher.uid == uid && publisher.flags and system != 0 &&
+            packages.getApplicationInfo(dialer, flags).flags and system != 0 &&
+            packages.checkSignatures(dialer, packageName) == PackageManager.SIGNATURE_MATCH
+    } catch (_: PackageManager.NameNotFoundException) { false }
+    catch (_: SecurityException) { false }
+}
+
+@RequiresApi(34)
+internal fun dialerNotice(notes: Array<StatusBarNotification>, dialer: String, packages: PackageManager, state: LineState, boundary: Long,
     restricted: Boolean = false, visibleOnLockScreen: (StatusBarNotification) -> Boolean = { false }): DialerNotice? {
     val sbn = notes.filter {
-        it.packageName == dialer && it.user == Process.myUserHandle() && it.opPkg == dialer && it.notification.let { n ->
+        it.isFromDialer(dialer, packages) && it.notification.let { n ->
             n.category == Notification.CATEGORY_CALL || n.extras.getString(Notification.EXTRA_TEMPLATE) == Notification.CallStyle::class.java.name
         }
     }.singleOrNull() ?: return null
@@ -98,7 +117,7 @@ internal fun dialerNotice(notes: Array<StatusBarNotification>, dialer: String, s
     if (!(ringing && type == Notification.CallStyle.CALL_TYPE_INCOMING ||
             state == LineState.OFF_HOOK && type == Notification.CallStyle.CALL_TYPE_ONGOING)) return null
     fun action(field: String) = if (!ringing) null else extras.getParcelable(field, PendingIntent::class.java)
-        ?.takeIf { intent -> intent.creatorPackage == dialer && intent.creatorUid == sbn.uid &&
+        ?.takeIf { intent -> intent.creatorPackage == sbn.packageName && intent.creatorUid == sbn.uid &&
             (!restricted || sbn.notification.actions.orEmpty().filter { it.actionIntent == intent }
                 .singleOrNull()?.isAuthenticationRequired == false) }
     val accept = action(Notification.EXTRA_ANSWER_INTENT)
@@ -109,7 +128,7 @@ internal fun dialerNotice(notes: Array<StatusBarNotification>, dialer: String, s
     val controls = accept != null && decline != null && accept != decline
     fun embedded(icon: Icon?) = icon?.takeIf { it.type == Icon.TYPE_BITMAP || it.type == Icon.TYPE_ADAPTIVE_BITMAP }
     return DialerNotice(CallStamp(sbn.key, sbn.postTime, boundary, accept.takeIf { controls },
-        decline.takeIf { controls }, dialer, restricted), name, embedded(person?.icon) ?: embedded(sbn.notification.getLargeIcon()))
+        decline.takeIf { controls }, sbn.packageName, restricted), name, embedded(person?.icon) ?: embedded(sbn.notification.getLargeIcon()))
 }
 
 internal fun DialerNotice.photo(context: Context): Bitmap? {

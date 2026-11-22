@@ -7,6 +7,9 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Person
 import android.content.Intent
+import android.content.pm.ApplicationInfo
+import android.content.pm.PackageInfo
+import android.content.pm.Signature
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.drawable.Icon
@@ -55,10 +58,14 @@ class PhoneCallViewTest {
     private val main get() = shadowOf(Looper.getMainLooper())
     private val telecom get() = app.getSystemService(TelephonyManager::class.java)
     private val pkg = "test.fixture.dialer"
-    private fun action(id: Int) = PendingIntent.getBroadcast(app, id, Intent("test.call.$id").setPackage(app.packageName),
+    private val samsungPhone = "com.samsung.android.dialer"
+    private val inCallUi = "com.samsung.android.incallui"
+    private val inCallUid = 1001
+    private fun action(id: Int, owner: String = pkg, uid: Int = Process.myUid()) =
+        PendingIntent.getBroadcast(app, id, Intent("test.call.$id").setPackage(app.packageName),
         PendingIntent.FLAG_IMMUTABLE).also {
-        shadowOf(it).setCreatorPackage(pkg)
-        shadowOf(it).setCreatorUid(Process.myUid())
+        shadowOf(it).setCreatorPackage(owner)
+        shadowOf(it).setCreatorUid(uid)
     }
     private fun note(accept: PendingIntent? = action(1), decline: PendingIntent? = action(2), poster: String = pkg,
         user: UserHandle = Process.myUserHandle(), person: Person? = null, posted: Long = System.currentTimeMillis()) =
@@ -72,8 +79,58 @@ class PhoneCallViewTest {
             extras.putParcelable(Notification.EXTRA_DECLINE_INTENT, decline)
         }, user, posted)
 
+    @Suppress("DEPRECATION") // Robolectric's PackageManager implements checkSignatures from these fixture signatures.
+    private fun installPhonePackage(name: String, uid: Int, flags: Int, signer: String = "phone-fixture") {
+        shadowOf(app.packageManager).installPackage(PackageInfo().apply {
+            packageName = name
+            applicationInfo = ApplicationInfo().apply { this.uid = uid; this.flags = flags }
+            signatures = arrayOf(Signature(signer.toByteArray()))
+        })
+    }
+
+    private fun samsungCall(person: Person, accept: PendingIntent = action(1, inCallUi, inCallUid),
+        publisher: String = inCallUi, poster: String = publisher, uid: Int = inCallUid,
+        user: UserHandle = Process.myUserHandle()): StatusBarNotification {
+        val call = Notification.Builder(app, "call")
+            .setSmallIcon(android.R.drawable.sym_call_incoming)
+            .setStyle(Notification.CallStyle.forIncomingCall(person, action(2, inCallUi, inCallUid), accept))
+            .setVisibility(Notification.VISIBILITY_PRIVATE)
+            .build()
+        return StatusBarNotification(publisher, poster, 1, null, uid, 0, 0, call, user, System.currentTimeMillis() + 1)
+    }
+
+    @Test fun splitPublisherRequiresCurrentSystemPairMatchingSignerAndPublisherOwnedActions() {
+        val person = Person.Builder().setName("Fixture").build()
+        val call = samsungCall(person)
+        fun read(vararg notes: StatusBarNotification, dialer: String = samsungPhone) =
+            dialerNotice(arrayOf(*notes), dialer, app.packageManager, LineState.RINGING, 0)
+        installPhonePackage(samsungPhone, 10130, ApplicationInfo.FLAG_SYSTEM)
+        assertNull(read(call)) // Missing or not visible to PackageManager.
+        installPhonePackage(inCallUi, inCallUid, ApplicationInfo.FLAG_SYSTEM, "other-signer")
+        assertNull(read(call))
+        installPhonePackage(inCallUi, inCallUid, 0)
+        assertNull(read(call))
+        installPhonePackage(inCallUi, inCallUid, ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)
+        installPhonePackage(samsungPhone, 10130, 0)
+        assertNull(read(call))
+        installPhonePackage(samsungPhone, 10130, ApplicationInfo.FLAG_SYSTEM)
+        assertEquals(inCallUi, read(call)!!.stamp.publisher)
+        assertNull(read(call, dialer = pkg))
+        assertNull(read(samsungCall(person, publisher = "other.incallui")))
+        assertNull(read(samsungCall(person, poster = samsungPhone)))
+        assertNull(read(samsungCall(person, uid = 10130)))
+        assertNull(read(samsungCall(person, user = UserHandle.getUserHandleForUid(1_010_000))))
+        assertNull(read(call, samsungCall(person, publisher = samsungPhone, uid = 10130)))
+        for (owner in listOf(action(3, samsungPhone, 10130), action(4, samsungPhone, inCallUid), action(5, inCallUi, 10130))) {
+            val result = read(samsungCall(person, accept = owner))!!
+            assertEquals("Fixture", result.name)
+            assertNull(result.stamp.accept)
+            assertNull(result.stamp.decline)
+        }
+    }
+
     @Test fun onlyOneCurrentLocalDialerNoticeSuppliesDistinctControlsAndDisplayLabel() {
-        fun read(vararg notes: StatusBarNotification) = dialerNotice(arrayOf(*notes), pkg, LineState.RINGING, 0)
+        fun read(vararg notes: StatusBarNotification) = dialerNotice(arrayOf(*notes), pkg, app.packageManager, LineState.RINGING, 0)
         assertNull(read(note(poster = "other")))
         assertNull(read(note(user = UserHandle.getUserHandleForUid(1_010_000))))
         assertNull(read(note(), note()))
@@ -84,17 +141,17 @@ class PhoneCallViewTest {
         val private = read(note(person = withheld))!!
         assertNull(private.name)
         assertNull(private.icon)
-        assertNull(dialerNotice(arrayOf(note()), pkg, LineState.OFF_HOOK, 0))
+        assertNull(dialerNotice(arrayOf(note()), pkg, app.packageManager, LineState.OFF_HOOK, 0))
         val secured = note().also { n ->
             n.notification.actions[0] = Notification.Action.Builder(n.notification.actions[0])
                 .setAuthenticationRequired(true).build()
             n.notification.extras.putString(Notification.EXTRA_TITLE, "Not an identity source")
         }
-        val locked = dialerNotice(arrayOf(secured), pkg, LineState.RINGING, 0, restricted = true) { true }!!
+        val locked = dialerNotice(arrayOf(secured), pkg, app.packageManager, LineState.RINGING, 0, restricted = true) { true }!!
         assertNull(locked.name)
         assertNull(locked.stamp.accept)
         assertNull(locked.stamp.decline)
-        assertNull(dialerNotice(arrayOf(secured), pkg, LineState.RINGING, 0, restricted = true) { false })
+        assertNull(dialerNotice(arrayOf(secured), pkg, app.packageManager, LineState.RINGING, 0, restricted = true) { false })
     }
 
     @Test fun pinsDismissalAndUncertaintyNeverRearmAnEpisode() {
@@ -291,12 +348,15 @@ class PhoneCallViewTest {
         } finally { session.disconnect() }
     }
 
-    @Test fun screenOffRejectsPriorFaceAndOnlyAllowsCurrentLockscreenSafeDetailsAndActions() {
+    @Test fun splitDialerRechecksPublisherAndPrivacyBeforeUsingRenderedCallControls() {
         shadowOf(app).grantPermissions(Manifest.permission.READ_PHONE_STATE, "${app.packageName}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION")
         val sub = SubscriptionInfoBuilder.newBuilder().setId(10).setSimSlotIndex(0).buildSubscriptionInfo()
         shadowOf(app.getSystemService(SubscriptionManager::class.java)).setActiveSubscriptionInfos(sub)
         shadowOf(telecom).setTelephonyManagerForSubscriptionId(10, telecom)
-        shadowOf(app.getSystemService(TelecomManager::class.java)).setDefaultDialerPackage(pkg)
+        val roles = shadowOf(app.getSystemService(TelecomManager::class.java))
+        roles.setDefaultDialerPackage(samsungPhone)
+        installPhonePackage(samsungPhone, 10130, ApplicationInfo.FLAG_SYSTEM)
+        installPhonePackage(inCallUi, inCallUid, ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)
         val access = session.phoneAccess
         access.enabled = true
         access.details = true
@@ -317,10 +377,18 @@ class PhoneCallViewTest {
             session.refreshPhoneCall(); main.idle()
             assertEquals(PHONE_CALL_VIEW, session.deck.operatingState.value.activeProfileId)
             // postTime is wall time, not Robolectric's simulated monotonic clock. Order it after idle.
-            val n = note(person = caller, posted = System.currentTimeMillis() + 1)
+            val n = samsungCall(caller)
             shadowOf(listener).addActiveNotification(n)
             listener.onNotificationPosted(n); main.idle()
+            assertEquals("Fixture", session.frame().keys[CALL_IDENTITY].label)
             assertEquals(color, app.lcd.getValue(CALL_PHOTO).getPixel(59,59))
+            assertFalse(session.frame().keys[CALL_ACCEPT].readOnly)
+            assertFalse(session.frame().keys[CALL_DECLINE].readOnly)
+            roles.setDefaultDialerPackage(pkg)
+            app.press(9) // No notification callback to invalidate the painted face.
+            assertEquals(0, attempts())
+            roles.setDefaultDialerPackage(samsungPhone)
+            session.refreshPhoneCall(); main.idle()
             app.emit(KeyEvent(7, true)) // Delivered after lock, against the old paint receipt.
             shadowOf(power).setIsInteractive(false)
             shadowOf(lock).setKeyguardLocked(true)
@@ -338,6 +406,11 @@ class PhoneCallViewTest {
             ReflectionHelpers.getField<MutableMap<String, Ranking>>(listener.currentRanking, "mRankings")[n.key] = rank
             Settings.Secure.putInt(app.contentResolver, "lock_screen_show_notifications", 1)
             Settings.Secure.putInt(app.contentResolver, "lock_screen_allow_private_notifications", 1)
+            n.notification.visibility = Notification.VISIBILITY_SECRET
+            session.refreshPhoneCall(); main.idle()
+            assertEquals(CallCopy.NoCallerDetails.text(), session.frame().keys[CALL_IDENTITY].label)
+            assertTrue(session.frame().keys.all { it.readOnly })
+            n.notification.visibility = Notification.VISIBILITY_PRIVATE
             session.refreshPhoneCall(); main.idle()
             assertEquals("Fixture", session.frame().keys[CALL_IDENTITY].label)
             assertEquals(color, app.lcd.getValue(CALL_PHOTO).getPixel(59,59))

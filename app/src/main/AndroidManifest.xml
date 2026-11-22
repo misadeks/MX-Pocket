@@ -4,6 +4,8 @@
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <queries>
+        <package android:name="com.samsung.android.dialer" />
+        <package android:name="com.samsung.android.incallui" />
         <intent><action android:name="android.settings.ACCESSIBILITY_SETTINGS" /></intent>
         <intent><action android:name="android.settings.CAPTIONING_SETTINGS" /></intent>
         <intent><action android:name="android.settings.NIGHT_DISPLAY_SETTINGS" /></intent>
