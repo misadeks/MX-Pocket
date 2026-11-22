@@ -118,6 +118,7 @@ internal class PocketSession(
     companion object { const val PHONE_ACTION_TTL = 60_000L }
     private data class Layout(val profile: String, val page: DeckPage, val pluginEpoch: Int,
         val disabled: Set<String>)
+    private data class ShortcutBinding(val layout: Layout, val pluginPage: Int, val inputToken: String?)
     private data class GridTarget(val screen: Long, val pluginPage: Int, val repaint: Long, val art: Long)
     private data class LcdKey(val tile: KeyTile, val action: ActionCall?, val hold: ActionCall?, val image: Bitmap,
         val repaint: Long, val hasTrackDetails: Boolean) {
@@ -188,6 +189,9 @@ internal class PocketSession(
     private var physicalPressAt: Long? = null
     private var physicalIndex: Int? = null
     private var pendingAction: PhoneAction? = null
+    private var pendingBinding: ShortcutBinding? = null
+    private var pendingHint: tel.misa.mxpocket.i18n.Copy? = null
+    private val expireShortcut = Runnable { clearPhoneAction() }
     private val installedIcons = MutableStateFlow(emptyMap<IntegrationApp, Bitmap>())
     val integrationIcons = installedIcons.asStateFlow()
     private val images = KeyImages({ installedIcons.value[it] }, favoriteApps::icon)
@@ -394,6 +398,7 @@ internal class PocketSession(
             call.targetProfileId() != GAME_PROFILE && (tile?.enabled != false)
         val footer = when {
             !key.enabled || ownerOf(call) in disabled.value || call?.targetProfileId() in disabled.value -> K.Disabled.text()
+            available && pendingAction?.index == index && pendingHint != null -> pendingHint!!.text()
             tile?.inputToken?.startsWith("${DeckCommand.TEAMS_STATUS.id}:") == true && key.label.isNotBlank() -> tile.label
             ownerOf(call) == TEAMS && tile != null -> if (tile.enabled && !available) K.Unavailable.text() else tile.footer
             ownerOf(call) == "onenote" && tile?.enabled == false -> tile.footer
@@ -909,6 +914,7 @@ internal class PocketSession(
     private fun paint() {
         val connected = output ?: return
         val scope = hardwareScope ?: return
+        pendingAction?.let { if (!isCurrentShortcut(it)) clearPhoneAction() }
         if (painting?.isActive == true) return
         refreshCallFace(layout().profile)
         val frame = frame()
@@ -924,7 +930,7 @@ internal class PocketSession(
         if (splitTarget != target) splitTarget = null
 
         if (connected is GridOutput && splitTarget == null && (paintedTarget != target || dirty.size > 1)) {
-            retireReceipts()
+            retirePaintReceipts()
             painting = scope.launch {
                 try {
                     val result = connected.writeGrid(art, keys.map { it.image }, gridHasArt) {
@@ -959,7 +965,7 @@ internal class PocketSession(
         // One transaction at a time. Re-read desired state after its ACK, continuing around the panel
         // rather than repeatedly starting at a rapidly changing first key.
         if (dirty.isNotEmpty()) {
-            retireReceipts(dirty)
+            retirePaintReceipts(dirty)
             val index = dirty.minBy { (it - nextKey + lcd.size) % lcd.size }
             nextKey = (index + 1) % lcd.size
             val key = keys[index]
@@ -1012,10 +1018,14 @@ internal class PocketSession(
         (layout.profile != PHONE_CALL_VIEW && layout.profile != TEAMS_INCOMING_VIEW) ||
             (deck.operatingState.value.activeProfileId == layout.profile && target.screen == screenGeneration)
 
-    private fun retireReceipts(indices: List<Int>? = null) {
+    private fun retireReceipts() {
+        retirePaintReceipts()
+        if (pendingAction != null) clearPhoneAction()
+    }
+
+    private fun retirePaintReceipts(indices: List<Int>? = null) {
         receipts = if (indices == null) LongArray(9)
             else receipts.copyOf().also { values -> indices.forEach { values[it] = 0 } }
-        pendingAction?.let { if (indices == null || it.index in indices) clearPhoneAction() }
     }
 
     private fun target(frame: PluginFrame) = GridTarget(screenGeneration, frame.page, repaintEpoch, images.artworkRevision)
@@ -1316,17 +1326,38 @@ internal class PocketSession(
         val index = physicalIndex ?: return unavailable(D.Press.text())
         val offer = onHandoff ?: return unavailable(D.NoSession.text())
         val action = PhoneAction(target, ticket, index, receipts[index], time)
+        val frame = frame()
+        if (!acknowledged(index, action.receipt, frame)) return unavailable(D.Again.text())
+        pendingBinding = shortcutBinding(index, frame)
+        pendingHint = null
+        main.removeCallbacks(expireShortcut)
         pendingAction = action
         return offer(action).also { if (!it.success && pendingAction == action) clearPhoneAction() }
     }
 
-    private fun clearPhoneAction() {
-        pendingAction = null
-        app.getSystemService(NotificationManager::class.java).cancel(PHONE_NOTICE)
+    private fun shortcutBinding(index: Int, frame: PluginFrame) =
+        frame.keys[index].takeIf { it.enabled && !it.readOnly }?.let { ShortcutBinding(layout(), frame.page, it.inputToken) }
+
+    fun shortcutPosted(action: PhoneAction, directRequested: Boolean) {
+        if (action != pendingAction) return
+        pendingHint = if (directRequested) D.RetryOnPhone else D.TapNotice
+        main.postDelayed(expireShortcut, PHONE_ACTION_TTL - (SystemClock.elapsedRealtime() - action.pressedAt))
+        invalidate()
     }
 
+    private fun clearPhoneAction() {
+        main.removeCallbacks(expireShortcut)
+        pendingAction = null
+        pendingBinding = null
+        pendingHint = null
+        app.getSystemService(NotificationManager::class.java).cancel(PHONE_NOTICE)
+        invalidate()
+    }
+
+    // The down needed a pixel ACK; a later tap confirms that same binding, not a new physical down.
     fun isCurrentShortcut(action: PhoneAction): Boolean =
-        pendingAction == action && action.ticket == request && output != null && acknowledged(action.index, action.receipt)
+        pendingAction == action && action.ticket == request && output != null && pendingBinding != null &&
+            pendingBinding == shortcutBinding(action.index, frame())
 
     fun logText(limit: Int = 250) = buildList {
         callBoard.lastRingReason?.let { add(CallCopy.LastRingCheck.text(it.name)) }

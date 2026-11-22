@@ -61,6 +61,14 @@ class PhoneActionActivity : ComponentActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (intent.data != this.intent.data) {
+            setIntent(intent)
+            failure = null
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         if (failure != null || isFinishing) return

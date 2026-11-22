@@ -137,7 +137,7 @@ class KeypadService : Service() {
         }
         val open = Intent(this, PhoneActionActivity::class.java)
             .setData(Uri.parse("mxpocket://shortcut/${action.id}"))
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         val tap = PendingIntent.getActivity(this, 0, open, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_ONE_SHOT)
         val label = when (val target = action.target) {
             PocketSession.Target.Teams -> "Teams"
@@ -168,6 +168,7 @@ class KeypadService : Service() {
             .setTimeoutAfter(PocketSession.PHONE_ACTION_TTL - age).setAutoCancel(true).setContentIntent(tap)
             .build()
         notifications.notify(PHONE_NOTICE, note)
+        session.shortcutPosted(action, launch?.success == true)
         val tapMessage = D.TapNotification.text(title)
         return ok(when (launch?.success) {
             true -> D.DirectRequested.text(label)

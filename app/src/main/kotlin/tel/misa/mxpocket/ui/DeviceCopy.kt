@@ -75,6 +75,8 @@ internal object DeviceCopy {
     val FailedKey = Copy("Failed", "Échec", "Neuspešno")
     val RequestedKey = Copy("Requested", "Demandé", "Zatraženo")
     val NotSentKey = Copy("Not sent", "Non envoyé", "Nije poslato")
+    val TapNotice = Copy("Tap notification", "Touchez la notif.", "Dodirni obaveštenje")
+    val RetryOnPhone = Copy("Retry on phone", "Réessai sur tél.", "Pokušaj na telefonu")
     val WorkflowStarted = Copy("Workflow started", "Flux lancé", "Tok je pokrenut")
     val Busy = Copy("Workflow unavailable or busy", "Flux indisponible ou occupé", "Tok nije dostupan ili je zauzet")
     val Starting = Copy("Starting keypad session...", "Démarrage de la session du pavé…", "Pokretanje sesije tastature…")
