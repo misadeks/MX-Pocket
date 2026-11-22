@@ -241,6 +241,7 @@ class PreviewDeckTest {
     @Test fun navigationUsesFactoryBindingsAndNeverClaimsAndroidAccess() {
         val deck = PreviewDeck(DeckRepository(File(folder.root, "deck.json"))).apply { simulator = true }
         deck.repository.selectProfile("navigation").getOrThrow()
+        assertEquals("Navigate", deck.profileName)
         val up = deck.repository.state.value.activePage.keys[1].action!!
         assertEquals(DeckCommand.UP, navigationCommands[up.params.getValue("index").toInt()])
         val tiles = deck.tiles(0)
