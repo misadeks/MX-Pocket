@@ -35,6 +35,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import tel.misa.mxpocket.deck.DeckPage
 import tel.misa.mxpocket.deck.DeckState
+import tel.misa.mxpocket.deck.GAME_PROFILE
+import tel.misa.mxpocket.deck.PROFILE_HOME
 import tel.misa.mxpocket.plugins.KeyTile
 import tel.misa.mxpocket.plugins.PluginFrame
 
@@ -176,6 +178,21 @@ fun HomeScreen(state: PocketScreenState, event: (PocketScreenEvent) -> Unit) {
         state.simulator?.let { Note(it.limitations) }
         BoxWithConstraints {
             val split = maxWidth >= 720.dp
+            val summary: @Composable () -> Unit = {
+                NowOnKeypad(state, event)
+                if (state.activeId == PROFILE_HOME) PocketCard("Choose a profile") {
+                    state.profiles.chunked(2).forEach { row ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            row.forEach { profile ->
+                                PocketButton(profile.name, { event(PocketScreenEvent.SelectPlugin(profile.id)) },
+                                    Modifier.weight(1f), icon = PocketStyle.accent(profile.id).icon)
+                            }
+                            if (row.size == 1) Spacer(Modifier.weight(1f))
+                        }
+                    }
+                } else PocketButton("Profile launcher", { event(PocketScreenEvent.SelectPlugin(PROFILE_HOME)) },
+                    Modifier.fillMaxWidth(), ShellIcon.HOME)
+            }
             // With hardware the mirror is display-only: keys are pressed on the device, never twice.
             val grid = state.simulator?.grid
             val tiles = if (grid != null) state.tiles else state.tiles.map { it.copy(readOnly = true) }
@@ -195,14 +212,15 @@ fun HomeScreen(state: PocketScreenState, event: (PocketScreenEvent) -> Unit) {
                         KeypadGrid(tiles, { index, pressed ->
                             if (!pressed && grid.page.keys[index].action != null)
                                 event(PocketScreenEvent.VirtualKey(index, grid))
-                        }, Modifier.widthIn(max = 480.dp).align(Alignment.CenterHorizontally), holds)
+                        }, Modifier.widthIn(max = 480.dp).align(Alignment.CenterHorizontally), holds,
+                            onPage = { delta -> event(PocketScreenEvent.ChangePage(delta)) })
                     }
                 }
             }
             if (split) Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                Column(Modifier.weight(.85f)) { NowOnKeypad(state, event) }
+                Column(Modifier.weight(.85f), verticalArrangement = Arrangement.spacedBy(12.dp)) { summary() }
                 Column(Modifier.weight(1.15f)) { keypad() }
-            } else Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { NowOnKeypad(state, event); keypad() }
+            } else Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { summary(); keypad() }
         }
     }
 }
@@ -293,7 +311,7 @@ private fun ProfilesScreen(state: PocketScreenState, event: (PocketScreenEvent) 
             }
         }
         ProfileCarousel(state.profiles, state.activeId) { event(PocketScreenEvent.SelectPlugin(it)) }
-        Box(Modifier.weight(1f).fillMaxWidth()) { editor() }
+        if (state.activeId != GAME_PROFILE) Box(Modifier.weight(1f).fillMaxWidth()) { editor() }
     }
 }
 
@@ -321,9 +339,14 @@ internal fun ProfileCarousel(profiles: List<ProfileChoice>, activeId: String, se
         }
     }
     LaunchedEffect(list) {
+        var moved = false
         snapshotFlow { list.isScrollInProgress }.collect { scrolling ->
-            if (!scrolling) currentProfiles.getOrNull(centered % currentProfiles.size)?.let {
-                if (it.id != currentActive) currentSelect(it.id)
+            if (scrolling) moved = true
+            else if (moved) {
+                moved = false
+                currentProfiles.getOrNull(centered % currentProfiles.size)?.let {
+                    if (it.id != currentActive) currentSelect(it.id)
+                }
             }
         }
     }

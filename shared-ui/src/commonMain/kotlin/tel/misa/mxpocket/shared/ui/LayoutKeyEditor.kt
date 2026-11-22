@@ -18,7 +18,7 @@ import tel.misa.mxpocket.i18n.*
 
 data class BindingOption(val label: String, val call: ActionCall)
 
-private val factoryProfiles = defaultDeck().profiles
+private val factoryProfiles = defaultDeck().visibleProfiles
 val factoryKeyBindings: List<BindingOption> by derivedStateOf {
     factoryProfiles.flatMap { profile ->
         profile.pages.single { it.id == profile.rootPageId }.keys.mapIndexedNotNull { physical, key ->
@@ -30,6 +30,10 @@ val factoryKeyBindings: List<BindingOption> by derivedStateOf {
             BindingOption(label, call)
         }
     }
+}
+
+fun availableFactoryKeyBindings(disabled: Set<String>) = factoryKeyBindings.filterNot {
+    it.call.slotOwner() in disabled || it.call.targetProfileId() in disabled
 }
 
 /** Page IDs are profile-local; a duplicated profile can have the same page IDs with different names. */

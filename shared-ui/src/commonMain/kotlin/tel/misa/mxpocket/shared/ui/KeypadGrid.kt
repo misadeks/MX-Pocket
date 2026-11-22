@@ -86,7 +86,8 @@ private fun top(index: Int) = 63 + index / 3 * PITCH
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
 fun KeypadGrid(tiles: List<KeypadTile>, onKey: (Int, Boolean) -> Unit,
-    modifier: Modifier = Modifier, onHold: Map<Int, () -> Unit> = emptyMap(), onSwap: ((Int, Int) -> Unit)? = null) {
+    modifier: Modifier = Modifier, onHold: Map<Int, () -> Unit> = emptyMap(), onSwap: ((Int, Int) -> Unit)? = null,
+    onPage: ((Int) -> Unit)? = null) {
     require(tiles.size == 9) { "A keypad frame must have nine tiles" }
     val direction = LocalLayoutDirection.current
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
@@ -127,6 +128,13 @@ fun KeypadGrid(tiles: List<KeypadTile>, onKey: (Int, Boolean) -> Unit,
                 }
                 Image(painterResource(Res.drawable.mx_keypad_housing), null, Modifier.matchParentSize(),
                     contentScale = ContentScale.FillBounds)
+                if (onPage != null) for (i in 0..1) {
+                    // The two page caps are below the LCD windows in the same 480 x 561 viewBox.
+                    val delta = if (i == 0) -1 else 1
+                    Box(Modifier.offset(unit * (58 + PITCH * i), unit * 436).size(unit * 114, unit * 74)
+                        .clickable(role = Role.Button) { onPage(delta) }
+                        .semantics { contentDescription = if (i == 0) "Keypad previous page" else "Keypad next page" })
+                }
                 tiles.forEachIndexed { i, tile ->
                     val x = unit * left(i)
                     val y = unit * top(i)

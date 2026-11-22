@@ -395,7 +395,7 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
                 session.message(D.RevokeOverlay.text())
             } else shortcutDisclosure = true
             is PocketScreenEvent.DesktopInput -> return
-            is PocketScreenEvent.SelectPlugin -> session.selectProfile(event.id)
+            is PocketScreenEvent.SelectPlugin -> session.openProfile(event.id)
             is PocketScreenEvent.ChangePage -> session.changePage(event.delta)
             PocketScreenEvent.Repaint -> session.repaint()
             PocketScreenEvent.ChooseImage -> imagePicker.launch(arrayOf("image/*"))
@@ -416,7 +416,7 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
     }
 
     override fun render() {
-        val deck = session.deck.state.value
+        val deck = session.deck.operatingState.value
         val frame = session.frame()
         val profile = deck.activeProfile.displayName()
         val page = deck.activeProfile.displayPageName(deck.activePage)
@@ -424,7 +424,7 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             status = session.status,
             pluginTitle = if (page == profile) profile else "$profile / $page",
             tiles = frame.keys.mapIndexed { i, key -> key.toGridTile(session.ready, session.keyImage(i, key).asImageBitmap()) },
-            profiles = deck.profiles.map { ProfileChoice(it.id, it.displayName()) },
+            profiles = deck.visibleProfiles.map { ProfileChoice(it.id, it.displayName()) },
             activeId = deck.activeProfileId, reason = displaySelectionReason(session.deck.reason.value),
             connectionLabel = session.connectionLabel,
             connectionActive = target != null || session.request != null,

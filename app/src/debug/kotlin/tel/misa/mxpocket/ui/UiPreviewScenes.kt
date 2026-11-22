@@ -5,6 +5,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import tel.misa.mxpocket.KeyImages
 import tel.misa.mxpocket.R
 import tel.misa.mxpocket.deck.navigationFactorySlots
+import tel.misa.mxpocket.deck.GAME_PROFILE
 import tel.misa.mxpocket.plugins.BuiltInPlugins
 import tel.misa.mxpocket.plugins.PluginFrame
 import tel.misa.mxpocket.shared.ui.*
@@ -14,7 +15,7 @@ class UiPreviewScenes(context: Context) {
     private val plugins = BuiltInPlugins.create(context.getString(R.string.focus),
         context.getString(R.string.audio), context.getString(R.string.phone), oneNoteTitle = context.getString(R.string.onenote))
     val descriptors = plugins.map { it.descriptor }
-    val ids = listOf("disconnected") + descriptors.map { it.id }
+    val ids = listOf("disconnected") + descriptors.map { it.id }.filterNot { it == GAME_PROFILE }
     private val note = "UI-only preview. No USB access, phone actions or running plugins."
     private val disconnectedNote = context.getString(R.string.not_connected)
     private val fixtures = ids.associateWith { lazy { buildState(it) } }
@@ -39,7 +40,7 @@ class UiPreviewScenes(context: Context) {
             status = if (id == "disconnected") "$note\n$disconnectedNote" else "$note\n${plugin.descriptor.title} fixture",
             pluginTitle = plugin.descriptor.title,
             tiles = keys.mapIndexed { index, key -> key.toGridTile(true, images.image(index, key).asImageBitmap()) },
-            profiles = descriptors.map { ProfileChoice(it.id, it.title) },
+            profiles = descriptors.filterNot { it.id == GAME_PROFILE }.map { ProfileChoice(it.id, it.title) },
             activeId = plugin.descriptor.id,
             diagnostics = "UI fixture: no USB enumeration has been performed.",
             log = "Static scene: $id. Controls only emit UI preview events.",

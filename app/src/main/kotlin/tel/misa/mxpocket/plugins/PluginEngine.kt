@@ -25,6 +25,7 @@ class PluginEngine(
     private val readActiveTool: () -> String? = { null },
     private val readToolBar: () -> List<Pair<String, String>> = { emptyList() },
     private val readOneNoteSettings: () -> OneNoteSettings? = { null },
+    private val navigate: ((String) -> Unit)? = null,
 ) : Closeable {
     private val entries = plugins.toList()
     val descriptors: List<PluginDescriptor> = entries.map { it.descriptor }
@@ -209,7 +210,7 @@ class PluginEngine(
             require(capability == null || capability in descriptor.capabilities) {
                 "Plugin ${descriptor.id} did not declare $capability capability"
             }
-            if (action is PluginAction.SelectPlugin) select(action.id) else perform(action, scope)
+            if (action is PluginAction.SelectPlugin) (navigate ?: ::select)(action.id) else perform(action, scope)
         }
     }
 }

@@ -18,7 +18,7 @@ import tel.misa.mxpocket.shared.ui.virtualGrid
 
 /** Uses the same saved deck and folder histories as the editor. Device effects never leave this host. */
 class PreviewDeck(val repository: DeckRepository) {
-    private val deck get() = repository.state.value
+    private val deck get() = repository.operatingState.value
     private val focus = FocusTimer()
     private val xo = TicTacToeGame()
     private var volume = 6
@@ -29,16 +29,22 @@ class PreviewDeck(val repository: DeckRepository) {
     private val knownPlugins = defaultDeck().profiles.map { it.id }.toSet()
     private var lastSnapshot: DeckState? = null
     private var generation = 0L
-    fun resetInput() { generation++ }
+    val pageButtons = PageButtons()
+    fun resetInput() { generation++; pageButtons.reset() }
 
     val profileName get() = deck.activeProfile.displayName()
-    val profileIndex get() = deck.profiles.indexOf(deck.activeProfile)
-    val profileCount get() = deck.profiles.size
+    val profileIndex get() = deck.visibleProfiles.indexOf(deck.activeProfile)
+    val profileCount get() = deck.visibleProfiles.size
     val profileId get() = deck.activeProfileId
-    val profiles get() = deck.profiles.map { it.id to it.displayName() }
+    val profiles get() = deck.visibleProfiles.map { it.id to it.displayName() }
+
+    fun setPluginEnabled(id: String, enabled: Boolean) {
+        require(id in knownPlugins)
+        repository.setDisabledPlugins(if (enabled) deck.disabledPluginIds - id else deck.disabledPluginIds + id)
+    }
 
     fun select(id: String) {
-        repository.selectProfile(id).getOrThrow()
+        if (id == PROFILE_HOME) repository.showHome() else repository.openProfileRoot(id).getOrThrow()
     }
 
     fun cycle(delta: Int) {
@@ -128,12 +134,14 @@ class PreviewDeck(val repository: DeckRepository) {
             }
             else -> null
         }
-        val navigation = assigned?.id in setOf(DeckActions.PAGE, DeckActions.PROFILE, DeckActions.BACK, DeckActions.ROOT)
+        val navigation = assigned?.id in setOf(DeckActions.PAGE, DeckActions.PROFILE, DeckActions.BACK, DeckActions.ROOT, MORE_PROFILES)
         val owner = assigned?.slotOwner()
         val ownerAvailable = owner == null || owner == selectedPlugin
-        val available = key.enabled && ownerAvailable && (navigation || native?.enabled == true)
+        val disabled = action?.plugin in deck.disabledPluginIds || assigned?.targetProfileId() in deck.disabledPluginIds ||
+            assigned?.targetProfileId() == GAME_PROFILE
+        val available = key.enabled && !disabled && ownerAvailable && (navigation || native?.enabled == true && native.label != "-")
         return key.present(native, name ?: "-", when {
-            !key.enabled -> K.Disabled.text()
+            !key.enabled || disabled -> K.Disabled.text()
             !ownerAvailable -> K.Unavailable.text()
             native != null -> native.footer
             !available && assigned != null -> K.Unavailable.text()
@@ -188,7 +196,9 @@ class PreviewDeck(val repository: DeckRepository) {
             DeckActions.BACK -> repository.back()
             DeckActions.ROOT -> repository.root()
             DeckActions.PAGE -> repository.openPage(call.params.getValue(DeckActions.PAGE_ID))
-            DeckActions.PROFILE -> repository.selectProfile(call.params.getValue(DeckActions.PROFILE_ID))
+            DeckActions.PROFILE -> if (deck.activeProfileId == PROFILE_HOME) repository.openProfileRoot(call.params.getValue(DeckActions.PROFILE_ID))
+                else repository.selectProfile(call.params.getValue(DeckActions.PROFILE_ID))
+            MORE_PROFILES -> repository.moreProfiles()
             else -> null
         }
         if (navigation != null) return navigation.fold({ K.OnPage.text(profileName, deck.activeProfile.displayPageName(deck.activePage)) },
@@ -231,11 +241,10 @@ class PreviewDeck(val repository: DeckRepository) {
                 7 -> K.PreviewAccess.text()
                 else -> K.SimulatedSystem.text(label)
             }
-            "phone" -> if (index == 6 || index == 7) {
-                val target = if (index == 6) "focus" else "audio"
+            "phone" -> phoneShortcutProfile(index)?.let { target ->
                 repository.selectProfile(target).getOrElse { return it.message ?: K.ProfileUnavailable.text() }
                 return K.OpenedFromPhone.text(profileName)
-            } else return K.SimulatedPhone.text(label)
+            } ?: return K.SimulatedPhone.text(label)
             else -> return K.SimulatedSystem.text(label)
         }
         return if (plugin == "focus") K.FocusRemaining.text(focus.label(now)) else K.PreviewOnly.text(label)

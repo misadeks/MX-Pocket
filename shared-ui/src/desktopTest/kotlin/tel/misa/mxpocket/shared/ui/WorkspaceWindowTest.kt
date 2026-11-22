@@ -44,6 +44,35 @@ class WorkspaceWindowTest {
         ui.onNodeWithText("Diagnostics").assertHasClickAction()
     }
 
+    @Test fun switchingOffTheEditedProfileHidesItsKeysButNotACustomNamesake() {
+        val repo = DeckRepository(File(temp.root, "deck.json"))
+        val custom = repo.duplicateProfile("audio", "Audio").getOrThrow()
+        repo.renameProfile("audio", "My player").getOrThrow()
+        repo.selectProfile("audio").getOrThrow()
+        val store = repo.asEditorStore()
+        ui.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(.75f)) {
+                Box(Modifier.requiredWidth(900.dp)) { PocketTheme {
+                    LayoutEditor(store, availableFactoryKeyBindings(repo.state.collectAsState().value.disabledPluginIds),
+                        emptyMap(), {}, {})
+                } }
+            }
+        }
+        ui.onNodeWithText("Swap keys").performScrollTo().performClick()
+        ui.onNodeWithContentDescription("Key 1,", substring = true).performClick()
+        ui.onNodeWithTag("key-label").assertExists()
+        ui.runOnIdle { repo.setDisabledPlugins(setOf("audio")) }
+        ui.onNodeWithTag("key-label").assertDoesNotExist()
+        ui.onNodeWithText("My player", substring = true).assertDoesNotExist()
+        ui.onNodeWithText("Tic Tac Toe", substring = true).assertDoesNotExist()
+        ui.onNodeWithText("Audio").performClick()
+        ui.waitUntil(5_000) { repo.state.value.activeProfileId == custom }
+        ui.onNodeWithText("Swap keys").performScrollTo().performClick()
+        ui.onNodeWithContentDescription("Key 1,", substring = true).performClick()
+        ui.onNodeWithTag("choose-binding").performClick()
+        ui.onNodeWithText("Audio key 1").assertDoesNotExist()
+    }
+
     @Test fun onlyAConnectedDesktopSimulatorOffersKeyInput() {
         val frame = FocusTimer().present(0)
         val grid = virtualGrid(1, defaultDeck(), frame, null)

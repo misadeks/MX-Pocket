@@ -7,12 +7,14 @@ import tel.misa.mxpocket.i18n.displaySelectionReason
 
 import androidx.compose.runtime.*
 import androidx.compose.ui.input.key.*
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.*
 import java.awt.FileDialog
 import androidx.compose.ui.awt.ComposeWindow
 import java.io.File
 import java.nio.file.Files
+import java.util.prefs.Preferences
 import kotlinx.coroutines.delay
 import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.*
@@ -48,11 +50,14 @@ fun main() = application {
             Files.createDirectories(it.toPath())
         }
     }
-    val repo = remember { DeckRepository(File(directory, "deck.json")) }
+    val registry = remember { defaultDeck().profiles }
+    val switches = remember { Preferences.userNodeForPackage(PreviewDeck::class.java) }
+    val repo = remember { DeckRepository(File(directory, "deck.json"),
+        registry.filter { switches.getBoolean("disabled.${it.id}", false) }.map { it.id }.toSet()) }
     val host = remember { PreviewDeck(repo) }
     val workflows = remember(directory) { DesktopWorkflowStore(directory) }
     val workflowState by workflows.state.collectAsState()
-    val deck by repo.state.collectAsState()
+    val deck by repo.operatingState.collectAsState()
     var tab by remember { mutableStateOf(WorkspaceTab.HOME) }
     var themeMode by remember {
         mutableStateOf(ThemeMode.entries.find { it.name == appearance.get("theme", null) } ?: ThemeMode.SYSTEM)
@@ -94,7 +99,12 @@ fun main() = application {
     Window(::exitApplication, title = "$profile - MX Pocket",
         state = rememberWindowState(width = 1120.dp, height = 760.dp),
         onPreviewKeyEvent = {
-            if (it.type == KeyEventType.KeyUp && it.key == Key.Escape) {
+            if (!setup && simulating && tab == WorkspaceTab.HOME && it.key in listOf(Key.PageUp, Key.PageDown)) {
+                host.pageButtons.input(if (it.key == Key.PageUp) -1 else 1, it.type == KeyEventType.KeyDown, false,
+                    { delta -> repo.changePage(delta).onFailure { error -> status(error.message ?: "Cannot change profile.") } },
+                    { repo.enterGame().onFailure { error -> status(error.message ?: "Game unavailable.") } })
+                true
+            } else if (it.type == KeyEventType.KeyUp && it.key == Key.Escape) {
                 when {
                     setup -> { setup = false; true }
                     nestedBack != null -> { nestedBack?.invoke(); true }
@@ -103,7 +113,9 @@ fun main() = application {
                 }
             } else false
         }) {
-        val profiles = deck.profiles.map { ProfileChoice(it.id, it.displayName()) }
+        val acceptsPageKeys = LocalWindowInfo.current.isWindowFocused && !setup && simulating && tab == WorkspaceTab.HOME
+        DisposableEffect(acceptsPageKeys) { onDispose { host.pageButtons.reset() } }
+        val profiles = deck.visibleProfiles.map { ProfileChoice(it.id, it.displayName()) }
         val board = remember(deck, time, revision, simulating, tel.misa.mxpocket.i18n.AppLocale.current) { host.board(time, deck) }
         val tiles = board.faces.map { it.toGridTile(simulating) }
         val state = PocketScreenState(status = message, pluginTitle = if (page == profile) profile else "$profile / $page",
@@ -111,25 +123,25 @@ fun main() = application {
             connectionLabel = if (simulating) W.VirtualKeypad.text() else W.Disconnected.text(), diagnostics = W.NoHid.text(),
             log = history.joinToString("\n"), simulator = DesktopSimulator(DEVICE_LIMIT, board.grid.takeIf { simulating }),
             activePageId = deck.activePage.id, themeMode = themeMode, language = language.choice)
-        val plugins = defaultDeck().profiles.map {
-            PluginItem(it.id, it.displayName(), true, W.Simulation.text(), when (it.id) {
+        val plugins = registry.map {
+            PluginItem(it.id, it.displayName(), it.id !in deck.disabledPluginIds, W.Simulation.text(), when (it.id) {
                 "focus" -> W.TimerSimulation.text()
                 "audio" -> W.AudioSimulation.text()
                 "game.xo" -> W.GameSimulation.text()
                 else -> W.AndroidOnly.text()
-            }, profiles.any { profile -> profile.id == it.id }, it.id == deck.defaultProfileId, null, canToggle = false)
+            }, profiles.any { profile -> profile.id == it.id }, it.id == deck.defaultProfileId, null)
         }
         val options = buildList {
             add(BindingOption(LayoutCopy.Back.text(), ActionCall(DeckActions.BACK)))
             add(BindingOption(LayoutCopy.Root.text(), ActionCall(DeckActions.ROOT)))
-            DeckCommand.entries.filter { it.deck in setOf("audio", "navigation", "teams") }.forEach {
+            DeckCommand.entries.filter { it.deck in setOf("audio", "navigation", "teams") && it.deck !in deck.disabledPluginIds }.forEach {
                 add(BindingOption(LayoutCopy.CategoryAction.text(builtInDeckName(it.deck), it.displayLabel), ActionCall(it.id)))
             }
             deck.profiles.forEach { add(BindingOption(LayoutCopy.BindProfile.text(it.displayName()), ActionCall(DeckActions.PROFILE, mapOf("profileId" to it.id)))) }
             workflowState.definitions.forEach {
                 add(BindingOption(LayoutCopy.AndroidWorkflow.text(it.name), ActionCall("workflow.run", mapOf("workflowId" to it.id))))
             }
-            addAll(factoryKeyBindings)
+            addAll(availableFactoryKeyBindings(deck.disabledPluginIds))
         }
         val backup = { save: Boolean ->
             try { chooseBackup(window, repo, save)?.let(::status) }
@@ -158,6 +170,10 @@ fun main() = application {
                         is PocketScreenEvent.VirtualKey -> if (simulating && tab == WorkspaceTab.HOME && !setup)
                             host.press(event, now())?.let(::status)
                         is PocketScreenEvent.DefaultProfile -> repo.setDefault(event.id).getOrThrow()
+                        is PocketScreenEvent.EnablePlugin -> {
+                            switches.putBoolean("disabled.${event.id}", !event.enabled)
+                            host.setPluginEnabled(event.id, event.enabled)
+                        }
                         PocketScreenEvent.FeatureSetup -> { setupReview = false; setup = true }
                         is PocketScreenEvent.SetTheme -> { themeMode = event.mode; appearance.put("theme", event.mode.name) }
                         is PocketScreenEvent.SetLanguage -> language.set(event.language)

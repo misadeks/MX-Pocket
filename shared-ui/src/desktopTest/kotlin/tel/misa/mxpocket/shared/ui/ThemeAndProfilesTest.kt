@@ -79,6 +79,27 @@ class ThemeAndProfilesTest {
         }
     }
 
+    @Test fun profilesTabDoesNotSelectOverTheHiddenGameOrOfferItsEditor() {
+        val repo = DeckRepository(File(temp.root, "deck.json"))
+        repo.enterGame().getOrThrow()
+        ui.setContent {
+            val live by repo.operatingState.collectAsState()
+            val surface = state().copy(activeId = live.activeProfileId,
+                profiles = live.visibleProfiles.map { ProfileChoice(it.id, it.name) })
+            PocketTheme {
+                PocketWorkspace(WorkspaceTab.PROFILES, {}, surface, emptyList(), {
+                    if (it is PocketScreenEvent.SelectPlugin) repo.openProfileRoot(it.id).getOrThrow()
+                }, editor = { LayoutEditor(repo.asEditorStore(), emptyList(), emptyMap(), {}, {}) }, workflows = {})
+            }
+        }
+        ui.waitForIdle()
+        ui.onNodeWithText("Swap keys").assertDoesNotExist()
+        ui.onNodeWithText("Tic Tac Toe").assertDoesNotExist()
+        ui.runOnIdle { assertEquals(GAME_PROFILE, repo.operatingState.value.activeProfileId) }
+        ui.onAllNodesWithText("Focus").onFirst().performClick()
+        ui.onNodeWithText("Swap keys").assertExists()
+    }
+
     private fun openEditor(): DeckRepository {
         val repo = DeckRepository(File(temp.root, "deck.json"))
         ui.setContent {

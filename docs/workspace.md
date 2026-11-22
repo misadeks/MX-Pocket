@@ -17,6 +17,19 @@ and **Settings** contains USB preferences. Open **Settings → Diagnostics** to
 see device details and the session log. On Android, Back returns to Settings.
 On Windows, Diagnostics opens in a separate window you can close independently.
 
+Home starts on a nine-key profile launcher. Pick a profile to open its first
+page; **More profiles** shows the next group if there are more than nine.
+**Previous** and **Next** browse Home and the available profile roots. To
+open a submenu such as Teams Call tools, use its assigned key instead.
+Press both page controls together to play Tic Tac Toe (**Page Up** and
+**Page Down** in the Windows simulator). Release both, then press either
+one to exit. The game is not in the regular launcher or editor.
+
+Turning off a plugin hides its own profile and pages from Home, Profiles and
+the action pickers. Its saved layout returns when you re-enable it in
+**Plugins**. Custom profiles remain visible, including any keys that will
+work again when their plugin is enabled.
+
 **Profiles** switches and edits profiles. Swipe the endless profile carousel
 (or tap a card) to put that profile on the keypad; the cards beside the
 centered one are slightly blurred. The profile picker below it always shows

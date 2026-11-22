@@ -108,7 +108,7 @@ fun LayoutEditor(
         fun finishSwap() { swapping = false }
         fun show(p: Pane) { index = null; finishSwap(); pane = p }
         fun selectProfile(id: String) {
-            if (id != deck.activeProfileId) writer.edit(DeckEdit.Select(id))
+            if (id != (live?.activeId ?: deck.activeProfileId)) writer.edit(DeckEdit.Select(id))
             show(Pane.PREVIEW)
         }
         fun selectPage(id: String) { selectedPage = id; show(Pane.PREVIEW) }
@@ -154,11 +154,11 @@ fun LayoutEditor(
             val library: @Composable () -> Unit = {
                 WorkspaceTitle(LayoutCopy.Layouts.text())
                 EditorNote(LayoutCopy.LibraryHint.text())
-                LibraryGroup(LayoutCopy.Profile.text(), LayoutCopy.ManageProfile.text(), deck.profiles.map { it.id to it.displayName() }, profile.id, !writer.busy, ::selectProfile,
+                LibraryGroup(LayoutCopy.Profile.text(), LayoutCopy.ManageProfile.text(), deck.visibleProfiles.map { it.id to it.displayName() }, profile.id, !writer.busy, ::selectProfile,
                     listOf(Command.CREATE_PROFILE, Command.COPY_PROFILE, Command.RENAME_PROFILE, Command.DELETE_PROFILE),
                     allowed = { cmd -> writable && when (cmd) {
                         Command.CREATE_PROFILE, Command.COPY_PROFILE -> deck.profiles.size < DeckLimits.PROFILES
-                        Command.DELETE_PROFILE -> deck.profiles.size > 1
+                        Command.DELETE_PROFILE -> deck.visibleProfiles.size > 1
                         else -> true
                     } }, choose = { command = it })
                 LibraryGroup(LayoutCopy.Page.text(), LayoutCopy.ManagePage.text(), profile.pages.map { it.id to profile.displayPageName(it) }, page.id, !writer.busy, ::selectPage,
@@ -202,7 +202,7 @@ fun LayoutEditor(
                         writer.edit(DeckEdit.Rules(profile.id, profile.rules, profile.rules +
                             DeckRule(tel.misa.mxpocket.FOREGROUND_APP, pkg, tel.misa.mxpocket.APP_RULE_WEIGHT)), done)
                     }, edit = { removingRule = false; rule = it },
-                        remove = { removingRule = true; rule = it }) }
+                        remove = { removingRule = true; rule = it }, disabledIds = deck.disabledPluginIds) }
                     PocketCard(LayoutCopy.Backups.text(), ShellIcon.DOCUMENT) {
                         EditorNote(LayoutCopy.ExportHint.text())
                         EditorActions {
@@ -310,7 +310,7 @@ private fun ProfileSettings(profile: DeckProfile, deck: DeckState, decision: Dec
                             writable: Boolean, edit: (DeckEdit) -> Unit) {
     EditorHeading(LayoutCopy.ProfileSelection.text())
     val pinned = profile.id == deck.pinnedProfileId
-    val defaultName = deck.profiles.first { it.id == deck.defaultProfileId }.displayName()
+    val defaultName = deck.visibleProfiles.first { it.id == deck.availableDefaultId }.displayName()
     val pinnedName = deck.profiles.find { it.id == deck.pinnedProfileId }?.displayName()
     EditorNote(LayoutCopy.DefaultSummary.text(defaultName, pinnedName?.let { LayoutCopy.Pinned.text(it) } ?: LayoutCopy.NotPinned.text()))
     EditorActions {
