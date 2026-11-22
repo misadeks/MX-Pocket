@@ -11,9 +11,31 @@ const val IN_CALL = "in-call"
 val teamsSlots = listOf(C.TEAMS_CAPTIONS, C.TEAMS_HAND, C.TEAMS_CHAT, C.TEAMS_QUIETER,
     C.TEAMS_MIC, C.TEAMS_LOUDER, C.TEAMS_OPEN, C.TEAMS_STATUS, C.TEAMS_ACCESS)
 
+enum class CallStatus(val label: String, val footer: String, val detail: String) {
+    NO_KEYPAD("No keypad", "Connect USB", "Connect and authorize the wired keypad. A virtual keypad cannot observe calls."),
+    DISABLED("Plugin off", "Plugins", "Enable the Teams plugin to use call status."),
+    UNSUPPORTED_OS("Android 14+", "Required", "Call status needs Android 14 or later."),
+    PROFILE_NOTICE("Call notice", "This profile", "Teams posted an ongoing call notification in this Android profile. With multiple profiles, MX Pocket cannot verify the call or operate the mic."),
+    NOT_INSTALLED("No Teams", "This profile", "No launchable Teams app was found in this Android profile."),
+    LOCKED("Locked", "Unlock phone", "Unlock the phone to resume call observation."),
+    OFF("Status off", "Teams setup", "Teams call status is off. No calls are being observed."),
+    NEEDS_ACCESS("Access off", "Teams setup", "Notification access for MX Pocket Teams calls is off. Audio and Navigation access do not enable Teams."),
+    DISCONNECTED("Not ready", "Teams setup", "Teams notification access is on, but the listener is not connected. Check the service in Android settings."),
+    TOOLBAR_OFF("Call notice", "Teams setup", "Teams posted an ongoing call notification. The Teams accessibility service is off; it is optional for read-only status."),
+    TOOLBAR_DISCONNECTED("Call notice", "Not connected", "Teams posted an ongoing call notification. Accessibility access is on, but its service is not connected."),
+    UNAVAILABLE("Unknown", "Use Teams", "No unique call signal is available. Check the call in Teams."),
+    UNTYPED("Call notice", "Type unknown", "Teams posted a call notification without a supported call type. Check the call in Teams."),
+    INCOMING("Incoming", "Use Teams", "Teams reports an incoming call, not a joined call."),
+    SCREENING("Screening", "Use Teams", "Teams reports call screening, not a joined call."),
+    NO_SIGNAL("No signal", "Check filters", "No eligible ongoing Teams call notification is visible. This does not mean there is no call."),
+    NOTIFICATION("Call notice", "Show controls", "Teams posted an ongoing call notification. Open the meeting on this phone and show its controls to confirm the call."),
+    JOINED("In call", "This phone", "A local Teams call was confirmed on this phone.");
+}
+
 /** Only display data crosses into rendering. The generation is local, never a notification or meeting ID. */
-data class TeamsState(val installed: Boolean = false, val observed: Boolean = false, val joined: Boolean = false,
+data class TeamsState(val installed: Boolean = false, val status: CallStatus = CallStatus.NO_KEYPAD,
     val muted: Boolean? = null, val generation: Long = 0, val setupAvailable: Boolean = true) {
+    val joined get() = status == CallStatus.JOINED
     fun tile(command: C): KeyTile {
         val (label, footer) = when (command) {
             C.TEAMS_MIC -> when {
@@ -21,11 +43,7 @@ data class TeamsState(val installed: Boolean = false, val observed: Boolean = fa
                 muted -> "Unmute mic" to "Mic muted"
                 else -> "Mute mic" to "Mic on"
             }
-            C.TEAMS_STATUS -> "Call status" to when {
-                joined -> "In call"
-                observed -> "No confirmed call"
-                else -> "State unavailable"
-            }
+            C.TEAMS_STATUS -> status.label to status.footer
             C.TEAMS_ACCESS -> command.label to if (setupAvailable) "On phone" else "Open MX Pocket"
             C.TEAMS_OPEN -> command.label to if (installed) "This phone" else "Not installed"
             else -> command.label to "Use Teams"

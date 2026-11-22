@@ -227,18 +227,18 @@ internal class PocketSession(
 
     private fun hasPlugin(id: String) = plugins.descriptors.any { it.id == id }
     private fun refreshTeams() {
-        val physical = !preview && output != null && TEAMS !in disabled.value && teams.access.enabled &&
-            request?.let(app::hasKeypadAccess) == true
+        val physical = !preview && output != null && request?.let(app::hasKeypadAccess) == true
         val previous = decks.value.teams
-        val state = teams.refresh(physical, screen != null, teamsInstalled)
+        val state = teams.refresh(physical, screen != null, teamsInstalled, TEAMS !in disabled.value)
         // A held key can be unrelated to the mic and still belong to the previous call state.
         if ((previous.joined || state.joined) && previous.generation != state.generation)
             cancelPhysicalGesture()
         decks.value = decks.value.copy(teams = state)
-        deck.showTeamsCall(when {
-            !physical || !teams.access.enabled -> false
-            !state.observed -> null
-            else -> state.joined
+        deck.showTeamsCall(when (state.status) {
+            CallStatus.JOINED -> true
+            CallStatus.NO_KEYPAD, CallStatus.DISABLED, CallStatus.OFF, CallStatus.NO_SIGNAL,
+            CallStatus.INCOMING, CallStatus.SCREENING -> false
+            else -> null // Inconclusive evidence withdraws the page without undoing a manual override.
         })
     }
     private fun selectedPlugin(page: DeckPage) = page.selectedSlotOwner(::hasPlugin)
@@ -308,6 +308,7 @@ internal class PocketSession(
             ownerOf(call) !in disabled.value && (tile?.enabled != false)
         val footer = when {
             !key.enabled || ownerOf(call) in disabled.value -> "Disabled"
+            tile?.inputToken?.startsWith("${DeckCommand.TEAMS_STATUS.id}:") == true && key.label.isNotBlank() -> tile.label
             ownerOf(call) == TEAMS && tile != null -> if (tile.enabled && !available) "Unavailable" else tile.footer
             tile?.glyph == NavigationGlyph.ACCESS_INFO ||
                 tile?.glyph == NavigationGlyph.RECENTS && !tile.enabled -> tile.footer

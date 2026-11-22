@@ -99,21 +99,43 @@ Previous focus, Select and Next focus use the existing Navigation controls.
 claiming a call is active. My chat and Meeting link are unassigned. Existing
 layouts are preserved: editing or deleting a Teams page isn't undone on upgrade.
 
-For automatic switching, open **Plugins → Teams → Teams setup** on the phone.
-Enable **Teams call switching**, then grant notification access to **MX Pocket
-Teams calls** and accessibility access to **MX Pocket Teams call controls**.
-These are broad Android permissions; neither the Audio listener, the Navigation
-service nor grant of a system permission alone opts you in. You can turn the
-feature off without affecting either Audio or Navigation.
+Open **Plugins → Teams → Teams setup** on the phone. **Enable Teams call
+status** is off by default. With an authorized wired keypad, unlocked phone and
+Android 14+, notification access for **MX Pocket Teams calls** allows read-only
+status. It is a broad Android permission: the adapter first checks the posting
+app and Android user, then checks Teams notification categories and call types.
+It does not read messages, names or notification action labels. Audio and
+Navigation grants do not opt you in. Turning off Teams leaves those features alone.
 
-With an authorized wired keypad and an unlocked phone, the adapter requires
-**both** one Android 14+ [typed ongoing CallStyle](https://developer.android.com/develop/ui/compose/notifications/call-style)
-from `com.microsoft.teams` in the same Android user, and the visible joined
-meeting controls. A notification alone cannot distinguish every client's
-pre-join or ringing behavior. The foreground check looks for the English
-**Mic** and **Hang up** buttons together in the same control group, as named in
+**Read key 8 on Call tools, or the explanation at the top of Teams setup:**
+
+| Readout | What it means |
+| --- | --- |
+| **No signal / Check filters** | No eligible Teams notice is visible. This is not a “No call” result. See the filter check below. |
+| **Call notice / Type unknown** | Teams posted a call-category notification without a supported call type. Use the controls in Teams. Incoming and screening notices also never switch pages. |
+| **Call notice / Show controls** | Teams reported an ongoing call. Open the meeting on this phone and show its controls; the notice alone does not prove you joined. |
+| **Call notice / This profile** | Multiple Android profiles are present. Only a notice posted in MX Pocket's own profile is observed. No window inspection, auto-switch or mic control is permitted. |
+| **In call / This phone** | A typed ongoing Teams notice and the joined toolbar were both observed on this phone. A hidden or unsupported mic still cannot be operated. |
+
+If access is already on, especially **after an upgrade**, open **Notification
+access** in Teams setup → **MX Pocket Teams calls**. Where Android offers filter
+controls, make sure Teams isn't excluded and review **Notifications** (alerting),
+**Silent** and **Conversations**. Android's listener delivery classes are *not*
+the Teams call type. The old “ongoing” default can exclude valid notices and
+Android [may keep a saved filter rather than apply a new default](https://developer.android.com/reference/android/service/notification/NotificationListenerService#META_DATA_DEFAULT_FILTER_TYPES).
+MX Pocket does not reset your choices. Some phones hide the controls; an
+update or re-enabling access is not a guaranteed reset. If no supported notice
+arrives, use Teams directly.
+
+For automatic entry on a **single-profile** phone, also allow accessibility
+access to **MX Pocket Teams call controls**. Entry requires **both** one
+[typed ongoing CallStyle](https://developer.android.com/develop/ui/compose/notifications/call-style)
+from Teams in the same Android user and the visible joined meeting controls.
+The foreground check looks for the English **Mic** and **Hang up** buttons
+together in the same control group, as named in
 [Microsoft's Android TalkBack guide](https://support.microsoft.com/en-us/accessibility/teams/use-a-screen-reader-to-join-a-meeting-in-microsoft-teams).
-Hang up is never pressed. Once confirmed, the same notification can maintain
+The Mic need not be actionable to recognize this pair. Hang up is never pressed.
+Once confirmed, the same notification can maintain
 the page with Teams in the background; hidden controls cannot be pressed.
 No presence, media activity, chat content or caller identity is used. No
 call data or automatic page selection is written to a backup.
@@ -133,10 +155,13 @@ not a Teams remote.
 Automatic detection and mic dispatch are tested with synthetic Android
 notifications, accessibility buttons and keypad input, **not a live Teams
 client**. There is no verified client/version combination yet. Missing or
-ambiguous controls, another language, Android below 14, multiple Android
-profiles (including a work profile), or an administrator restriction can
-leave the feature unavailable. A real, user-controlled call and a physical
+ambiguous controls, another language, an unrecognized notification or an
+administrator restriction can limit the readout. With multiple profiles,
+call notices are read-only. A real, user-controlled call and a physical
 LCD/TalkBack check are still required before claiming support for a client.
+Verify that ringing/pre-join does not switch the page, showing the joined
+toolbar changes key 8, one center press changes the mic in Teams, and leaving
+restores the previous page. No meeting content, screenshots or logs are needed.
 
 ## Profile and workflow bindings
 

@@ -18,14 +18,31 @@ internal class TeamsCall(private val app: Context) {
     var state = TeamsState()
         private set
 
-    fun refresh(physical: Boolean, visible: Boolean, installed: Boolean): TeamsState {
-        val allowed = physical && installed && access.enabled && Build.VERSION.SDK_INT >= 34 &&
-            app.isUnlockedAndInteractive() && access.granted && access.toolbarGranted && access.singleProfile
-        val listener = TeamsCallListener.current.takeIf { allowed }
+    fun refresh(physical: Boolean, visible: Boolean, installed: Boolean, pluginEnabled: Boolean): TeamsState {
+        val blocked = when {
+            !pluginEnabled -> CallStatus.DISABLED
+            !physical -> CallStatus.NO_KEYPAD
+            Build.VERSION.SDK_INT < 34 -> CallStatus.UNSUPPORTED_OS
+            !app.isUnlockedAndInteractive() -> CallStatus.LOCKED
+            !access.enabled -> CallStatus.OFF
+            !installed -> CallStatus.NOT_INSTALLED
+            !access.granted -> CallStatus.NEEDS_ACCESS
+            TeamsCallListener.current == null -> CallStatus.DISCONNECTED
+            else -> null
+        }
+        val listener = TeamsCallListener.current.takeIf { blocked == null }
         if (owner !== listener) owner?.forget()
         val observation = listener?.snapshot() ?: TeamsObservation.Unavailable
         val ongoing = observation as? TeamsObservation.Ongoing
-        val service = TeamsToolbarService.current.takeIf { ongoing != null }
+        // The posting user is available on notifications, but not on accessibility nodes.
+        val toolbarBlocked = when {
+            ongoing == null -> null
+            !access.singleProfile -> CallStatus.PROFILE_NOTICE
+            !access.toolbarGranted -> CallStatus.TOOLBAR_OFF
+            TeamsToolbarService.current == null -> CallStatus.TOOLBAR_DISCONNECTED
+            else -> null
+        }
+        val service = TeamsToolbarService.current.takeIf { ongoing != null && toolbarBlocked == null }
         val toolbar = service?.inspect()?.first
         val newCall = owner !== listener || key != ongoing?.key || boundary != (listener?.boundary ?: -1L)
         if (newCall || service == null || toolbarService !== service) {
@@ -37,8 +54,16 @@ internal class TeamsCall(private val app: Context) {
         if (toolbar != null) confirmed = true
         val muted = toolbar?.muted
         if (muted != null && muted != waitingForChange) waitingForChange = null
-        val next = TeamsState(installed, observation != TeamsObservation.Unavailable && TeamsToolbarService.current != null,
-            confirmed, muted.takeIf { waitingForChange == null }, state.generation, visible)
+        val status = blocked ?: toolbarBlocked ?: when {
+            confirmed -> CallStatus.JOINED
+            ongoing != null -> CallStatus.NOTIFICATION
+            observation == TeamsObservation.None -> CallStatus.NO_SIGNAL
+            observation == TeamsObservation.Untyped -> CallStatus.UNTYPED
+            observation == TeamsObservation.Incoming -> CallStatus.INCOMING
+            observation == TeamsObservation.Screening -> CallStatus.SCREENING
+            else -> CallStatus.UNAVAILABLE
+        }
+        val next = TeamsState(installed, status, muted.takeIf { waitingForChange == null }, state.generation, visible)
         val stamp = ongoing?.posted ?: -1L
         val changed = newCall || stamp != posted || toolbarService !== service || window != toolbar?.window || next != state
         state = if (changed) next.copy(generation = state.generation + 1) else next
@@ -53,7 +78,8 @@ internal class TeamsCall(private val app: Context) {
 
     fun pressMic(expected: TeamsState, authorized: () -> Boolean): DeckResult {
         val service = toolbarService
-        if (expected != state || !expected.joined || expected.muted == null || service == null || !authorized())
+        if (expected != state || !expected.joined || expected.muted == null || service == null || !authorized() ||
+            !access.singleProfile)
             return unavailable("Call controls changed. Check the center key.")
         val sent = service.inspect { toolbar ->
             val current = TeamsCallListener.current
