@@ -14,9 +14,9 @@ Switch to **Navigate**: that same key becomes **Select**. With
 [Android navigation access](docs/android-decks.md) enabled, you can move focus
 between controls in supported apps without swiping the phone.
 
-![Six keypad layouts. Top: Music and Navigate, with Back, Home and Recents above Previous, Select and Next. Middle: OneNote Draw and an incoming call, with the caller’s picture above their name and Accept and Decline in the bottom corners. Bottom: the Home profile picker and Tic Tac Toe.](docs/images/audio-and-navigation.png)
+![Six keypad layouts. Top: the Home profile picker and Navigate. Middle: Music playback and OneNote Draw tools. Bottom: an incoming call with the caller’s picture above their name and Accept and Decline in the bottom corners, beside a game of Tic Tac Toe.](docs/images/audio-and-navigation.png)
 
-*On Navigate, the bottom row shows Scroll up, Scroll down and More. Incoming Call shows a fictional caller and both actions from a supported dialer.*
+*Home lists the available profiles. Navigate groups scrolling and More on its bottom row. Incoming Call shows a fictional caller and both actions from a supported dialer.*
 
 The **wired Logitech MX Creative Keypad** (`046D:C354`) connects directly to
 your Android phone over USB-C. MX Pocket's Kotlin driver uses Android's USB
