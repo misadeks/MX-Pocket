@@ -1,6 +1,7 @@
 package tel.misa.mxpocket
 
 import androidx.compose.ui.test.*
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import android.content.Intent
 import android.os.Bundle
@@ -50,17 +51,26 @@ class MainActivityTest {
             ui.onNodeWithText("Disconnect virtual keypad").assertDoesNotExist()
             ui.onNodeWithText("Home").performClick()
             ui.onNodeWithText("Choose a profile").assertDoesNotExist()
-            ui.onNodeWithText("Switch layout").performClick()
-            ui.onNodeWithText("Focus").performClick()
+            ui.onNodeWithText("Switch layout").assertDoesNotExist()
+            ui.onNodeWithText("Profiles").performClick()
+            ui.onNodeWithText("Focus").performScrollTo().performClick()
+            ui.onNodeWithText("Profile settings and rules").performScrollTo().performClick()
+            ui.onNodeWithText("Use on keypad").performScrollTo().performClick()
+            ui.waitUntil(5_000) { app.session.deck.operatingState.value.activeProfileId == "focus" }
+            ui.onNodeWithText("Home").performClick()
             ui.onNodeWithContentDescription("Key 1, Start", substring = true).assertHasNoClickAction()
+            ui.onNodeWithContentDescription("Previous page").performScrollTo().performClick()
+            assertEquals(tel.misa.mxpocket.deck.PROFILE_HOME, app.session.deck.operatingState.value.activeProfileId)
+            ui.onNode(hasText("Home") and SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)).assertExists()
+            ui.onNodeWithContentDescription("Key 1, Focus", substring = true).assertHasNoClickAction()
+            ui.onNodeWithContentDescription("Next page").performScrollTo().performClick()
             ui.onNodeWithContentDescription("Next page").performScrollTo().performClick()
             assertEquals("audio", app.session.deck.state.value.activeProfileId)
             ui.onNodeWithContentDescription("Play/Pause").assertExists()
             ui.onNodeWithContentDescription("Next page").performScrollTo().performClick()
             ui.onNodeWithContentDescription("Key 1, Camera", substring = true).assertHasNoClickAction()
-            ui.onNodeWithText("Switch layout").performScrollTo().performClick()
-            ui.onNodeWithText("Profile launcher").performClick()
-            assertEquals(tel.misa.mxpocket.deck.PROFILE_HOME, app.session.deck.operatingState.value.activeProfileId)
+            ui.onNodeWithText("Switch layout").assertDoesNotExist()
+            ui.onNodeWithText("Profile launcher").assertDoesNotExist()
             assertFalse(app.session.ready)
         }
     }
@@ -94,6 +104,7 @@ class MainActivityTest {
                 ui.onNodeWithText("Français").performClick()
                 scene.recreate()
                 ui.onNodeWithText("Accueil").performClick()
+                ui.onNode(hasText("Accueil") and SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)).assertExists()
                 ui.onNodeWithContentDescription("Connecter l’appareil").performClick()
                 ui.onNodeWithText("Vérifiez le câble", substring = true).assertExists()
                 assertEquals(AppLanguage.FRENCH, LanguagePreference.choice(app))

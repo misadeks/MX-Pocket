@@ -10,7 +10,7 @@ translated or editable title. Focus is blue, Audio green, Phone violet,
 Launcher amber, Studio pink, Navigation teal, Tic-tac-toe (`game.xo`) orange,
 Teams indigo and OneNote orchid. **Work** is the root page of `teams`, not a
 second plugin. Unknown IDs, including copied/custom profiles, use neutral slate.
-These colors identify profiles and launcher keys; they do not replace status
+These colors identify profiles and their keys on Home; they do not replace status
 colors, drawing-tool swatches, user-selected key colors or LCD backgrounds.
 
 Teams and OneNote use icons from the current Android profile's installed

@@ -190,14 +190,14 @@ class PreviewDeckTest {
         check(deck.press(2, 0).startsWith("Invalid action parameters"))
         check(deck.tiles(0)[3].label == "5 / 15")
     }
-    @Test fun launcherPaginatesAndBrowseAlwaysOpensProfileRoots() {
+    @Test fun homePaginatesAndBrowseAlwaysOpensProfileRoots() {
         val repo = DeckRepository(File(folder.root, "deck.json"))
         val deck = PreviewDeck(repo).apply { simulator = true }
         val page = repo.createPage("focus", "Projects").getOrThrow()
         val extras = List(4) { repo.createProfile("Custom $it").getOrThrow() }
         check(deck.profileName == "Home")
         check(deck.tiles(0)[8].label == "More profiles")
-        deck.press(8, 0)
+        assertEquals("Home", deck.press(8, 0))
         val lastChoice = deck.tiles(0).indexOfFirst { it.label == "Custom 3" }
         check(lastChoice in 0..7)
         deck.press(lastChoice, 0)
