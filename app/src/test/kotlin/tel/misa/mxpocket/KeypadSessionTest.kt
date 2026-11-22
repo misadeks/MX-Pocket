@@ -379,7 +379,7 @@ class KeypadSessionTest {
         assertEquals("Focus", session.frame().keys.first().label)
         press(1); expectProfile("focus")
         session.setPluginEnabled("audio", false)
-        val ids = listOf("phone", "launcher", "studio", "navigation", "teams", "@home", "focus")
+        val ids = listOf("phone", "launcher", "studio", "navigation", "teams", "onenote", "@home", "focus")
         ids.forEach { press(0x01a2); expectProfile(it) }
         for ((first, second) in listOf(0x01a1 to 0x01a2, 0x01a2 to 0x01a1)) {
             val backup = repo.exportJson()

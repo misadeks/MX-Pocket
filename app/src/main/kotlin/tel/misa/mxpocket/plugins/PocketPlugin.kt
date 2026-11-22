@@ -5,7 +5,7 @@ import kotlinx.coroutines.flow.StateFlow
 import tel.misa.mxpocket.decks.DeckCommand
 import tel.misa.mxpocket.decks.DeckState
 
-enum class PluginCapability { AUDIO, OPEN_APPS, NAVIGATION, TONE, STUDIO, SYSTEM_NAVIGATION, TEAMS }
+enum class PluginCapability { AUDIO, OPEN_APPS, NAVIGATION, TONE, STUDIO, SYSTEM_NAVIGATION, TEAMS, ACCESSIBILITY }
 
 /** Two distinct logical plugin slots in ascending order (not press order). */
 data class KeyChord(val first: Int, val second: Int) {
@@ -33,13 +33,23 @@ data class PluginKeyEvent(val index: Int, val pressed: Boolean, val synthetic: B
 data class AudioSnapshot(val volume: Int, val maximum: Int)
 enum class VolumeChange { LOWER, RAISE, MUTE, UNMUTE }
 enum class MediaCommand { PLAY_PAUSE, PREVIOUS, NEXT }
-enum class PhoneApp { CAMERA, SETTINGS, DIALER, WEB, ALARMS }
+enum class PhoneApp { CAMERA, SETTINGS, DIALER, WEB, ALARMS, ONENOTE }
+
+data class OneNoteSettings(val colors: List<String>, val selectedColor: String?, val thickness: Float, val min: Float, val max: Float, val textColor: Boolean = false, val colorIds: List<String> = colors,
+    val colorValues: List<Int> = emptyList(), val selectedIndex: Int = -1)
 
 sealed interface PluginAction {
     data class Deck(val command: DeckCommand, val component: String? = null) : PluginAction
     data class Volume(val change: VolumeChange) : PluginAction
     data class Media(val command: MediaCommand) : PluginAction
     data class OpenApp(val app: PhoneApp) : PluginAction
+    /** ACTION_VIEW for an external URI scheme/host, e.g. a `onenote:` deep link. */
+    data class OpenUri(val uri: String) : PluginAction
+    /** ACTION_SEND text/plain, e.g. OneNote's share target creating a quick note. */
+    data class ShareText(val text: String) : PluginAction
+    /** Click the visible control with this text via the opt-in accessibility service. */
+    data class AccessibilityClick(val text: String) : PluginAction
+    data class OneNoteSetting(val color: String? = null, val thicknessDelta: Int = 0, val close: Boolean = false) : PluginAction
     data class SelectPlugin(val id: String) : PluginAction
     data object CompletionTone : PluginAction
     data object Repaint : PluginAction
@@ -53,6 +63,13 @@ interface PluginHost {
     fun audioSnapshot(): AudioSnapshot
     val deckState: StateFlow<DeckState>
         get() = error("No Android deck state installed")
+    /** Description of the selected tool in the foreground app, via the opt-in accessibility service. */
+    val activeTool: String?
+        get() = error("No accessibility state installed")
+    /** Toolbar tools of the foreground app as (stable id, description). */
+    val toolBar: List<Pair<String, String>>
+        get() = error("No accessibility state installed")
+    val oneNoteSettings: OneNoteSettings? get() = null
     fun dispatch(action: PluginAction)
 }
 

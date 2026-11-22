@@ -5,7 +5,7 @@ and put actions where your fingers expect them. In supported apps, use physical
 keys to move between items, scroll and select without tapping a small button or
 making a precise swipe. Assign a workflow to one of the nine LCD keys, open a
 favorite app, start a focus timer or change tracks. Two page buttons switch
-layouts. To try MX Pocket without hardware, use the on-screen keys.
+layouts. To try MX Pocket without hardware, use the Windows simulator.
 
 When you join a Microsoft Teams call on the connected Android phone, the keypad
 switches to a meeting layout. Mute stays in the same spot, with keys for
@@ -64,6 +64,9 @@ Teams setup distinguish a notice from a confirmed call. The in-app setting
 defaults to on, but Teams still needs its own Android permissions. You can
 turn call status off in Teams setup.
 See [Teams call controls and client limits](docs/android-decks.md#teams-on-this-phone).
+
+The **OneNote** profile uses a separate, optional accessibility service to
+select drawing tools and change formatting while OneNote is on screen.
 
 <a name="hardware-evidence-and-credits"></a>
 
