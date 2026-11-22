@@ -144,7 +144,7 @@ internal class PocketSession(
     private val disabled = MutableStateFlow(switches.getStringSet("disabled", emptySet()).orEmpty()
         .intersect(registeredPlugins.map { it.descriptor.id }.toSet()))
     val disabledPlugins = disabled.asStateFlow()
-    val deck = DeckRepository(app, disabled.value)
+    val deck = DeckRepository(app, disabled.value, usageTimeMillis)
     @Volatile private var pageInputEpoch = 0L
     private val pageButtons = PageButtons(sessionScope, SystemClock::elapsedRealtime,
         { ViewConfiguration.getLongPressTimeout().toLong() }, ::changePage, deck::showHome,
@@ -463,8 +463,9 @@ internal class PocketSession(
             sampleContext(null)
         }
         try {
+            var followUp = false
             while (true) {
-                var match: String? = null
+                var match: ForegroundMatch? = null
                 val granted = configured.isNotEmpty() && app.hasUsageAccess()
                 if (granted && app.isUnlockedAndInteractive()) {
                     val source = reader ?: ForegroundApps(app.getSystemService(UsageStatsManager::class.java),
@@ -480,13 +481,20 @@ internal class PocketSession(
                     unlockedSince = null
                     lastLockedPoll = if (granted) usageTimeMillis() else null
                 }
-                sampleContext(match)
-                delay(1000)
+                val recheck = sampleContext(match?.packageName, match)
+                // At most one extra usage read per regular poll, even during rapid activity changes.
+                if (!followUp && recheck != null) {
+                    followUp = true
+                    delay(recheck)
+                } else {
+                    followUp = false
+                    delay(1000)
+                }
             }
         } finally { watcher?.close() }
     }
 
-    private fun sampleContext(foregroundApp: String? = _signals.value[FOREGROUND_APP]) {
+    private fun sampleContext(foregroundApp: String? = _signals.value[FOREGROUND_APP], match: ForegroundMatch? = null): Long? {
         val time = LocalDateTime.now()
         val connected = output != null && request != null
         val state = deck.operatingState.value
@@ -503,10 +511,11 @@ internal class PocketSession(
                 app.isUnlockedAndInteractive() && app.hasUsageAccess())
                 mapOf(FOREGROUND_APP to foregroundApp) else emptyMap()
         _signals.value = snapshot
-        deck.observe(snapshot, SystemClock.elapsedRealtime(),
-            allowTeamsWork = teamsEnabled.value && TEAMS !in disabled.value && hasPlugin(TEAMS))
+        val decision = deck.observe(snapshot, SystemClock.elapsedRealtime(),
+            allowTeamsWork = teamsEnabled.value && TEAMS !in disabled.value && hasPlugin(TEAMS), foregroundMatch = match)
             .onFailure { fail(D.SelectLayout.text(), it) }
         workflows?.onContextChanged(workflowContext())
+        return decision.getOrNull()
     }
 
     fun observeUsb(devices: Set<String>) { attachedUsb = devices; sampleContext() }

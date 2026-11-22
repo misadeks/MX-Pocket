@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.FOREGROUND_APP
+import tel.misa.mxpocket.ForegroundMatch
 import tel.misa.mxpocket.APP_RULE_WEIGHT
 import tel.misa.mxpocket.decks.*
 import tel.misa.mxpocket.i18n.CallCopy
@@ -18,7 +19,8 @@ import tel.misa.mxpocket.i18n.LayoutCopy
 import tel.misa.mxpocket.i18n.LauncherCopy
 
 /** Own one instance per app session. Successful edits replace the file before publishing the new snapshot. */
-class DeckRepository(private val file: File, disabledPluginIds: Set<String> = emptySet()) {
+class DeckRepository(private val file: File, disabledPluginIds: Set<String> = emptySet(),
+    private val wallTimeMillis: () -> Long = System::currentTimeMillis) {
 
     private val mutable: MutableStateFlow<DeckState>
     val state: StateFlow<DeckState>
@@ -56,6 +58,12 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
     private var confirmedCall = false
     private var teamsInForeground = false
     private var teamsWorkOverridden = false
+    private var lastManualNavigation: Long? = null
+
+    private fun recordManualNavigation() {
+        lastManualNavigation = wallTimeMillis()
+        if (teamsInForeground) teamsWorkOverridden = true
+    }
 
     init {
         val loaded = try {
@@ -126,7 +134,7 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
 
     @Synchronized fun showHome() {
         showingPhone = false
-        if (teamsInForeground) teamsWorkOverridden = true
+        recordManualNavigation()
         home = true
         game = false
         homeBatch = 0
@@ -149,7 +157,7 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
         // Dismiss the phone overlay without publishing its underlying layout on the way to the game.
         if (!game) gameReturnId = if (home && !showingCall) PROFILE_HOME else state.value.activeProfileId
         showingPhone = false
-        if (teamsInForeground) teamsWorkOverridden = true
+        recordManualNavigation()
         game = true
         clearObservation()
         publish()
@@ -298,18 +306,21 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
      * Sample a complete snapshot on a monotonic clock, including ticks after the debounce period.
      * Only observed signal/value pairs score. Retain the current profile on a tie or a one-point
      * lead over a positive incumbent. When a rule-selected layout loses its match, use the eligible default.
+     * Return a shorter recheck delay only for a recent built-in Work entry still settling.
      */
     @Synchronized
-    fun observe(signals: Map<String, String>, nowMillis: Long, allowTeamsWork: Boolean = false): Result<Unit> {
+    fun observe(signals: Map<String, String>, nowMillis: Long, allowTeamsWork: Boolean = false,
+        foregroundMatch: ForegroundMatch? = null): Result<Long?> {
         val deck = state.value
         val teamsApp = allowTeamsWork && signals[FOREGROUND_APP] == TEAMS_PACKAGE
+        val entry = foregroundMatch?.takeIf { teamsApp && it.packageName == TEAMS_PACKAGE }
         if (!teamsApp) teamsWorkOverridden = false
         teamsInForeground = teamsApp
         if ((confirmedCall || game) && teamsApp) teamsWorkOverridden = true
-        if (showingPhone || game || confirmedCall || teamsApp && teamsWorkOverridden) return Result.success(Unit)
+        if (showingPhone || game || confirmedCall || teamsApp && teamsWorkOverridden) return Result.success(null)
         if (!deck.activeProfile.automatic || deck.pinnedProfileId != null || nowMillis < 0L) {
             clearObservation()
-            return Result.success(Unit)
+            return Result.success(null)
         }
         if (nowMillis < lastSample) clearObservation()
         lastSample = nowMillis
@@ -317,6 +328,12 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
         // Don't add a stored rule on upgrade or compete with an explicit mapping of this app.
         val workRule = DeckRule(FOREGROUND_APP, TEAMS_PACKAGE, APP_RULE_WEIGHT).takeIf { rule ->
             teamsApp && eligible.none { p -> p.rules.any { it.signal == rule.signal && it.value == rule.value } }
+        }
+        // A manual choice can land after Teams resumes but before the first usage poll sees it.
+        if (workRule != null && entry != null && lastManualNavigation?.let { it in entry.resumedAtMillis..wallTimeMillis() } == true) {
+            teamsWorkOverridden = true
+            clearObservation()
+            return Result.success(null)
         }
         val matches = eligible.associate { profile ->
             val matching = profile.rules.filter { it.matches(signals) }
@@ -334,11 +351,20 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
             else -> best.key
         }
         val openWork = target == TEAMS && workRule != null
+        var recheck: Long? = null
         if (target == null || !home && target == deck.activeProfileId && (!openWork || deck.activePage.id == deck.activeProfile.rootPageId)) candidate = null
-        else if (candidate != target) {
-            candidate = target
-            candidateSince = nowMillis
-        } else if (nowMillis - candidateSince >= DEBOUNCE_MS) {
+        else {
+            if (candidate != target) {
+                candidate = target
+                candidateSince = nowMillis
+            }
+            if (openWork && entry != null && scores.none { (id, score) -> id != TEAMS && score >= scores.getValue(TEAMS) }) {
+                val age = wallTimeMillis() - entry.resumedAtMillis
+                if (age in 0..DEBOUNCE_MS && entry.unchangedForMillis in 0..age)
+                    recheck = (WORK_DWELL_MS - entry.unchangedForMillis).coerceAtLeast(0L)
+            }
+        }
+        if (target != null && candidate == target && (recheck == 0L || nowMillis - candidateSince >= DEBOUNCE_MS)) {
             val rules = matches.getValue(target)
             val explanation = if (rules.isEmpty()) "Automatic: default profile (no matching rules)"
                 else if (rules.any { it.signal == FOREGROUND_APP }) APP_MATCH_REASON
@@ -349,10 +375,10 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
                 if (openWork) next.withHistory(listOf(next.activeProfile.rootPageId)) else next
             }
             mutableDecision.value = DeckDecision(reason.value, scores.locked(), matches.locked(), candidate)
-            return result
+            return result.map { null }
         }
         mutableDecision.value = DeckDecision(reason.value, scores.locked(), matches.locked(), candidate)
-        return Result.success(Unit)
+        return Result.success(recheck)
     }
 
     private fun DeckState.withPrivateReason() =
@@ -481,7 +507,7 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
             resumeCall = false
             home = false
             game = false
-            if (manual && teamsInForeground) teamsWorkOverridden = true
+            if (manual) recordManualNavigation()
         }
         publish()
         clearObservation()
@@ -511,6 +537,7 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
     companion object {
         private const val APP_MATCH_REASON = "Automatic: matched an app mapping"
         const val DEBOUNCE_MS = 1500L
+        private const val WORK_DWELL_MS = 250L
         const val SCORE_MARGIN = 2
     }
 }

@@ -63,6 +63,105 @@ class ForegroundAppTest {
             app.applicationInfo.uid, app.packageName, if (enabled) AppOpsManager.MODE_ALLOWED else AppOpsManager.MODE_IGNORED)
     }
 
+    private fun withTeamsDetection(setup: (PocketSession) -> Unit = {}, run: (PocketSession) -> Unit) {
+        NotificationAccess(app).teams = true
+        grant(true)
+        val session = PocketSession(app, usageDispatcher = Dispatchers.Main.immediate, usageTimeMillis = ::usageTime)
+        session.deck.setDefault("focus").getOrThrow()
+        session.selectProfile("focus")
+        setup(session)
+        session.setDetectForegroundApps(true)
+        val screen = object : PocketSession.Screen {
+            override fun render() {}
+            override fun openApp(app: tel.misa.mxpocket.plugins.PhoneApp): Boolean = error("Unexpected key dispatch")
+        }
+        session.attach(screen)
+        try { main.idle(); run(session) } finally { session.detach(screen) }
+    }
+
+    private fun advance(ms: Long) = main.idleFor(Duration.ofMillis(ms))
+    private fun surface(session: PocketSession) = session.deck.operatingState.value.activeProfileId
+
+    @Test fun teamsLaunchedJustAfterAPollOpensWorkAtTheNextPoll() = withTeamsDetection { session ->
+        advance(1)
+        event(TEAMS_PACKAGE, Event.MOVE_TO_FOREGROUND)
+        advance(998)
+        assertEquals("focus", surface(session))
+        advance(1)
+        assertEquals(TEAMS, surface(session))
+        assertEquals("Work", session.deck.operatingState.value.activePage.name)
+    }
+
+    @Test fun teamsLaunchedJustBeforeAPollGetsOneShortConfirmation() = withTeamsDetection { session ->
+        advance(999)
+        event(TEAMS_PACKAGE, Event.MOVE_TO_FOREGROUND)
+        advance(249)
+        assertEquals(TEAMS_PACKAGE, session.signals.value[FOREGROUND_APP])
+        assertEquals("focus", surface(session))
+        advance(1)
+        assertEquals(TEAMS, surface(session))
+    }
+
+    @Test fun leavingTeamsDuringConfirmationDoesNotFlashWork() = withTeamsDetection { session ->
+        advance(999)
+        event(TEAMS_PACKAGE, Event.MOVE_TO_FOREGROUND)
+        advance(100)
+        assertEquals(TEAMS_PACKAGE, session.signals.value[FOREGROUND_APP])
+        event(TEAMS_PACKAGE, Event.MOVE_TO_BACKGROUND)
+        advance(150)
+        assertNull(session.signals.value[FOREGROUND_APP])
+        assertEquals("focus", surface(session))
+    }
+
+    @Test fun timeWithTwoResumedAppsDoesNotCountTowardTeamsDwell() = withTeamsDetection { session ->
+        advance(1)
+        event(other, Event.MOVE_TO_FOREGROUND)
+        event(TEAMS_PACKAGE, Event.MOVE_TO_FOREGROUND)
+        advance(998)
+        event(other, Event.MOVE_TO_BACKGROUND)
+        advance(249)
+        assertEquals("focus", surface(session))
+        advance(1)
+        assertEquals(TEAMS, surface(session))
+    }
+
+    @Test fun manualSelectionAfterResumeButBeforePollWinsUntilTeamsReentry() = withTeamsDetection { session ->
+        advance(1)
+        event(TEAMS_PACKAGE, Event.MOVE_TO_FOREGROUND)
+        advance(30)
+        session.selectProfile("audio")
+        advance(3_000)
+        assertEquals(TEAMS_PACKAGE, session.signals.value[FOREGROUND_APP])
+        assertEquals("audio", surface(session))
+        event(TEAMS_PACKAGE, Event.MOVE_TO_BACKGROUND)
+        advance(1_000)
+        event(TEAMS_PACKAGE, Event.MOVE_TO_FOREGROUND)
+        advance(1_000)
+        assertEquals(TEAMS, surface(session))
+    }
+
+    @Test fun anOlderResumeObservedLateDoesNotFastTrackWork() = withTeamsDetection { session ->
+        advance(4_200)
+        event(TEAMS_PACKAGE, Event.MOVE_TO_FOREGROUND, usageTime() - 3_000)
+        advance(800)
+        assertEquals(TEAMS_PACKAGE, session.signals.value[FOREGROUND_APP])
+        advance(1_999)
+        assertEquals("focus", surface(session))
+        advance(1)
+        assertEquals(TEAMS, surface(session))
+    }
+
+    @Test fun explicitMappingOfTeamsStillUsesTheOrdinaryStabilityGate() = withTeamsDetection(setup = { session ->
+        session.deck.setRules("audio", listOf(DeckRule(FOREGROUND_APP, TEAMS_PACKAGE, APP_RULE_WEIGHT))).getOrThrow()
+    }) { session ->
+        advance(1)
+        event(TEAMS_PACKAGE, Event.MOVE_TO_FOREGROUND)
+        advance(2_998)
+        assertEquals("focus", surface(session))
+        advance(1)
+        assertEquals("audio", surface(session))
+    }
+
     @Test fun openingTeamsSelectsWorkWithoutAMappingOrAnActionAndRespectsOverrides() {
         NotificationAccess(app).teams = true
         val session = PocketSession(app, usageDispatcher = Dispatchers.Main.immediate, usageTimeMillis = ::usageTime)
@@ -264,7 +363,7 @@ class ForegroundAppTest {
     @Test fun onlyAnUnambiguousFreshResumedActivityCounts() {
         val reader = ForegroundApps(usage, 1)
         val mapped = setOf(player, camera)
-        fun read(time: Long) = reader.match(mapped, time)
+        fun read(time: Long) = reader.match(mapped, time)?.packageName
         event(camera, Event.MOVE_TO_FOREGROUND, 1)
         assertNull(read(2)) // Same millisecond as the new permission interval.
         event(player, Event.MOVE_TO_FOREGROUND, 100)
