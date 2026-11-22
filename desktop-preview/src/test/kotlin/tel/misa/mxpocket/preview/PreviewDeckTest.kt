@@ -228,7 +228,7 @@ class PreviewDeckTest {
     @Test fun navigationUsesFactoryBindingsAndNeverClaimsAndroidAccess() {
         val deck = PreviewDeck(DeckRepository(File(folder.root, "deck.json"))).apply { simulator = true }
         deck.repository.selectProfile("navigation").getOrThrow()
-        val up = factoryKeyBindings.single { it.label == "Navigation and Accessibility key 2: Scroll up" }
+        val up = factoryKeyBindings.single { it.label == "Navigate key 2: Scroll up" }
         assertEquals(deck.repository.state.value.activePage.keys[1].action, up.call)
         val tiles = deck.tiles(0)
         check(tiles.map { it.label } == listOf("Back", "Scroll up", "Home", "Prev focus", "Select",

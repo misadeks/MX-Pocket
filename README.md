@@ -16,7 +16,7 @@ actions. When the call ends, the keypad returns to your previous layout unless
 you've selected another.
 
 On the **Music** layout, press the center key to pause the track.
-Switch to **Navigation and Accessibility**: that same key now says **Select**, and the key below
+Switch to **Navigate**: that same key now says **Select**, and the key below
 it says **Scroll down**. The bottom-right key opens **Accessibility**; press it again
 to return to navigation. With [Android navigation access](docs/android-decks.md)
 enabled, you can keep reading in a supported app without swiping the screen.

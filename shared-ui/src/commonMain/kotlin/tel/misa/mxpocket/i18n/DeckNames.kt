@@ -16,11 +16,11 @@ private val deckNames = mapOf("focus" to K.Focus, "audio" to K.Audio, "phone" to
     "launcher" to K.Launcher, "studio" to K.Studio, "navigation" to K.Navigation,
     "game.xo" to K.TicTacToe, PROFILE_HOME to WorkspaceCopy.Home, TEAMS to K.Teams)
 
-fun builtInDeckName(id: String): String = if (id == "navigation") K.NavigationAndAccessibility.text() else deckNames[id]?.text() ?: id
+fun builtInDeckName(id: String): String = if (id == "navigation") K.Navigate.text() else deckNames[id]?.text() ?: id
 
 /** Native descriptors can contain a resource resolved before an in-app language switch. */
 fun builtInPluginTitle(id: String, title: String): String {
-    if (id == "navigation" && title in listOf(K.Navigation.en, K.AndroidNavigation.en)) return K.NavigationAndAccessibility.text()
+    if (id == "navigation" && title in listOf(K.Navigation.en, K.AndroidNavigation.en)) return K.Navigate.text()
     val name = when (id) {
         "audio" -> K.MediaDeck
         "launcher" -> K.AppLauncher
@@ -34,7 +34,7 @@ fun builtInPluginTitle(id: String, title: String): String {
 private fun Copy?.ifFactoryValue(raw: String) = if (this != null && raw == en) text() else raw
 
 private fun profileTitle(id: String?, name: String) = if (id == "navigation" && name == K.Navigation.en)
-    K.NavigationAndAccessibility.text() else deckNames[id].ifFactoryValue(name)
+    K.Navigate.text() else deckNames[id].ifFactoryValue(name)
 
 fun DeckProfile.displayName(): String = profileTitle(id, name)
 
