@@ -224,7 +224,8 @@ internal class PocketSession(
 
     private fun hasPlugin(id: String) = plugins.descriptors.any { it.id == id }
     private fun refreshTeams() {
-        val physical = !preview && request != null && output != null && TEAMS !in disabled.value
+        val physical = !preview && output != null && TEAMS !in disabled.value && teams.access.enabled &&
+            request?.let(app::hasKeypadAccess) == true
         val state = teams.refresh(physical, screen != null, teamsInstalled)
         decks.value = decks.value.copy(teams = state)
         deck.showTeamsCall(when {
@@ -287,10 +288,12 @@ internal class PocketSession(
             val cameraControl = tile?.inputToken?.let(DeckCommand::fromId)?.takeIf { it.nativeControl }
             val available = registered && key.enabled && call != null && (plugin == null || plugin == plugins.selectedId) &&
                 (cameraControl == null || isStudioKey(index, cameraControl)) &&
+                (tile?.inputToken?.startsWith("${DeckCommand.TEAMS_MIC.id}:") != true || isTeamsMicKey(index)) &&
                 ownerOf(call) !in disabled.value && (tile?.enabled != false)
             val footer = when {
                 !key.enabled || ownerOf(call) in disabled.value -> "Disabled"
-                ownerOf(call) == TEAMS && tile != null -> tile.footer
+                ownerOf(call) == TEAMS && tile != null ->
+                    if (tile.enabled && !available) "Unavailable" else tile.footer
                 // Keep the access state and its recovery hint even after an earlier failed press.
                 tile?.glyph == NavigationGlyph.ACCESS_INFO ||
                     tile?.glyph == NavigationGlyph.RECENTS && !tile.enabled -> tile.footer
@@ -992,11 +995,7 @@ internal class PocketSession(
                 val index = physicalIndex ?: return unavailable("Use the physical center key in a Teams call.")
                 val expected = deckState.value.teams
                 fun authorized(): Boolean {
-                    val layout = deck.state.value
-                    val key = layout.activePage.keys[index]
-                    return index == 4 && layout.activeProfileId == TEAMS && layout.activePage.id == IN_CALL &&
-                        key.action == ActionCall("plugin.key", mapOf("pluginId" to TEAMS, "index" to "4")) &&
-                        key.label.isBlank() && key.enabled && freshAuthorizedPress() && app.isUnlockedAndInteractive() &&
+                    return isTeamsMicKey(index) && freshAuthorizedPress() && app.isUnlockedAndInteractive() &&
                         lcd[index]?.tile?.inputToken == expected.tile(c).inputToken && acknowledged(index, receipts[index])
                 }
                 refreshTeams()
@@ -1032,6 +1031,14 @@ internal class PocketSession(
             else -> return unavailable("Open MX Pocket to use this control.")
         }
         return offerPhysicalShortcut(target)
+    }
+
+    private fun isTeamsMicKey(index: Int): Boolean {
+        val layout = deck.state.value
+        val key = layout.activePage.keys[index]
+        return index == 4 && layout.activeProfileId == TEAMS && layout.activePage.id == IN_CALL &&
+            key.action == ActionCall("plugin.key", mapOf("pluginId" to TEAMS, "index" to "4")) &&
+            key.label.isBlank() && key.enabled
     }
 
     private fun isStudioKey(index: Int, command: DeckCommand): Boolean {

@@ -13,7 +13,7 @@ class TeamsAccessActivity : DeckActivity() {
     private val access by lazy { TeamsAccess(this) }
     private var state by mutableStateOf(TeamsSetupState(false, false, false, false))
     private fun refresh() {
-        state = TeamsSetupState(access.enabled, access.granted, TeamsToolbarService.current != null,
+        state = TeamsSetupState(access.enabled, access.granted, access.toolbarGranted && TeamsToolbarService.current != null,
             Build.VERSION.SDK_INT >= 34 && access.singleProfile, state.message)
     }
     override fun onCreate(savedInstanceState: Bundle?) {

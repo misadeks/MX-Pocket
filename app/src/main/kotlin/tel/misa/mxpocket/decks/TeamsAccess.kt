@@ -10,6 +10,8 @@ import android.os.Process
 import android.os.UserManager
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import android.accessibilityservice.AccessibilityServiceInfo
+import android.view.accessibility.AccessibilityManager
 
 internal const val TEAMS_PACKAGE = "com.microsoft.teams"
 
@@ -28,6 +30,11 @@ internal class TeamsAccess(private val app: Context) {
         set(value) { prefs.edit().putBoolean("observe", value).apply() }
     val granted get() = app.getSystemService(NotificationManager::class.java)
         .isNotificationListenerAccessGranted(ComponentName(app, TeamsCallListener::class.java))
+    val toolbarGranted get() = app.getSystemService(AccessibilityManager::class.java)
+        .getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK).any {
+            val service = it.resolveInfo.serviceInfo
+            ComponentName(service.packageName, service.name) == ComponentName(app, TeamsToolbarService::class.java)
+        }
     // Accessibility nodes do not expose their Android user. Do not click across a profile boundary.
     val singleProfile get() = app.getSystemService(UserManager::class.java).userProfiles == listOf(Process.myUserHandle())
 }

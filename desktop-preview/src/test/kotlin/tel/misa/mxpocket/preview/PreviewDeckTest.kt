@@ -102,11 +102,13 @@ class PreviewDeckTest {
     check(label(2, 1_000) == "14:59")
 
     deck.cycle(-1)
+    check(deck.profileId == "teams")
+    deck.cycle(-1)
     check(deck.profileId == "game.xo")
     deck.cycle(-1)
     check(deck.profileName == "Navigation")
     check(deck.press(1, 1_000).contains("No system action"))
-    deck.cycle(2)
+    deck.cycle(3)
     check(label(1, 1_000) == "Pause")
     deck.cycle(2)
     check(deck.profileName == "Phone")
@@ -127,7 +129,7 @@ class PreviewDeckTest {
     check(before[7].readOnly)
     for (slot in 6..8) { check(!before[slot].enabled || before[slot].readOnly); deck.press(slot, 1_000) }
     check(before == deck.tiles(0))
-    repeat(deck.profileCount) {
+    repeat(deck.repository.state.value.profiles.sumOf { it.pages.size }) {
         check(deck.tiles(1_000).size == 9)
         deck.cycle(1)
     }

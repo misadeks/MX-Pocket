@@ -20,7 +20,7 @@ internal class TeamsCall(private val app: Context) {
 
     fun refresh(physical: Boolean, visible: Boolean, installed: Boolean): TeamsState {
         val allowed = physical && installed && access.enabled && Build.VERSION.SDK_INT >= 34 &&
-            app.isUnlockedAndInteractive() && access.granted && access.singleProfile
+            app.isUnlockedAndInteractive() && access.granted && access.toolbarGranted && access.singleProfile
         val listener = TeamsCallListener.current.takeIf { allowed }
         val observation = listener?.snapshot() ?: TeamsObservation.Unavailable
         val ongoing = observation as? TeamsObservation.Ongoing
@@ -36,8 +36,7 @@ internal class TeamsCall(private val app: Context) {
         if (toolbar != null) confirmed = true
         val muted = toolbar?.muted
         if (muted != null && muted != waitingForChange) waitingForChange = null
-        val next = TeamsState(installed, observation != TeamsObservation.Unavailable && service != null ||
-            observation == TeamsObservation.None && TeamsToolbarService.current != null,
+        val next = TeamsState(installed, observation != TeamsObservation.Unavailable && TeamsToolbarService.current != null,
             confirmed, muted.takeIf { waitingForChange == null }, state.generation, visible)
         val stamp = ongoing?.posted ?: -1L
         val changed = newCall || stamp != posted || toolbarService !== service || window != toolbar?.window || next != state
@@ -61,7 +60,7 @@ internal class TeamsCall(private val app: Context) {
             current != null && current === owner && current.boundary == boundary && call != null &&
                 call.key == key && call.posted == posted && service === TeamsToolbarService.current &&
                 toolbar.muted == expected.muted && toolbar.window == window && waitingForChange == null &&
-                access.enabled && access.granted && access.singleProfile && authorized()
+                access.enabled && access.granted && access.toolbarGranted && access.singleProfile && authorized()
         }.second
         if (!sent) return unavailable("Mic unavailable. Use the mic in Teams.")
         waitingForChange = expected.muted

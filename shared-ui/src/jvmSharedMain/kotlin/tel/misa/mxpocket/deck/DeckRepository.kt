@@ -36,6 +36,7 @@ class DeckRepository(private val file: File) {
     private var saved: DeckState
     private var showingCall = false
     private var callEpisode = false
+    private var resumeCall = false
 
     init {
         val loaded = try {
@@ -283,7 +284,11 @@ class DeckRepository(private val file: File) {
         if (joined == true && !callEpisode) {
             callEpisode = true
             showingCall = saved.callProjection() != null
+        } else if (joined == true && resumeCall) {
+            showingCall = saved.callProjection() != null
+            resumeCall = false
         } else if (joined != true) {
+            resumeCall = joined == null && (showingCall || resumeCall)
             showingCall = false
             if (joined == false) callEpisode = false
         }
@@ -315,15 +320,17 @@ class DeckRepository(private val file: File) {
         val change = update(previous)
         val next = if (navigation && showingCall && !recover && change.activeProfileId != TEAMS && TEAMS in change.histories)
             change.copy(histories = change.histories + (TEAMS to saved.histories.getValue(TEAMS))) else change
-        if (force || saved != next) {
-            val snapshot = next.snapshot()
+        val persistent = if (navigation && showingCall && !recover && next.selectionReason == "Local Teams call")
+            next.copy(selectionReason = "Manually selected") else next
+        if (force || saved != persistent) {
+            val snapshot = persistent.snapshot()
             validateDeck(snapshot)
             write(DeckJson.encode(snapshot))
             loadError = null
             cleanupWarning = null
             saved = snapshot
         }
-        if (navigation) showingCall = false
+        if (navigation) { showingCall = false; resumeCall = false }
         publish()
         clearObservation()
         Result.success(Unit)

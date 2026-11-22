@@ -111,6 +111,11 @@ class DeckRepositoryTest {
     @Test fun freshAndRestoredNavigationDefaultsUsePhysicalOrderWithoutChangingOtherDecks() {
         fun checkDefaults() {
             for (profile in repo.state.value.profiles) {
+                if (profile.id == "teams") {
+                    assertEquals(listOf("Work", "In call"), profile.pages.map { it.name })
+                    assertEquals(pluginKey("teams", 4), profile.pages.last().keys[4])
+                    continue
+                }
                 val slots = if (profile.id == "navigation") listOf(0, 3, 1, 6, 4, 8, 2, 5, 7) else (0..8).toList()
                 assertEquals(profile.id, slots.map { pluginKey(profile.id, it) }, profile.pages.single().keys)
             }

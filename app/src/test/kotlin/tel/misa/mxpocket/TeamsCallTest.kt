@@ -33,15 +33,15 @@ class TeamsCallTest {
     private val main get() = shadowOf(Looper.getMainLooper())
     private fun note(pkg: String = TEAMS_PACKAGE, type: Int = Notification.CallStyle.CALL_TYPE_ONGOING,
         styled: Boolean = true, user: UserHandle = Process.myUserHandle(), id: Int = 1) =
-        StatusBarNotification(pkg, pkg, id, null, 10000, 0, Notification().apply {
+        StatusBarNotification(pkg, pkg, id, null, 10000, 0, 0, Notification().apply {
             category = Notification.CATEGORY_CALL
             if (styled) extras.putString(Notification.EXTRA_TEMPLATE, Notification.CallStyle::class.java.name)
             extras.putInt(Notification.EXTRA_CALL_TYPE, type)
-        }, user, null, 1L)
+        }, user, 1L)
 
     @Test fun onlyOneLocalTypedOngoingTeamsCallIsEligible() {
         for (rejected in listOf(note("com.android.dialer"), note("other.voip"),
-            note(user = UserHandle.of(10)), note(styled = false), note(type = Notification.CallStyle.CALL_TYPE_INCOMING),
+            note(user = UserHandle.getUserHandleForUid(1_010_000)), note(styled = false), note(type = Notification.CallStyle.CALL_TYPE_INCOMING),
             note(type = Notification.CallStyle.CALL_TYPE_SCREENING))) {
             assertSame(TeamsObservation.None, teamsObservation(arrayOf(rejected)))
         }
@@ -65,6 +65,15 @@ class TeamsCallTest {
         listener.onListenerConnected()
         val service = serviceController.get()
         ReflectionHelpers.callInstanceMethod<Unit>(service, "onServiceConnected")
+        val info = android.accessibilityservice.AccessibilityServiceInfo().also {
+            ReflectionHelpers.setField(it, "mResolveInfo", ResolveInfo().apply {
+                serviceInfo = android.content.pm.ServiceInfo().apply {
+                    packageName = app.packageName; name = TeamsToolbarService::class.java.name
+                }
+            })
+        }
+        shadowOf(app.getSystemService(android.view.accessibility.AccessibilityManager::class.java))
+            .setEnabledAccessibilityServiceList(listOf(info))
         val window = shadowOf(service) as CameraWindowFixture
         val mic = cameraNode("Mic", TEAMS_PACKAGE).apply { stateDescription = "unmuted" }
         val leave = cameraNode("Hang up", TEAMS_PACKAGE)
