@@ -1,10 +1,12 @@
 package tel.misa.mxpocket.workflow
 
 import android.content.Context
+import androidx.startup.Initializer
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import androidx.work.WorkManagerInitializer
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import java.time.Duration
@@ -14,12 +16,24 @@ import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+class WorkflowScheduleInitializer : Initializer<Unit> {
+    override fun dependencies() = listOf(WorkManagerInitializer::class.java)
+
+    override fun create(context: Context) {
+        if (!WORKFLOWS_ENABLED) {
+            // WorkManager tags requests with the worker class name, including jobs from older releases.
+            WorkManager.getInstance(context).cancelAllWorkByTag(WorkflowWorker::class.java.name)
+        }
+    }
+}
+
 internal fun nextOccurrence(time: LocalTime, now: ZonedDateTime): ZonedDateTime {
     fun on(day: Long) = now.toLocalDate().plusDays(day).atTime(time).atZone(now.zone)
     return on(0).takeIf { it > now } ?: on(1)
 }
 
 internal fun queueDaily(context: Context, definition: WorkflowDefinition) {
+    if (!WORKFLOWS_ENABLED) return
     val now = ZonedDateTime.now()
     val time = runCatching { LocalTime.parse(definition.trigger.value) }.getOrNull() ?: return
     val next = nextOccurrence(time, now)
@@ -32,6 +46,7 @@ internal fun queueDaily(context: Context, definition: WorkflowDefinition) {
 
 class WorkflowWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result = withContext(Dispatchers.Main.immediate) {
+        if (!WORKFLOWS_ENABLED) return@withContext Result.success()
         val controller = (applicationContext as? WorkflowProvider)?.workflows ?: return@withContext Result.failure()
         val definition = controller.definitions.value.find { it.id == inputData.getString("workflow") }
             ?: return@withContext Result.success()

@@ -3,8 +3,8 @@
 MX Pocket lets you control Android by feel. Link a keypad layout to an app
 and put actions where your fingers expect them. In supported apps, use physical
 keys to move between items, scroll and select without tapping a small button or
-making a precise swipe. Assign a workflow to one of the nine LCD keys, open a
-favorite app, start a focus timer or change tracks. Previous and Next switch
+making a precise swipe. Use the nine LCD keys to open a favorite app, start a
+focus timer or change tracks. Previous and Next switch
 layouts. Press them together and release for the keypad’s profile launcher,
 or hold both to play Tic Tac Toe. To try MX Pocket without hardware, use the
 Windows simulator.
@@ -56,7 +56,7 @@ edit profiles before connecting hardware.
 
 <a name="guides"></a>
 
-[Key layouts and permissions](docs/android-decks.md) · [Workflows](docs/workflows.md) · [Write a plugin](docs/plugins.md) · [Contribute](CONTRIBUTING.md)
+[Key layouts and permissions](docs/android-decks.md) · [Workflows (paused)](docs/workflows.md) · [Write a plugin](docs/plugins.md) · [Contribute](CONTRIBUTING.md)
 
 The **Teams** profile opens the Android client on this phone. Choose **Call
 tools** for its manual meeting page, or **Teams setup** for optional local call

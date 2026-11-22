@@ -197,7 +197,7 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         LanguagePreference.sync(this)
-        tab = savedInstanceState?.getString("tab")?.let { name -> WorkspaceTab.entries.find { it.name == name } } ?: WorkspaceTab.HOME
+        tab = savedInstanceState?.getString("tab")?.let { name -> WorkspaceTab.available.find { it.name == name } } ?: WorkspaceTab.HOME
         shortcutDisclosure = savedInstanceState?.getBoolean("shortcutDisclosure") == true
         setContent {
             PocketTheme(ThemePreference.current(this)) {

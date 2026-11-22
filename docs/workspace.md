@@ -12,8 +12,8 @@ choice is remembered; System follows your device's current theme.
 also expose this choice in the system's per-app language settings. The Windows
 simulator remembers its own choice. Changing language does not rename your
 layouts, workflows or key labels, or change exported files.
-**Plugins** turns features on or off, **Flows** lets you build and run workflows,
-and **Settings** contains USB preferences. Open **Settings → Diagnostics** to
+**Plugins** turns features on or off and **Settings** contains USB preferences.
+**Flows** is hidden while [Workflows are paused](workflows.md). Open **Settings → Diagnostics** to
 see device details and the session log. On Android, Back returns to Settings.
 On Windows, Diagnostics opens in a separate window you can close independently.
 
@@ -94,7 +94,7 @@ Choose **Settings → Connect virtual keypad** for clickable Home keys with no
 USB I/O. Phone, Launcher, Studio, Navigation, Teams and OneNote require Android; they
 stay listed with reasons. Windows does not read volume levels, track metadata
 or seek positions, issue absolute mute/unmute commands, run workflows, apply
-foreground rules, or upload user background images. Layouts and workflows can
+foreground rules, or upload user background images. Layouts can
 be edited and backed-up layouts imported without enabling Android actions.
 Windows desktop data stays local and is not synchronized with the phone.
 
@@ -159,12 +159,9 @@ call doesn't require changing Android permissions. See
    *Open page: Tools*, and set its label, icon and color. Put *Back* or *Return
    to root* on Tools. Inspect both pages in Profiles. To exercise the bindings,
    choose **Profile settings and rules > Use on keypad**, connect the wired keypad and press its keys.
-3. In Flows duplicate **Keypad check**. Give the copy a name, change a delay
-   or add a step, then **Test run** and **Save workflow**. A test executes real
-   steps. In Profiles assign the saved workflow to a Tools key. Press that key
-   on the connected keypad to see the steps run. **Run history** shows origin,
-   result and progress. For confirmation steps open Flows and approve or
-   decline on the phone. Cancelling does not undo completed actions.
+3. If a layout was saved with a workflow binding, that assignment remains in
+   the layout but cannot start the workflow. You can replace it with another
+   action in Profiles; no change is needed to continue using other keys.
 4. In Plugins enable Audio; optional media access is explained before opening
    Android settings. Start playback in a player. In Profiles enable automatic
    switching and inspect the Audio rule `mediaActive = true`. While the app
@@ -177,7 +174,7 @@ call doesn't require changing Android permissions. See
    a pinned non-music profile keeps its own background.
 5. Inspect the selection reason, matched rules and observed values in Profiles.
    Create or change weighted rules for an observed app-owned activity, device,
-   local hour/range, media, plugin or workflow state. Pin Desk, change playback
+   local hour/range, media or plugin state. Pin Desk, change playback
    and verify it stays on Desk. Unpin to resume automatic selection. Disabling
    automatic switching for a profile prevents entering or leaving it by rule.
    Foreground app mappings are optional; see below.
@@ -268,13 +265,13 @@ results without identifiers or media metadata.
   notification. Disconnect from that notification and reopen the app: it should
   not reconnect until requested or reattached. An unrelated device should not
   start a session.
-- Repeat the Desk/Tools workflow above on hardware. Observe all nine 118x118
+- Repeat the Desk/Tools page-switching check above on hardware. Observe all nine 118x118
   regions of the single panel, confirm readability and persistence for 60 seconds.
   Switch pages while an image is transferring; a press against the unacknowledged
   page must not run the replacement action.
 - Start playback and confirm the selected media profile, physical Play/Pause,
-  corresponding playback-state redraw, then open a nested page. Run the saved
-  workflow with a physical key. Compare progress and result on phone and LCD.
+  corresponding playback-state redraw, then open a nested page. A saved
+  workflow binding should not execute or advance the workflow on the phone or LCD.
 - Lock the phone, then turn the screen off. Use the physical media keys without
   waking the screen. On authorized hardware, change tracks and check that
   the Audio title and cover follow the player. Switch profiles, then revoke

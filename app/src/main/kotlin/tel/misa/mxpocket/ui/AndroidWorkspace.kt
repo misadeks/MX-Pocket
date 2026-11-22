@@ -26,7 +26,7 @@ internal fun AndroidWorkspace(
 ) {
     val deck by session.deck.state.collectAsStateWithLifecycle()
     val signals by session.signals.collectAsStateWithLifecycle()
-    val flows by session.workflows.definitions.collectAsStateWithLifecycle()
+    val flows = session.workflows?.definitions?.collectAsStateWithLifecycle()?.value.orEmpty()
     val disabled by session.disabledPlugins.collectAsStateWithLifecycle()
     val detection by session.detectForegroundApps.collectAsStateWithLifecycle()
     val plugins = session.plugins.descriptors.map { plugin ->
@@ -55,6 +55,6 @@ internal fun AndroidWorkspace(
                 }
             },
             backHandler = { enabled, back -> BackHandler(enabled, back) })
-    }, workflows = { WorkflowScreen(session.workflows) },
+    }, workflows = { session.workflows?.let { WorkflowScreen(it) } },
         backHandler = { enabled, back -> BackHandler(enabled, back) })
 }

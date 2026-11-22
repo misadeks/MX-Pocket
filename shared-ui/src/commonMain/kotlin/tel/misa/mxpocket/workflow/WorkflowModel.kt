@@ -8,6 +8,9 @@ import kotlinx.serialization.Transient
 import tel.misa.mxpocket.i18n.Copy
 import tel.misa.mxpocket.i18n.WorkflowCopy
 
+/** Release policy for both hosts. This is intentionally not a user preference. */
+const val WORKFLOWS_ENABLED = false
+
 data class WorkflowActionSpec(
     val id: String,
     val label: String,

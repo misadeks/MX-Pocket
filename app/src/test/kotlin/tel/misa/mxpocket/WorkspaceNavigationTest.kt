@@ -82,6 +82,7 @@ class WorkspaceNavigationTest {
         compose.onNodeWithContentDescription("Key 4, Previous").performScrollTo().performClick()
         assertEquals(before, repo.state.value)
         compose.onNodeWithTag("choose-binding").performScrollTo().performClick()
+        compose.onNodeWithText("Workflow: Keypad check").assertDoesNotExist()
         compose.onNodeWithText("Open page: Meetings").performClick()
         // A live switch while editing must not retarget the open key or discard its draft.
         compose.onNodeWithTag("key-label").performTextReplacement("Return")
@@ -104,7 +105,7 @@ class WorkspaceNavigationTest {
     }
 
     @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
-    @Test fun openTheLayoutEditorWorkflowLibraryAndConnectionSettingsFromHome() {
+    @Test fun openTheLayoutEditorAndConnectionSettingsWithoutOfferingWorkflows() {
         fun capture(name: String) = compose.runOnIdle {
             val view = compose.activity.window.decorView
             val bitmap = android.graphics.Bitmap.createBitmap(view.width, view.height, android.graphics.Bitmap.Config.ARGB_8888)
@@ -119,11 +120,7 @@ class WorkspaceNavigationTest {
         compose.onNodeWithText("New profile").assertExists()
         compose.onNodeWithText("Swipe to switch").assertDoesNotExist()
         capture("profiles")
-        compose.onNodeWithText("Flows").performClick()
-        compose.onNodeWithText("Keypad check").assertExists()
-        capture("flows")
-        compose.onNodeWithText("New workflow").performClick()
-        compose.onNodeWithText("Workflow name").assertExists()
+        compose.onNodeWithText("Flows").assertDoesNotExist()
         compose.onNodeWithText("Plugins").performClick()
         compose.onNodeWithText("Edit favorites").assertExists()
         capture("plugins")

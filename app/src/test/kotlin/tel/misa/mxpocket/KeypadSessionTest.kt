@@ -76,7 +76,8 @@ class KeypadSessionTest {
         var closes = 0
         lateinit var emit: (KeyEvent) -> Unit
         val lcd = mutableMapOf<Int, Bitmap>()
-        override fun createSession() = PocketSession(this) { _, _, event, _, _ ->
+        var workflowsEnabled = tel.misa.mxpocket.workflow.WORKFLOWS_ENABLED
+        override fun createSession() = PocketSession(this, workflowsEnabled = workflowsEnabled) { _, _, event, _, _ ->
             emit = event
             claims++
             lcd.clear()
@@ -148,6 +149,7 @@ class KeypadSessionTest {
     }
 
     @Test fun authorizedAudioDisplaysAndControlsThePlayerWithScreenOffOrKeyguardLocked() {
+        app.workflowsEnabled = true
         val media = MediaSession(app,"external player")
         val player = media.controller
         val controller = shadowOf(player)
@@ -164,7 +166,8 @@ class KeypadSessionTest {
         val session = app.session
         session.selectProfile("audio")
         val flow = WorkflowDefinition(name = "Skip", steps = listOf(WorkflowStep(StepKind.ACTION, target = "media.next")))
-        assertNull(kotlinx.coroutines.runBlocking { session.workflows.save(flow) })
+        val workflows = checkNotNull(session.workflows)
+        assertNull(kotlinx.coroutines.runBlocking { workflows.save(flow) })
         session.deck.setKey("audio","root",0,DeckKey(action = ActionCall("workflow.run",mapOf("workflowId" to flow.id)))).getOrThrow()
         val service = Robolectric.buildService(KeypadService::class.java).create()
         service.get().onStartCommand(KeypadService.command(app,session.reserve(real)!!),0,1)
@@ -189,7 +192,7 @@ class KeypadSessionTest {
             assertFalse(session.actions.let { kotlinx.coroutines.runBlocking { it.dispatch(ActionCall("media.next")) } }.success)
             val controls = shadowOf(player.transportControls)
             press(5); assertEquals(P.ACTION_PAUSE,controls.lastPerformedAction)
-            press(1); assertEquals(WorkflowPhase.FAILED,session.workflows.status.value?.phase)
+            press(1); assertEquals(WorkflowPhase.FAILED,workflows.status.value?.phase)
             assertEquals(P.ACTION_PAUSE,controls.lastPerformedAction)
             state(false); tick()
             press(5); assertEquals(P.ACTION_PLAY,controls.lastPerformedAction)

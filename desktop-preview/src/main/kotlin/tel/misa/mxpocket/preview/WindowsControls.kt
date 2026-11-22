@@ -9,6 +9,8 @@ import com.sun.jna.platform.win32.WinUser.KEYBDINPUT
 import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.*
 import tel.misa.mxpocket.decks.DeckCommand
+import tel.misa.mxpocket.i18n.KeypadCopy
+import tel.misa.mxpocket.workflow.WORKFLOWS_ENABLED
 
 enum class MediaKey(val vk: Int, private val caption: tel.misa.mxpocket.i18n.Copy) {
     QUIETER(0xae, H.Quieter), LOUDER(0xaf, H.Louder), TOGGLE_MUTE(0xad, H.Mute),
@@ -78,7 +80,7 @@ internal fun bindingReason(call: ActionCall, simulator: Boolean): String? {
     return when (call.id) {
         DeckActions.BACK, DeckActions.ROOT, DeckActions.PAGE, MORE_PROFILES -> null
         DeckActions.PROFILE -> profileReason(call.params[DeckActions.PROFILE_ID].orEmpty())
-        "workflow.run" -> H.Workflow.text()
+        "workflow.run" -> if (WORKFLOWS_ENABLED) H.Workflow.text() else KeypadCopy.Unavailable.text()
         else -> H.NotImplemented.text()
     }
 }

@@ -1,6 +1,7 @@
 package tel.misa.mxpocket.deck
 
 import tel.misa.mxpocket.actions.ActionCall
+import tel.misa.mxpocket.workflow.WORKFLOWS_ENABLED
 
 /** Stable IDs for host-dispatched navigation. Page IDs are local to a profile. */
 object DeckActions {
@@ -53,6 +54,13 @@ data class DeckKey(
     val enabled: Boolean = true,
     val holdAction: ActionCall? = null,
 )
+
+/** Show the Hold face on a hold-only key, including one whose saved workflow Tap is dormant. */
+fun DeckKey.displayedAction(hold: Boolean, workflowsEnabled: Boolean = WORKFLOWS_ENABLED): ActionCall? = when {
+    hold || action == null -> holdAction
+    !workflowsEnabled && action.id == "workflow.run" && holdAction != null -> holdAction
+    else -> action
+}
 
 internal fun DeckKey.mapActions(transform: (ActionCall) -> ActionCall?) =
     copy(action = action?.let(transform), holdAction = holdAction?.let(transform))

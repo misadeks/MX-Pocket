@@ -80,7 +80,7 @@ class ForegroundAppTest {
             assertEquals(TEAMS, deck.state.value.activeProfileId)
             assertEquals("root", deck.state.value.activePage.id)
             assertFalse(session.deckState.value.teams.joined)
-            assertNull(session.workflows.status.value)
+            assertNull(session.workflows?.status?.value)
         }
         deck.selectProfile(TEAMS).getOrThrow()
         deck.openPage(IN_CALL).getOrThrow()
@@ -210,7 +210,7 @@ class ForegroundAppTest {
             assertFalse(deck.exportJson().contains(other))
             assertFalse(session.logText().contains(other))
             assertEquals(profiles, deck.state.value.profiles)
-            assertNull(session.workflows.status.value)
+            assertNull(session.workflows?.status?.value)
         } finally { session.disconnect() }
         assertNull(signal())
     }

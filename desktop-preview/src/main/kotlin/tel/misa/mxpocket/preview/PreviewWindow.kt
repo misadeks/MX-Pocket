@@ -29,6 +29,7 @@ import tel.misa.mxpocket.decks.DeckCommand
 import tel.misa.mxpocket.i18n.LayoutCopy
 import tel.misa.mxpocket.i18n.builtInDeckName
 import tel.misa.mxpocket.shared.ui.*
+import tel.misa.mxpocket.workflow.WORKFLOWS_ENABLED
 
 private val DEVICE_LIMIT get() = H.Separate.text()
 
@@ -69,8 +70,8 @@ fun main() = application {
     val repo = remember { DeckRepository(File(directory, "deck.json"),
         registry.filter { switches.getBoolean("disabled.${it.id}", false) }.map { it.id }.toSet()) }
     val host = remember { PreviewDeck(repo) }
-    val workflows = remember(directory) { DesktopWorkflowStore(directory) }
-    val workflowState by workflows.state.collectAsState()
+    val workflows = remember(directory) { if (WORKFLOWS_ENABLED) DesktopWorkflowStore(directory) else null }
+    val workflowDefinitions = workflows?.state?.collectAsState()?.value?.definitions.orEmpty()
     val deck by repo.operatingState.collectAsState()
     var tab by remember { mutableStateOf(WorkspaceTab.HOME) }
     var themeMode by remember {
@@ -178,7 +179,7 @@ fun main() = application {
                 add(BindingOption(LayoutCopy.CategoryAction.text(builtInDeckName(it.deck), it.displayLabel), ActionCall(it.id)))
             }
             deck.visibleProfiles.forEach { add(BindingOption(LayoutCopy.BindProfile.text(it.displayName()), ActionCall(DeckActions.PROFILE, mapOf("profileId" to it.id)))) }
-            workflowState.definitions.forEach {
+            workflowDefinitions.forEach {
                 add(BindingOption(LayoutCopy.AndroidWorkflow.text(it.name), ActionCall("workflow.run", mapOf("workflowId" to it.id))))
             }
             addAll(availableFactoryKeyBindings(deck.disabledPluginIds))
@@ -228,7 +229,7 @@ fun main() = application {
                 LayoutEditor(remember(repo) { repo.asEditorStore() }, options, emptyMap(), { backup(true) }, { backup(false) },
                     live = state, backHandler = registerBack)
                     }
-                }, workflows = { DesktopWorkflows(workflows, registerBack) }, openDiagnosticsWindow = { diagnosticsRequest++ })
+                }, workflows = { workflows?.let { DesktopWorkflows(it, registerBack) } }, openDiagnosticsWindow = { diagnosticsRequest++ })
             }
         }
     }

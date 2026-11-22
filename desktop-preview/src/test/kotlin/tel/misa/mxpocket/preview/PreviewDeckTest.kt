@@ -27,6 +27,19 @@ class PreviewDeckTest {
     private fun PreviewDeck.press(slot: Int, now: Long, hold: Boolean = false): String =
         press(PocketScreenEvent.VirtualKey(slot, board(now).grid, hold), now)!!
 
+    @Test fun legacyWorkflowTapDoesNotMaskAWorkingHoldOrRunItOnTap() {
+        val repo = DeckRepository(File(folder.root, "deck.json"))
+        val deck = PreviewDeck(repo).apply { simulator = true; select("focus") }
+        val key = DeckKey(action = ActionCall("workflow.run", mapOf("workflowId" to "old")),
+            holdAction = ActionCall(DeckActions.PROFILE, mapOf("profileId" to "audio")))
+        repo.setKey("focus", "root", 0, key).getOrThrow()
+        deck.press(0, 0)
+        assertEquals("focus", deck.profileId)
+        deck.press(0, 0, hold = true)
+        assertEquals("audio", deck.profileId)
+        assertEquals(key, repo.state.value.profiles.single { it.id == "focus" }.pages.first().keys.first())
+    }
+
     @Test fun switchingLanguageRepaintsWithoutRebindingOrRenamingSavedKeys() {
         val language = AppLocale.current
         try {

@@ -200,7 +200,7 @@ class WorkspaceWindowTest {
         val repo = DeckRepository(File(temp.root, "deck.json"))
         val store = repo.asEditorStore()
         var width by mutableStateOf(380.dp)
-        var tab by mutableStateOf(WorkspaceTab.HOME)
+        var tab by mutableStateOf(WorkspaceTab.WORKFLOWS) // Stale route from an earlier release.
         val events = mutableListOf<PocketScreenEvent>()
         val frame = FocusTimer().present(0)
         val grid = virtualGrid(1, repo.state.value, frame, null)
@@ -214,12 +214,13 @@ class WorkspaceWindowTest {
                         PocketWorkspace(tab, { tab = it }, screen, emptyList(), events::add,
                             profiles = { SimulatorProfiles(screen, { events += PocketScreenEvent.SelectPlugin(it) }) {
                                 LayoutEditor(store, emptyList(), emptyMap(), {}, {})
-                            } }, workflows = {})
+                            } }, workflows = { error("Disabled route composed its editor") })
                     }
                 }
             }
         }
         fun assertFocusBoard() {
+            ui.onNodeWithText("Flows").assertDoesNotExist()
             screen.tiles.forEachIndexed { index, tile ->
                 ui.onNodeWithContentDescription("Key ${index + 1}, ${tile.label}, ${tile.footer}").assertExists()
             }
