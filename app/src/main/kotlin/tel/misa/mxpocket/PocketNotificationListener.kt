@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.update
 import tel.misa.mxpocket.calls.DialerNotice
 import tel.misa.mxpocket.calls.LineState
 import tel.misa.mxpocket.calls.dialerNotice
+import tel.misa.mxpocket.calls.isFromDialer
 import tel.misa.mxpocket.decks.TEAMS_PACKAGE
 import tel.misa.mxpocket.decks.TeamsEvents
 import tel.misa.mxpocket.decks.TeamsObservation
@@ -71,7 +72,7 @@ class PocketNotificationListener : NotificationListenerService() {
             if (removed && sbn.key == observedTeamsKey) teamsBoundary++
             teams()
         }
-        if (phone != null && sbn.packageName == dialer()) {
+        if (phone != null && sbn.isFromDialer(dialer(), packageManager)) {
             // The publisher may replace the very same key in the same millisecond.
             phoneBoundary++
             phone()
@@ -95,7 +96,7 @@ class PocketNotificationListener : NotificationListenerService() {
         return try {
             val pkg = dialer() ?: return null
             val notes = activeNotifications ?: return null
-            dialerNotice(notes, pkg, state, phoneBoundary, !isUnlockedAndInteractive(), ::visibleOnLockScreen)
+            dialerNotice(notes, pkg, packageManager, state, phoneBoundary, !isUnlockedAndInteractive(), ::visibleOnLockScreen)
                 ?.takeIf { expectedKey == null || it.stamp.key == expectedKey }
         } catch (_: SecurityException) { null }
         catch (_: BadParcelableException) { null }
