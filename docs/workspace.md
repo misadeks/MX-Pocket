@@ -109,8 +109,9 @@ option off; see [deck behavior without special access](android-decks.md).
 
 Layout format 2 updated the factory Audio key order; customized pages keep
 the old Audio actions. Format 3 also updates an untouched Navigation root
-from format 1 or 2. Importing a format 3 layout keeps its key order. Older
-versions of the app cannot import format 3 exports.
+from format 1 or 2. Format 4 removes the stock Focus timer shortcut from
+Teams Work without moving other keys. A customized shortcut is preserved.
+Older app versions cannot import format 4 exports.
 
 ## Connect a wired keypad
 
@@ -138,6 +139,12 @@ version; don't post unredacted logs, device paths, serials or personal artwork.
 No root, firmware update or kernel change is part of setup.
 
 ## Show a profile when an app opens
+
+**Automatic profile switching** lets you choose whether app and context rules
+can move your keypad at all. Leave it off for manual control, or pin a profile
+to pause switching. Teams has a built-in app match: once step 2 below is set
+up, opening Teams selects **Teams / Work** without a custom rule. This does
+not join a call or press a key.
 
 1. In **Profiles**, pick **Studio** in the **Profile** picker. Under **Context rules > Choose app**, tap **Camera** (Samsung Camera on a Galaxy). Pick **Audio** and repeat for **YouTube Music**. You can choose a custom profile the same way. Saving a mapping does not enable detection, change key bindings or launch anything.
 2. Enable **Automatic profile switching** and **Detect foreground apps**. Tap **Open usage access settings**, select **MX Pocket**, and allow Usage Access. No notification, accessibility or overlay access is needed for detection. Turn detection off here or revoke the Android grant at any time.

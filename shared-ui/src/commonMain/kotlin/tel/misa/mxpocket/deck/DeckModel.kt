@@ -80,7 +80,7 @@ data class DeckState(
 }
 
 object DeckLimits {
-    const val VERSION = 3
+    const val VERSION = 4
     const val MAX_BYTES = 512 * 1024
     const val PROFILES = 16
     const val PAGES = 32
