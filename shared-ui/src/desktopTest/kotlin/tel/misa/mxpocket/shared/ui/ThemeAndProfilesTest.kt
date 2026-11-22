@@ -170,7 +170,7 @@ class ThemeAndProfilesTest {
 
     @Test fun choosingAProfileInThePickerPutsItOnTheKeypad() {
         val repo = openEditor()
-        ui.onNodeWithText("Focus / Focus ▾").performClick()
+        ui.onNodeWithText("Launcher / Launcher ▾").performClick()
         ui.onNodeWithText("Audio").performClick()
         ui.waitUntil(5_000) { repo.state.value.activeProfileId == "audio" }
         ui.onNodeWithText("Audio / Audio ▾").assertExists()

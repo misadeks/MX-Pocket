@@ -24,6 +24,20 @@ class DeckRepositoryTest {
     private val file: File get() = File(folder.root, "deck.json")
     private val repo by lazy { DeckRepository(file) }
 
+    @Test fun factoryDefaultsStartOnLauncherAndKeepStudioSelected() {
+        assertEquals("launcher", repo.state.value.activeProfileId)
+        assertEquals("launcher", repo.state.value.defaultProfileId)
+        assertFalse(repo.state.value.profiles.single { it.id == "studio" }.automatic)
+        repo.setAutomatic(true).getOrThrow()
+        repo.selectProfile("studio").getOrThrow()
+        repo.observe(emptyMap(), 0).getOrThrow()
+        repo.observe(emptyMap(), 3000).getOrThrow()
+        assertEquals("studio", repo.state.value.activeProfileId)
+        val restored = DeckRepository(file)
+        assertEquals("studio", restored.state.value.activeProfileId)
+        assertEquals("launcher", restored.state.value.defaultProfileId)
+    }
+
     @Test fun localizedReasonsAndValidationNeverChangeExportsOrRuleValues() {
         val previous = AppLocale.current
         try {
@@ -56,6 +70,7 @@ class DeckRepositoryTest {
         repo.showTeamsCall(false); observe(4000); observe(6000)
         assertEquals("phone", repo.state.value.activeProfileId)
         repo.observe(emptyMap(), 7000).getOrThrow()
+        repo.setProfileAutomatic("studio", true).getOrThrow()
         repo.setRules("studio", listOf(DeckRule("foregroundApp", "com.microsoft.teams", 5))).getOrThrow()
         observe(8000); observe(10000)
         assertEquals("studio", repo.state.value.activeProfileId)
@@ -357,6 +372,7 @@ class DeckRepositoryTest {
     @Test fun removingAnAppMappingLeavesNoPackageInTheSavedOrExportedReason() {
         val pkg = "example.privateplayer"
         val rule = DeckRule("foregroundApp", pkg, 5)
+        repo.setProfileAutomatic("studio", true).getOrThrow()
         repo.setRules("studio", listOf(rule)).getOrThrow()
         repo.setAutomatic(true).getOrThrow()
         for (time in listOf(0L, 2000L)) repo.observe(mapOf(rule.signal to pkg), time).getOrThrow()
@@ -463,7 +479,7 @@ class DeckRepositoryTest {
 
         val exported = repo.exportJson()
         repo.restoreDefaults().getOrThrow()
-        assertEquals("focus", repo.state.value.activeProfileId)
+        assertEquals("launcher", repo.state.value.activeProfileId)
         repo.importJson(exported).getOrThrow()
         assertEquals(state, repo.state.value)
     }
@@ -606,6 +622,7 @@ class DeckRepositoryTest {
         repo.root().getOrThrow()
         assertTrue(repo.deletePage(duplicate, "root").isFailure)
         repo.setKey("focus", "root", 0, DeckKey(action = ActionCall("profile.switch", mapOf("profileId" to duplicate)))).getOrThrow()
+        repo.setDefault("focus").getOrThrow()
         repo.setPinned(duplicate).getOrThrow()
         repo.deleteProfile(duplicate).getOrThrow()
         assertEquals("focus", repo.state.value.activeProfileId)
@@ -617,6 +634,7 @@ class DeckRepositoryTest {
     @Test fun copyingRenamingAndRemovingTargetsPreservesIndependentTapAndHoldLinks() {
         fun page(id: String) = ActionCall(DeckActions.PAGE, mapOf(DeckActions.PAGE_ID to id))
         fun profile(id: String) = ActionCall(DeckActions.PROFILE, mapOf(DeckActions.PROFILE_ID to id))
+        repo.setDefault("focus").getOrThrow()
         val child = repo.createPage("focus", "Scene").getOrThrow()
         repo.setKey("focus", "root", 0, DeckKey(holdAction = page(child))).getOrThrow()
         val key = DeckKey(action = profile("focus"), holdAction = page(child))
@@ -644,6 +662,9 @@ class DeckRepositoryTest {
         val music = DeckRule("mediaActive", "true", 3)
         val overnight = DeckRule("hour", "22-5", 4)
         val dock = DeckRule("dock", "desk", 1)
+        repo.setDefault("focus").getOrThrow()
+        repo.selectProfile("focus").getOrThrow()
+        repo.setProfileAutomatic("studio", true).getOrThrow()
         repo.setAutomatic(true).getOrThrow()
         repo.setRules("audio", listOf(music)).getOrThrow()
         repo.setRules("studio", listOf(overnight, dock)).getOrThrow()
@@ -683,6 +704,7 @@ class DeckRepositoryTest {
 
     @Test fun explicitSelectionPinAndOptOutCannotBeOverriddenByAnOldCandidate() {
         val media = mapOf("mediaActive" to "true")
+        repo.setDefault("focus").getOrThrow()
         repo.setAutomatic(true).getOrThrow()
         repo.observe(media, 1).getOrThrow()
         repo.setPinned("phone").getOrThrow()
