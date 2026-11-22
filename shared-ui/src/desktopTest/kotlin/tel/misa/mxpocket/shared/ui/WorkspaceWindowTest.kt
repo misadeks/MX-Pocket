@@ -98,6 +98,7 @@ class WorkspaceWindowTest {
         assertEquals(List(2) { PocketScreenEvent.DefaultProfile("focus") }, events)
     }
 
+    @OptIn(ExperimentalTestApi::class)
     @Test fun unavailableBindingCanBeReadAndReplacedWithoutChangingTheOtherGesture() {
         val camera = BindingOption(ActionCategory.CAMERA, "Open Camera", ActionCall("studio.open"), "Requires the phone camera.")
         val back = BindingOption(ActionCategory.LAYOUT, "Back", ActionCall(DeckActions.BACK))
