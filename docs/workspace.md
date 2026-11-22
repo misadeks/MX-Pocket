@@ -5,7 +5,11 @@ to press the nine keys and **Keypad** to edit them without running their actions
 **Plugins** turns features on or off, **Flows** lets you build and run workflows,
 and **Settings** contains USB preferences, background images and diagnostics.
 
-Foreground-app mappings and Usage Access run only on Android; Windows can edit layouts without observing Android apps.
+The Windows simulator uses the same workspace and layout editor. In a narrow
+window, selecting a key in **Keypad** opens its editor; Back returns without
+firing the key. A wider window keeps the board and key details side by side.
+Windows can save its own layouts, but does not observe Android apps or request
+Usage Access. The walkthrough below uses the Android host.
 
 ## Choose features on first launch
 

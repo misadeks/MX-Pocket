@@ -70,12 +70,13 @@ ARM64. Running the packaged JAR does not require the Android SDK.
 
 ## Phone UI layout and safe preview
 
-Start in the [Android UI sources](app/src/main/kotlin/tel/misa/mxpocket/ui)
-for the live workspace and in [`:desktop-preview`](desktop-preview) for the
-Windows simulator. The simulator shares the factory layouts, Focus timer and
-Tic Tac Toe game, not the Android services. Keep safe-area insets, accessible touch
-targets, selectable diagnostics and live status announcements when changing
-the phone layout.
+Android and Windows render `PocketScreenState` using `PocketWorkspace` in the
+[shared UI sources](shared-ui/src/commonMain). Taps emit typed `PocketScreenEvent`
+values. Use `PocketTheme` for appearance and Compose semantics for UI tests.
+Rendering does not activate plugins or execute actions. Keep the safe-area
+insets, 48dp control/84dp key minimum heights, selectable diagnostics and live
+status announcements. The [Windows host](desktop-preview) can run the Focus
+timer and Tic Tac Toe, but does not call Android services.
 
 `MainActivity` remains the live state/event adapter: it owns visible consent and
 hands hardware sessions to `KeypadService`/`PocketSession`. Styling the phone

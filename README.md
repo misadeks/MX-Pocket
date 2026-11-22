@@ -24,12 +24,12 @@ for Android builds on Linux/macOS, substitute
 .\gradlew.bat :desktop-preview:run
 ```
 
-No Android SDK is needed for this simulator. On Windows ARM64, use an
-**x64 JDK** for the desktop runtime. On **Focus**,
-click **Start** to see the countdown. Choose **Next profile** for **Audio**:
-changing tracks or volume changes only the simulation. You can also play
-**Tic Tac Toe** by clicking the nine keys as board squares. Nothing is saved,
-no Windows apps are launched, and no phone or keypad is needed.
+No Android SDK, phone or keypad is needed. On Windows ARM64, use an **x64
+JDK** for the desktop runtime. On **Home**, select **Focus** and click **Start** to see the
+countdown. Select **Audio** to try simulated media keys, or play **Tic Tac Toe**
+using the nine keys as board squares. **Keypad** edits and saves layouts
+locally using the same editor as Android. The simulator doesn't change Windows
+volume, open phone apps, or run Android workflows.
 
 ### Run it on Android
 
