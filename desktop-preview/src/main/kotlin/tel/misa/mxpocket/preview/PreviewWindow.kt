@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import tel.misa.mxpocket.plugins.IntegrationApp
 import tel.misa.mxpocket.deck.*
 import tel.misa.mxpocket.shared.ui.*
+import tel.misa.mxpocket.workflow.WORKFLOWS_ENABLED
 
 private val DEVICE_LIMIT get() = H.Separate.text()
 
@@ -65,7 +66,7 @@ fun main() = application {
     val repo = remember { DeckRepository(File(directory, "deck.json"),
         registry.filter { switches.getBoolean("disabled.${it.id}", false) }.map { it.id }.toSet()) }
     val host = remember { PreviewDeck(repo) }
-    val workflows = remember(directory) { DesktopWorkflowStore(directory) }
+    val workflows = remember(directory) { if (WORKFLOWS_ENABLED) DesktopWorkflowStore(directory) else null }
     val deck by repo.operatingState.collectAsState()
     var tab by remember { mutableStateOf(WorkspaceTab.HOME) }
     var themeMode by remember {
@@ -212,7 +213,7 @@ fun main() = application {
                 LayoutEditor(remember(repo) { repo.asEditorStore() }, options, emptyMap(), { backup(true) }, { backup(false) },
                     live = state, backHandler = registerBack)
                     }
-                }, workflows = { DesktopWorkflows(workflows, registerBack) }, openDiagnosticsWindow = { diagnosticsRequest++ })
+                }, workflows = { workflows?.let { DesktopWorkflows(it, registerBack) } }, openDiagnosticsWindow = { diagnosticsRequest++ })
             }
         }
     }

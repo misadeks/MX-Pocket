@@ -41,10 +41,15 @@ import tel.misa.mxpocket.deck.PROFILE_HOME
 import tel.misa.mxpocket.i18n.DesktopCopy as H
 import tel.misa.mxpocket.plugins.KeyTile
 import tel.misa.mxpocket.plugins.PluginFrame
+import tel.misa.mxpocket.workflow.WORKFLOWS_ENABLED
 
 enum class WorkspaceTab(private val copy: tel.misa.mxpocket.i18n.Copy) {
     HOME(W.Home), PROFILES(W.Profiles), PLUGINS(W.Plugins), WORKFLOWS(W.Flows), SETTINGS(W.Settings);
     val label get() = copy.text()
+
+    companion object {
+        val available = entries.filter { it != WORKFLOWS || WORKFLOWS_ENABLED }
+    }
 }
 
 data class ProfileChoice(val id: String, val name: String, val unavailableReason: String? = null)
@@ -133,8 +138,9 @@ fun PocketWorkspace(
     openDiagnosticsWindow: (() -> Unit)? = null,
     backHandler: @Composable (Boolean, () -> Unit) -> Unit = { _, _ -> },
 ) {
+    val activeTab = tab.takeIf { it in WorkspaceTab.available } ?: WorkspaceTab.HOME
     val holder = rememberSaveableStateHolder()
-    var diagnosticsOpen by rememberSaveable(tab) { mutableStateOf(false) }
+    var diagnosticsOpen by rememberSaveable(activeTab) { mutableStateOf(false) }
     val closeDiagnostics = { diagnosticsOpen = false }
     backHandler(diagnosticsOpen, closeDiagnostics)
     BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
@@ -146,16 +152,16 @@ fun PocketWorkspace(
         Column {
             Row(Modifier.weight(1f)) {
                 if (rail) NavigationRail(containerColor = PocketColors.nav) {
-                    WorkspaceTab.entries.forEach { item ->
-                        NavigationRailItem(item == tab, { select(item) }, icon = { TabIcon(item) },
+                    WorkspaceTab.available.forEach { item ->
+                        NavigationRailItem(item == activeTab, { select(item) }, icon = { TabIcon(item) },
                             label = { Text(item.label) }, colors = NavigationRailItemDefaults.colors(
                                 selectedIconColor = PocketColors.accent, selectedTextColor = PocketColors.accent,
                                 indicatorColor = PocketColors.navIndicator))
                     }
                 }
                 Box(Modifier.fillMaxSize()) {
-                    holder.SaveableStateProvider(tab.name) {
-                        when (tab) {
+                    holder.SaveableStateProvider(activeTab.name) {
+                        when (activeTab) {
                             WorkspaceTab.HOME -> HomeScreen(state, event)
                             WorkspaceTab.PROFILES -> profiles()
                             WorkspaceTab.PLUGINS -> if (state.simulator == null) PluginSettingsList(plugins, event) else PluginsScreen(plugins, event)
@@ -166,8 +172,8 @@ fun PocketWorkspace(
                 }
             }
             if (!rail) NavigationBar(windowInsets = WindowInsets(0), containerColor = PocketColors.nav, tonalElevation = 0.dp) {
-                WorkspaceTab.entries.forEach { item ->
-                    NavigationBarItem(item == tab, { select(item) }, icon = { TabIcon(item) },
+                WorkspaceTab.available.forEach { item ->
+                    NavigationBarItem(item == activeTab, { select(item) }, icon = { TabIcon(item) },
                         label = { Text(item.label, maxLines = 2, textAlign = androidx.compose.ui.text.style.TextAlign.Center) }, colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = PocketColors.accent, selectedTextColor = PocketColors.accent,
                             indicatorColor = PocketColors.navIndicator))

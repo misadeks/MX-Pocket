@@ -16,10 +16,10 @@ import kotlinx.serialization.SerializationException
 import tel.misa.mxpocket.i18n.Copy
 import tel.misa.mxpocket.i18n.WorkflowCopy
 
-interface WorkflowProvider { val workflows: WorkflowController }
+interface WorkflowProvider { val workflows: WorkflowController? }
 
 /** One application-owned instance, called on the main thread, including scheduled deliveries. */
-class WorkflowController(context: Context, private val scope: CoroutineScope, private val host: WorkflowHost) {
+class WorkflowController internal constructor(context: Context, private val scope: CoroutineScope, private val host: WorkflowHost) {
     private val app = context.applicationContext
     private val store = WorkflowStore(app)
     private val alerts = MutableStateFlow<Copy?>(null)
