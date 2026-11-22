@@ -1,5 +1,6 @@
 package tel.misa.mxpocket
 
+import tel.misa.mxpocket.i18n.CallCopy
 import tel.misa.mxpocket.i18n.OneNoteCopy
 
 import tel.misa.mxpocket.ui.DeviceCopy as D
@@ -741,7 +742,7 @@ internal class PocketSession(
                     request == ticket && SystemClock.elapsedRealtime() - arrivedAt in 0 until 2_000L &&
                     acknowledged(index, epoch)
             }
-            if (!sent) message("Call controls changed or unavailable. Use Phone.")
+            if (!sent) message(CallCopy.ControlsUnavailable.text())
             refreshPhoneCall()
             return
         }

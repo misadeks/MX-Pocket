@@ -1,7 +1,7 @@
 MX Pocket includes protocol algorithm adaptations from MIT-licensed projects.
 Their copyright notices, license, revision identifiers and source attribution
 are preserved in mx-driver/src/main/assets/mx-pocket-provenance.txt and are
-embedded in the generated AAR and APK.
+embedded in the generated AAR, APK and desktop JAR.
 
 gradlew, gradlew.bat and gradle/wrapper/gradle-wrapper.jar are generated Gradle
 wrapper files, licensed under the Apache License, Version 2.0.

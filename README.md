@@ -26,25 +26,24 @@ The **wired Logitech MX Creative Keypad** (`046D:C354`) connects directly to
 your Android phone over USB-C. MX Pocket's Kotlin driver uses Android's USB
 Host API to read key presses and update the labels behind the keys as layouts
 change. You can use the driver without the app. No root access or companion PC
-is needed. The wireless **Dialpad** sold with the keypad is not supported, and
-the Windows simulator does not drive hardware.
+is needed. The Windows companion uses the standard Windows HID driver for the
+same wired keypad. The wireless **Dialpad** sold with it is not supported.
 
 ## Quick start
 
 <a name="try-it-on-windows-without-hardware"></a>
 
-**Try the two layouts on Windows.** From the repository root with `JAVA_HOME` set
+**Use MX Pocket on Windows.** From the repository root with `JAVA_HOME` set
 to JDK 17 or 21 (x64 on Windows ARM64), run:
 
 ```powershell
 .\gradlew.bat :desktop-preview:run
 ```
 
-On **Profiles**, swipe the profile carousel to the music-note profile, then click the center key on **Home** to toggle playback.
-Swipe to **Navigation** to see the same key become **Select**. Choose System,
-Light or Dark in **Settings → Appearance**. The simulator
-needs no Android SDK, phone or keypad; it doesn't change Windows media,
-navigate other apps or drive USB hardware.
+Choose **Connect USB keypad** to use the physical keys for Focus, Windows
+volume and media transport, or Tic Tac Toe. Without a keypad, choose
+**Settings → Connect virtual keypad** and click the keys on Home. Virtual
+audio never changes Windows media. See [Windows controls and limitations](docs/workspace.md#windows-companion).
 
 <a name="run-it-on-android"></a>
 

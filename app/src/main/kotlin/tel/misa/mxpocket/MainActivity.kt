@@ -1,5 +1,6 @@
 package tel.misa.mxpocket
 
+import tel.misa.mxpocket.i18n.CallCopy
 import tel.misa.mxpocket.ui.DeviceCopy as D
 import tel.misa.mxpocket.i18n.WorkspaceCopy as W
 import tel.misa.mxpocket.i18n.displayName
@@ -106,7 +107,7 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
         }
     }
     private val callStatePermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (!granted) session.message("Phone state was not granted. Use Phone, or allow Phone permission in Android app settings.")
+        if (!granted) session.message(CallCopy.PhonePermissionDenied.text())
         session.refreshPhoneCall()
         render()
     }
@@ -436,9 +437,9 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
                 startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS).putExtra(
                     Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, session.phoneAccess.listener.flattenToString()))
             } catch (_: ActivityNotFoundException) {
-                session.message("Open Android notification access settings for MX Pocket phone calls.")
+                session.message(CallCopy.OpenAccessSettings.text())
             } catch (_: SecurityException) {
-                session.message("Android restricted notification access. Use Phone for call controls.")
+                session.message(CallCopy.RestrictedAccess.text())
             }
         }
         render()
@@ -446,14 +447,15 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
 
     override fun render() {
         val deck = session.deck.operatingState.value
+        val carrierCall = deck.activeProfileId == tel.misa.mxpocket.deck.PHONE_CALL_VIEW
         val profile = deck.activeProfile.displayName()
         val page = deck.activeProfile.displayPageName(deck.activePage)
         val state = PocketScreenState(
             status = session.status,
-            pluginTitle = if (page == profile) profile else "$profile / $page",
+            pluginTitle = if (carrierCall) CallCopy.ViewTitle.text() else if (page == profile) profile else "$profile / $page",
             tiles = session.homeTiles(),
             profiles = deck.visibleProfiles.map { ProfileChoice(it.id, it.displayName()) },
-            activeId = deck.activeProfileId, reason = displaySelectionReason(deck.selectionReason),
+            activeId = deck.activeProfileId, reason = if (carrierCall) CallCopy.ViewReason.text() else displaySelectionReason(deck.selectionReason),
             connectionLabel = session.connectionLabel,
             connectionActive = target != null || session.request != null,
             usbReady = session.ready, activePageId = deck.activePage.id,

@@ -39,6 +39,12 @@ reader actions. This edits saved bindings, not the live screen: it works
 disconnected, runs no keys and does not switch profiles. To switch explicitly,
 open the profile’s **Profile settings and rules > Use on keypad**.
 
+In a wide desktop window, **Home > Switch layout** selects a layout without leaving
+the keypad. The **Profiles** workshop shows a profile library instead of the
+swipe strip. **Plugins** lists controls supported by the current host first;
+unavailable plugins remain visible with the reason they cannot run. The key
+action picker also explains unavailable bindings without changing saved keys.
+
 To give a key a second action, open the key on its page, choose **Hold** under
 **Key actions**, pick an action, and save the key. **Tap** and **Hold** are
 independent; choose **Unassigned** for Hold and save to remove it. Existing
@@ -51,10 +57,40 @@ recognized physical two-key chord consumes both keys. Hold does not grant
 permission to launch an app in the background or operate the camera shutter.
 Keys without Hold keep their usual response time.
 
-The Windows simulator keeps its live profile carousel and **Swap keys** editor,
-and starts with the virtual keypad connected. It can save its own layouts, but has no USB connection,
-image upload, or Android permission and foreground-app detection controls.
-The walkthrough below uses the Android host.
+## Windows companion
+
+MX Pocket starts disconnected. **Connect USB keypad** on Home or in Settings
+scans for one wired Logitech MX Creative Keypad (`046D:C354`), opens its
+vendor HID collections and initializes the page and LCD controls. No driver
+installation, elevation or Options+ changes are needed. If discovery finds
+no keypad, check the cable. If the device is busy, reconnect or retry later;
+the app will not force ownership. Disconnect before switching input modes.
+
+| Profile | Physical keypad | Explicit virtual keypad |
+| --- | --- | --- |
+| Focus | Local start/pause, reset, duration adjustments and 15/25/50-minute presets. No completion tone. | Same local timer |
+| Audio | Volume down/up, mute **toggle**, previous, play/pause and next. Transport depends on a compatible media app. “Sent” means Windows accepted the key events, not that playback changed. | In-memory volume, mute, track and playback. No Windows input. |
+| Tic Tac Toe | One- or two-player local game | Same game |
+
+Home is a read-only mirror in USB mode. LCD writes use the same nine rendered
+key faces as the mirror. Diagnostics distinguish initialization and image
+acknowledgments from visible output. The two physical page keys navigate
+available layouts. Ordinary presses act once; a slot with a Hold binding
+selects Tap or Hold **on release** (500 ms threshold on Windows). Disconnecting
+or changing the layout discards stale input. The two page buttons together open the game; either alone exits it.
+
+Choose **Settings → Connect virtual keypad** for clickable Home keys with no
+USB I/O. Phone, Launcher, Studio, Navigation, Teams and OneNote require Android; they
+stay listed with reasons. Windows does not read volume levels, track metadata
+or seek positions, issue absolute mute/unmute commands, run workflows, apply
+foreground rules, or upload user background images. Layouts and workflows can
+be edited and backed-up layouts imported without enabling Android actions.
+Windows desktop data stays local and is not synchronized with the phone.
+
+Build the [x64 Windows JAR](../CONTRIBUTING.md#tooling-and-local-checks)
+with a matching x64 JDK 17/21 (also on ARM64 Windows). Run `java -jar` on the
+generated JAR. Running it does not need the Android SDK. The remainder of this
+walkthrough uses the Android host.
 
 ## Install the Android app
 

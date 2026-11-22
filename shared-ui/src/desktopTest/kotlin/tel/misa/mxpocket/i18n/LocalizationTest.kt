@@ -30,7 +30,8 @@ class LocalizationTest {
     }
 
     @Test fun catalogsHaveCompleteLatinTextAndPreserveFormatArguments() {
-        val catalogs = listOf(WorkspaceCopy, LayoutCopy, WorkflowCopy, KeypadCopy, AccessCopy, TeamsCallCopy, OneNoteCopy)
+        val catalogs = listOf(WorkspaceCopy, LayoutCopy, WorkflowCopy, KeypadCopy, AccessCopy, TeamsCallCopy, OneNoteCopy,
+            CallCopy, OneNoteArtworkCopy, LauncherCopy, DesktopCopy, WindowsHostCopy, SavedEditorCopy)
         fun checkEntry(id: String, copy: Copy) {
             val slots = { value: String -> Copy.slot.findAll(value).map { it.value }.toSet() }
             assertEquals("$id/fr", slots(copy.en), slots(copy.fr))

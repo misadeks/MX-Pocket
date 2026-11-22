@@ -15,4 +15,8 @@ internal object SavedEditorCopy {
     val BackToPages = Copy("Back to {0} pages", "Retour aux pages de « {0} »", "Nazad na stranice profila „{0}”")
     val Selected = Copy("Selected for keypad", "Profil actif sur le clavier", "Izabrano za tastaturu")
     val UseOnKeypad = Copy("Use on keypad", "Utiliser sur le clavier", "Koristi na tastaturi")
+    val Saving = Copy("Saving changes…", "Enregistrement des modifications…", "Čuvanje izmena…")
+    val AndroidRuleEngine = Copy("Automatic switching runs on Android. Saved rules are kept.",
+        "Le changement automatique de profil fonctionne sur Android. Les règles enregistrées sont conservées.",
+        "Automatska promena profila radi na Androidu. Sačuvana pravila se zadržavaju.")
 }

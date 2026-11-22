@@ -17,7 +17,7 @@ import tel.misa.mxpocket.decks.DeckCommand
 import tel.misa.mxpocket.decks.navigationCommands
 import tel.misa.mxpocket.i18n.*
 
-data class BindingOption(val label: String, val call: ActionCall)
+data class BindingOption(val label: String, val call: ActionCall, val unavailableReason: String? = null)
 
 private val factoryProfiles = defaultDeck().visibleProfiles
 val factoryKeyBindings: List<BindingOption> by derivedStateOf {
@@ -49,17 +49,20 @@ internal fun editorBindings(profile: DeckProfile, options: List<BindingOption>, 
 
 /** Page IDs are profile-local; a duplicated profile can have the same page IDs with different names. */
 fun localBindings(options: List<BindingOption>, pages: List<DeckPage>, pageName: (DeckPage) -> String = { it.name }): List<BindingOption> {
-    val pageOptions = options.filter { it.call.id == DeckActions.PAGE }.associateBy { it.call.params[DeckActions.PAGE_ID] }
+    val pageOptions = options.filter { it.call.id == DeckActions.PAGE }.associateBy { it.call }
     // The host knows the active deck; the editor can also prepare an inactive profile.
     return (pages.map { page ->
-        val call = pageOptions[page.id]?.call ?: ActionCall(DeckActions.PAGE, mapOf(DeckActions.PAGE_ID to page.id))
-        BindingOption(LayoutCopy.OpenPage.text(pageName(page)), call)
+        val call = ActionCall(DeckActions.PAGE, mapOf(DeckActions.PAGE_ID to page.id))
+        BindingOption(LayoutCopy.OpenPage.text(pageName(page)), call, pageOptions[call]?.unavailableReason)
     } + options.filterNot { it.call.id == DeckActions.PAGE }).distinctBy { it.call }
 }
 
 internal fun bindingName(call: ActionCall?, options: List<BindingOption>): String {
     if (call == null) return LayoutCopy.Unassigned.text()
-    return options.firstOrNull { it.call == call.commandBinding() }?.label ?: when (call.id) {
+    val binding = call.commandBinding()
+    return options.firstOrNull { it.call.commandBinding() == binding }?.let { option ->
+        if (option.unavailableReason == null) option.label else LayoutCopy.Unavailable.text(option.label)
+    } ?: when (call.id) {
         "plugin.key" -> {
             val number = call.params["index"]?.toIntOrNull()?.takeIf { it in 0..8 }?.plus(1)
             val slot = factoryKeyBindings.firstOrNull { it.call == call }?.label ?: LayoutCopy.PluginSlot.text(
@@ -172,6 +175,7 @@ internal fun KeyFields(index: Int, draft: KeyDraft, options: List<BindingOption>
             modifier = Modifier.fillMaxWidth().testTag(if (target == BindingTarget.TAP) "choose-binding" else "choose-hold-binding")) {
             Text(target.summary.text(bindingName(binding(target), options)))
         }
+        options.find { it.call == binding(target)?.commandBinding() }?.unavailableReason?.let { EditorNote(it) }
     }
     EditorSwitch(LayoutCopy.EnabledOnDeck.text(), enabled, writable) { enabled = it }
     if (attempted) error?.let { EditorError(it) }
@@ -218,8 +222,12 @@ internal fun BindingChoices(options: List<BindingOption>, draft: KeyDraft, listM
             }
             if (filtered.isEmpty()) item { EditorNote(LayoutCopy.NoMatchingActions.text()) }
             items(filtered) { option ->
-                DropdownMenuItem(text = { Text(if (selected == option.call) "✓ ${option.label}" else option.label) },
-                    onClick = { choose(option.call) })
+                if (option.unavailableReason != null) {
+                    UnavailableRow(option.label, option.unavailableReason)
+                } else {
+                    DropdownMenuItem(text = { Text(if (selected == option.call.commandBinding()) "✓ ${option.label}" else option.label) },
+                        onClick = { choose(option.call) })
+                }
             }
         }
     }

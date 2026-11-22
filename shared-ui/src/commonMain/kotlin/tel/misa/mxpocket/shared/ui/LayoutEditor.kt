@@ -118,7 +118,7 @@ fun LayoutEditor(
         /** The same faces as the physical LCDs; the active page shows the live images. */
         fun gridTiles(): List<KeypadTile> = page.keys.mapIndexed { i, saved ->
             val tile = if (index == i && draft != null) draft.preview() else saved
-            val current = active?.tiles?.get(i)
+            val current = active?.tiles?.getOrNull(i)
             val visual = if (tile == saved && current != null) current else {
                 val base = current?.face?.takeIf {
                     saved.action == tile.action && saved.icon == tile.icon &&
@@ -150,14 +150,19 @@ fun LayoutEditor(
             val library: @Composable () -> Unit = {
                 WorkspaceTitle(LayoutCopy.Layouts.text())
                 EditorNote(LayoutCopy.LibraryHint.text())
-                LibraryGroup(LayoutCopy.Profile.text(), LayoutCopy.ManageProfile.text(), deck.visibleProfiles.map { it.id to it.displayName() }, profile.id, !writer.busy, ::selectProfile,
+                LibraryGroup(LayoutCopy.Profile.text(), LayoutCopy.ManageProfile.text(), deck.visibleProfiles.map { p ->
+                    ProfileChoice(p.id, p.displayName(), live?.profiles?.find { it.id == p.id }?.unavailableReason)
+                },
+                    profile.id, !writer.busy, ::selectProfile,
                     listOf(Command.CREATE_PROFILE, Command.COPY_PROFILE, Command.RENAME_PROFILE, Command.DELETE_PROFILE),
                     allowed = { cmd -> writable && when (cmd) {
                         Command.CREATE_PROFILE, Command.COPY_PROFILE -> deck.profiles.size < DeckLimits.PROFILES
                         Command.DELETE_PROFILE -> deck.visibleProfiles.size > 1
                         else -> true
                     } }, choose = { command = it }, profileIcons = true)
-                LibraryGroup(LayoutCopy.Page.text(), LayoutCopy.ManagePage.text(), profile.pages.map { it.id to profile.displayPageName(it) }, page.id, !writer.busy, ::selectPage,
+                LibraryGroup(LayoutCopy.Page.text(), LayoutCopy.ManagePage.text(), profile.pages.map {
+                    ProfileChoice(it.id, profile.displayPageName(it))
+                }, page.id, !writer.busy, ::selectPage,
                     listOf(Command.CREATE_PAGE, Command.COPY_PAGE, Command.RENAME_PAGE, Command.DELETE_PAGE),
                     allowed = { cmd -> writable && when (cmd) {
                         Command.CREATE_PAGE, Command.COPY_PAGE -> profile.pages.size < DeckLimits.PAGES
@@ -176,6 +181,10 @@ fun LayoutEditor(
                     else Text(currentNames, style = MaterialTheme.typography.titleMedium)
                     PocketButton(LayoutCopy.SwapKeys.text(), { show(Pane.PREVIEW); swapping = true }, Modifier.fillMaxWidth(),
                         ShellIcon.SWAP, PocketTone.ACCENT, enabled = writable)
+                    if (wide && live?.simulator != null) {
+                        KeypadGrid(gridTiles(), { i, down -> if (!down && !writer.busy) pickKey(i) },
+                            Modifier.widthIn(max = 360.dp).align(Alignment.CenterHorizontally))
+                    }
                 }
                 if (!wide || index != null) PocketButton(LayoutCopy.ProfileSettings.text(), { show(Pane.SETTINGS) },
                     Modifier.fillMaxWidth(), ShellIcon.SETTINGS, enabled = !writer.busy)
@@ -194,7 +203,9 @@ fun LayoutEditor(
                 } else {
                     if (!wide) TextButton(onClick = { show(Pane.PREVIEW) }) { Text(LayoutCopy.BackToPreview.text()) }
                     ProfileOptions(profile, deck, decision, signals, foreground, writer, writable,
-                        edit = { removingRule = false; rule = it }, remove = { removingRule = true; rule = it })
+                        edit = { removingRule = false; rule = it }, remove = { removingRule = true; rule = it },
+                        available = live?.profiles?.find { it.id == profile.id }?.unavailableReason == null,
+                        ruleEngine = live?.simulator == null)
                     LayoutBackups(writer, writable, onExport) { command = it }
                 }
             }
@@ -276,8 +287,9 @@ internal fun ProfileRuleDialog(profile: DeckProfile, signals: Map<String, String
 @Composable
 internal fun ProfileOptions(profile: DeckProfile, deck: DeckState, decision: DeckDecision, signals: Map<String, String>,
                             foreground: ForegroundControls?, writer: LayoutWriter, writable: Boolean,
-                            edit: (Int) -> Unit, remove: (Int) -> Unit, disabledIds: Set<String> = deck.disabledPluginIds) {
-    PocketCard { ProfileSettings(profile, deck, decision, writable) { writer.edit(it) } }
+                            edit: (Int) -> Unit, remove: (Int) -> Unit, disabledIds: Set<String> = deck.disabledPluginIds,
+                            available: Boolean = true, ruleEngine: Boolean = true) {
+    PocketCard { ProfileSettings(profile, deck, decision, writable, available, ruleEngine) { writer.edit(it) } }
     PocketCard { RuleSection(profile, deck.profiles, signals, writable, foreground, addApp = { pkg, done ->
         writer.edit(DeckEdit.Rules(profile.id, profile.rules, profile.rules +
             DeckRule(tel.misa.mxpocket.FOREGROUND_APP, pkg, tel.misa.mxpocket.APP_RULE_WEIGHT)), done)
@@ -312,16 +324,18 @@ private fun EditorPane(modifier: Modifier, bounded: Boolean, content: @Composabl
 
 @Composable
 private fun LibraryGroup(
-    title: String, manage: String, items: List<Pair<String, String>>, selected: String, enabled: Boolean, select: (String) -> Unit,
+    title: String, manage: String, items: List<ProfileChoice>, selected: String, enabled: Boolean, select: (String) -> Unit,
     commands: List<Command>, allowed: (Command) -> Boolean, choose: (Command) -> Unit,
     profileIcons: Boolean = false,
 ) {
     HorizontalDivider()
     Text(title, style = MaterialTheme.typography.titleMedium)
-    items.forEach { (id, name) ->
-        NavigationDrawerItem(label = { Text(name) }, selected = id == selected, onClick = { if (enabled) select(id) },
+    items.forEach { (id, name, reason) ->
+        if (reason != null) UnavailableRow(name, reason)
+        else if (!enabled) UnavailableRow(name, SavedEditorCopy.Saving.text())
+        else NavigationDrawerItem(label = { Text(name) }, selected = id == selected, onClick = { select(id) },
             icon = if (profileIcons) ({ PocketIconTile(PocketStyle.accent(id), 28.dp) }) else null,
-            shape = MaterialTheme.shapes.small)
+            shape = MaterialTheme.shapes.small, modifier = Modifier.pocketFocusRing(MaterialTheme.shapes.small))
     }
     ManageMenu(manage, commands, enabled, allowed, choose)
 }
@@ -343,7 +357,7 @@ internal fun ManageMenu(label: String, commands: List<Command>, enabled: Boolean
 
 @Composable
 private fun ProfileSettings(profile: DeckProfile, deck: DeckState, decision: DeckDecision,
-                            writable: Boolean, edit: (DeckEdit) -> Unit) {
+                            writable: Boolean, available: Boolean, ruleEngine: Boolean, edit: (DeckEdit) -> Unit) {
     EditorHeading(LayoutCopy.ProfileSelection.text())
     val pinned = profile.id == deck.pinnedProfileId
     val defaultName = deck.visibleProfiles.first { it.id == deck.availableDefaultId }.displayName()
@@ -351,12 +365,13 @@ private fun ProfileSettings(profile: DeckProfile, deck: DeckState, decision: Dec
     EditorNote(LayoutCopy.DefaultSummary.text(defaultName, pinnedName?.let { LayoutCopy.Pinned.text(it) } ?: LayoutCopy.NotPinned.text()))
     EditorActions {
         PocketButton((if (pinned) LayoutCopy.UnpinProfile else LayoutCopy.PinProfile).text(), { edit(DeckEdit.Pin(if (pinned) null else profile.id)) },
-            icon = ShellIcon.PIN, tone = PocketTone.ACCENT, enabled = writable)
+            icon = ShellIcon.PIN, tone = PocketTone.ACCENT, enabled = writable && (available || pinned))
         PocketButton(LayoutCopy.SetDefault.text(), { edit(DeckEdit.Default(profile.id)) }, icon = ShellIcon.STAR,
-            enabled = writable && profile.id != deck.defaultProfileId)
+            enabled = writable && available && profile.id != deck.defaultProfileId)
     }
-    EditorSwitch(LayoutCopy.Automatic.text(), deck.automatic, writable) { edit(DeckEdit.Automatic(it)) }
-    EditorSwitch(LayoutCopy.IncludeAutomatic.text(profile.displayName()), profile.automatic, writable) {
+    if (!ruleEngine) EditorNote(SavedEditorCopy.AndroidRuleEngine.text())
+    EditorSwitch(LayoutCopy.Automatic.text(), deck.automatic, writable && ruleEngine) { edit(DeckEdit.Automatic(it)) }
+    EditorSwitch(LayoutCopy.IncludeAutomatic.text(profile.displayName()), profile.automatic, writable && ruleEngine) {
         edit(DeckEdit.ProfileAutomatic(profile.id, it))
     }
     if (!profile.automatic) EditorNote(LayoutCopy.AutomaticOff.text())

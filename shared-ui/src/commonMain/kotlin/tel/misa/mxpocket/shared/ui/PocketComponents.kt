@@ -10,15 +10,15 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.ReadOnlyComposable
-import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -127,13 +127,29 @@ internal val PocketAccent.ink: Color @Composable get() = Color(if (PocketColors.
     else PocketIcon(accent.icon, accent.ink, size)
 }
 
-@Composable internal fun PocketIconTile(accent: PocketAccent, size: Dp = 44.dp) {
-    val tile = if (PocketColors.dark) Color(accent.tile) else Color(accent.tint).copy(alpha = .12f)
+@Composable internal fun PocketIconTile(accent: PocketAccent, size: Dp = 44.dp, muted: Boolean = false) {
+    val tint = if (muted) PocketColors.muted else Color(accent.tint)
+    val tile = if (muted) PocketColors.chip else if (PocketColors.dark) Color(accent.tile) else tint.copy(alpha = .12f)
     Box(Modifier.size(size).clip(RoundedCornerShape(12.dp)).background(tile)
-        .border(1.dp, Color(accent.tint).copy(alpha = .25f), RoundedCornerShape(12.dp)),
+        .border(1.dp, tint.copy(alpha = .25f), RoundedCornerShape(12.dp)),
         contentAlignment = Alignment.Center) {
         IdentityIcon(accent, size * .62f)
     }
+}
+
+/** A reason remains readable and discoverable without introducing a dead keyboard stop. */
+@Composable internal fun UnavailableRow(title: String, reason: String) {
+    Column(Modifier.fillMaxWidth().semantics(mergeDescendants = true) { disabled() }
+        .heightIn(min = 48.dp).padding(horizontal = 12.dp, vertical = 6.dp), verticalArrangement = Arrangement.Center) {
+        Text(title, color = PocketColors.muted, style = MaterialTheme.typography.bodyLarge)
+        Text(reason, color = PocketColors.muted, style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+@Composable internal fun Modifier.pocketFocusRing(shape: Shape): Modifier {
+    var focused by remember { mutableStateOf(false) }
+    return onFocusChanged { focused = it.isFocused }
+        .then(if (focused) Modifier.border(2.dp, PocketColors.accent, shape) else Modifier)
 }
 
 /** Uppercase section label, e.g. "PROFILES" or "SESSION LOG". */
@@ -217,7 +233,7 @@ internal enum class PocketTone {
     compact: Boolean = false,
     identity: PocketAccent? = null,
 ) {
-    OutlinedButton(onClick = onClick, modifier = modifier, enabled = enabled,
+    OutlinedButton(onClick = onClick, modifier = modifier.pocketFocusRing(RoundedCornerShape(12.dp)), enabled = enabled,
         shape = RoundedCornerShape(12.dp), border = BorderStroke(1.dp, if (enabled) tone.stroke else PocketColors.cardStroke),
         colors = ButtonDefaults.outlinedButtonColors(containerColor = tone.fill, contentColor = tone.text,
             disabledContainerColor = PocketColors.chip, disabledContentColor = PocketColors.faint),
