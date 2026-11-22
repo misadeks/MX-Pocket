@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.FOREGROUND_APP
 import tel.misa.mxpocket.decks.*
+import tel.misa.mxpocket.i18n.LayoutCopy
 
 /** Own one instance per app session. Successful edits replace the file before publishing the new snapshot. */
 class DeckRepository(private val file: File) {
@@ -24,10 +25,10 @@ class DeckRepository(private val file: File) {
     val decision: StateFlow<DeckDecision>
 
     /** An unreadable or future-format file is preserved until an explicit restore or valid import. */
-    var loadError: String? = null
-        private set
-    var cleanupWarning: String? = null
-        private set
+    private var unreadable = false
+    private var cleanupPending = false
+    val loadError: String? get() = if (unreadable) LayoutCopy.UnreadableDeck.text() else null
+    val cleanupWarning: String? get() = if (cleanupPending) LayoutCopy.CleanupWarning.text() else null
 
     private var candidate: String? = null
     private var candidateSince = 0L
@@ -44,23 +45,23 @@ class DeckRepository(private val file: File) {
             if (!file.exists()) defaultDeck() else {
                 val text = file.inputStream().use {
                     val length = it.channel.size()
-                    require(length in 1L..DeckLimits.MAX_BYTES.toLong()) { "Invalid deck file size" }
+                    require(length in 1L..DeckLimits.MAX_BYTES.toLong()) { LayoutCopy.InvalidFileSize.text() }
                     val bytes = ByteArray(length.toInt())
                     java.io.DataInputStream(it).readFully(bytes)
-                    require(it.read() == -1) { "Deck file changed while reading" }
+                    require(it.read() == -1) { LayoutCopy.FileChanged.text() }
                     Charsets.UTF_8.newDecoder().decode(ByteBuffer.wrap(bytes)).toString()
                 }
                 val decoded = DeckJson.decode(text)
                 decoded.withPrivateReason().also { clean ->
                     if (clean !== decoded) {
                         try { write(DeckJson.encode(clean)) }
-                        catch (_: IOException) { cleanupWarning = CLEANUP_WARNING }
-                        catch (_: SecurityException) { cleanupWarning = CLEANUP_WARNING }
+                        catch (_: IOException) { cleanupPending = true }
+                        catch (_: SecurityException) { cleanupPending = true }
                     }
                 }
             }
         } catch (e: Exception) {
-            loadError = "Saved deck unreadable; import a backup or restore defaults"
+            unreadable = true
             defaultDeck()
         }
         val initial = loaded.withBuiltIns()
@@ -84,7 +85,7 @@ class DeckRepository(private val file: File) {
         val profile = old.profile(id)
         if (source == SelectionSource.AUTOMATIC) {
             require(old.automatic && old.activeProfile.automatic && profile.automatic && old.pinnedProfileId == null) {
-                "Automatic selection is disabled"
+                LayoutCopy.SelectionDisabled.text()
             }
         }
         old.copy(activeProfileId = id, pinnedProfileId = old.pinnedProfileId?.let { id },
@@ -104,12 +105,12 @@ class DeckRepository(private val file: File) {
     fun setAutomatic(enabled: Boolean) = edit { it.copy(automatic = enabled) }
     fun setProfileAutomatic(id: String, enabled: Boolean) = updateProfile(id) { it.copy(automatic = enabled) }
     fun setRules(id: String, rules: List<DeckRule>) = updateProfile(id) {
-        require(rules.size <= DeckLimits.RULES) { "Too many rules" }
+        require(rules.size <= DeckLimits.RULES) { LayoutCopy.TooManyRules.text() }
         it.copy(rules = rules.toList())
     }
 
     fun openPage(id: String) = edit(navigation = true) { old ->
-        require(old.activeProfile.pages.any { it.id == id }) { "Unknown page" }
+        require(old.activeProfile.pages.any { it.id == id }) { LayoutCopy.UnknownPage.text() }
         val history = old.histories.getValue(old.activeProfileId)
         val previous = history.indexOf(id)
         val next = if (previous >= 0) history.take(previous + 1) else history + id
@@ -159,7 +160,7 @@ class DeckRepository(private val file: File) {
     fun renameProfile(id: String, name: String) = updateProfile(id) { it.copy(name = name) }
     fun deleteProfile(id: String) = edit { old ->
         old.profile(id)
-        require(old.profiles.size > 1) { "Cannot delete the last profile" }
+        require(old.profiles.size > 1) { LayoutCopy.LastProfile.text() }
         val remaining = old.profiles.filterNot { it.id == id }.map { profile ->
             profile.copy(pages = profile.pages.map { page ->
                 page.mapActions { call -> call.takeUnless { it.id == DeckActions.PROFILE && it.params[DeckActions.PROFILE_ID] == id } }
@@ -192,7 +193,7 @@ class DeckRepository(private val file: File) {
     fun deletePage(profileId: String, pageId: String) = edit { old ->
         val replaced = old.withProfile(profileId) { profile ->
             profile.page(pageId)
-            require(pageId != profile.rootPageId) { "Cannot delete the root page" }
+            require(pageId != profile.rootPageId) { LayoutCopy.RootPage.text() }
             profile.copy(pages = profile.pages.filterNot { it.id == pageId }.map { page ->
                 page.mapActions { call -> call.takeUnless { it.id == DeckActions.PAGE && it.params[DeckActions.PAGE_ID] == pageId } }
             })
@@ -201,16 +202,16 @@ class DeckRepository(private val file: File) {
         replaced.copy(histories = old.histories + (profileId to history))
     }
     fun setKey(profileId: String, pageId: String, index: Int, key: DeckKey) = updateProfile(profileId) { profile ->
-        require(index in 0..8) { "Key index must be 0 through 8" }
+        require(index in 0..8) { LayoutCopy.KeyIndex.text() }
         require((key.action?.params?.size ?: 0) <= DeckLimits.PARAMS &&
-            (key.holdAction?.params?.size ?: 0) <= DeckLimits.PARAMS) { "Too many action parameters" }
+            (key.holdAction?.params?.size ?: 0) <= DeckLimits.PARAMS) { LayoutCopy.TooManyParameters.text() }
         profile.withPage(pageId) { page ->
             page.copy(keys = page.keys.mapIndexed { i, previous -> if (i == index) key else previous })
         }
     }
 
     fun swapKeys(profileId: String, pageId: String, first: Int, second: Int) = updateProfile(profileId) { profile ->
-        require(first in 0..8 && second in 0..8) { "Key index must be 0 through 8" }
+        require(first in 0..8 && second in 0..8) { LayoutCopy.KeyIndex.text() }
         profile.withPage(pageId) { page ->
             page.copy(keys = page.keys.toMutableList().also { java.util.Collections.swap(it, first, second) })
         }
@@ -318,7 +319,7 @@ class DeckRepository(private val file: File) {
     @Synchronized
     private fun edit(recover: Boolean = false, force: Boolean = false, navigation: Boolean = false,
         update: (DeckState) -> DeckState): Result<Unit> = try {
-        check(recover || loadError == null) { loadError.orEmpty() }
+        check(recover || !unreadable) { LayoutCopy.UnreadableDeck.text() }
         val previous = if (navigation) state.value else saved
         val change = update(previous)
         val next = if (navigation && showingCall && !recover && change.activeProfileId != TEAMS && TEAMS in change.histories)
@@ -329,14 +330,18 @@ class DeckRepository(private val file: File) {
             val snapshot = persistent.snapshot()
             validateDeck(snapshot)
             write(DeckJson.encode(snapshot))
-            loadError = null
-            cleanupWarning = null
+            unreadable = false
+            cleanupPending = false
             saved = snapshot
         }
         if (navigation) { showingCall = false; resumeCall = false }
         publish()
         clearObservation()
         Result.success(Unit)
+    } catch (e: IOException) {
+        Result.failure(IOException(LayoutCopy.WriteFailed.text(), e))
+    } catch (e: SecurityException) {
+        Result.failure(SecurityException(LayoutCopy.WriteFailed.text(), e))
     } catch (e: Exception) {
         Result.failure(e)
     }
@@ -357,8 +362,6 @@ class DeckRepository(private val file: File) {
 
     companion object {
         private const val APP_MATCH_REASON = "Automatic: matched an app mapping"
-        private const val CLEANUP_WARNING =
-            "Your layout is loaded and exports are redacted. The old selection detail could not be removed from device storage. Free up storage and retry."
         const val DEBOUNCE_MS = 1500L
         const val SCORE_MARGIN = 2
     }
@@ -375,8 +378,8 @@ private fun DeckState.addBuiltIn(profile: DeckProfile): DeckState {
     return if (DeckJson.fits(augmented)) augmented else this
 }
 
-private fun DeckState.profile(id: String) = profiles.firstOrNull { it.id == id } ?: error("Unknown profile")
-private fun DeckProfile.page(id: String) = pages.firstOrNull { it.id == id } ?: error("Unknown page")
+private fun DeckState.profile(id: String) = profiles.firstOrNull { it.id == id } ?: error(LayoutCopy.UnknownProfile.text())
+private fun DeckProfile.page(id: String) = pages.firstOrNull { it.id == id } ?: error(LayoutCopy.UnknownPage.text())
 private fun DeckState.withHistory(history: List<String>) = copy(histories = histories + (activeProfileId to history))
 private fun DeckState.withProfile(id: String, update: (DeckProfile) -> DeckProfile): DeckState {
     val next = update(profile(id))

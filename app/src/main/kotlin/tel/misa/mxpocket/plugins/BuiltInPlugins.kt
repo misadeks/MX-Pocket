@@ -3,6 +3,28 @@ package tel.misa.mxpocket.plugins
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import tel.misa.mxpocket.FocusTimer
+import tel.misa.mxpocket.i18n.builtInPluginTitle
+import tel.misa.mxpocket.i18n.KeypadCopy as K
+
+fun PluginDescriptor.displayTitle() = builtInPluginTitle(id, title)
+
+fun PluginCapability.displayName() = when (this) {
+    PluginCapability.AUDIO -> K.CapAudio
+    PluginCapability.OPEN_APPS -> K.CapApps
+    PluginCapability.NAVIGATION -> K.CapNav
+    PluginCapability.TONE -> K.CapTone
+    PluginCapability.STUDIO -> K.CapStudio
+    PluginCapability.SYSTEM_NAVIGATION -> K.CapSystemNav
+    PluginCapability.TEAMS -> K.CapTeams
+}.text()
+
+fun PhoneApp.displayName() = when (this) {
+    PhoneApp.CAMERA -> K.Camera
+    PhoneApp.SETTINGS -> K.Settings
+    PhoneApp.DIALER -> K.Dialer
+    PhoneApp.WEB -> K.Web
+    PhoneApp.ALARMS -> K.Alarms
+}.text()
 
 /** Registration order is the page-button order. Add your compiled-in plugin here. */
 object BuiltInPlugins {

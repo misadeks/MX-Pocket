@@ -15,21 +15,28 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import tel.misa.mxpocket.i18n.AccessCopy
+import tel.misa.mxpocket.i18n.Copy
 
-enum class SetupFeature(val title: String, val summary: String) {
-    USB("Use a USB keypad", "Keep the keys active when MX Pocket is in the background."),
-    AUTO("Connect on plug-in", "Let Android offer MX Pocket when you attach the keypad."),
-    MUSIC("Show player controls and artwork", "Use track details and controls supplied by the active player."),
-    STUDIO("Control the phone camera", "Open the native viewfinder. Optionally use the physical Studio keys for shutter, record and stop."),
-    DIRECT("Open apps with one press", "Open a supported shortcut from your physical keypad without a notification tap."),
-    NAVIGATION("Navigate other apps", "Use keypad buttons for Back, Home, scrolling and focus.")
+enum class SetupFeature(private val titleCopy: Copy, private val summaryCopy: Copy) {
+    USB(AccessCopy.Usb, AccessCopy.UsbSummary),
+    AUTO(AccessCopy.Auto, AccessCopy.AutoSummary),
+    MUSIC(AccessCopy.Music, AccessCopy.MusicSummary),
+    STUDIO(AccessCopy.Studio, AccessCopy.StudioSummary),
+    DIRECT(AccessCopy.Direct, AccessCopy.DirectSummary),
+    NAVIGATION(AccessCopy.Navigation, AccessCopy.NavigationSummary);
+
+    val title get() = titleCopy.text()
+    val summary get() = summaryCopy.text()
 }
 
-enum class SetupAction(val label: String) {
-    USB("Allow this keypad"), POST("Allow session notifications"), APP_NOTICES("Open notification settings"),
-    CHANNEL("Open session channel"), AUTO("Enable plug-in handling"), MEDIA("Open notification access"),
-    CAMERA("Manage camera controls"), OVERLAY("Open special access"),
-    DIRECT("Enable one-press shortcuts"), NAVIGATION("Open accessibility settings")
+enum class SetupAction(private val copy: Copy) {
+    USB(AccessCopy.AllowKeypad), POST(AccessCopy.AllowNotices), APP_NOTICES(AccessCopy.OpenNoticeSettings),
+    CHANNEL(AccessCopy.OpenChannel), AUTO(AccessCopy.EnableAuto), MEDIA(AccessCopy.OpenNotificationAccess),
+    CAMERA(AccessCopy.ManageCamera), OVERLAY(AccessCopy.OpenSpecialAccess),
+    DIRECT(AccessCopy.EnableDirect), NAVIGATION(AccessCopy.OpenAccessibility);
+
+    val label get() = copy.text()
 }
 
 data class SetupStep(val title: String, val detail: String, val status: String,
@@ -42,10 +49,10 @@ data class SetupScreenState(
     val selected: Set<SetupFeature>, val reviewing: Boolean, val steps: List<SetupStep>,
     val message: String, val firstRun: Boolean,
     val options: List<SetupOption> = SetupFeature.entries.map { SetupOption(it) },
-    val introduction: String = "Choose the features you want to set up. You can change these choices later in Settings.",
-    val reviewHint: String = "Tap a step to change it. If Android restricts an option, leave it off. You can finish at any time.",
+    val introduction: String = AccessCopy.Introduction.text(),
+    val reviewHint: String = AccessCopy.ReviewHint.text(),
     val connectHint: String? = if (selected.any { it in setOf(SetupFeature.USB, SetupFeature.AUTO, SetupFeature.DIRECT) })
-        "When ready, tap the connection button at the top of Home to start the session." else null
+        AccessCopy.ConnectHint.text() else null
 )
 
 sealed interface SetupEvent {
@@ -69,7 +76,7 @@ private fun SetupContent(state: SetupScreenState, onEvent: (SetupEvent) -> Unit)
         .widthIn(max = 640.dp).fillMaxWidth()) {
         key(reviewing) {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 16.dp)) {
-                Text(if (reviewing) "Set up your features" else "How will you use your keypad?",
+                Text(if (reviewing) AccessCopy.ReviewFeatures.text() else AccessCopy.ChooseFeatures.text(),
                     Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium)
                 Spacer(Modifier.height(8.dp))
                 if (!reviewing) {
@@ -90,10 +97,10 @@ private fun SetupContent(state: SetupScreenState, onEvent: (SetupEvent) -> Unit)
                         HorizontalDivider()
                     }
                     Spacer(Modifier.height(12.dp))
-                    Text("Changing this list does not revoke access or turn off features. Reopen it in Settings > Feature setup.",
+                    Text(AccessCopy.ChoicesHint.text(),
                         style = MaterialTheme.typography.bodySmall)
                 } else {
-                    Text("${steps.count { it.ready }} of ${steps.size} steps ready", style = MaterialTheme.typography.titleMedium,
+                    Text(AccessCopy.StepsReady.text(steps.size, steps.count { it.ready }), style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.primary)
                     Text(state.reviewHint)
                     steps.forEach { step ->
@@ -117,11 +124,11 @@ private fun SetupContent(state: SetupScreenState, onEvent: (SetupEvent) -> Unit)
             if (message.isNotEmpty()) Text(message, Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                 style = MaterialTheme.typography.bodyMedium)
             Button(onClick = { onEvent(if (reviewing) SetupEvent.Finish else SetupEvent.Review) }, modifier = Modifier.fillMaxWidth()) {
-                Text(when { reviewing -> "Finish setup"; selected.isEmpty() -> "Continue without extras"; else -> "Review setup steps" })
+                Text(when { reviewing -> AccessCopy.FinishSetup; selected.isEmpty() -> AccessCopy.WithoutExtras; else -> AccessCopy.ReviewSteps }.text())
             }
-            if (reviewing) TextButton(onClick = { onEvent(SetupEvent.Edit) }, modifier = Modifier.fillMaxWidth()) { Text("Change choices") }
+            if (reviewing) TextButton(onClick = { onEvent(SetupEvent.Edit) }, modifier = Modifier.fillMaxWidth()) { Text(AccessCopy.EditChoices.text()) }
             else TextButton(onClick = { onEvent(SetupEvent.Cancel) }, modifier = Modifier.fillMaxWidth()) {
-                Text(if (firstRun) "Not now" else "Cancel")
+                Text(if (firstRun) AccessCopy.NotNow.text() else AccessCopy.Cancel.text())
             }
         }
     }

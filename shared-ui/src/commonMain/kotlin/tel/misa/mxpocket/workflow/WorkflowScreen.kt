@@ -15,10 +15,13 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import tel.misa.mxpocket.i18n.AppLocale
+import tel.misa.mxpocket.i18n.Copy
+import tel.misa.mxpocket.i18n.WorkflowCopy
 import tel.misa.mxpocket.shared.ui.*
 
-private enum class Section(val title: String) {
-    Library("Workflows"), Editor("Workflow editor"), History("Run history"), Endpoints("Approved endpoints")
+private enum class Section(val title: Copy) {
+    Library(WorkflowCopy.Library), Editor(WorkflowCopy.Editor), History(WorkflowCopy.History), Endpoints(WorkflowCopy.ApprovedEndpoints)
 }
 
 @Composable
@@ -34,7 +37,7 @@ fun WorkflowScreen(
     }
     var draft by remember { mutableStateOf<WorkflowDefinition?>(null) }
     var initial by remember { mutableStateOf<WorkflowDefinition?>(null) }
-    var message by remember { mutableStateOf<String?>(null) }
+    var message by remember(AppLocale.current) { mutableStateOf<String?>(null) }
     var discard by remember { mutableStateOf(false) }
     var remove by remember { mutableStateOf<WorkflowDefinition?>(null) }
     var saving by remember { mutableStateOf(false) }
@@ -54,19 +57,20 @@ fun WorkflowScreen(
     val running = status?.phase in setOf(WorkflowPhase.RUNNING, WorkflowPhase.CONFIRMATION)
     key(view) {
         WorkspaceColumn {
-            if (view != Section.Library) TextButton(onClick = ::close, enabled = !saving) { Text("Back to workflows") }
-            WorkspaceTitle(view.title)
-            state.error?.let { ErrorLine(it) }
+            if (view != Section.Library) TextButton(onClick = ::close, enabled = !saving) { Text(WorkflowCopy.Back.text()) }
+            WorkspaceTitle(view.title.text())
+            state.error?.let { ErrorLine(it.text()) }
             if (callbacks.run == null && callbacks.test == null)
-                Text("Workflow execution is unavailable on this host.", style = MaterialTheme.typography.bodySmall)
+                Text(WorkflowCopy.NoExecution.text(), style = MaterialTheme.typography.bodySmall)
             status?.let { progress ->
                 if (running || view == Section.Editor) {
                     Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.medium) {
                         Column(Modifier.fillMaxWidth().padding(12.dp).semantics { liveRegion = LiveRegionMode.Polite }) {
                             Text(progress.name, style = MaterialTheme.typography.titleSmall)
-                            Text("${if (progress.step > 0) "Step ${progress.step}: " else ""}${progress.message}")
+                            val detail = progress.displayMessage(state.actions)
+                            Text(if (progress.step > 0) WorkflowCopy.StepProgress.text(progress.step, detail) else detail)
                             if (running) TextButton(enabled = callbacks.cancel != null,
-                                onClick = { callbacks.cancel?.invoke() }) { Text("Cancel run") }
+                                onClick = { callbacks.cancel?.invoke() }) { Text(WorkflowCopy.CancelRun.text()) }
                         }
                     }
                 }
@@ -89,64 +93,63 @@ fun WorkflowScreen(
                                     if (failure == null) { initial = current; section = Section.Library }
                                 } finally { saving = false }
                             }
-                        }) { Text("Save workflow") }
+                        }) { Text(WorkflowCopy.Save.text()) }
                         OutlinedButton(enabled = !running && !saving && callbacks.test != null, onClick = {
                             message = callbacks.test?.invoke(current)
-                        }) { Text("Test run") }
+                        }) { Text(WorkflowCopy.TestRun.text()) }
                     }
-                    if (callbacks.save == null) Text("Draft edits cannot be saved on this host.",
+                    if (callbacks.save == null) Text(WorkflowCopy.CannotSave.text(),
                         style = MaterialTheme.typography.bodySmall)
-                    if (callbacks.test != null) Text("Test runs execute the steps shown, including unsaved changes.",
+                    if (callbacks.test != null) Text(WorkflowCopy.TestHint.text(),
                         style = MaterialTheme.typography.bodySmall)
                 }
                 Section.History -> {
-                    if (state.history.isEmpty()) Text(if (callbacks.test == null) "No runs yet."
-                        else "No runs yet. Test a workflow or run one from the keypad.")
+                    if (state.history.isEmpty()) Text(if (callbacks.test == null) WorkflowCopy.NoRuns.text()
+                        else WorkflowCopy.NoRunsHint.text())
                     for ((entry, timeLabel) in state.history) {
                         Text(entry.name, style = MaterialTheme.typography.titleMedium)
-                        Text("${entry.message} · ${entry.step} steps", style = MaterialTheme.typography.bodyMedium)
-                        Text("$timeLabel · ${entry.origin.name.lowercase()}",
+                        Text("${entry.displayMessage()} · ${WorkflowCopy.Steps.text(entry.step)}", style = MaterialTheme.typography.bodyMedium)
+                        Text("$timeLabel · ${entry.origin.label}",
                             style = MaterialTheme.typography.bodySmall)
                         HorizontalDivider()
                     }
                 }
                 Section.Endpoints -> EndpointPanel(callbacks.endpoints, state.endpoints)
                 Section.Library -> {
-                        Text(if (callbacks.test != null) "Build a sequence, test it here, then assign it to a keypad key."
-                            else "Build and edit workflow sequences.")
+                        Text(if (callbacks.test != null) WorkflowCopy.BuildAndTest.text() else WorkflowCopy.BuildAndEdit.text())
                         ActionRow {
-                            PocketButton("New workflow", { open(WorkflowDefinition()) }, icon = ShellIcon.PLUS, tone = PocketTone.SUCCESS, compact = true)
-                            PocketButton("Run history", { section = Section.History; message = null }, icon = ShellIcon.HISTORY, compact = true)
-                            PocketButton("Endpoints", { section = Section.Endpoints; message = null }, icon = ShellIcon.LIST, compact = true)
+                            PocketButton(WorkflowCopy.New.text(), { open(WorkflowDefinition(name = WorkflowCopy.Untitled.text())) }, icon = ShellIcon.PLUS, tone = PocketTone.SUCCESS, compact = true)
+                            PocketButton(WorkflowCopy.History.text(), { section = Section.History; message = null }, icon = ShellIcon.HISTORY, compact = true)
+                            PocketButton(WorkflowCopy.Endpoints.text(), { section = Section.Endpoints; message = null }, icon = ShellIcon.LIST, compact = true)
                         }
-                        PocketLabel("Configured workflows (${saved.size})")
-                        if (saved.isEmpty()) Text("No saved workflows.")
+                        PocketLabel(WorkflowCopy.Configured.text(saved.size))
+                        if (saved.isEmpty()) Text(WorkflowCopy.EmptyLibrary.text())
                         for (workflow in saved) {
                             PocketCard {
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                 PocketDot(if (running && status?.workflowId == workflow.id) PocketColors.accent else PocketColors.faint)
                                 Column(Modifier.weight(1f).clickable { open(workflow) }.padding(vertical = 8.dp)) {
                                     Text(workflow.name, style = MaterialTheme.typography.titleMedium)
-                                    Text("${workflow.steps.size} steps · ${workflow.trigger.kind.label}",
+                                    Text("${WorkflowCopy.Steps.text(workflow.steps.size)} · ${workflow.trigger.kind.label}",
                                         style = MaterialTheme.typography.bodySmall)
                                 }
                             }
                             if (workflow.steps.isNotEmpty()) PocketInner {
                                 workflow.steps.take(4).forEachIndexed { i, step ->
-                                    val label = if (step.kind == StepKind.ACTION) state.actions.firstOrNull { it.id == step.target }?.label else null
+                                    val label = if (step.kind == StepKind.ACTION) state.actions.firstOrNull { it.id == step.target }?.displayLabel else null
                                     Text("${i + 1}. ${label ?: step.kind.label}", style = MaterialTheme.typography.bodyMedium)
                                 }
-                                if (workflow.steps.size > 4) Text("+${workflow.steps.size - 4} more", style = MaterialTheme.typography.bodySmall)
+                                if (workflow.steps.size > 4) Text(WorkflowCopy.More.text(workflow.steps.size - 4), style = MaterialTheme.typography.bodySmall)
                             }
                             ActionRow {
-                                PocketButton("Run", { message = callbacks.run?.invoke(workflow) }, icon = ShellIcon.PLAY,
+                                PocketButton(WorkflowCopy.Run.text(), { message = callbacks.run?.invoke(workflow) }, icon = ShellIcon.PLAY,
                                     tone = PocketTone.SUCCESS, enabled = !running && callbacks.run != null, compact = true)
-                                PocketButton("Edit", { open(workflow) }, icon = ShellIcon.EDIT, tone = PocketTone.ACCENT, compact = true)
-                                PocketButton("Duplicate", { open(workflow.duplicate()) }, icon = ShellIcon.COPY, compact = true)
-                                PocketButton("Delete", { remove = workflow }, icon = ShellIcon.DELETE, tone = PocketTone.DANGER,
+                                PocketButton(WorkflowCopy.Edit.text(), { open(workflow) }, icon = ShellIcon.EDIT, tone = PocketTone.ACCENT, compact = true)
+                                PocketButton(WorkflowCopy.Duplicate.text(), { open(workflow.duplicate()) }, icon = ShellIcon.COPY, compact = true)
+                                PocketButton(WorkflowCopy.Delete.text(), { remove = workflow }, icon = ShellIcon.DELETE, tone = PocketTone.DANGER,
                                     enabled = callbacks.delete != null, compact = true)
                             }
-                            if (!running && status?.workflowId == workflow.id) Text(status.message,
+                            if (!running && status?.workflowId == workflow.id) Text(status.displayMessage(),
                                 Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.labelLarge)
                             }
                         }
@@ -154,13 +157,13 @@ fun WorkflowScreen(
             }
         }
     }
-    if (discard) DecisionDialog("Discard changes?", "Your saved workflow will not change.", "Discard",
+    if (discard) DecisionDialog(WorkflowCopy.DiscardChanges.text(), WorkflowCopy.DiscardHint.text(), WorkflowCopy.Discard.text(),
         { discard = false; section = Section.Library; message = null }, { discard = false })
-    remove?.let { target -> DecisionDialog("Delete ${target.name}?", "Keys assigned to this workflow will no longer run it.",
-        "Delete", { remove = null; scope.launch { message = callbacks.delete?.invoke(target.id) } }, { remove = null }) }
+    remove?.let { target -> DecisionDialog(WorkflowCopy.DeleteNamed.text(target.name), WorkflowCopy.DeleteHint.text(),
+        WorkflowCopy.Delete.text(), { remove = null; scope.launch { message = callbacks.delete?.invoke(target.id) } }, { remove = null }) }
     state.prompt?.let { request ->
         callbacks.respond?.let { respond ->
-            DecisionDialog("Workflow confirmation", request.text, "Allow",
+            DecisionDialog(WorkflowCopy.WorkflowConfirmation.text(), request.displayText(state.actions), WorkflowCopy.Allow.text(),
                 { respond(request, true) }, { respond(request, false) })
         }
     }
@@ -170,7 +173,7 @@ fun WorkflowScreen(
 internal fun DecisionDialog(title: String, body: String, action: String, accept: () -> Unit, dismiss: () -> Unit) {
     AlertDialog(onDismissRequest = dismiss, title = { Text(title) }, text = { Text(body) },
         confirmButton = { Button(onClick = accept) { Text(action) } },
-        dismissButton = { TextButton(onClick = dismiss) { Text("Cancel") } })
+        dismissButton = { TextButton(onClick = dismiss) { Text(WorkflowCopy.Cancel.text()) } })
 }
 
 @Composable
@@ -190,33 +193,33 @@ private fun EndpointPanel(callbacks: EndpointCallbacks?, endpoints: List<Workflo
     var url by rememberSaveable { mutableStateOf("") }
     var method by rememberSaveable { mutableStateOf("GET") }
     var pending by remember { mutableStateOf<WorkflowEndpoint?>(null) }
-    var message by remember { mutableStateOf<String?>(null) }
-    Text("Requests can only use addresses you approve here. Redirects, credentials and query strings are not supported.")
+    var message by remember(AppLocale.current) { mutableStateOf<String?>(null) }
+    Text(WorkflowCopy.EndpointHint.text())
     endpoints.forEach { endpoint ->
         HorizontalDivider()
         Text(endpoint.name, style = MaterialTheme.typography.titleMedium)
         Text("${endpoint.method} ${endpoint.url}", style = MaterialTheme.typography.bodySmall)
         TextButton(enabled = callbacks != null, onClick = {
             scope.launch { message = callbacks?.revoke?.invoke(endpoint.id) }
-        }) { Text("Revoke") }
+        }) { Text(WorkflowCopy.Revoke.text()) }
     }
     HorizontalDivider()
     if (callbacks == null) {
-        Text("Endpoint approval is unavailable on this host.")
+        Text(WorkflowCopy.CannotApprove.text())
         return
     }
-    Text("Approve an endpoint", style = MaterialTheme.typography.titleMedium)
-    Field("Endpoint name", name) { name = it }
-    Field("Exact HTTPS address", url) { url = it }
-    Choice("Method", method, listOf("GET", "POST"), { it }) { method = it }
+    Text(WorkflowCopy.ApproveEndpoint.text(), style = MaterialTheme.typography.titleMedium)
+    Field(WorkflowCopy.EndpointName.text(), name) { name = it }
+    Field(WorkflowCopy.HttpsAddress.text(), url) { url = it }
+    Choice(WorkflowCopy.Method.text(), method, listOf("GET", "POST"), { it }) { method = it }
     message?.let { ErrorLine(it) }
     Button(onClick = {
         val endpoint = WorkflowEndpoint(name = name.trim(), url = url.trim(), method = method)
         message = callbacks.validate(endpoint)
         if (message == null) pending = endpoint
-    }) { Text("Review endpoint") }
+    }) { Text(WorkflowCopy.ReviewEndpoint.text()) }
     pending?.let { endpoint ->
-        DecisionDialog("Approve ${endpoint.method} requests?", endpoint.url, "Approve", {
+        DecisionDialog(WorkflowCopy.ApproveRequests.text(endpoint.method), endpoint.url, WorkflowCopy.Approve.text(), {
             pending = null
             scope.launch {
                 message = callbacks.approve(endpoint)

@@ -15,6 +15,10 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.DateFormat
 import java.util.Date
+import java.util.Locale
+import tel.misa.mxpocket.i18n.AccessCopy
+import tel.misa.mxpocket.i18n.AppLocale
+import tel.misa.mxpocket.i18n.Copy
 import tel.misa.mxpocket.isUnlockedAndInteractive
 import tel.misa.mxpocket.shared.ui.CameraControlsEvent
 import tel.misa.mxpocket.shared.ui.CameraControlsScreen
@@ -22,16 +26,25 @@ import tel.misa.mxpocket.shared.ui.CameraControlsState
 import tel.misa.mxpocket.shared.ui.StudioCaptureOption
 
 class CameraControlsActivity : DeckActivity() {
+    private enum class Notice(val copy: Copy) {
+        SETTINGS_UNAVAILABLE(AccessCopy.AccessibilityUnavailable), SETTINGS_RESTRICTED(AccessCopy.RestrictedSettings),
+        NO_CAPTURES(AccessCopy.NoCaptures), UNAVAILABLE(AccessCopy.CaptureUnavailable),
+        NO_VIEWER(AccessCopy.CaptureNoViewer), RESTRICTED(AccessCopy.CaptureRestricted)
+    }
+
     private val access by lazy { CameraControlsAccess(this) }
     private val captures by lazy { File(filesDir, "captures") }
     private val mimeTypes = mapOf("jpg" to "image/jpeg", "mp4" to "video/mp4", "txt" to "text/plain")
     private var state by mutableStateOf(CameraControlsState.Available(false, false))
+    private var notice by mutableStateOf<Notice?>(null)
     private var listing: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        state = state.copy(message = savedInstanceState?.getString("message").orEmpty())
-        page("Studio camera controls") { CameraControlsScreen(state, ::handle) }
+        notice = savedInstanceState?.getString("notice")?.let { id -> Notice.entries.find { it.name == id } }
+        page({ AccessCopy.StudioControls.text() }) {
+            CameraControlsScreen(state.copy(message = notice?.copy?.text().orEmpty()), ::handle)
+        }
     }
 
     override fun onResume() {
@@ -46,7 +59,7 @@ class CameraControlsActivity : DeckActivity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        outState.putString("message", state.message)
+        outState.putString("notice", notice?.name)
     }
 
     private fun handle(event: CameraControlsEvent) {
@@ -61,12 +74,11 @@ class CameraControlsActivity : DeckActivity() {
                 state = state.copy(enabled = access.enabled)
             }
             CameraControlsEvent.OpenSettings -> {
-                val message = try {
+                notice = try {
                     startActivity(DeckAccessActivity.settings(false))
-                    ""
-                } catch (_: ActivityNotFoundException) { "Accessibility settings unavailable." }
-                catch (_: SecurityException) { "Android restricted access to settings." }
-                state = state.copy(message = message)
+                    null
+                } catch (_: ActivityNotFoundException) { Notice.SETTINGS_UNAVAILABLE }
+                catch (_: SecurityException) { Notice.SETTINGS_RESTRICTED }
             }
             CameraControlsEvent.ListCaptures -> listCaptures()
             is CameraControlsEvent.OpenCapture -> openCapture(event.id)
@@ -78,16 +90,16 @@ class CameraControlsActivity : DeckActivity() {
         listing?.cancel()
         listing = lifecycleScope.launch {
             val options = withContext(Dispatchers.IO) {
-                val dates = DateFormat.getDateTimeInstance()
+                val dates = DateFormat.getDateTimeInstance(DateFormat.DEFAULT, DateFormat.DEFAULT, Locale.forLanguageTag(AppLocale.current.tag))
                 captures.listFiles().orEmpty().filter { it.isFile && it.extension in mimeTypes }
                     .sortedByDescending { it.name }.map { file ->
                         StudioCaptureOption(file.name, "${file.extension.uppercase()}  ${dates.format(Date(file.lastModified()))}")
                     }
             }
-            if (isUnlockedAndInteractive()) state = state.copy(
-                captureChoices = options.takeIf { it.isNotEmpty() },
-                message = if (options.isEmpty()) "No previous Studio captures." else ""
-            )
+            if (isUnlockedAndInteractive()) {
+                state = state.copy(captureChoices = options.takeIf { it.isNotEmpty() })
+                notice = if (options.isEmpty()) Notice.NO_CAPTURES else null
+            }
         }
     }
 
@@ -96,20 +108,19 @@ class CameraControlsActivity : DeckActivity() {
         if (choices.none { it.id == id }) return
         state = state.copy(captureChoices = null)
         val file = File(captures, id)
-        val message = try {
+        notice = try {
             val mime = mimeTypes[file.extension]
             if (mime == null || !file.isFile || file.canonicalFile.parentFile != captures.canonicalFile)
-                "This capture is no longer available."
+                Notice.UNAVAILABLE
             else {
                 val uri = FileProvider.getUriForFile(this, "$packageName.captures", file)
                 startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime)
                     .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
-                ""
+                null
             }
-        } catch (_: ActivityNotFoundException) { "No viewer for this capture." }
-        catch (_: SecurityException) { "Android restricted access to this capture." }
-        catch (_: java.io.IOException) { "This capture is no longer available." }
-        catch (_: IllegalArgumentException) { "This capture is no longer available." }
-        state = state.copy(message = message)
+        } catch (_: ActivityNotFoundException) { Notice.NO_VIEWER }
+        catch (_: SecurityException) { Notice.RESTRICTED }
+        catch (_: java.io.IOException) { Notice.UNAVAILABLE }
+        catch (_: IllegalArgumentException) { Notice.UNAVAILABLE }
     }
 }

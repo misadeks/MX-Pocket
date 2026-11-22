@@ -5,6 +5,7 @@ import tel.misa.mxpocket.deck.DeckKey
 import tel.misa.mxpocket.deck.DeckActions
 import tel.misa.mxpocket.decks.DeckCommand
 import tel.misa.mxpocket.decks.navigationCommands
+import tel.misa.mxpocket.i18n.KeypadCopy as K
 
 sealed interface KeyGlyph
 enum class PlayerGlyph : KeyGlyph {
@@ -13,7 +14,7 @@ enum class PlayerGlyph : KeyGlyph {
 
 data class VolumeLevel(val current: Int, val maximum: Int, val muted: Boolean) {
     val fraction: Float? get() = if (maximum <= 0) null else if (muted) 0f else current.coerceIn(0, maximum).toFloat() / maximum
-    val description: String get() = if (maximum > 0) "$current / $maximum" else "Volume unknown"
+    val description: String get() = if (maximum > 0) "$current / $maximum" else K.VolumeUnknown.text()
 }
 
 data class KeyTile(val label: String, val footer: String, val background: Int,
@@ -31,13 +32,13 @@ fun frame(labels: List<String>, footer: String, background: Int): PluginFrame =
     PluginFrame(labels.map { KeyTile(it, footer, background) })
 
 fun FocusTimer.present(now: Long): PluginFrame {
-    val labels = listOf(if (running) "Pause" else "Start", label(now), "Reset", "-5 min", "${durationMillis / 60_000} min",
-        "+5 min", "15 min", "25 min", "50 min")
+    val labels = listOf((if (running) K.Pause else K.Start).text(), label(now), K.Reset.text(), K.Minutes.text("-5"),
+        K.Minutes.text(durationMillis / 60_000), K.Minutes.text("+5"), K.Minutes.text(15), K.Minutes.text(25), K.Minutes.text(50))
     val glyphs = listOf(if (running) PlayerGlyph.PAUSE else PlayerGlyph.PLAY, null, DeckGlyph.RESET,
         DeckGlyph.MINUS, null, DeckGlyph.PLUS, DeckGlyph.TIMER, DeckGlyph.TIMER, DeckGlyph.TIMER)
     return PluginFrame(labels.mapIndexed { i, text ->
         val readout = i == 1 || i == 4
-        KeyTile(text, when (i) { 1 -> "Remaining"; 4 -> "Duration"; else -> "Focus" },
+        KeyTile(text, when (i) { 1 -> K.Remaining; 4 -> K.Duration; else -> K.Focus }.text(),
             (if (readout) 0xff233448 else 0xff194375).toInt(), glyph = glyphs[i], readOnly = readout,
             showFooter = readout)
     })
@@ -46,8 +47,8 @@ fun FocusTimer.present(now: Long): PluginFrame {
 fun phoneFrame(): PluginFrame {
     val glyphs = listOf(DeckGlyph.CAMERA, DeckGlyph.SETTINGS, DeckGlyph.PHONE, DeckGlyph.WEB, null,
         DeckGlyph.TIMER, DeckGlyph.TIMER, PlayerGlyph.TRACK, DeckGlyph.REFRESH)
-    return PluginFrame(listOf("Camera", "Settings", "Dialer", "Web", "Phone", "Alarm", "Focus", "Audio", "Repaint")
-        .mapIndexed { i, text -> KeyTile(text, "Phone", 0xff49345f.toInt(), glyph = glyphs[i],
+    return PluginFrame(listOf(K.Camera, K.Settings, K.Dialer, K.Web, K.Phone, K.Alarm, K.Focus, K.Audio, K.Repaint)
+        .mapIndexed { i, text -> KeyTile(text.text(), K.Phone.text(), 0xff49345f.toInt(), glyph = glyphs[i],
             readOnly = i == 4, showFooter = false) })
 }
 
@@ -104,15 +105,21 @@ fun DeckKey.bindingPreview(): KeyTile? {
         "focus" -> {
             val face = FocusTimer().present(0).keys.getOrNull(slot) ?: return null
             return when (slot) {
-                0 -> face.copy(label = "Start / pause", glyph = PlayerGlyph.PLAY_PAUSE)
+                0 -> face.copy(label = K.StartPause.text(), glyph = PlayerGlyph.PLAY_PAUSE)
                 1, 4 -> face.copy(label = face.footer, footer = "")
                 else -> face
             }
         }
         "navigation" -> navigationCommands.getOrNull(slot)
+        "studio" -> studioSlots.getOrNull(slot)
+        "launcher" -> when (slot) {
+            7 -> DeckCommand.EDIT
+            8 -> return KeyTile(K.Favorites.text(), "", color, glyph = DeckGlyph.FOLDER)
+            else -> null // The favorite assigned to a slot is only known on the device.
+        }
         "teams" -> tel.misa.mxpocket.decks.teamsSlots.getOrNull(slot)
         "audio" -> {
-            if (slot == 7) return KeyTile("Track", "", 0xff303438.toInt(), glyph = PlayerGlyph.TRACK,
+            if (slot == 7) return KeyTile(K.Track.text(), "", 0xff303438.toInt(), glyph = PlayerGlyph.TRACK,
                 readOnly = true, playerFace = true, showFooter = false)
             audioSlots.getOrNull(slot)
         }
@@ -122,12 +129,15 @@ fun DeckKey.bindingPreview(): KeyTile? {
     if (command.deck == "navigation") return command.navigationFace(null).copy(enabled = true, readOnly = false,
         footer = "", showFooter = false)
     val transport = command.legend() is PlayerGlyph
-    return KeyTile(command.label, "", if (transport) 0xff303438.toInt() else color, glyph = command.legend(),
+    return KeyTile(command.displayLabel, "", if (transport) 0xff303438.toInt() else color, glyph = command.legend(),
         playerFace = transport, showLabel = !transport, showFooter = false)
 }
 
 val audioSlots = listOf(DeckCommand.QUIETER, DeckCommand.MUTE, DeckCommand.LOUDER, DeckCommand.PREVIOUS,
     DeckCommand.PLAY, DeckCommand.NEXT, DeckCommand.BACK_10, null, DeckCommand.FORWARD_10)
+
+val studioSlots = listOf(DeckCommand.SHUTTER, DeckCommand.START_VIDEO, DeckCommand.STOP_VIDEO, null, null, null,
+    DeckCommand.VIDEO, DeckCommand.STUDIO, DeckCommand.CAMERA_ACCESS)
 
 /** Identical override order for the LCD, phone mirror and offline desktop host. */
 fun DeckKey.present(native: KeyTile?, fallbackLabel: String, footer: String, available: Boolean): KeyTile {

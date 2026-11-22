@@ -2,7 +2,11 @@ package tel.misa.mxpocket
 
 import tel.misa.mxpocket.actions.*
 import tel.misa.mxpocket.decks.DeckCommand
+import tel.misa.mxpocket.decks.pluginDetails
+import tel.misa.mxpocket.i18n.LayoutCopy
+import tel.misa.mxpocket.i18n.builtInDeckName
 import tel.misa.mxpocket.plugins.KeyTile
+import tel.misa.mxpocket.plugins.displayName
 import tel.misa.mxpocket.workflow.WorkflowActionSpec
 import tel.misa.mxpocket.workflow.WorkflowField
 import tel.misa.mxpocket.workflow.WorkflowOrigin
@@ -10,47 +14,32 @@ import tel.misa.mxpocket.workflow.WorkflowOrigin
 internal fun PocketSession.platformBindings(): List<Pair<String,ActionCall>> = buildList {
     for (command in DeckCommand.entries.filterNot { it.legacyCapture || it.nativeControl }) {
         if (command == DeckCommand.OPEN) deckState.value.favorites.forEach {
-            add("Launch ${it.label}" to ActionCall(command.id,mapOf("component" to it.component)))
-        } else add("${command.deck}: ${command.label}" to ActionCall(command.id))
+            add(LayoutCopy.Launch.text(it.label) to ActionCall(command.id,mapOf("component" to it.component)))
+        } else add(LayoutCopy.CategoryAction.text(builtInDeckName(command.deck), command.displayLabel) to ActionCall(command.id))
     }
     for (choice in tel.misa.mxpocket.plugins.PhoneApp.entries) {
-        add("Phone: ${choice.name.lowercase().replaceFirstChar(Char::uppercaseChar)}" to
+        add(LayoutCopy.PhoneAction.text(choice.displayName()) to
             ActionCall("phone.open",mapOf("app" to choice.name)))
     }
 }
 
-internal fun PocketSession.pluginDetails(id: String): String {
-    val state = deckState.value
-    val access = when (id) {
-        "launcher" -> "${state.favorites.size} favorites. Only launchable apps are listed."
-        "studio" -> "Phone camera viewfinder. Keypad camera controls: ${state.cameraStatus}."
-        "audio" -> if (state.media.access) "Media access on. ${state.media.status}" else "Media access off. Basic media keys available."
-        "navigation" -> if (state.navigationEnabled) "System navigation enabled." else "Basic in-app navigation; system access off."
-        "teams" -> "Work opens Teams on this phone. Call tools keep the meeting mic on the center key. Automatic switching is optional."
-        "game.xo" -> "Choose single player against the computer or local 1v1. Play and change modes on the keypad."
-        "focus" -> "Timer, pause, reset, and duration presets. No permission required."
-        "phone" -> "Camera, settings, dialer, browser and alarms. Direct shortcuts are optional."
-        else -> ""
-    }
-    val commands = DeckCommand.entries.filter { it.deck == id && !it.legacyCapture }.joinToString { it.label }
-    return listOf(access,commands).filter(String::isNotBlank).joinToString("\n")
-}
+internal fun PocketSession.pluginDetails(id: String) = deckState.value.pluginDetails(id)
 
 internal fun PocketSession.platformWorkflowActions(): List<WorkflowActionSpec> = buildList {
     addAll(DeckCommand.entries.filter { it.workflowSafe && it.deck !in disabledPlugins.value }
-        .map { WorkflowActionSpec(it.id,it.label) }
+        .map { WorkflowActionSpec(it.id,it.displayLabel) }
     )
     if ("navigation" !in disabledPlugins.value) add(WorkflowActionSpec(DeckCommand.HOME.id,
-        "Open Android Home",requiresConfirmation = true))
+        LayoutCopy.AndroidHome.text(),requiresConfirmation = true))
     val favorites = deckState.value.favorites
     if ("launcher" !in disabledPlugins.value && favorites.isNotEmpty())
-        add(WorkflowActionSpec(DeckCommand.OPEN.id,"Open a favorite app",listOf(
-            WorkflowField("component","Favorite activity",favorites.map { it.component })), requiresConfirmation = true))
+        add(WorkflowActionSpec(DeckCommand.OPEN.id,LayoutCopy.OpenFavorite.text(),listOf(
+            WorkflowField("component",LayoutCopy.FavoriteActivity.text(),favorites.map { it.component })), requiresConfirmation = true))
 }
 
 internal fun PocketSession.platformAction(call: ActionCall, origin: WorkflowOrigin?): ActionResult {
-    val command = DeckCommand.fromId(call.id) ?: return ActionResult(false,"Unknown action: ${call.id}")
-    if (origin == null && !command.workflowSafe) return ActionResult(false,"This control requires a fresh keypad press.")
+    val command = DeckCommand.fromId(call.id) ?: return ActionResult(false,LayoutCopy.UnknownAction.text(call.id))
+    if (origin == null && !command.workflowSafe) return ActionResult(false,LayoutCopy.RequiresKey.text())
     val result = runDeckAction(call.id, call.params, fromPhysicalKey = origin == WorkflowOrigin.PHYSICAL)
     return ActionResult(result.success,result.message)
 }

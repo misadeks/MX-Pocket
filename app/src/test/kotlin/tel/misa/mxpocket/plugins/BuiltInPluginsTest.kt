@@ -8,9 +8,35 @@ import org.junit.Assert.*
 import org.junit.Test
 import kotlinx.coroutines.flow.MutableStateFlow
 import tel.misa.mxpocket.decks.*
+import tel.misa.mxpocket.i18n.AppLocale
+import tel.misa.mxpocket.i18n.AppLanguage
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class BuiltInPluginsTest {
+    @Test fun localeChangesOnlyBuiltInPresentationNotMediaMetadataFavoritesOrTokens() {
+        val language = AppLocale.current
+        try {
+            val favorite = Favorite("test.pkg/.Player", "Play")
+            val state = DeckState(favorites = listOf(favorite), media = MediaDeckState(
+                playing = false, title = "Playing", status = "Unrecognized player status",
+            ))
+            val descriptor = PluginDescriptor("phone", "Phone")
+            AppLocale.update(AppLanguage.ENGLISH, emptyList())
+            val english = state.tile(DeckCommand.PLAY)
+            AppLocale.update(AppLanguage.SERBIAN_LATIN, emptyList())
+            val serbian = state.tile(DeckCommand.PLAY)
+            assertEquals("Pusti", serbian.label)
+            assertEquals("Playing", serbian.footer)
+            assertEquals(english.inputToken, serbian.inputToken)
+            assertEquals("Play", state.tile(DeckCommand.OPEN, favorite.component).label)
+            assertEquals("Unrecognized player status", state.media.displayStatus)
+            assertEquals("Telefon", descriptor.displayTitle())
+            assertEquals("Phone", descriptor.copy(id = "custom.plugin").displayTitle())
+        } finally {
+            AppLocale.update(language, emptyList())
+        }
+    }
+
     @Test fun focusActionsAndCountdownSurvivePageSwitchWithoutStaleTicks() = runTest {
         val actions = mutableListOf<PluginAction>()
         var updates = 0

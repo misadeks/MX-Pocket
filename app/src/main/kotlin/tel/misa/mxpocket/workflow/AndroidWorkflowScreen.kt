@@ -10,6 +10,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.text.DateFormat
 import java.util.Date
+import java.util.Locale
+import tel.misa.mxpocket.i18n.AppLocale
+import tel.misa.mxpocket.i18n.WorkflowCopy
 
 @Composable
 fun WorkflowScreen(controller: WorkflowController) {
@@ -20,7 +23,7 @@ fun WorkflowScreen(controller: WorkflowController) {
     val endpoints by controller.endpoints.collectAsStateWithLifecycle()
     val prompt by controller.effects.prompt.collectAsStateWithLifecycle()
     val activity = LocalContext.current.activity()
-    val formatter = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
+    val formatter = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT, Locale.forLanguageTag(AppLocale.current.tag))
     val state = WorkflowUiState(
         definitions = saved, actions = controller.actions(), endpoints = endpoints,
         history = history.map { WorkflowHistoryEntry(it, formatter.format(Date(it.timestamp))) },
@@ -29,13 +32,13 @@ fun WorkflowScreen(controller: WorkflowController) {
     val callbacks = WorkflowCallbacks(
         save = controller::save, delete = controller::delete,
         run = { draft -> controller.validate(draft) ?: if (controller.run(draft.id, WorkflowOrigin.MANUAL)) null
-            else "The workflow could not start." },
+            else WorkflowCopy.CannotStart.text() },
         test = { draft -> controller.validate(draft) ?: if (controller.test(draft)) null
-            else "A workflow is already running." },
+            else WorkflowCopy.AlreadyRunning.text() },
         cancel = controller::cancel,
         respond = { request, accept -> controller.effects.respond(request, accept, activity) },
         endpoints = EndpointCallbacks(
-            validate = { if (it.valid()) null else "Enter a name and an exact HTTPS address without credentials or query." },
+            validate = { if (it.valid()) null else WorkflowCopy.ExactAddressRequired.text() },
             approve = controller::addEndpoint, revoke = controller::removeEndpoint,
         ),
     )

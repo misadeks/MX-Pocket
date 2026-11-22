@@ -19,6 +19,8 @@ import org.robolectric.annotation.Config
 import tel.misa.mxpocket.shared.ui.PocketScreenEvent
 import tel.misa.mxpocket.shared.ui.virtualGrid
 import tel.misa.mxpocket.ui.ThemePreference
+import tel.misa.mxpocket.ui.LanguagePreference
+import tel.misa.mxpocket.i18n.AppLanguage
 import tel.misa.mxpocket.shared.ui.ThemeMode
 
 @RunWith(RobolectricTestRunner::class)
@@ -73,6 +75,22 @@ class MainActivityTest {
             scene.recreate()
             ui.onNodeWithText("System").assertIsSelected()
             assertEquals("SYSTEM", app.getSharedPreferences("appearance", 0).getString("theme", null))
+        }
+
+        @Test fun languageSelectorChangesNavigationAndMissingDeviceMessageAcrossRecreation() {
+            try {
+                ActivityScenario.launch(MainActivity::class.java).use { scene ->
+                    ui.onNodeWithText("Settings").performClick()
+                    ui.onNodeWithText("Language").performScrollTo().performClick()
+                    ui.onNodeWithText("Français").performClick()
+                    scene.recreate()
+                    ui.onNodeWithText("Accueil").performClick()
+                    ui.onNodeWithContentDescription("Connecter l’appareil").performClick()
+                    ui.onNodeWithText("Vérifiez le câble", substring = true).assertExists()
+                    assertEquals(AppLanguage.FRENCH, LanguagePreference.choice(app))
+                    assertNull(app.session.request)
+                }
+            } finally { LanguagePreference.set(app, null) }
         }
     }
 

@@ -18,18 +18,44 @@ import androidx.activity.compose.setContent
 import tel.misa.mxpocket.shared.ui.PhoneActionResultScreen
 import tel.misa.mxpocket.shared.ui.PocketTheme
 import tel.misa.mxpocket.decks.FavoriteApps
+import tel.misa.mxpocket.i18n.AccessCopy
 import tel.misa.mxpocket.plugins.PhoneApp
+import tel.misa.mxpocket.plugins.displayName
 import tel.misa.mxpocket.decks.viewfinder
 import tel.misa.mxpocket.decks.teamsLauncher
+import tel.misa.mxpocket.ui.LanguagePreference
+
+private enum class ShortcutFailure {
+    STALE, LOCKED, TEAMS_MISSING, FAVORITE_UNAVAILABLE, NO_VIEWFINDER, APP_MISSING, RESTRICTED, NO_PHONE_HANDLER, PHONE_RESTRICTED;
+
+    fun text(context: Context, app: PhoneApp?) = when (this) {
+        STALE -> LanguagePreference.resourcesFor(context).getString(R.string.phone_action_stale)
+        LOCKED -> LanguagePreference.resourcesFor(context).getString(R.string.phone_action_locked)
+        TEAMS_MISSING -> AccessCopy.TeamsNotInstalled.text()
+        FAVORITE_UNAVAILABLE -> AccessCopy.FavoriteUnavailable.text()
+        NO_VIEWFINDER -> AccessCopy.NoViewfinder.text()
+        APP_MISSING -> AccessCopy.AppNotInstalled.text()
+        RESTRICTED -> AccessCopy.ShortcutRestricted.text()
+        NO_PHONE_HANDLER -> AccessCopy.NoPhoneHandler.text(requireNotNull(app).displayName().uppercase())
+        PHONE_RESTRICTED -> AccessCopy.PhoneRestricted.text(requireNotNull(app).displayName().uppercase())
+    }
+}
 
 /** Only opened by tapping the system notification. The intent identifies a request, not a target. */
 class PhoneActionActivity : ComponentActivity() {
-    private var failure: String? = null
+    override fun attachBaseContext(newBase: Context) =
+        super.attachBaseContext(tel.misa.mxpocket.ui.LanguagePreference.activityContext(newBase))
+
+    private var failure: ShortcutFailure? = null
+    private var phoneApp: PhoneApp? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setTitle(R.string.phone_action_title)
-        savedInstanceState?.getString("failure")?.let(::showFailure)
+        phoneApp = savedInstanceState?.getString("phoneApp")?.let { id -> PhoneApp.entries.find { it.name == id } }
+        savedInstanceState?.getString("failureCode")?.let { id ->
+            ShortcutFailure.entries.find { it.name == id }?.let(::showFailure)
+        }
     }
 
     override fun onResume() {
@@ -40,26 +66,30 @@ class PhoneActionActivity : ComponentActivity() {
         if (action != null) {
             getSystemService(NotificationManager::class.java).cancel(PHONE_NOTICE)
         }
+        phoneApp = (action?.target as? PocketSession.Target.Phone)?.app
         val error = when {
-            action == null -> getString(R.string.phone_action_stale)
-            !isUnlockedAndInteractive() -> getString(R.string.phone_action_locked)
-            !hasKeypadAccess(action.ticket) -> getString(R.string.phone_action_stale)
-            else -> launchShortcut(action.target)
+            action == null -> ShortcutFailure.STALE
+            !isUnlockedAndInteractive() -> ShortcutFailure.LOCKED
+            !hasKeypadAccess(action.ticket) -> ShortcutFailure.STALE
+            else -> tryShortcut(action.target)
         }
         if (error != null) {
-            session.message(error)
+            session.message(error.text(this, phoneApp))
             showFailure(error)
         } else finish()
     }
 
-    private fun showFailure(message: String) {
-        failure = message
-        setContent { PocketTheme(tel.misa.mxpocket.ui.ThemePreference.current(this)) { PhoneActionResultScreen(message, ::finish) } }
+    private fun showFailure(problem: ShortcutFailure) {
+        failure = problem
+        setContent { PocketTheme(tel.misa.mxpocket.ui.ThemePreference.current(this)) {
+            PhoneActionResultScreen(problem.text(this, phoneApp), ::finish)
+        } }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        outState.putString("failure", failure)
+        outState.putString("failureCode", failure?.name)
+        outState.putString("phoneApp", phoneApp?.name)
     }
 }
 
@@ -81,13 +111,16 @@ internal fun Context.hasKeypadAccess(ticket: PocketSession.Request): Boolean {
     return usb.keypad(ticket.name)?.let(usb::hasPermission) == true
 }
 
-internal fun Context.launchShortcut(target: PocketSession.Target): String? {
+internal fun Context.launchShortcut(target: PocketSession.Target): String? =
+    tryShortcut(target)?.text(this, (target as? PocketSession.Target.Phone)?.app)
+
+private fun Context.tryShortcut(target: PocketSession.Target): ShortcutFailure? {
     val intent = when (target) {
-        PocketSession.Target.Teams -> teamsLauncher() ?: return "Teams is not installed in this profile."
-        is PocketSession.Target.Phone -> return launchPhoneApp(target.app)
+        PocketSession.Target.Teams -> teamsLauncher() ?: return ShortcutFailure.TEAMS_MISSING
+        is PocketSession.Target.Phone -> return tryPhoneApp(target.app)
         is PocketSession.Target.FavoriteApp -> intentForFavoriteShortcut(target.component,
-            (applicationContext as PocketApplication).session.favoriteApps) ?: return "Favorite shortcut is no longer available."
-        is PocketSession.Target.Studio -> viewfinder(target.mode) ?: return "No default camera viewfinder for this mode."
+            (applicationContext as PocketApplication).session.favoriteApps) ?: return ShortcutFailure.FAVORITE_UNAVAILABLE
+        is PocketSession.Target.Studio -> viewfinder(target.mode) ?: return ShortcutFailure.NO_VIEWFINDER
     }
     return startShortcut(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 }
@@ -109,13 +142,15 @@ private fun Context.intentForFavoriteShortcut(component: String, favorites: Favo
     return intent.setComponent(name)
 }
 
-internal fun Context.startShortcut(intent: Intent): String? = try {
+private fun Context.startShortcut(intent: Intent): ShortcutFailure? = try {
     startActivity(intent)
     null
-} catch (_: ActivityNotFoundException) { "App is no longer installed." }
-catch (_: SecurityException) { "Android restricted this shortcut." }
+} catch (_: ActivityNotFoundException) { ShortcutFailure.APP_MISSING }
+catch (_: SecurityException) { ShortcutFailure.RESTRICTED }
 
-internal fun Context.launchPhoneApp(app: PhoneApp): String? {
+internal fun Context.launchPhoneApp(app: PhoneApp): String? = tryPhoneApp(app)?.text(this, app)
+
+private fun Context.tryPhoneApp(app: PhoneApp): ShortcutFailure? {
     val intent = when (app) {
         PhoneApp.CAMERA -> Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA)
         PhoneApp.SETTINGS -> Intent(Settings.ACTION_SETTINGS)
@@ -129,8 +164,8 @@ internal fun Context.launchPhoneApp(app: PhoneApp): String? {
         startActivity(intent)
         null
     } catch (_: ActivityNotFoundException) {
-        "No app can handle ${app.name}."
+        ShortcutFailure.NO_PHONE_HANDLER
     } catch (_: SecurityException) {
-        "Android did not allow ${app.name} to open."
+        ShortcutFailure.PHONE_RESTRICTED
     }
 }

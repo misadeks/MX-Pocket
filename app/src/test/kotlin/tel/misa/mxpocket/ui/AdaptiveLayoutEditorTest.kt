@@ -20,6 +20,8 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.*
+import tel.misa.mxpocket.i18n.AppLanguage
+import tel.misa.mxpocket.i18n.AppLocale
 import tel.misa.mxpocket.shared.ui.LayoutEditor
 import tel.misa.mxpocket.shared.ui.PocketTheme
 
@@ -49,6 +51,34 @@ class AdaptiveLayoutEditorTest {
     private fun openKey(description: String) {
         ui.onNodeWithText("Swap keys").performScrollTo().performClick()
         ui.onNodeWithContentDescription(description, substring = true).performClick()
+    }
+
+    @Test fun languageChangeKeepsDraftSearchAndSelectedPageBinding() {
+        val previous = AppLocale.current
+        val custom = "Mix {0} 🎚"
+        try {
+            AppLocale.update(AppLanguage.ENGLISH, emptyList())
+            val pageId = repo.createPage("focus", custom).getOrThrow()
+            open()
+            openKey("Key 1,")
+            ui.onNodeWithTag("key-label").performTextReplacement(custom)
+            ui.onNodeWithTag("choose-binding").performScrollTo().performClick()
+            ui.onNodeWithText("Search actions").performTextInput("Mix")
+            ui.runOnIdle { AppLocale.update(AppLanguage.FRENCH, emptyList()) }
+            ui.onNodeWithText("Rechercher une action").assertTextContains("Mix")
+            ui.onNodeWithText("Ouvrir la page : $custom").performClick()
+            ui.runOnIdle { AppLocale.update(AppLanguage.SERBIAN_LATIN, emptyList()) }
+            ui.onNodeWithTag("choose-binding").assertTextContains("Kratak pritisak: Otvori stranicu: $custom")
+            ui.onNodeWithTag("key-label").assertTextContains(custom)
+            ui.onNodeWithText("Sačuvaj taster").performScrollTo().performClick()
+            ui.waitUntil(5000) { repo.state.value.activePage.keys[0].label == custom }
+            val saved = DeckRepository(file).state.value
+            assertEquals(ActionCall(DeckActions.PAGE, mapOf(DeckActions.PAGE_ID to pageId)), saved.activePage.keys[0].action)
+            assertEquals("root", saved.activePage.id)
+            assertEquals("Focus", saved.activePage.name)
+        } finally {
+            AppLocale.update(previous, emptyList())
+        }
     }
 
     @Test fun keyAndBindingDraftFollowTheSelectedPageAcrossBreakpointsWithoutNavigatingTheDeck() {

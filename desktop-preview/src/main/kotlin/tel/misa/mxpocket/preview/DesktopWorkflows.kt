@@ -16,6 +16,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerializationException
+import tel.misa.mxpocket.i18n.WorkflowCopy
 import tel.misa.mxpocket.workflow.*
 
 /**
@@ -27,10 +28,10 @@ import tel.misa.mxpocket.workflow.*
 class DesktopWorkflowStore(
     directory: File,
     actions: List<WorkflowActionSpec> = listOf(
-        WorkflowActionSpec("sound.play", "Play a sound"),
-        WorkflowActionSpec("keypad.status", "Set key status", listOf(
-            WorkflowField("key", "Key index (0-8)", (0..8).map(Int::toString)),
-            WorkflowField("text", "Status text"))),
+        WorkflowActionSpec("sound.play", WorkflowCopy.PlaySound),
+        WorkflowActionSpec("keypad.status", WorkflowCopy.SetKeyStatus, listOf(
+            WorkflowField("key", WorkflowCopy.KeyIndex, (0..8).map(Int::toString)),
+            WorkflowField("text", WorkflowCopy.StatusText))),
     ),
 ) {
     private val file = directory.toPath().resolve("workflow-library.json")
@@ -50,23 +51,23 @@ class DesktopWorkflowStore(
     }
     private val snapshot = MutableStateFlow(WorkflowUiState(
         definitions = library?.definitions.orEmpty(), endpoints = library?.endpoints.orEmpty(), actions = actions,
-        error = if (library == null) "Cannot read this workflow library. Existing data has not been replaced." else null,
+        error = if (library == null) WorkflowCopy.ReadFailed else null,
     ))
     val state = snapshot.asStateFlow()
 
     suspend fun save(draft: WorkflowDefinition): String? = writer.withLock {
-        val data = library ?: return@withLock "The workflow library is unreadable."
+        val data = library ?: return@withLock WorkflowCopy.Unreadable.text()
         data.saveDefinition(draft, snapshot.value.actions, ::persist)
     }
 
     suspend fun delete(id: String): String? = writer.withLock {
-        val data = library ?: return@withLock "The workflow library is unreadable."
+        val data = library ?: return@withLock WorkflowCopy.Unreadable.text()
         data.deleteDefinition(id, ::persist)
     }
 
     private suspend fun persist(next: WorkflowLibrary): String? = withContext(Dispatchers.IO) {
         val bytes = next.encode().encodeToByteArray()
-        if (bytes.size > WorkflowLibrary.MAX_BYTES) return@withContext "Workflow data exceeds size limit."
+        if (bytes.size > WorkflowLibrary.MAX_BYTES) return@withContext WorkflowCopy.SizeLimit.text()
         try {
             val parent = Files.createDirectories(file.toAbsolutePath().parent)
             val staged = Files.createTempFile(parent, "workflow-library-", ".new")
@@ -77,9 +78,9 @@ class DesktopWorkflowStore(
                 Files.deleteIfExists(staged)
             }
         } catch (_: IOException) {
-            return@withContext "Could not save the library. Check available storage."
+            return@withContext WorkflowCopy.SaveStorage.text()
         } catch (_: SecurityException) {
-            return@withContext "Could not save the library. Check directory permissions."
+            return@withContext WorkflowCopy.SavePermissions.text()
         }
         library = next
         snapshot.value = snapshot.value.copy(definitions = next.definitions, endpoints = next.endpoints)

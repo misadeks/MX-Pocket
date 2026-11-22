@@ -13,6 +13,9 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import tel.misa.mxpocket.actions.ActionCall
+import tel.misa.mxpocket.i18n.AppLanguage
+import tel.misa.mxpocket.i18n.AppLocale
+import tel.misa.mxpocket.i18n.displaySelectionReason
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28], application = Application::class)
@@ -20,6 +23,27 @@ class DeckRepositoryTest {
     @get:Rule val folder = TemporaryFolder()
     private val file: File get() = File(folder.root, "deck.json")
     private val repo by lazy { DeckRepository(file) }
+
+    @Test fun localizedReasonsAndValidationNeverChangeExportsOrRuleValues() {
+        val previous = AppLocale.current
+        try {
+            AppLocale.update(AppLanguage.FRENCH, emptyList())
+            repo.selectProfile("audio").getOrThrow()
+            assertEquals("Sélection manuelle", displaySelectionReason(repo.reason.value))
+            assertEquals("Manually selected", JSONObject(repo.exportJson()).getString("selectionReason"))
+            val before = repo.exportJson()
+            assertEquals("Page inconnue", repo.openPage("missing").exceptionOrNull()?.message)
+            AppLocale.update(AppLanguage.SERBIAN_LATIN, emptyList())
+            assertEquals("Nepoznata stranica", repo.openPage("missing").exceptionOrNull()?.message)
+            assertEquals(before, repo.exportJson())
+            val details = "dock=My {0} desk (+5)"
+            assertEquals("Automatski: broj bodova 5 — $details", displaySelectionReason("Automatic: score 5 — $details"))
+            val unknown = "Automatic: score 5 — my own note"
+            assertEquals(unknown, displaySelectionReason(unknown))
+        } finally {
+            AppLocale.update(previous, emptyList())
+        }
+    }
 
     @Test fun callProjectionRestoresExactPageAndNeverOverwritesAnExplicitChoice() {
         val child = repo.createPage("phone", "Tools").getOrThrow()

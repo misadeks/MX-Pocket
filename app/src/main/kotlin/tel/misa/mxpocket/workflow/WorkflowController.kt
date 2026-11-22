@@ -13,6 +13,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerializationException
+import tel.misa.mxpocket.i18n.Copy
+import tel.misa.mxpocket.i18n.WorkflowCopy
 
 interface WorkflowProvider { val workflows: WorkflowController }
 
@@ -20,7 +22,7 @@ interface WorkflowProvider { val workflows: WorkflowController }
 class WorkflowController(context: Context, private val scope: CoroutineScope, private val host: WorkflowHost) {
     private val app = context.applicationContext
     private val store = WorkflowStore(app)
-    private val alerts = MutableStateFlow<String?>(null)
+    private val alerts = MutableStateFlow<Copy?>(null)
     val error = alerts.asStateFlow()
     private fun load(): WorkflowLibrary? = try {
         store.load()
@@ -41,15 +43,15 @@ class WorkflowController(context: Context, private val scope: CoroutineScope, pr
     val status = runner.status
     private var lastContext: WorkflowContext? = null
     private fun historyLoadError(): List<WorkflowStatus> {
-        alerts.value = "Run history could not be read."
+        alerts.value = WorkflowCopy.HistoryRead
         return emptyList()
     }
     init {
-        if (library == null) alerts.value = "Cannot read this workflow library. Existing data has not been replaced."
+        if (library == null) alerts.value = WorkflowCopy.ReadFailed
         scope.launch {
             for (entries in historyWrites) {
                 try { withContext(Dispatchers.IO) { store.saveHistory(entries) } }
-                catch (_: IOException) { alerts.value = "Run history could not be saved." }
+                catch (_: IOException) { alerts.value = WorkflowCopy.HistoryWrite }
             }
         }
         saved.value.filter { it.trigger.kind == TriggerKind.DAILY }.forEach { queueDaily(app, it) }
@@ -64,33 +66,33 @@ class WorkflowController(context: Context, private val scope: CoroutineScope, pr
     fun validate(draft: WorkflowDefinition) = validateWorkflow(draft, saved.value, allowed.value, actions())
     private suspend fun persist(next: WorkflowLibrary): String? {
         try { withContext(Dispatchers.IO) { store.save(next) } }
-        catch (_: IOException) { return "Could not save the library. Check available storage." }
+        catch (_: IOException) { return WorkflowCopy.SaveStorage.text() }
         library = next
         saved.value = next.definitions
         allowed.value = next.endpoints
         return null
     }
     suspend fun save(draft: WorkflowDefinition): String? = writer.withLock {
-        val data = library ?: return@withLock "The workflow library is unreadable."
+        val data = library ?: return@withLock WorkflowCopy.Unreadable.text()
         data.saveDefinition(draft, actions(), ::persist)?.let { return@withLock it }
         if (draft.trigger.kind == TriggerKind.DAILY) queueDaily(app, draft)
         null
     }
     suspend fun delete(id: String): String? = writer.withLock {
-        val data = library ?: return@withLock "The workflow library is unreadable."
+        val data = library ?: return@withLock WorkflowCopy.Unreadable.text()
         data.deleteDefinition(id, ::persist)
     }
     fun duplicate(draft: WorkflowDefinition) = draft.duplicate()
     suspend fun addEndpoint(endpoint: WorkflowEndpoint): String? = writer.withLock {
-        val data = library ?: return@withLock "The workflow library is unreadable."
-        if (!endpoint.valid()) return@withLock "Use a name and an HTTPS address without credentials, query or fragment."
-        if (data.endpoints.size >= 32) return@withLock "The endpoint list is full."
+        val data = library ?: return@withLock WorkflowCopy.Unreadable.text()
+        if (!endpoint.valid()) return@withLock WorkflowCopy.EndpointInvalid.text()
+        if (data.endpoints.size >= 32) return@withLock WorkflowCopy.EndpointFull.text()
         if (data.endpoints.any { it.id == endpoint.id || it.name.equals(endpoint.name, true) })
-            return@withLock "Use a different endpoint name."
+            return@withLock WorkflowCopy.EndpointDuplicate.text()
         persist(data.copy(endpoints = data.endpoints + endpoint))
     }
     suspend fun removeEndpoint(id: String): String? = writer.withLock {
-        val data = library ?: return@withLock "The workflow library is unreadable."
+        val data = library ?: return@withLock WorkflowCopy.Unreadable.text()
         persist(data.copy(endpoints = data.endpoints.filterNot { it.id == id })).also {
             if (it == null && runner.busy) runner.cancel() // A running snapshot may still carry the revoked endpoint.
         }
@@ -106,8 +108,7 @@ class WorkflowController(context: Context, private val scope: CoroutineScope, pr
     internal fun test(draft: WorkflowDefinition) = start(draft, WorkflowOrigin.TEST) != null
     internal fun start(definition: WorkflowDefinition, origin: WorkflowOrigin): Job? {
         if (runner.busy) {
-            record(WorkflowStatus(definition.id, definition.name, origin, WorkflowPhase.FAILED,
-                FailureKind.BUSY.description, error = FailureKind.BUSY))
+            record(WorkflowStatus(definition.id, definition.name, origin, WorkflowPhase.FAILED, "").failed(FailureKind.BUSY))
             return null
         }
         return runner.start(definition, origin, saved.value, allowed.value)

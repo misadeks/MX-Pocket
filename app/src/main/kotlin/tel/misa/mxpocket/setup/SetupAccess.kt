@@ -14,6 +14,7 @@ import android.provider.Settings
 import android.view.accessibility.AccessibilityManager
 import tel.misa.mxpocket.DirectShortcuts
 import tel.misa.mxpocket.KeypadService
+import tel.misa.mxpocket.R
 import tel.misa.mxpocket.UsbAccess
 import tel.misa.mxpocket.decks.DeckAccessActivity
 import tel.misa.mxpocket.decks.CameraControlsAccess
@@ -21,12 +22,14 @@ import tel.misa.mxpocket.decks.CameraControlsActivity
 import tel.misa.mxpocket.decks.NavigationService
 import tel.misa.mxpocket.decks.hasMediaSessionAccess
 import tel.misa.mxpocket.driver.UsbDiagnostics
+import tel.misa.mxpocket.i18n.AccessCopy
 import tel.misa.mxpocket.shared.ui.SetupAction
 import tel.misa.mxpocket.shared.ui.SetupFeature as Feature
 import tel.misa.mxpocket.shared.ui.SetupStep
 import tel.misa.mxpocket.shared.ui.CameraControlsDisclosure
 import tel.misa.mxpocket.shared.ui.DeckAccess
 import tel.misa.mxpocket.shared.ui.DirectShortcutDisclosure
+import tel.misa.mxpocket.ui.LanguagePreference
 
 internal class SetupAccess(private val host: Activity, private val choices: SetupChoices) {
     val usb: UsbManager = host.getSystemService(UsbManager::class.java)
@@ -61,12 +64,12 @@ internal class SetupAccess(private val host: Activity, private val choices: Setu
             val devices = keypads()
             val device = devices.singleOrNull()
             val allowed = device != null && usb.hasPermission(device)
-            add(SetupStep("Physical keypad", "Connect one MX Creative Keypad with a data cable. USB access applies to this attachment, not all USB devices.", when {
-                devices.isEmpty() -> "No supported keypad attached"
-                device == null -> "More than one keypad attached"
-                allowed -> "This keypad is authorized"
-                else -> "This keypad needs approval"
-            }, allowed, SetupAction.USB.takeIf { device != null && !allowed }))
+            add(SetupStep(AccessCopy.PhysicalKeypad.text(), AccessCopy.UsbInstructions.text(), when {
+                devices.isEmpty() -> AccessCopy.NoKeypad
+                device == null -> AccessCopy.MultipleKeypads
+                allowed -> AccessCopy.KeypadAuthorized
+                else -> AccessCopy.KeypadNeedsApproval
+            }.text(), allowed, SetupAction.USB.takeIf { device != null && !allowed }))
             val notice = when {
                 Build.VERSION.SDK_INT >= 33 && !granted(Manifest.permission.POST_NOTIFICATIONS) ->
                     if (restricted(Manifest.permission.POST_NOTIFICATIONS)) SetupAction.APP_NOTICES else SetupAction.POST
@@ -74,42 +77,43 @@ internal class SetupAccess(private val host: Activity, private val choices: Setu
                 KeypadService.sessionChannelBlocked(notifications) -> SetupAction.CHANNEL
                 else -> null
             }
-            add(SetupStep("Session notification", "MX Pocket requires a visible notification so you can disconnect a background USB session.", when (notice) {
-                null -> "Notifications allowed"
-                SetupAction.CHANNEL -> "Keypad session channel is off"
-                SetupAction.POST -> "Notification permission is off"
-                else -> "App notifications are off"
-            }, notice == null, notice))
+            add(SetupStep(AccessCopy.SessionNotice.text(), AccessCopy.SessionNoticeDetail.text(), when (notice) {
+                null -> AccessCopy.NoticesAllowed
+                SetupAction.CHANNEL -> AccessCopy.ChannelOff
+                SetupAction.POST -> AccessCopy.NoticePermissionOff
+                else -> AccessCopy.AppNoticesOff
+            }.text(), notice == null, notice))
         }
         if (Feature.AUTO in features) {
             val enabled = attach.automatic
-            add(SetupStep("Connect on plug-in", "Enabling this option makes MX Pocket a USB handler. Replug the keypad and choose MX Pocket if Android asks. Android controls the default; you can always connect manually.",
-                if (enabled) "App option on; Android chooses the handler" else "App option off", enabled, SetupAction.AUTO.takeUnless { enabled }))
+            add(SetupStep(AccessCopy.Auto.text(), AccessCopy.AutoDetail.text(),
+                if (enabled) AccessCopy.AutoOn.text() else AccessCopy.AppOptionOff.text(), enabled, SetupAction.AUTO.takeUnless { enabled }))
         }
         if (Feature.MUSIC in features) {
             val allowed = host.hasMediaSessionAccess()
-            add(SetupStep("Player controls and artwork", DeckAccess.Media.disclosure +
-                " In Notification access, select MX Pocket media sessions. This is separate from showing session notifications.",
-                if (allowed) "Media session access allowed" else "Basic media keys only", allowed, SetupAction.MEDIA.takeUnless { allowed }))
+            val serviceName = LanguagePreference.resourcesFor(host).getString(R.string.media_access)
+            add(SetupStep(AccessCopy.PlayerControls.text(), "${DeckAccess.Media.disclosure} ${AccessCopy.MediaInstructions.text(serviceName)}",
+                if (allowed) AccessCopy.MediaAllowed.text() else AccessCopy.BasicMediaKeys.text(), allowed, SetupAction.MEDIA.takeUnless { allowed }))
         }
         if (Feature.STUDIO in features) {
             val enabled = CameraControlsAccess(host).enabled
             val ready = enabled && navigationAllowed()
-            add(SetupStep("Studio camera controls", CameraControlsDisclosure,
-                when { ready -> "Keypad controls enabled"; enabled -> "Navigation service off"; else -> "Viewfinder only" },
+            add(SetupStep(AccessCopy.StudioControls.text(), CameraControlsDisclosure,
+                when { ready -> AccessCopy.KeypadControlsEnabled; enabled -> AccessCopy.NavigationOff; else -> AccessCopy.ViewfinderOnly }.text(),
                 ready, SetupAction.CAMERA))
         }
         if (Feature.DIRECT in features) {
             val allowed = Settings.canDrawOverlays(host)
             val enabled = shortcuts.enabled
-            add(SetupStep("One-press app opening", DirectShortcutDisclosure,
-                when { enabled -> "One-press shortcuts on"; allowed -> "Access allowed; app option off"; else -> "Display over other apps is off" },
+            add(SetupStep(AccessCopy.DirectOpening.text(), DirectShortcutDisclosure,
+                when { enabled -> AccessCopy.DirectOn; allowed -> AccessCopy.AccessAllowedOptionOff; else -> AccessCopy.OverlayOff }.text(),
                 enabled, when { enabled -> null; allowed -> SetupAction.DIRECT; else -> SetupAction.OVERLAY }))
         }
         if (Feature.NAVIGATION in features) {
             val allowed = navigationAllowed()
-            add(SetupStep("Cross-app navigation", DeckAccess.Navigation.disclosure +
-                " In Accessibility, select MX Pocket navigation.", if (allowed) "Navigation service enabled" else "In-app navigation only",
+            val serviceName = LanguagePreference.resourcesFor(host).getString(R.string.navigation_access)
+            add(SetupStep(AccessCopy.CrossAppNavigation.text(), "${DeckAccess.Navigation.disclosure} ${AccessCopy.NavigationInstructions.text(serviceName)}",
+                if (allowed) AccessCopy.NavigationEnabled.text() else AccessCopy.InAppNavigation.text(),
                 allowed, SetupAction.NAVIGATION.takeUnless { allowed }))
         }
     }

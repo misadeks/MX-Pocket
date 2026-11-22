@@ -13,36 +13,39 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import tel.misa.mxpocket.i18n.AccessCopy
+import tel.misa.mxpocket.i18n.Copy
+import tel.misa.mxpocket.i18n.KeypadCopy
 
 data class FavoriteOption(val id: String, val label: String)
 
 sealed interface FavoritesState {
     data object Loading : FavoritesState
-    data class Unavailable(val reason: String) : FavoritesState
+    data class Unavailable(val reason: Copy) : FavoritesState
     data class Ready(val apps: List<FavoriteOption>, val selected: Set<String>,
-        val emptyMessage: String = "No launchable apps available.") : FavoritesState
+        val emptyMessage: Copy = AccessCopy.NoLaunchableApps) : FavoritesState
 }
 
 @Composable
 fun FavoritesScreen(state: FavoritesState, onSetSelected: (String, Boolean) -> Unit, onDone: () -> Unit,
     loadIcon: (suspend (String) -> ImageBitmap?)? = null) {
     var query by rememberSaveable { mutableStateOf("") }
-    SubsidiaryPage("App Launcher", onDone) {
+    SubsidiaryPage(KeypadCopy.AppLauncher.text(), onDone) {
         when (state) {
-            FavoritesState.Loading -> SubsidiaryStatus("Loading launchable apps...")
-            is FavoritesState.Unavailable -> SubsidiaryStatus(state.reason)
+            FavoritesState.Loading -> SubsidiaryStatus(AccessCopy.LoadingApps.text())
+            is FavoritesState.Unavailable -> SubsidiaryStatus(state.reason.text())
             is FavoritesState.Ready -> {
                 val matches = remember(state.apps, query) {
                     state.apps.filter { it.label.contains(query, ignoreCase = true) }
                 }
                 val count = remember(state.apps, state.selected) { state.apps.count { it.id in state.selected } }
                 SubsidiaryStatus(when {
-                    state.apps.isEmpty() -> state.emptyMessage
-                    matches.isEmpty() -> "No matching apps."
-                    else -> "$count selected. Checked apps appear on the keypad."
+                    state.apps.isEmpty() -> state.emptyMessage.text()
+                    matches.isEmpty() -> AccessCopy.NoMatches.text()
+                    else -> AccessCopy.AppsSelected.text(count)
                 })
                 OutlinedTextField(value = query, onValueChange = { query = it.take(80) }, singleLine = true,
-                    label = { Text("Find an app") }, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp))
+                    label = { Text(AccessCopy.FindApp.text()) }, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp))
                 LazyColumn {
                     items(matches, key = { it.id }) { app ->
                         val selected = app.id in state.selected

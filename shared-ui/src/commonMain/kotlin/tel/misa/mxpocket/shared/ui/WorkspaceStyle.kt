@@ -1,5 +1,7 @@
 package tel.misa.mxpocket.shared.ui
 
+import tel.misa.mxpocket.i18n.WorkspaceCopy as W
+
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -15,7 +17,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 
 /** The user's appearance choice; [SYSTEM] follows the platform's dark setting. */
-enum class ThemeMode(val label: String) { SYSTEM("System"), LIGHT("Light"), DARK("Dark") }
+enum class ThemeMode(private val copy: tel.misa.mxpocket.i18n.Copy) { SYSTEM(W.System), LIGHT(W.Light), DARK(W.Dark);
+    val label get() = copy.text()
+}
 
 private fun PocketPalette.scheme(): ColorScheme {
     val onContainer = if (dark) Color.White else Color(0xff0b1220)

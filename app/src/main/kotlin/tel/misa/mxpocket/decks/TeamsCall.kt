@@ -1,5 +1,7 @@
 package tel.misa.mxpocket.decks
 
+import tel.misa.mxpocket.i18n.KeypadCopy as K
+
 import android.content.Context
 import android.os.Build
 import tel.misa.mxpocket.isUnlockedAndInteractive
@@ -54,7 +56,7 @@ internal class TeamsCall(private val app: Context) {
     fun pressMic(expected: TeamsState, authorized: () -> Boolean): DeckResult {
         val service = toolbarService
         if (expected != state || !expected.joined || expected.muted == null || service == null || !authorized())
-            return unavailable("Call controls changed. Check the center key.")
+            return unavailable(K.ChangedCallControls.text())
         val sent = service.inspect { toolbar ->
             val current = TeamsCallListener.current
             val call = current?.snapshot() as? TeamsObservation.Ongoing
@@ -63,8 +65,8 @@ internal class TeamsCall(private val app: Context) {
                 toolbar.muted == expected.muted && toolbar.window == window && waitingForChange == null &&
                 access.enabled && access.granted && access.toolbarGranted && access.singleProfile && authorized()
         }.second
-        if (!sent) return unavailable("Mic unavailable. Use the mic in Teams.")
+        if (!sent) return unavailable(K.UseMeetingMic.text())
         waitingForChange = expected.muted
-        return ok("Mic requested. Waiting for Teams.")
+        return ok(K.MicRequested.text())
     }
 }

@@ -10,6 +10,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import tel.misa.mxpocket.decks.DeckState
+import tel.misa.mxpocket.i18n.KeypadCopy as K
 
 /** Call every method on the owner's UI thread; plugin scope inherits that same dispatcher. */
 class PluginEngine(
@@ -66,7 +67,8 @@ class PluginEngine(
     }
 
     fun render(): PluginFrame {
-        if (failed) return frame(List(9) { "Plugin error" }, selected.descriptor.title, 0xff792e2e.toInt())
+        fun errorFrame() = frame(List(9) { K.PluginError.text() }, selected.descriptor.displayTitle(), 0xff792e2e.toInt())
+        if (failed) return errorFrame()
         return try {
             val result = selected.render(nowMillis())
             // Snapshot mutable lists so a coroutine cannot change a frame while it is uploading.
@@ -75,7 +77,7 @@ class PluginEngine(
             throw e
         } catch (e: Exception) {
             fail(selectedId, e)
-            frame(List(9) { "Plugin error" }, selected.descriptor.title, 0xff792e2e.toInt())
+            errorFrame()
         }
     }
 

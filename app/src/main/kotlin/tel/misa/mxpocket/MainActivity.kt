@@ -1,5 +1,11 @@
 package tel.misa.mxpocket
 
+import tel.misa.mxpocket.ui.DeviceCopy as D
+import tel.misa.mxpocket.i18n.WorkspaceCopy as W
+import tel.misa.mxpocket.i18n.displayName
+import tel.misa.mxpocket.i18n.displayPageName
+import tel.misa.mxpocket.i18n.displaySelectionReason
+
 import android.Manifest
 import android.app.KeyguardManager
 import android.content.ActivityNotFoundException
@@ -40,10 +46,13 @@ import tel.misa.mxpocket.decks.*
 import tel.misa.mxpocket.shared.ui.*
 import tel.misa.mxpocket.ui.AndroidWorkspace
 import tel.misa.mxpocket.ui.ThemePreference
+import tel.misa.mxpocket.ui.LanguagePreference
 import tel.misa.mxpocket.deck.DeckLimits
 import java.io.ByteArrayOutputStream
 
 class MainActivity : AppCompatActivity(), PocketSession.Screen {
+    override fun attachBaseContext(newBase: Context) = super.attachBaseContext(LanguagePreference.activityContext(newBase))
+
     private val session get() = (application as PocketApplication).session
     private val usb by lazy { getSystemService(UsbManager::class.java) }
     private val access by lazy { UsbAccess(this) }
@@ -62,7 +71,7 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
     private var waitingForNotifications = false
     private val specialAccess = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         direct.enabled = Settings.canDrawOverlays(this)
-        if (!direct.enabled) session.message("Direct shortcuts are off. Tap a keypad shortcut notification instead.")
+        if (!direct.enabled) session.message(D.DirectOff.text())
         render()
     }
 
@@ -73,7 +82,7 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             usbToken = null
             // The callback is an immutable wake-up, not evidence of permission.
             val device = usb.keypad(target)
-            if (device == null || !usb.hasPermission(device)) cancelAttempt("USB permission denied or keypad removed. Tap Connect to retry.")
+            if (device == null || !usb.hasPermission(device)) cancelAttempt(D.Denied.text())
             else advance()
             refreshDiagnostics()
         }
@@ -83,7 +92,7 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             val name = intent.usbDevice()?.deviceName ?: return
             if (intent.action == UsbManager.ACTION_USB_DEVICE_DETACHED && !usb.deviceList.containsKey(name)) {
                 access.detached(name)
-                if (target == name) cancelAttempt("Keypad detached.")
+                if (target == name) cancelAttempt(D.Detached.text())
             }
             refreshDiagnostics()
         }
@@ -91,7 +100,7 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         waitingForNotifications = false
         if (target != null) {
-            if (granted) advance() else cancelAttempt("Allow notifications in Android settings for a visible keypad session, then tap Connect.")
+            if (granted) advance() else cancelAttempt(D.AllowNotifications.text())
         }
     }
     private val imagePicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -100,13 +109,13 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
                 val image = withContext(Dispatchers.IO) {
                     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                     contentResolver.openInputStream(uri).use { BitmapFactory.decodeStream(it, null, bounds) }
-                    require(bounds.outWidth > 0 && bounds.outHeight > 0) { "Image could not be decoded" }
+                    require(bounds.outWidth > 0 && bounds.outHeight > 0) { D.Decode.text() }
                     var sample = 1
                     while (maxOf(bounds.outWidth, bounds.outHeight) / sample > 960) sample *= 2
                     val options = BitmapFactory.Options().apply { inSampleSize = sample }
                     val decoded = contentResolver.openInputStream(uri).use {
                         BitmapFactory.decodeStream(it, null, options)
-                    } ?: error("Image could not be decoded")
+                    } ?: error(D.Decode.text())
                     try {
                         Bitmap.createScaledBitmap(decoded, 118, 118, true)
                     } finally {
@@ -117,7 +126,7 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                session.fail("Cannot load image", e)
+                session.fail(D.LoadImage.text(), e)
             }
         }
     }
@@ -126,15 +135,15 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             try {
                 val text = diagnostics + "\n" + session.logText()
                 withContext(Dispatchers.IO) {
-                    val output = contentResolver.openOutputStream(uri) ?: error("Cannot open log destination")
+                    val output = contentResolver.openOutputStream(uri) ?: error(D.LogDestination.text())
                     output.bufferedWriter().use { it.write(text) }
                 }
 
-                session.message("Diagnostic log saved")
+                session.message(D.SavedLog.text())
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                session.fail("Cannot save log", e)
+                session.fail(D.SaveLog.text(), e)
             }
         }
     }
@@ -144,40 +153,41 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             try {
                 withContext(Dispatchers.IO) {
                     val text = session.deck.exportJson()
-                    val out = contentResolver.openOutputStream(uri, "wt") ?: error("Cannot open destination")
+                    val out = contentResolver.openOutputStream(uri, "wt") ?: error(D.Destination.text())
                     out.bufferedWriter(Charsets.UTF_8).use { it.write(text) }
                 }
-                session.message("Layouts exported.")
+                session.message(W.Exported.text())
             } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { session.fail("Cannot export layouts",e) }
+            catch (e: Exception) { session.fail(D.Export.text(),e) }
         }
     }
     private val layoutPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) lifecycleScope.launch {
             try {
                 val imported = withContext(Dispatchers.IO) {
-                    val stream = contentResolver.openInputStream(uri) ?: error("Cannot open document")
+                    val stream = contentResolver.openInputStream(uri) ?: error(D.OpenDocument.text())
                     val text = stream.use {
                         val bytes = ByteArrayOutputStream()
                         val buffer = ByteArray(8192)
                         while (true) {
                             val n = it.read(buffer)
                             if (n < 0) break
-                            require(bytes.size() + n <= DeckLimits.MAX_BYTES) { "Layout file too large" }
+                            require(bytes.size() + n <= DeckLimits.MAX_BYTES) { D.TooLarge.text() }
                             bytes.write(buffer,0,n)
                         }
                         Charsets.UTF_8.newDecoder().decode(java.nio.ByteBuffer.wrap(bytes.toByteArray())).toString()
                     }
                     session.deck.importJson(text)
                 }
-                imported.fold({ session.message("Layouts imported.") }, { session.fail("Cannot import layouts", it) })
+                imported.fold({ session.message(W.Imported.text()) }, { session.fail(D.Import.text(), it) })
             } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { session.fail("Cannot import layouts",e) }
+            catch (e: Exception) { session.fail(D.Import.text(),e) }
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        LanguagePreference.sync(this)
         tab = savedInstanceState?.getString("tab")?.let { name -> WorkspaceTab.entries.find { it.name == name } } ?: WorkspaceTab.HOME
         shortcutDisclosure = savedInstanceState?.getBoolean("shortcutDisclosure") == true
         setContent {
@@ -218,9 +228,9 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
             null
         } catch (_: ActivityNotFoundException) {
-            "Usage access settings are unavailable on this phone."
+            D.UsageSettings.text()
         } catch (_: SecurityException) {
-            "Android restricted access to these settings."
+            D.RestrictedSettings.text()
         }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -250,15 +260,15 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
         // A fast replug can deliver the new Activity intent before the previous detach/error callback.
         session.request?.let {
             if (it.name == device.deviceName) return
-            session.disconnect("Previous keypad detached.")
+            session.disconnect(D.PreviousDetached.text())
         }
         target?.let {
             if (it == device.deviceName) return
-            cancelAttempt("Previous keypad detached.")
+            cancelAttempt(D.PreviousDetached.text())
         }
         if (access.alreadyHandled(device.deviceName)) return
         if (!usb.hasPermission(device)) {
-            session.message("Android USB permission is required. Tap Connect.")
+            session.message(D.PermissionRequired.text())
             return
         }
         target = device.deviceName
@@ -290,8 +300,8 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
     private fun requestConnect() {
         val candidates = usb.deviceList.values.filter(UsbDiagnostics::isKeypad)
         if (candidates.size != 1) {
-            session.message(if (candidates.isEmpty()) "No MX Creative Keypad (046D:C354). Check cable and USB host support."
-                else "Multiple keypads connected. Connect only one keypad.")
+            session.message(if (candidates.isEmpty()) D.Missing.text()
+                else D.Multiple.text())
             refreshDiagnostics()
             return
         }
@@ -314,20 +324,20 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
         if (session.request != null) { target = null; usbToken = null; return }
         if (fromAttach && !access.automatic) { cancelAttempt(getString(R.string.not_connected)); return }
         if (getSystemService(KeyguardManager::class.java).isKeyguardLocked) {
-            cancelAttempt("Unlock the phone and tap Connect."); return
+            cancelAttempt(D.UnlockConnect.text()); return
         }
-        val device = usb.keypad(name) ?: run { cancelAttempt("Keypad no longer available. Check the cable and tap Connect."); return }
+        val device = usb.keypad(name) ?: run { cancelAttempt(D.Gone.text()); return }
         if (waitingForNotifications) return
         if (!usb.hasPermission(device)) {
-            if (fromAttach) { cancelAttempt("USB permission is required. Tap Connect."); return }
+            if (fromAttach) { cancelAttempt(D.NeedUsb.text()); return }
             if (usbToken != null) return
             val token = UUID.randomUUID().toString()
             usbToken = token
-            session.message("Waiting for Android USB permission...")
+            session.message(D.Waiting.text())
             try {
                 usb.requestKeypadAccess(this, device, permissionAction, token)
             } catch (e: RuntimeException) {
-                cancelAttempt("Could not request USB permission: ${e.message}. Tap Connect to retry.")
+                cancelAttempt(D.RequestFailed.text(e.message))
             }
             return
         }
@@ -338,7 +348,7 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             return
         }
         if (!KeypadService.notificationsVisible(this)) {
-            cancelAttempt("Enable keypad session notifications in Android settings and tap Connect.")
+            cancelAttempt(D.NeedNotifications.text())
             return
         }
         target = null
@@ -350,7 +360,7 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             startService(KeypadService.command(this, ticket))
         } catch (e: RuntimeException) {
             session.disconnect()
-            session.fail("Android did not allow the keypad foreground service", e)
+            session.fail(D.ServiceDenied.text(), e)
         }
     }
 
@@ -362,9 +372,9 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
         } else try {
             specialAccess.launch(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
         } catch (_: ActivityNotFoundException) {
-            session.message("Special access is unavailable. Use keypad shortcut notifications instead.")
+            session.message(D.SpecialUnavailable.text())
         } catch (_: SecurityException) {
-            session.message("Android restricted special access. Use keypad shortcut notifications instead.")
+            session.message(D.SpecialRestricted.text())
         }
     }
 
@@ -378,7 +388,7 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             }
             is PocketScreenEvent.SetDirectShortcuts -> if (!event.enabled) {
                 direct.enabled = false
-                session.message("Direct shortcuts are off. You can revoke Display over other apps in Android settings.")
+                session.message(D.RevokeOverlay.text())
             } else shortcutDisclosure = true
             is PocketScreenEvent.DesktopInput -> return
             is PocketScreenEvent.SelectPlugin -> session.selectProfile(event.id)
@@ -388,10 +398,15 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             PocketScreenEvent.RefreshDiagnostics -> refreshDiagnostics()
             PocketScreenEvent.SaveLog -> logSaver.launch("mx-pocket-diagnostics.txt")
             PocketScreenEvent.FeatureSetup -> openSetup(firstRun = false)
-            is PocketScreenEvent.DefaultProfile -> session.deck.setDefault(event.id).onFailure { session.fail("Cannot change default", it) }
+            is PocketScreenEvent.DefaultProfile -> session.deck.setDefault(event.id).onFailure { session.fail(D.ChangeDefault.text(), it) }
             is PocketScreenEvent.EnablePlugin -> session.setPluginEnabled(event.id, event.enabled)
             is PocketScreenEvent.PluginSettings -> session.pluginSettings(event.id)?.second?.invoke()
             is PocketScreenEvent.SetTheme -> ThemePreference.set(this, event.mode)
+            is PocketScreenEvent.SetLanguage -> {
+                LanguagePreference.set(this, event.language)
+                session.languageChanged()
+                if (Build.VERSION.SDK_INT < 33) recreate()
+            }
         }
         render()
     }
@@ -399,18 +414,20 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
     override fun render() {
         val deck = session.deck.state.value
         val frame = session.frame()
+        val profile = deck.activeProfile.displayName()
+        val page = deck.activeProfile.displayPageName(deck.activePage)
         val state = PocketScreenState(
             status = session.status,
-            pluginTitle = if (deck.activePage.name == deck.activeProfile.name) deck.activeProfile.name
-                else "${deck.activeProfile.name} / ${deck.activePage.name}",
+            pluginTitle = if (page == profile) profile else "$profile / $page",
             tiles = frame.keys.mapIndexed { i, key -> key.toGridTile(session.ready, session.keyImage(i, key).asImageBitmap()) },
-            profiles = deck.profiles.map { ProfileChoice(it.id, it.name) },
-            activeId = deck.activeProfileId, reason = session.deck.reason.value,
+            profiles = deck.profiles.map { ProfileChoice(it.id, it.displayName()) },
+            activeId = deck.activeProfileId, reason = displaySelectionReason(session.deck.reason.value),
             connectionLabel = session.connectionLabel,
             connectionActive = target != null || session.request != null,
             usbReady = session.ready, activePageId = deck.activePage.id,
             diagnostics = diagnostics, log = session.logText(60), automatic = access.automatic, directShortcuts = direct.enabled,
             themeMode = ThemePreference.current(this),
+            language = LanguagePreference.choice(this),
         )
         presentation = state
     }
@@ -422,27 +439,27 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
     }
 
     override fun deckAction(command: DeckCommand, component: String?): DeckResult {
-        if (!resumed || !isUnlockedAndInteractive()) return unavailable("Open MX Pocket on the unlocked phone.")
+        if (!resumed || !isUnlockedAndInteractive()) return unavailable(D.OpenUnlocked.text())
         val intent = when (command) {
-            DeckCommand.TEAMS_OPEN -> teamsLauncher() ?: return unavailable("Teams is not installed in this profile.")
+            DeckCommand.TEAMS_OPEN -> teamsLauncher() ?: return unavailable(D.NoTeams.text())
             DeckCommand.TEAMS_ACCESS -> Intent(this, TeamsAccessActivity::class.java)
-            DeckCommand.OPEN -> session.favoriteApps.intentFor(component) ?: return unavailable("Favorite no longer available.")
+            DeckCommand.OPEN -> session.favoriteApps.intentFor(component) ?: return unavailable(D.NoFavorite.text())
             DeckCommand.EDIT -> Intent(this, FavoritesActivity::class.java)
             DeckCommand.STUDIO, DeckCommand.VIDEO -> viewfinder(if (command == DeckCommand.STUDIO) CameraMode.PHOTO else CameraMode.VIDEO)
-                ?: return unavailable("No default camera viewfinder for this mode.")
+                ?: return unavailable(D.NoCamera.text())
             DeckCommand.CAMERA_ACCESS -> Intent(this, CameraControlsActivity::class.java)
             DeckCommand.MEDIA_ACCESS, DeckCommand.NAV_ACCESS -> DeckAccessActivity.intent(this, command)
             DeckCommand.HOME -> Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
-            DeckCommand.BACK -> { onBackPressedDispatcher.onBackPressed(); return ok("Back in MX Pocket.") }
+            DeckCommand.BACK -> { onBackPressedDispatcher.onBackPressed(); return ok(D.Back.text()) }
             DeckCommand.UP, DeckCommand.DOWN, DeckCommand.FORWARD, DeckCommand.REVERSE, DeckCommand.ACTIVATE ->
                 return navigateVisibleWorkspace(command)
-            DeckCommand.RECENTS -> return unavailable("Recent apps needs navigation access. Choose Navigation access to learn more.")
-            else -> return unavailable("Not a visible screen action.")
+            DeckCommand.RECENTS -> return unavailable(D.RecentAccess.text())
+            else -> return unavailable(D.NotScreenAction.text())
         }
 
-        return try { startActivity(intent); ok("Opened ${command.label}.") }
-        catch (_: ActivityNotFoundException) { unavailable("No app handles this action.") }
-        catch (_: SecurityException) { unavailable("Android restricted this action.") }
+        return try { startActivity(intent); ok(D.Opened.text(command.displayLabel)) }
+        catch (_: ActivityNotFoundException) { unavailable(D.NoHandler.text()) }
+        catch (_: SecurityException) { unavailable(D.ActionRestricted.text()) }
     }
 
     private fun refreshDiagnostics() {
@@ -461,13 +478,13 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
 
     /** Only our focused activity receives these keys; never send input to a permission dialog or another app. */
     private fun navigateVisibleWorkspace(command: DeckCommand): DeckResult {
-        if (!hasWindowFocus() || navigating || shortcutDisclosure) return unavailable("Focus the workspace first.")
+        if (!hasWindowFocus() || navigating || shortcutDisclosure) return unavailable(D.FocusWorkspace.text())
         val code = when (command) {
             DeckCommand.UP -> KeyEvent.KEYCODE_PAGE_UP
             DeckCommand.DOWN -> KeyEvent.KEYCODE_PAGE_DOWN
             DeckCommand.REVERSE, DeckCommand.FORWARD -> KeyEvent.KEYCODE_TAB
             DeckCommand.ACTIVATE -> KeyEvent.KEYCODE_ENTER
-            else -> return unavailable("Unsupported navigation command.")
+            else -> return unavailable(D.UnsupportedNavigation.text())
         }
         val meta = if (command == DeckCommand.REVERSE) KeyEvent.META_SHIFT_ON else 0
         val now = android.os.SystemClock.uptimeMillis()
@@ -476,7 +493,7 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             fun send(action: Int) = window.decorView.dispatchKeyEvent(KeyEvent(now, now, action, code, 0, meta))
             val down = send(KeyEvent.ACTION_DOWN)
             val up = send(KeyEvent.ACTION_UP)
-            if (down || up) ok("Requested ${command.label}.") else unavailable("No matching workspace control.")
+            if (down || up) ok(D.Requested.text(command.displayLabel)) else unavailable(D.NoControl.text())
         } finally { navigating = false }
     }
 }

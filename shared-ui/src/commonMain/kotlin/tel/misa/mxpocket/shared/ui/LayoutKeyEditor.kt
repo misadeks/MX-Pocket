@@ -14,36 +14,43 @@ import androidx.compose.ui.platform.testTag
 import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.*
 import tel.misa.mxpocket.decks.navigationCommands
+import tel.misa.mxpocket.i18n.*
 
 data class BindingOption(val label: String, val call: ActionCall)
 
-val factoryKeyBindings = defaultDeck().profiles.flatMap { profile ->
-    profile.pages.single { it.id == profile.rootPageId }.keys.mapIndexedNotNull { physical, key ->
-        val call = key.action ?: return@mapIndexedNotNull null
-        if (call.id != "plugin.key") return@mapIndexedNotNull null
-        val suffix = if (profile.id == "navigation") ": ${navigationCommands[call.params.getValue("index").toInt()].label}" else ""
-        BindingOption("${profile.name} key ${physical + 1}$suffix", call)
+private val factoryProfiles = defaultDeck().profiles
+val factoryKeyBindings: List<BindingOption> by derivedStateOf {
+    factoryProfiles.flatMap { profile ->
+        profile.pages.single { it.id == profile.rootPageId }.keys.mapIndexedNotNull { physical, key ->
+            val call = key.action ?: return@mapIndexedNotNull null
+            if (call.id != "plugin.key") return@mapIndexedNotNull null
+            val label = if (profile.id == "navigation") LayoutCopy.FactoryCommand.text(profile.displayName(), physical + 1,
+                navigationCommands[call.params.getValue("index").toInt()].displayLabel)
+            else LayoutCopy.FactoryKey.text(profile.displayName(), physical + 1)
+            BindingOption(label, call)
+        }
     }
 }
 
 /** Page IDs are profile-local; a duplicated profile can have the same page IDs with different names. */
-fun localBindings(options: List<BindingOption>, pages: List<DeckPage>): List<BindingOption> {
+fun localBindings(options: List<BindingOption>, pages: List<DeckPage>, pageName: (DeckPage) -> String = { it.name }): List<BindingOption> {
     val pageOptions = options.filter { it.call.id == DeckActions.PAGE }.associateBy { it.call.params[DeckActions.PAGE_ID] }
     // The host knows the active deck; the editor can also prepare an inactive profile.
     return (pages.map { page ->
         val call = pageOptions[page.id]?.call ?: ActionCall(DeckActions.PAGE, mapOf(DeckActions.PAGE_ID to page.id))
-        BindingOption("Open page: ${page.name}", call)
+        BindingOption(LayoutCopy.OpenPage.text(pageName(page)), call)
     } + options.filterNot { it.call.id == DeckActions.PAGE }).distinctBy { it.call }
 }
 
 internal fun bindingName(call: ActionCall?, options: List<BindingOption>): String {
-    if (call == null) return "Unassigned"
+    if (call == null) return LayoutCopy.Unassigned.text()
     return options.firstOrNull { it.call == call.commandBinding() }?.label ?: when (call.id) {
         "plugin.key" -> {
             val number = call.params["index"]?.toIntOrNull()?.plus(1)
-            factoryKeyBindings.firstOrNull { it.call == call }?.label ?: "${call.params["pluginId"] ?: "Plugin"} slot ${number ?: "?"}"
+            factoryKeyBindings.firstOrNull { it.call == call }?.label ?: LayoutCopy.PluginSlot.text(
+                call.params["pluginId"]?.let(::builtInDeckName) ?: LayoutCopy.Plugin.text(), number ?: "?")
         }
-        else -> "${call.id} (unavailable)"
+        else -> LayoutCopy.Unavailable.text(call.id)
     }
 }
 
@@ -62,7 +69,9 @@ private fun List<String>.call(): ActionCall? = firstOrNull()?.let { id ->
     ActionCall(id, drop(1).chunked(2).associate { (k, v) -> k to v })
 }
 
-internal enum class BindingTarget(val label: String) { TAP("Tap"), HOLD("Hold") }
+internal enum class BindingTarget(val summary: Copy, val picker: Copy) {
+    TAP(LayoutCopy.TapBinding, LayoutCopy.ChooseTap), HOLD(LayoutCopy.HoldBinding, LayoutCopy.ChooseHold)
+}
 
 /** Owned by the editor, not by either layout branch or by the action picker. */
 internal class KeyDraft(val original: DeckKey) {
@@ -77,9 +86,9 @@ internal class KeyDraft(val original: DeckKey) {
     var attempted by mutableStateOf(false)
 
     val error: String? get() = when {
-        label.length > DeckLimits.LABEL -> "Use ${DeckLimits.LABEL} characters or fewer for the label."
-        icon.length > DeckLimits.ICON -> "Use ${DeckLimits.ICON} characters or fewer for the icon."
-        parseTileColor(color) == null -> "Enter six hex digits (RGB) or eight (ARGB), for example #284454."
+        label.length > DeckLimits.LABEL -> LayoutCopy.LabelLength.text(DeckLimits.LABEL)
+        icon.length > DeckLimits.ICON -> LayoutCopy.IconLength.text(DeckLimits.ICON)
+        parseTileColor(color) == null -> LayoutCopy.InvalidHex.text()
         else -> null
     }
 
@@ -120,45 +129,45 @@ internal class KeyDraft(val original: DeckKey) {
 @Composable
 internal fun KeyFields(index: Int, draft: KeyDraft, options: List<BindingOption>, writable: Boolean,
                        onClose: () -> Unit, onSave: (DeckKey) -> Unit) = with(draft) {
-    EditorHeading("Edit key ${index + 1}")
-    EditorNote("Row ${index / 3 + 1}, column ${index % 3 + 1}")
+    EditorHeading(LayoutCopy.EditKey.text(index + 1))
+    EditorNote(LayoutCopy.Coordinates.text(index / 3 + 1, index % 3 + 1))
     OutlinedTextField(label, { label = it }, Modifier.fillMaxWidth().testTag("key-label"), enabled = writable,
-        label = { Text("Key label") }, singleLine = true, isError = attempted && label.length > DeckLimits.LABEL)
+        label = { Text(LayoutCopy.KeyLabel.text()) }, singleLine = true, isError = attempted && label.length > DeckLimits.LABEL)
     OutlinedTextField(icon, { icon = it }, Modifier.fillMaxWidth(), enabled = writable,
-        label = { Text("Icon text or emoji") }, singleLine = true, isError = attempted && icon.length > DeckLimits.ICON)
+        label = { Text(LayoutCopy.IconText.text()) }, singleLine = true, isError = attempted && icon.length > DeckLimits.ICON)
     OutlinedTextField(color, { color = it }, Modifier.fillMaxWidth(), enabled = writable,
-        label = { Text("Key color") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
+        label = { Text(LayoutCopy.KeyColor.text()) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
         placeholder = { Text("#284454") }, isError = attempted && parseTileColor(color) == null)
     Box {
         var open by remember { mutableStateOf(false) }
-        TextButton(onClick = { open = true }, enabled = writable) { Text("Choose a preset color") }
+        TextButton(onClick = { open = true }, enabled = writable) { Text(LayoutCopy.ChooseColor.text()) }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             for ((name, hex) in palette) {
-                DropdownMenuItem(text = { Text(name) }, leadingIcon = {
+                DropdownMenuItem(text = { Text(name.text()) }, leadingIcon = {
                     Surface(Modifier.size(20.dp), shape = MaterialTheme.shapes.small,
                         color = androidx.compose.ui.graphics.Color(parseTileColor(hex)!!)) {}
                 }, onClick = { color = hex; open = false })
             }
         }
     }
-    Text("Key actions", style = MaterialTheme.typography.titleSmall)
+    Text(LayoutCopy.KeyActions.text(), style = MaterialTheme.typography.titleSmall)
     for (target in BindingTarget.entries) {
         OutlinedButton(onClick = { query = ""; picking = target }, enabled = writable,
             modifier = Modifier.fillMaxWidth().testTag(if (target == BindingTarget.TAP) "choose-binding" else "choose-hold-binding")) {
-            Text("${target.label}: ${bindingName(binding(target), options)}")
+            Text(target.summary.text(bindingName(binding(target), options)))
         }
     }
-    EditorSwitch("Enabled on deck", enabled, writable) { enabled = it }
+    EditorSwitch(LayoutCopy.EnabledOnDeck.text(), enabled, writable) { enabled = it }
     if (attempted) error?.let { EditorError(it) }
     EditorActions {
-        Button(onClick = { attempted = true; if (error == null) onSave(preview()) }, enabled = writable) { Text("Save key") }
-        TextButton(onClick = onClose) { Text("Cancel") }
+        Button(onClick = { attempted = true; if (error == null) onSave(preview()) }, enabled = writable) { Text(LayoutCopy.SaveKey.text()) }
+        TextButton(onClick = onClose) { Text(LayoutCopy.Cancel.text()) }
     }
 }
 
 private val palette = listOf(
-    "Slate" to "#284454", "Blue" to "#245CB5", "Teal" to "#176A63",
-    "Amber" to "#E9A73C", "Berry" to "#923F62", "Graphite" to "#373B42",
+    LayoutCopy.Slate to "#284454", LayoutCopy.Blue to "#245CB5", LayoutCopy.Teal to "#176A63",
+    LayoutCopy.Amber to "#E9A73C", LayoutCopy.Berry to "#923F62", LayoutCopy.Graphite to "#373B42",
 )
 
 @Composable
@@ -177,19 +186,19 @@ internal fun BindingDialog(options: List<BindingOption>, draft: KeyDraft) {
     val filtered = remember(options, query) {
         options.filter { it.label.contains(query.trim(), ignoreCase = true) || it.call.id.contains(query.trim(), ignoreCase = true) }
     }
-    AlertDialog(onDismissRequest = ::close, title = { Text("Choose a ${target.label.lowercase()} action") }, text = {
+    AlertDialog(onDismissRequest = ::close, title = { Text(target.picker.text()) }, text = {
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            OutlinedTextField(query, { draft.query = it }, Modifier.fillMaxWidth(), label = { Text("Search actions") }, singleLine = true)
+            OutlinedTextField(query, { draft.query = it }, Modifier.fillMaxWidth(), label = { Text(LayoutCopy.SearchActions.text()) }, singleLine = true)
             LazyColumn(Modifier.fillMaxWidth().heightIn(max = 380.dp)) {
                 item {
-                    DropdownMenuItem(text = { Text(if (selected == null) "✓ Unassigned" else "Unassigned") }, onClick = { choose(null) })
+                    DropdownMenuItem(text = { Text((if (selected == null) "✓ " else "") + LayoutCopy.Unassigned.text()) }, onClick = { choose(null) })
                 }
-                if (filtered.isEmpty()) item { EditorNote("No matching actions.") }
+                if (filtered.isEmpty()) item { EditorNote(LayoutCopy.NoMatchingActions.text()) }
                 items(filtered) { option ->
                     DropdownMenuItem(text = { Text(if (selected == option.call) "✓ ${option.label}" else option.label) },
                         onClick = { choose(option.call) })
                 }
             }
         }
-    }, confirmButton = { TextButton(onClick = ::close) { Text("Back to key") } })
+    }, confirmButton = { TextButton(onClick = ::close) { Text(LayoutCopy.BackToKey.text()) } })
 }

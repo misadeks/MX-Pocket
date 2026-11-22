@@ -18,6 +18,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tel.misa.mxpocket.PocketApplication
+import tel.misa.mxpocket.i18n.AccessCopy
+import tel.misa.mxpocket.i18n.KeypadCopy
 import tel.misa.mxpocket.isUnlockedAndInteractive
 import tel.misa.mxpocket.shared.ui.FavoriteOption
 import tel.misa.mxpocket.shared.ui.FavoritesScreen
@@ -71,15 +73,15 @@ class FavoritesActivity : DeckActivity() {
     private var state by mutableStateOf<FavoritesState>(FavoritesState.Loading)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        page("App Launcher") { FavoritesScreen(state, ::setSelected, ::finish, ::loadIcon) }
+        page({ KeypadCopy.AppLauncher.text() }) { FavoritesScreen(state, ::setSelected, ::finish, ::loadIcon) }
         lifecycleScope.launch {
             state = try {
                 apps = withContext(Dispatchers.IO) { session.favoriteApps.discover() }
                 session.publishFavorites(apps)
                 FavoritesState.Ready(apps.map { FavoriteOption(it.component, it.label) }, session.favoriteApps.selected(),
-                    "No launchable apps available in this Android profile.")
+                    AccessCopy.NoProfileApps)
             } catch (_: SecurityException) {
-                FavoritesState.Unavailable("Android restricted access to the apps in this profile.")
+                FavoritesState.Unavailable(AccessCopy.ProfileAppsRestricted)
             }
         }
     }

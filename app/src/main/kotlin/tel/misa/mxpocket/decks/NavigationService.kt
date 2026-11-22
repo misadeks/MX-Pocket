@@ -6,6 +6,7 @@ import android.view.View
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo as Node
 import tel.misa.mxpocket.isUnlockedAndInteractive
+import tel.misa.mxpocket.i18n.KeypadCopy as K
 
 /** No event subscriptions, gesture injection, text extraction, window enumeration or persistent node references. */
 class NavigationService : AccessibilityService() {
@@ -28,24 +29,24 @@ class NavigationService : AccessibilityService() {
         val mode = when (command) {
             DeckCommand.SHUTTER -> CameraMode.PHOTO
             DeckCommand.START_VIDEO, DeckCommand.STOP_VIDEO -> CameraMode.VIDEO
-            else -> return unavailable("Not a camera control.")
+            else -> return unavailable(K.CameraExpected.text())
         }
-        val target = viewfinder(mode)?.component ?: return unavailable("Choose a default phone camera first.")
+        val target = viewfinder(mode)?.component ?: return unavailable(K.ChooseCamera.text())
         val accepted = clickCameraControl(target.packageName, command, { rootInActiveWindow }) {
             authorized() && viewfinder(mode)?.component == target
         }
-        return if (accepted) ok("${command.label} requested. Check the camera.")
-        else unavailable("No matching ${command.label} control. Check the camera mode or use its on-screen button.")
+        return if (accepted) ok(K.CameraRequested.text(command.displayLabel))
+        else unavailable(K.NoCameraControl.text(command.displayLabel))
     }
     internal fun press(command: DeckCommand): DeckResult {
-        if (!isUnlockedAndInteractive()) return unavailable("Unlock the phone before navigating.")
+        if (!isUnlockedAndInteractive()) return unavailable(K.UnlockNavigation.text())
         val accepted = when (command) {
             DeckCommand.BACK -> performGlobalAction(GLOBAL_ACTION_BACK)
             DeckCommand.HOME -> performGlobalAction(GLOBAL_ACTION_HOME)
             DeckCommand.RECENTS -> performGlobalAction(GLOBAL_ACTION_RECENTS)
             else -> element(command)
         }
-        return if (accepted) ok("Requested ${command.label}.") else unavailable("This screen does not offer ${command.label}.")
+        return if (accepted) ok(K.RequestedControl.text(command.displayLabel)) else unavailable(K.NoScreenControl.text(command.displayLabel))
     }
     @Suppress("DEPRECATION")
     private fun element(command: DeckCommand): Boolean {

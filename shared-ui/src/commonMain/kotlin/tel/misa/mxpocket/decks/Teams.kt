@@ -4,6 +4,7 @@ import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.*
 import tel.misa.mxpocket.plugins.DeckGlyph
 import tel.misa.mxpocket.plugins.KeyTile
+import tel.misa.mxpocket.i18n.KeypadCopy as K
 import tel.misa.mxpocket.decks.DeckCommand as C
 
 const val TEAMS = "teams"
@@ -17,18 +18,18 @@ data class TeamsState(val installed: Boolean = false, val observed: Boolean = fa
     fun tile(command: C): KeyTile {
         val (label, footer) = when (command) {
             C.TEAMS_MIC -> when {
-                !joined || muted == null -> "Mic unavailable" to "Use Teams"
-                muted -> "Unmute mic" to "Mic muted"
-                else -> "Mute mic" to "Mic on"
+                !joined || muted == null -> K.MicUnavailable.text() to K.UseTeams.text()
+                muted -> K.UnmuteMic.text() to K.MicMuted.text()
+                else -> K.MuteMic.text() to K.MicOn.text()
             }
-            C.TEAMS_STATUS -> "Call status" to when {
-                joined -> "In call"
-                observed -> "No confirmed call"
-                else -> "State unavailable"
-            }
-            C.TEAMS_ACCESS -> command.label to if (setupAvailable) "On phone" else "Open MX Pocket"
-            C.TEAMS_OPEN -> command.label to if (installed) "This phone" else "Not installed"
-            else -> command.label to "Use Teams"
+            C.TEAMS_STATUS -> command.displayLabel to when {
+                joined -> K.InCall
+                observed -> K.NoConfirmedCall
+                else -> K.StateUnavailable
+            }.text()
+            C.TEAMS_ACCESS -> command.displayLabel to (if (setupAvailable) K.OnPhone else K.OpenPocket).text()
+            C.TEAMS_OPEN -> command.displayLabel to (if (installed) K.ThisPhone else K.NotInstalled).text()
+            else -> command.displayLabel to K.UseTeams.text()
         }
         val available = when (command) {
             C.TEAMS_OPEN -> installed

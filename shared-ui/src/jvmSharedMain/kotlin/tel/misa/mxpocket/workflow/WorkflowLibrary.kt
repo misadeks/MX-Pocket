@@ -3,6 +3,7 @@ package tel.misa.mxpocket.workflow
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
+import tel.misa.mxpocket.i18n.WorkflowCopy
 
 /** Version 1 on-disk format used by the Android and desktop host adapters. */
 @Serializable
@@ -20,7 +21,7 @@ data class WorkflowLibrary(
     ): String? {
         validateWorkflow(draft, definitions, endpoints, actions)?.let { return it }
         val new = definitions.none { it.id == draft.id }
-        if (new && definitions.size >= MAX_DEFINITIONS) return "The library is full."
+        if (new && definitions.size >= MAX_DEFINITIONS) return WorkflowCopy.LibraryFull.text()
         return persist(copy(definitions = if (new) definitions + draft
             else definitions.map { if (it.id == draft.id) draft else it }))
     }
@@ -28,7 +29,7 @@ data class WorkflowLibrary(
     suspend fun deleteDefinition(id: String, persist: suspend (WorkflowLibrary) -> String?): String? {
         fun uses(step: WorkflowStep): Boolean = (step.kind == StepKind.CALL && step.target == id) ||
             step.yes.any(::uses) || step.no.any(::uses)
-        if (definitions.any { it.id != id && it.steps.any(::uses) }) return "Another workflow uses this one."
+        if (definitions.any { it.id != id && it.steps.any(::uses) }) return WorkflowCopy.InUse.text()
         return persist(copy(definitions = definitions.filterNot { it.id == id }))
     }
 

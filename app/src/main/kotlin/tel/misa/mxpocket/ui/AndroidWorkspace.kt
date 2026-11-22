@@ -9,8 +9,12 @@ import tel.misa.mxpocket.PocketSession
 import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.DeckActions
 import tel.misa.mxpocket.deck.asEditorStore
+import tel.misa.mxpocket.i18n.LayoutCopy
+import tel.misa.mxpocket.i18n.displayName
 import tel.misa.mxpocket.platformBindings
 import tel.misa.mxpocket.pluginDetails
+import tel.misa.mxpocket.plugins.displayName
+import tel.misa.mxpocket.plugins.displayTitle
 import tel.misa.mxpocket.shared.ui.*
 import tel.misa.mxpocket.workflow.WorkflowScreen
 
@@ -26,17 +30,17 @@ internal fun AndroidWorkspace(
     val disabled by session.disabledPlugins.collectAsStateWithLifecycle()
     val detection by session.detectForegroundApps.collectAsStateWithLifecycle()
     val plugins = session.plugins.descriptors.map { plugin ->
-        PluginItem(plugin.id, plugin.title, plugin.id !in disabled,
-            plugin.capabilities.joinToString { it.name.lowercase().replace('_', ' ') }, session.pluginDetails(plugin.id),
+        PluginItem(plugin.id, plugin.displayTitle(), plugin.id !in disabled,
+            plugin.capabilities.joinToString { it.displayName() }, session.pluginDetails(plugin.id),
             deck.profiles.any { it.id == plugin.id }, deck.defaultProfileId == plugin.id, session.pluginSettings(plugin.id)?.first)
     }
     PocketWorkspace(tab, select, state, plugins, event, editor = {
         val options = buildList {
-            add(BindingOption("Back", ActionCall(DeckActions.BACK)))
-            add(BindingOption("Return to root", ActionCall(DeckActions.ROOT)))
-            deck.profiles.forEach { add(BindingOption("Profile: ${it.name}", ActionCall(DeckActions.PROFILE, mapOf("profileId" to it.id)))) }
-            flows.forEach { add(BindingOption("Workflow: ${it.name}", ActionCall("workflow.run", mapOf("workflowId" to it.id)))) }
-            add(BindingOption("Play a sound", ActionCall("sound.play")))
+            add(BindingOption(LayoutCopy.Back.text(), ActionCall(DeckActions.BACK)))
+            add(BindingOption(LayoutCopy.Root.text(), ActionCall(DeckActions.ROOT)))
+            deck.profiles.forEach { add(BindingOption(LayoutCopy.BindProfile.text(it.displayName()), ActionCall(DeckActions.PROFILE, mapOf("profileId" to it.id)))) }
+            flows.forEach { add(BindingOption(LayoutCopy.BindWorkflow.text(it.name), ActionCall("workflow.run", mapOf("workflowId" to it.id)))) }
+            add(BindingOption(LayoutCopy.PlaySound.text(), ActionCall("sound.play")))
             addAll(factoryKeyBindings)
             session.platformBindings().forEach { (label, call) -> add(BindingOption(label, call)) }
         }

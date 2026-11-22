@@ -12,12 +12,15 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import tel.misa.mxpocket.i18n.AccessCopy
+import tel.misa.mxpocket.i18n.Copy
 
-enum class DeckAccess(val title: String, val disclosure: String) {
-    Media("Media session access",
-        "Android grants broad notification access. The Audio service only queries active media sessions; it does not read, store or act on notifications. With Audio selected, the connected, authorized keypad shows track titles and local cover art even when the phone is locked. Switch profiles or revoke access to stop showing them. Basic media keys and volume work without access."),
-    Navigation("Navigation access",
-        "The MX Pocket navigation accessibility service can inspect the current window and act across apps. On a key press it can go Back or Home, open Recents, scroll, move focus or activate an item. With a separate Studio opt-in it can press a labeled camera button. It does not read or store screen text, record keys or automate gestures. Without access, navigation stays inside MX Pocket.")
+enum class DeckAccess(private val titleCopy: Copy, private val disclosureCopy: Copy) {
+    Media(AccessCopy.MediaAccess, AccessCopy.MediaDisclosure),
+    Navigation(AccessCopy.NavigationAccess, AccessCopy.NavigationDisclosure);
+
+    val title get() = titleCopy.text()
+    val disclosure get() = disclosureCopy.text()
 }
 
 data class TeamsSetupState(val enabled: Boolean, val notifications: Boolean, val toolbar: Boolean,
@@ -26,32 +29,28 @@ enum class TeamsSetupAction { TOGGLE, NOTIFICATIONS, TOOLBAR, DONE }
 
 @Composable
 fun TeamsSetupScreen(state: TeamsSetupState, onAction: (TeamsSetupAction) -> Unit) {
-    SubsidiaryPage("Teams call controls", { onAction(TeamsSetupAction.DONE) }) {
+    SubsidiaryPage(AccessCopy.TeamsControls.text(), { onAction(TeamsSetupAction.DONE) }) {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Show In call when you join on this phone. Leaving returns to your previous page unless you chose another. Opening a page never operates a call control.")
-            Text("Android grants broad notification and accessibility access. MX Pocket checks the Teams call notification type and visible Mic and Hang up buttons. Only a center key press on the physical keypad can operate the meeting mic. No chat text, names or call details are saved.")
-            if (!state.supported) Text("Automatic switching needs Android 14 or later and a single Android profile. You can still use Work and open Call tools manually.")
+            Text(AccessCopy.TeamsSwitching.text())
+            Text(AccessCopy.TeamsDisclosure.text())
+            if (!state.supported) Text(AccessCopy.TeamsUnsupported.text())
             OutlinedButton({ onAction(TeamsSetupAction.TOGGLE) }, enabled = state.supported || state.enabled) {
-                Text(if (state.enabled) "Turn off Teams call switching" else "Enable Teams call switching")
+                Text(if (state.enabled) AccessCopy.DisableTeams.text() else AccessCopy.EnableTeams.text())
             }
-            Text("In Notification access, select MX Pocket Teams calls. Audio access is separate.")
+            Text(AccessCopy.TeamsNotificationInstructions.text())
             OutlinedButton({ onAction(TeamsSetupAction.NOTIFICATIONS) }) {
-                Text("Notification access: ${if (state.notifications) "on" else "off"}")
+                Text(if (state.notifications) AccessCopy.NotificationAccessOn.text() else AccessCopy.NotificationAccessOff.text())
             }
-            Text("In Accessibility, select MX Pocket Teams call controls. Both grants are optional. Revoke either here or turn off switching above.")
+            Text(AccessCopy.TeamsToolbarInstructions.text())
             OutlinedButton({ onAction(TeamsSetupAction.TOOLBAR) }) {
-                Text("Accessibility service: ${if (state.toolbar) "connected" else "off"}")
+                Text(if (state.toolbar) AccessCopy.AccessibilityConnected.text() else AccessCopy.AccessibilityOff.text())
             }
             SubsidiaryStatus(state.message)
         }
     }
 }
 
-const val CameraControlsDisclosure = "Open Camera and Open Video only open your phone's viewfinder; MX Pocket needs no camera permission. " +
-    "Optional keypad controls use the MX Pocket navigation accessibility service. On a physical Studio Shutter, Record or Stop press, " +
-    "MX Pocket checks the active window for the default camera and clicks a matching labeled camera button. " +
-    "It does not monitor the viewfinder, save screen content, or check whether a capture succeeded. " +
-    "Keep this off to use the camera's own controls."
+val CameraControlsDisclosure get() = AccessCopy.CameraDisclosure.text()
 
 @Composable
 internal fun SubsidiaryPage(title: String, onDone: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
@@ -67,7 +66,7 @@ private fun SubsidiaryColumn(title: String, onDone: () -> Unit, content: @Compos
         Column(Modifier.fillMaxWidth().weight(1f), content = content)
         HorizontalDivider()
         TextButton(onClick = onDone, modifier = Modifier.align(Alignment.End).padding(vertical = 4.dp)) {
-            Text("Done")
+            Text(AccessCopy.Done.text())
         }
     }
 }
@@ -85,10 +84,10 @@ fun DeckAccessScreen(access: DeckAccess, message: String, onOpenSettings: (() ->
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (onOpenSettings != null) {
                 Text(access.disclosure)
-                Text("Access is optional. You can turn it off in the same settings at any time.",
+                Text(AccessCopy.OptionalAccess.text(),
                     style = MaterialTheme.typography.bodyMedium)
-                OutlinedButton(onClick = onOpenSettings) { Text("Open Android settings") }
-            } else Text("This Android access setting is not available on this platform.")
+                OutlinedButton(onClick = onOpenSettings) { Text(AccessCopy.OpenAndroidSettings.text()) }
+            } else Text(AccessCopy.NoAndroidSettings.text())
             SubsidiaryStatus(message)
         }
     }
@@ -96,7 +95,7 @@ fun DeckAccessScreen(access: DeckAccess, message: String, onOpenSettings: (() ->
 
 @Composable
 fun PhoneActionResultScreen(message: String, onDone: () -> Unit) {
-    SubsidiaryPage("Keypad app shortcuts", onDone) {
+    SubsidiaryPage(AccessCopy.PhoneShortcuts.text(), onDone) {
         Column(Modifier.verticalScroll(rememberScrollState())) { SubsidiaryStatus(message) }
     }
 }
@@ -105,14 +104,14 @@ fun PhoneActionResultScreen(message: String, onDone: () -> Unit) {
 @Composable
 fun DirectShortcutConsentDialog(hasOverlayAccess: Boolean, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(onDismissRequest = onDismiss,
-        title = { Text("Open apps directly from keypad") },
+        title = { Text(AccessCopy.DirectTitle.text()) },
         text = {
             Text(DirectShortcutDisclosure, Modifier.verticalScroll(rememberScrollState()))
         },
         confirmButton = { TextButton(onClick = onConfirm) {
-            Text(if (hasOverlayAccess) "Enable shortcuts" else "Open Android settings")
+            Text(if (hasOverlayAccess) AccessCopy.EnableShortcuts.text() else AccessCopy.OpenAndroidSettings.text())
         } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
+        dismissButton = { TextButton(onClick = onDismiss) { Text(AccessCopy.Cancel.text()) } })
 }
 
-const val DirectShortcutDisclosure = "On an unlocked phone, each physical keypad press can open a saved favorite, a Phone shortcut, or a camera viewfinder without a notification tap. Opening the viewfinder does not take a photo or record. Android requires “Display over other apps”, which also allows drawing over other apps. MX Pocket does not draw overlays. Leave this off to use notifications, or revoke access in Android settings at any time."
+val DirectShortcutDisclosure get() = AccessCopy.DirectDisclosure.text()

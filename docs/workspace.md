@@ -7,8 +7,13 @@ or why it failed. Home previews the selected layout offline and mirrors all nine
 LCD keys live when connected. Press keys on the device, not on the phone.
 Choose **System**, **Light** or **Dark** in **Settings > Appearance**. The
 choice is remembered; System follows your device's current theme.
+**Settings > Language** follows the system by default. Choose **English**,
+**Français** or **Srpski (latinica)** to override it. Android 13 and newer
+also expose this choice in the system's per-app language settings. The Windows
+simulator remembers its own choice. Changing language does not rename your
+layouts, workflows or key labels, or change exported files.
 **Plugins** turns features on or off, **Flows** lets you build and run workflows,
-and **Settings** contains USB preferences, background images, repaint and diagnostics.
+and **Settings** contains connection preferences and diagnostics.
 
 **Profiles** switches and edits profiles. Swipe the endless profile carousel
 (or tap a card) to put that profile on the keypad; the cards beside the
