@@ -97,7 +97,6 @@ class SetupActivity : ComponentActivity() {
             SetupEvent.Edit -> { reviewing = false; message = "" }
             is SetupEvent.Act -> perform(event.action)
             SetupEvent.Cancel, SetupEvent.Finish -> finish()
-            SetupEvent.TryVirtual -> { setResult(TRY_VIRTUAL); finish() }
         }
     }
 
@@ -153,7 +152,6 @@ class SetupActivity : ComponentActivity() {
     }
 
     companion object {
-        internal const val TRY_VIRTUAL = RESULT_FIRST_USER
         internal fun intent(context: Context, firstRun: Boolean) =
             Intent(context, SetupActivity::class.java).putExtra("firstRun", firstRun)
     }

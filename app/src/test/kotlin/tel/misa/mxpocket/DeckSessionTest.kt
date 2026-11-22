@@ -2,7 +2,6 @@ package tel.misa.mxpocket
 
 import android.os.Looper
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -22,15 +21,12 @@ import tel.misa.mxpocket.workflow.WorkflowStep
 import tel.misa.mxpocket.workflow.StepKind
 import java.time.Duration
 import android.graphics.Bitmap
-import android.hardware.usb.UsbDevice
-import android.hardware.usb.UsbManager
-import org.robolectric.util.ReflectionHelpers
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35])
+@Config(sdk = [35], application = KeypadSessionTest.FakeApp::class)
 @LooperMode(LooperMode.Mode.PAUSED)
 class DeckSessionTest {
-    private val app get() = RuntimeEnvironment.getApplication() as PocketApplication
+    private val app get() = RuntimeEnvironment.getApplication() as KeypadSessionTest.FakeApp
     private val main get() = shadowOf(Looper.getMainLooper())
     private val screen = object : PocketSession.Screen {
         override fun render() {}
@@ -49,21 +45,19 @@ class DeckSessionTest {
         val stream = android.media.AudioManager.STREAM_MUSIC
         audio.setStreamVolume(stream, 4, 0)
         fun verifyLoaded(active: PocketSession, expectedVolume: Int) {
-            active.startPreview()
-            main.idle()
+            app.connectKeypad(active)
             assertEquals("audio",active.plugins.selectedId)
             assertEquals("audio",active.signals.value["plugin"])
             assertTrue(active.frame().keys[0].enabled)
             assertFalse(active.frame().keys[1].enabled)
-            assertTrue(active.phoneKey(0))
-            main.idle()
+            app.press(1)
             assertEquals(expectedVolume, audio.getStreamVolume(stream))
             active.disconnect()
             active.detach(screen)
         }
         verifyLoaded(session, 3)
         repo.save().getOrThrow()
-        val reloaded = PocketSession(app)
+        val reloaded = app.createSession()
         reloaded.attach(screen)
         assertEquals(PROFILE_HOME, reloaded.deck.operatingState.value.activeProfileId)
         reloaded.openProfile("studio")
@@ -71,13 +65,13 @@ class DeckSessionTest {
         // Explicit v2 actions are not positional plugin bindings.
         reloaded.deck.setKey("studio","root",0,DeckKey(action = ActionCall("media.volume-down"))).getOrThrow()
         reloaded.attach(screen)
-        reloaded.startPreview(); main.idle()
+        app.connectKeypad(reloaded)
         assertEquals("studio", reloaded.signals.value["plugin"])
         assertFalse(reloaded.runDeckAction("media.volume-down", mapOf("unexpected" to "x")).success)
         reloaded.disconnect(); reloaded.detach(screen)
     }
 
-    @Test fun simulatorRunsSavedPagesAndWorkflowAndReconnectsWithoutLosingLocation() {
+    @Test fun physicalKeypadRunsSavedWorkflowAfterReconnectingOnTheSamePage() {
         val session = app.session
         val repo = session.deck
         val id = repo.createProfile("Desk").getOrThrow()
@@ -87,16 +81,17 @@ class DeckSessionTest {
         repo.setKey(id,child,1,DeckKey(label = "Test",action = ActionCall("workflow.run",mapOf("workflowId" to "keypad-check")))).getOrThrow()
         session.attach(screen)
         session.selectProfile(id)
-        session.startPreview()
-        assertTrue(session.phoneKey(0))
+        app.connectKeypad()
+        app.press(1)
         assertEquals(child, repo.state.value.activePage.id)
         session.disconnect()
-        assertFalse(session.phoneKey(1))
-        session.startPreview()
+        app.press(2) // The old USB callback cannot start a workflow after disconnect.
+        assertNull(session.workflows.status.value)
+        app.connectKeypad()
         assertEquals("Test",session.frame().keys[1].label)
-        assertTrue(session.phoneKey(1))
-        main.idle()
+        app.press(2)
         assertEquals(WorkflowPhase.RUNNING,session.workflows.status.value?.phase)
+        assertEquals(WorkflowOrigin.PHYSICAL,session.workflows.status.value?.origin)
         assertTrue(session.frame().keys[1].footer.contains("running"))
         main.idleFor(Duration.ofSeconds(3))
         assertEquals(WorkflowPhase.SUCCESS,session.workflows.status.value?.phase)
@@ -126,11 +121,7 @@ class DeckSessionTest {
         val key = DeckKey(label = "Go",action = ActionCall("page.root"))
         layout.setKey(id,"root",0,key).getOrThrow()
         session.selectProfile(id)
-        val device = ReflectionHelpers.newInstance(UsbDevice::class.java)
-        ReflectionHelpers.setField(device,"mName","simulated")
-        val ticket = session.reserve(device)!!
-        session.connect(ticket,app.getSystemService(UsbManager::class.java),device,{}, { error("Unexpected shortcut") })
-        main.idle()
+        app.connectKeypad(session)
         assertEquals(9,writes)
         // Transmit a changed tile, then change the binding while that transaction is waiting.
         layout.setKey(id,"root",1,key.copy(label = "Root")).getOrThrow()
@@ -157,11 +148,8 @@ class DeckSessionTest {
                 override suspend fun setKeyImage(index: Int, bitmap: Bitmap) {}
             }
         }
-        val device = ReflectionHelpers.newInstance(UsbDevice::class.java)
-        ReflectionHelpers.setField(device,"mName","simulated")
         session.selectProfile("focus")
-        session.connect(session.reserve(device)!!,app.getSystemService(UsbManager::class.java),device,{}, { error("Unexpected shortcut") })
-        main.idle()
+        app.connectKeypad(session)
         emit(KeyEvent(1,true))
         main.idle()
         assertEquals("Pause",session.frame().keys[0].label)

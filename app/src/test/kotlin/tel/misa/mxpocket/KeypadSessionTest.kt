@@ -58,6 +58,14 @@ import tel.misa.mxpocket.workflow.WorkflowDefinition
 import tel.misa.mxpocket.workflow.WorkflowPhase
 import tel.misa.mxpocket.workflow.WorkflowStep
 
+private fun device(name: String, product: Int = 0xc354) =
+    ReflectionHelpers.newInstance(UsbDevice::class.java).also {
+        ReflectionHelpers.setField(it, "mName", name)
+        ReflectionHelpers.setField(it, "mVendorId", 0x046d)
+        ReflectionHelpers.setField(it, "mProductId", product)
+        ReflectionHelpers.setField(it, "mConfigurations", emptyArray<UsbConfiguration>())
+    }
+
 @RunWith(org.robolectric.RobolectricTestRunner::class)
 @Config(sdk = [28, 35], application = KeypadSessionTest.FakeApp::class, shadows = [KeypadSessionTest.ConsentUsb::class])
 @LooperMode(LooperMode.Mode.PAUSED)
@@ -66,13 +74,30 @@ class KeypadSessionTest {
         var claims = 0
         var closes = 0
         lateinit var emit: (KeyEvent) -> Unit
+        val lcd = mutableMapOf<Int, Bitmap>()
         override fun createSession() = PocketSession(this) { _, _, event, _, _ ->
             emit = event
             claims++
+            lcd.clear()
             object : KeypadOutput {
-                override fun close() { closes++ }
-                override suspend fun setKeyImage(index: Int, bitmap: Bitmap) {}
+                override fun close() { closes++; lcd.clear() }
+                override suspend fun setKeyImage(index: Int, bitmap: Bitmap) { lcd[index] = bitmap }
             }
+        }
+
+        internal fun connectKeypad(active: PocketSession = session) {
+            val usb = getSystemService(UsbManager::class.java)
+            val keypad = device("test-keypad")
+            shadowOf(usb).addOrUpdateUsbDevice(keypad, true)
+            active.connect(checkNotNull(active.reserve(keypad)), usb, keypad, {}, { error("Unexpected shortcut") })
+            shadowOf(Looper.getMainLooper()).idle() // Complete the initial LCD writes before sending a down.
+            check(active.ready) { active.status }
+        }
+
+        fun press(controlId: Int) {
+            emit(KeyEvent(controlId, true))
+            emit(KeyEvent(controlId, false))
+            shadowOf(Looper.getMainLooper()).idle()
         }
     }
     @Implements(UsbManager::class)
@@ -94,13 +119,6 @@ class KeypadSessionTest {
         if (Build.VERSION.SDK_INT >= 33) shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
     }
 
-    private fun device(name: String, product: Int = 0xc354) =
-        ReflectionHelpers.newInstance(UsbDevice::class.java).also {
-            ReflectionHelpers.setField(it, "mName", name)
-            ReflectionHelpers.setField(it, "mVendorId", 0x046d)
-            ReflectionHelpers.setField(it, "mProductId", product)
-            ReflectionHelpers.setField(it, "mConfigurations", emptyArray<UsbConfiguration>())
-        }
     private fun attached(device: UsbDevice) = Intent(UsbManager.ACTION_USB_DEVICE_ATTACHED)
         .putExtra(UsbManager.EXTRA_DEVICE, device)
     private fun deliver(intent: Intent) {
@@ -184,22 +202,27 @@ class KeypadSessionTest {
         session.disconnect(); service.destroy(); media.release()
     }
 
-    @Test fun simulatedMediaKeyCannotUseTheScreenOffException() {
+    @Test fun disconnectedMediaActionCannotUseTheScreenOffException() {
         val session = app.session
         val audio = app.getSystemService(AudioManager::class.java)
         Robolectric.buildActivity(MainActivity::class.java).setup().use {
-            session.startPreview(); session.selectProfile("audio")
+            session.selectProfile("audio")
             audio.setStreamVolume(AudioManager.STREAM_MUSIC,3,0)
             val before = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
             shadowOf(app.getSystemService(PowerManager::class.java)).setIsInteractive(false)
-            assertTrue(session.phoneKey(2))
+            assertFalse(session.runDeckAction(DeckCommand.LOUDER.id).success)
             assertEquals(before,audio.getStreamVolume(AudioManager.STREAM_MUSIC))
         }
-        session.disconnect()
     }
 
     @Test fun manualPermissionCanBeDeniedRetriedAndCompletedAfterRecreationWithOptInOff() {
         val real = device("test-keypad")
+        val session = app.session
+        fun assertDisconnected() {
+            assertFalse(session.ready)
+            assertEquals("Disconnected", session.connectionLabel)
+            assertNull(session.request)
+        }
         shadowOf(usb).addOrUpdateUsbDevice(real, false)
         assertFalse(access.automatic)
         Robolectric.buildActivity(MainActivity::class.java).setup().use { controller ->
@@ -208,7 +231,8 @@ class KeypadSessionTest {
             (shadowOf(usb) as ConsentUsb).reply.send()
             main.idle()
             assertNull(shadowOf(app).nextStartedService)
-            assertTrue(app.session.status.contains("denied"))
+            assertTrue(session.status.contains("denied"))
+            assertDisconnected()
             click()
             val grant = (shadowOf(usb) as ConsentUsb).reply
             controller.recreate()
@@ -223,10 +247,11 @@ class KeypadSessionTest {
             controller.pause().stop()
             assertEquals(1, app.claims)
             assertEquals(0, app.closes)
+            assertTrue(session.ready)
             shadowOf(usb).removeUsbDevice(real)
             app.sendBroadcast(Intent(UsbManager.ACTION_USB_DEVICE_DETACHED).putExtra(UsbManager.EXTRA_DEVICE, real))
             main.idle()
-            assertNull(app.session.request)
+            assertDisconnected()
             assertEquals(1, app.closes)
             assertTrue(shadowOf(service.get()).isStoppedBySelf)
             service.destroy()
@@ -341,21 +366,10 @@ class KeypadSessionTest {
         controller.destroy()
     }
 
-    private fun connectPageControls() {
-        val real = device("test-keypad")
-        val session = app.session
-        session.connect(session.reserve(real)!!, usb, real, {}, { error("Unexpected shortcut") })
-        main.idle()
-    }
-
-    private fun press(control: Int) {
-        app.emit(KeyEvent(control, true))
-        app.emit(KeyEvent(control, false))
-        main.idle()
-    }
+    private fun press(control: Int) = app.press(control)
 
     @Test fun physicalPageButtonsBrowseRootsAndConsumeTheGameChordInEitherOrder() {
-        connectPageControls()
+        app.connectKeypad()
         val session = app.session
         val repo = session.deck
         fun expectProfile(id: String) {
@@ -393,7 +407,7 @@ class KeypadSessionTest {
         val state = repo.state.value
         repo.importJson(DeckJson.encode(state.copy(profiles = state.profiles.reversed()))).getOrThrow()
         repo.setPinned("focus").getOrThrow()
-        connectPageControls()
+        app.connectKeypad()
         press(0x01a2) // From Focus wrap to Home, then the first imported profile.
         press(0x01a2)
         assertEquals(desk, repo.state.value.activeProfileId)
@@ -782,7 +796,6 @@ class KeypadSessionTest {
 
             val call = ActionCall("launcher.open", mapOf("component" to first.flattenToString()))
             assertFalse(kotlinx.coroutines.runBlocking { session.actions.dispatch(call) }.success)
-            assertFalse(session.phoneKey(0))
             app.emit(KeyEvent(1, true, synthetic = true)); app.emit(KeyEvent(1, false, synthetic = true))
             main.idle()
             app.emit(KeyEvent(1, true)); app.emit(KeyEvent(1, false))

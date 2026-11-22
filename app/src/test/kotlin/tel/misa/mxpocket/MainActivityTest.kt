@@ -2,23 +2,24 @@ package tel.misa.mxpocket
 
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
-import androidx.compose.ui.semantics.SemanticsActions
+import android.content.Intent
+import android.os.Bundle
 import androidx.test.core.app.ActivityScenario
 import androidx.lifecycle.Lifecycle
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertEquals
+import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
-import tel.misa.mxpocket.actions.ActionCall
-import tel.misa.mxpocket.deck.DeckActions
 import tel.misa.mxpocket.shared.ui.PocketScreenEvent
 import tel.misa.mxpocket.shared.ui.virtualGrid
+import tel.misa.mxpocket.ui.ThemePreference
+import tel.misa.mxpocket.shared.ui.ThemeMode
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28, 35], qualifiers = "w400dp-h800dp")
@@ -31,27 +32,27 @@ class MainActivityTest {
     @Test fun startsWithoutUsbDeviceAndConnectReportsMissingHardware() {
         ActivityScenario.launch(MainActivity::class.java).use {
             assertEquals("tel.misa.mxpocket", app.packageName)
-            ui.onNodeWithText("Connect keypad").performClick()
+            ui.onNodeWithContentDescription("Connect to device").performClick()
             ui.onNodeWithText("No MX Creative Keypad", substring = true).assertExists()
+            ui.onNodeWithText("Not connected").assertExists()
         }
     }
-    @Test fun previewRunsTimerAndChangesPageWithoutClaimingUsbSuccess() {
+    @Test fun disconnectedHomeCanBrowseLayoutsButNotRunKeys() {
         ActivityScenario.launch(MainActivity::class.java).use {
-            // The virtual keypad is started from Settings; Home only shows and operates the keypad.
             ui.onNodeWithText("Connect virtual keypad").assertDoesNotExist()
             ui.onNodeWithText("Settings").performClick()
-            ui.onNodeWithText("Connect virtual keypad").performScrollTo().performClick()
+            ui.onNodeWithText("Connect keypad").assertExists()
+            ui.onNodeWithText("Connect virtual keypad").assertDoesNotExist()
+            ui.onNodeWithText("Disconnect virtual keypad").assertDoesNotExist()
             ui.onNodeWithText("Home").performClick()
             ui.onNodeWithText("Focus").performClick()
-            ui.onNodeWithContentDescription("Key 1, Start", substring = true).performClick()
-            ui.onNodeWithContentDescription("Key 1, Pause", substring = true).assertExists()
+            ui.onNodeWithContentDescription("Key 1, Start", substring = true).assertHasNoClickAction()
             ui.onNodeWithContentDescription("Next page").performScrollTo().performClick()
             assertEquals("audio", app.session.deck.state.value.activeProfileId)
             ui.onNodeWithContentDescription("Play/Pause").assertExists()
             ui.onNodeWithContentDescription("Next page").performScrollTo().performClick()
-            ui.onNodeWithContentDescription("Key 1, Camera", substring = true).assertExists()
-            ui.onNodeWithText("No USB messages are sent", substring = true).assertExists()
-            ui.onNodeWithText("Nine LCD image uploads acknowledged", substring = true).assertDoesNotExist()
+            ui.onNodeWithContentDescription("Key 1, Camera", substring = true).assertHasNoClickAction()
+            assertFalse(app.session.ready)
         }
     }
     @Test fun backgroundLifecycleNeverStartsServiceForAnIdleScreen() {
@@ -63,31 +64,36 @@ class MainActivityTest {
         }
     }
 
-    @Test fun holdOnlyKeyRequiresTheSameLiveVirtualBoard() {
+    @Test fun homeConnectionDoesNotChangeTheSavedAppearance() {
+        ThemePreference.set(app, ThemeMode.DARK)
         ActivityScenario.launch(MainActivity::class.java).use { scene ->
-            val session = app.session
-            val deck = session.deck
-            val key = deck.state.value.activePage.keys.first().copy(label = "Open Audio", action = null,
-                holdAction = ActionCall(DeckActions.PROFILE, mapOf(DeckActions.PROFILE_ID to "audio")))
-            scene.onActivity { deck.setKey("focus", "root", 0, key).getOrThrow() }
+            ui.onNodeWithContentDescription("Connect to device").performClick()
             ui.onNodeWithText("Settings").performClick()
-            ui.onNodeWithText("Connect virtual keypad").performScrollTo().performClick()
-            ui.onNodeWithText("Home").performClick()
-            ui.onNodeWithText("Focus").performClick()
-            val slot = ui.onNodeWithContentDescription("Key 1, Open Audio", substring = true)
-            slot.performClick()
-            assertEquals("focus", deck.state.value.activeProfileId)
-            scene.onActivity { activity ->
-                val stale = PocketScreenEvent.VirtualKey(0, virtualGrid(session.inputGeneration, deck.state.value,
-                    session.frame(), session.frame(hold = true)), hold = true)
-                session.disconnect()
-                activity.handleScreenEvent(stale)
-                session.startPreview()
-                activity.handleScreenEvent(stale)
-                assertEquals("focus", deck.state.value.activeProfileId)
-            }
-            slot.performSemanticsAction(SemanticsActions.OnLongClick)
-            assertEquals("audio", deck.state.value.activeProfileId)
+            ui.onNodeWithText("Dark").assertIsSelected()
+            ui.onNodeWithText("System").performScrollTo().performClick()
+            scene.recreate()
+            ui.onNodeWithText("System").assertIsSelected()
+            assertEquals("SYSTEM", app.getSharedPreferences("appearance", 0).getString("theme", null))
+        }
+    }
+
+    @Test fun staleLaunchAndRestoredAttemptCannotConnectOrDispatchDesktopInput() {
+        val intent = Intent(app, MainActivity::class.java).setAction("PREVIEW").putExtra("preview", true)
+        val stale = Bundle().apply {
+            putString("tab", "PREVIEW")
+            putString("target", "absent-keypad")
+            putBoolean("notificationPrompt", true)
+        }
+        Robolectric.buildActivity(MainActivity::class.java, intent).create(stale).start().resume().visible().use {
+            val session = app.session
+            it.newIntent(intent)
+            it.get().handleScreenEvent(PocketScreenEvent.EnterPreview)
+            it.get().handleScreenEvent(PocketScreenEvent.VirtualKey(0, virtualGrid(0, session.deck.state.value, session.frame(), null)))
+            ui.onNodeWithContentDescription("Connect to device").assertExists()
+            ui.onNodeWithContentDescription("Key 1, Focus", substring = true).assertHasNoClickAction()
+            assertFalse(session.ready)
+            assertNull(session.request)
+            assertNull(shadowOf(app).nextStartedService)
         }
     }
 }

@@ -246,17 +246,18 @@ class ChordSessionTest {
         assertEquals(listOf("0+", "0-"), events)
         assertEquals(0, launches)
         effect = PluginAction.Deck(DeckCommand.SHUTTER)
-        session.phoneKey(3, hold = true)
+        events.clear()
+        event(4, true); main.idleFor(Duration.ofMillis(holdDelay)); event(4, false)
+        assertEquals(listOf("0+", "0-"), events)
         assertEquals(0, captures)
     }
 
-    @Test fun aVirtualHoldCannotStartAPhysicalOnlyWorkflowButAuthorizedPhysicalHoldCan() {
+    @Test fun physicalOnlyWorkflowRequiresTheConfiguredHoldInsteadOfATap() {
         val flow = session.workflows.definitions.value.first { it.id == "keypad-check" }
         assertNull(runBlocking { session.workflows.save(flow.copy(trigger = WorkflowTrigger(TriggerKind.PHYSICAL))) })
-        bindHold(3, ActionCall("workflow.run", mapOf("workflowId" to flow.id)))
-        session.phoneKey(3, hold = true)
+        bindHold(3, ActionCall("workflow.run", mapOf("workflowId" to flow.id)), tap = null)
+        event(4, true); event(4, false)
         assertNull(session.workflows.status.value)
-        main.idle() // The rejected virtual run paints failure feedback. Wait for its new LCD receipt.
         event(4, true); main.idleFor(Duration.ofMillis(holdDelay)); event(4, false)
         assertEquals(WorkflowOrigin.PHYSICAL, session.workflows.status.value?.origin)
         assertTrue(events.isEmpty())
@@ -380,22 +381,20 @@ class ChordSessionTest {
         assertEquals(listOf("0+", "0-"), events)
     }
 
-    @Test fun chordAndDeferredSingleCannotBorrowLaunchCaptureOrPhoneTapAuthority() {
+    @Test fun chordAndDeferredSingleCannotBorrowFreshDownLaunchOrCaptureAuthority() {
         effect = PluginAction.OpenApp(PhoneApp.CAMERA)
         report(1)
-        session.phoneKey(8) // Virtual tap is a separate ordinary foreground input, never a physical partner.
-        assertEquals(listOf("8+", "8-"), events)
         report(1, 9); report()
         report(1); waitWindow(); report()
-        assertEquals(listOf("8+", "8-", "0&8", "0+", "0-"), events)
-        assertEquals(1, launches)
+        assertEquals(listOf("0&8", "0+", "0-"), events)
+        assertEquals(0, launches)
         effect = PluginAction.Deck(DeckCommand.SHUTTER)
         report(1, 9); report(); report(1); report()
-        assertEquals("Press a key on the unlocked phone or connected keypad.", session.status)
+        assertEquals("Unlock the phone and press a key on the connected keypad.", session.status)
         assertEquals(0, captures)
         effect = PluginAction.OpenApp(PhoneApp.CAMERA)
         report(4); event(4, true); report()
-        assertEquals(2, launches) // Positive control: unconfigured fresh down works, repeat does not.
+        assertEquals(1, launches) // Positive control: unconfigured fresh down works, repeat does not.
     }
 
     @Config(shadows = [CameraWindowFixture::class])

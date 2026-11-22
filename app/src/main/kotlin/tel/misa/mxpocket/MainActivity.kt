@@ -41,8 +41,6 @@ import tel.misa.mxpocket.shared.ui.*
 import tel.misa.mxpocket.ui.AndroidWorkspace
 import tel.misa.mxpocket.ui.ThemePreference
 import tel.misa.mxpocket.deck.DeckLimits
-import tel.misa.mxpocket.deck.DeckState
-import tel.misa.mxpocket.plugins.PluginFrame
 import java.io.ByteArrayOutputStream
 
 class MainActivity : AppCompatActivity(), PocketSession.Screen {
@@ -178,13 +176,6 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
         }
     }
 
-    private val setup = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-        if (it.resultCode == SetupActivity.TRY_VIRTUAL && target == null && session.request == null) {
-            showTab(WorkspaceTab.HOME)
-            if (!session.preview) session.startPreview()
-        }
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         tab = savedInstanceState?.getString("tab")?.let { name -> WorkspaceTab.entries.find { it.name == name } } ?: WorkspaceTab.HOME
@@ -208,18 +199,18 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
         }, ContextCompat.RECEIVER_NOT_EXPORTED)
         if (savedInstanceState == null && intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY == 0) readAttach(intent)
-        if (savedInstanceState != null) {
-            target = savedInstanceState.getString("target")
+        savedInstanceState?.getString("target")?.let { name ->
+            target = name
             fromAttach = savedInstanceState.getBoolean("fromAttach")
             usbToken = savedInstanceState.getString("usbToken")
             waitingForNotifications = savedInstanceState.getBoolean("notificationPrompt")
         }
-        if (savedInstanceState == null && target == null && session.request == null && !session.preview &&
+        if (savedInstanceState == null && target == null && session.request == null &&
             SetupChoices(this).takeLauncherWelcome(intent)) openSetup(firstRun = true)
     }
 
     private fun openSetup(firstRun: Boolean) {
-        setup.launch(SetupActivity.intent(this, firstRun))
+        startActivity(SetupActivity.intent(this, firstRun))
     }
 
     private fun openUsageSettings(): String? =
@@ -300,7 +291,7 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
         val candidates = usb.deviceList.values.filter(UsbDiagnostics::isKeypad)
         if (candidates.size != 1) {
             session.message(if (candidates.isEmpty()) "No MX Creative Keypad (046D:C354). Check cable and USB host support."
-                else "Multiple keypads connected. Connect only one for this demo.")
+                else "Multiple keypads connected. Connect only one keypad.")
             refreshDiagnostics()
             return
         }
@@ -313,18 +304,20 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
         target = null
         usbToken = null
         fromAttach = false
+        waitingForNotifications = false
         session.message(message)
     }
 
     private fun advance() {
         val name = target ?: return
-        if (!resumed || waitingForNotifications) return
+        if (!resumed) return
         if (session.request != null) { target = null; usbToken = null; return }
         if (fromAttach && !access.automatic) { cancelAttempt(getString(R.string.not_connected)); return }
         if (getSystemService(KeyguardManager::class.java).isKeyguardLocked) {
             cancelAttempt("Unlock the phone and tap Connect."); return
         }
         val device = usb.keypad(name) ?: run { cancelAttempt("Keypad no longer available. Check the cable and tap Connect."); return }
+        if (waitingForNotifications) return
         if (!usb.hasPermission(device)) {
             if (fromAttach) { cancelAttempt("USB permission is required. Tap Connect."); return }
             if (usbToken != null) return
@@ -387,18 +380,8 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
                 direct.enabled = false
                 session.message("Direct shortcuts are off. You can revoke Display over other apps in Android settings.")
             } else shortcutDisclosure = true
-            PocketScreenEvent.EnterPreview -> {
-                target = null
-                usbToken = null
-                session.startPreview()
-            }
-            PocketScreenEvent.StopPreview -> session.disconnect("Virtual keypad disconnected. Reconnect to resume this layout.")
+            is PocketScreenEvent.DesktopInput -> return
             is PocketScreenEvent.SelectPlugin -> session.openProfile(event.id)
-            is PocketScreenEvent.VirtualKey -> if (resumed && !navigating && tab == WorkspaceTab.HOME &&
-                event.grid != null && event.grid == presentation?.virtualGrid) synchronized(session.deck) {
-                if (event.grid == homeGrid(session.deck.operatingState.value, session.frame()))
-                    session.phoneKey(event.index, hold = event.hold)
-            }
             is PocketScreenEvent.ChangePage -> session.changePage(event.delta)
             PocketScreenEvent.Repaint -> session.repaint()
             PocketScreenEvent.ChooseImage -> imagePicker.launch(arrayOf("image/*"))
@@ -423,21 +406,13 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             tiles = frame.keys.mapIndexed { i, key -> key.toGridTile(session.ready, session.keyImage(i, key).asImageBitmap()) },
             profiles = deck.visibleProfiles.map { ProfileChoice(it.id, it.name) },
             activeId = deck.activeProfileId, reason = deck.selectionReason,
-            simulating = session.preview,
             connectionLabel = session.connectionLabel,
             connectionActive = target != null || session.request != null,
-            usbReady = session.ready && !session.preview, activePageId = deck.activePage.id, hardwareSummary = !session.preview,
-            virtualGrid = homeGrid(deck, frame),
+            usbReady = session.ready, activePageId = deck.activePage.id,
             diagnostics = diagnostics, log = session.logText(60), automatic = access.automatic, directShortcuts = direct.enabled,
             themeMode = ThemePreference.current(this),
         )
         presentation = state
-    }
-
-    private fun homeGrid(deck: DeckState, frame: PluginFrame): VirtualGrid? {
-        if (!session.preview || !session.ready || session.request != null || target != null) return null
-        val holds = if (deck.activePage.keys.any { it.holdAction != null }) session.frame(hold = true) else null
-        return virtualGrid(session.inputGeneration, deck, frame, holds)
     }
 
     override fun openApp(app: PhoneApp): Boolean {

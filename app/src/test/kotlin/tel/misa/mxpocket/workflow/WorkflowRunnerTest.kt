@@ -44,7 +44,7 @@ class WorkflowRunnerTest {
                 WorkflowStep(StepKind.IF, test = WorkflowTest(TestKind.PREVIOUS, value = "false"),
                     yes = listOf(label("recovered")), no = listOf(label("wrong")))))
         val root = workflow(WorkflowStep(StepKind.CALL, target = child.id), branch)
-        WorkflowRunner(this, host, effects, history::add).start(root, WorkflowOrigin.VIRTUAL, listOf(root, child), emptyList())!!.join()
+        WorkflowRunner(this, host, effects, history::add).start(root, WorkflowOrigin.MANUAL, listOf(root, child), emptyList())!!.join()
         assertEquals(listOf("recovered"), seen)
         assertEquals(WorkflowPhase.FAILED, history.single().phase)
         assertFalse(history.single().toString().contains("private-address"))
@@ -69,7 +69,7 @@ class WorkflowRunnerTest {
         val job = runner.start(root, WorkflowOrigin.TEST, listOf(root), emptyList())!!
         runCurrent()
         assertEquals(WorkflowPhase.CONFIRMATION, runner.status.value!!.phase)
-        assertNull(runner.start(root, WorkflowOrigin.VIRTUAL, listOf(root), emptyList()))
+        assertNull(runner.start(root, WorkflowOrigin.MANUAL, listOf(root), emptyList()))
         runner.cancel(); job.join()
         assertEquals(WorkflowPhase.CANCELLED, history.last().phase)
         assertTrue(seen.isEmpty())

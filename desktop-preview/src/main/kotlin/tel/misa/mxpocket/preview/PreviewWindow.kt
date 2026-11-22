@@ -109,9 +109,8 @@ fun main() = application {
             deck.activeProfile.name else "${deck.activeProfile.name} / ${deck.activePage.name}",
             tiles = tiles, profiles = profiles, activeId = deck.activeProfileId, reason = deck.selectionReason,
             connectionLabel = if (simulating) "Virtual keypad" else "Disconnected", diagnostics = "No USB diagnostics: Windows has no HID adapter.",
-            log = history.joinToString("\n"), simulating = simulating, deviceLimit = DEVICE_LIMIT,
-            activePageId = deck.activePage.id, hardwareSummary = !simulating,
-            virtualGrid = board.grid.takeIf { simulating }, themeMode = themeMode)
+            log = history.joinToString("\n"), simulator = DesktopSimulator(DEVICE_LIMIT, board.grid.takeIf { simulating }),
+            activePageId = deck.activePage.id, themeMode = themeMode)
         val plugins = registry.map {
             PluginItem(it.id, it.name, it.id !in deck.disabledPluginIds, "Local simulation", when (it.id) {
                 "focus" -> "Timer and presets run locally. No completion sound."

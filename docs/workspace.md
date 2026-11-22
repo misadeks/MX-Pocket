@@ -1,12 +1,12 @@
 # Workspace walkthrough
 
 After [installing the Android app](#install-the-android-app), open
-**Home** to connect a keypad. Home shows what is on the keypad now (profile,
-page and page buttons) and mirrors the nine LCD keys live. With a wired keypad
-the mirror is display-only; press the keys on the device. With the virtual
-keypad connected (**Settings > Connect virtual keypad**), tap the keys on Home
-instead. The round button in Home's header, or **Settings > Appearance**
-(System, Light or Dark), switches the theme; the choice is remembered.
+**Home**. The connection button in the top-right corner connects or disconnects
+a USB keypad. The adjacent status and message show whether the session is ready
+or why it failed. Home previews the selected layout offline and mirrors all nine
+LCD keys live when connected. Press keys on the device, not on the phone.
+Choose **System**, **Light** or **Dark** in **Settings > Appearance**. The
+choice is remembered; System follows your device's current theme.
 **Plugins** turns features on or off, **Flows** lets you build and run workflows,
 and **Settings** contains USB preferences, background images, repaint and diagnostics.
 
@@ -65,14 +65,13 @@ the computer and accept the debugging prompt. From the repository root run:
 ```
 
 On Linux or macOS use `./gradlew :app:installDebug`. Open **MX Pocket** on
-the phone. For an on-screen demo choose **Skip and try virtual keypad**.
-For hardware, disconnect the computer, choose **Use a USB keypad** in
+the phone. Disconnect the computer, choose **Use a USB keypad** in
 first-run setup, finish setup and [connect the wired keypad](#connect-a-wired-keypad).
 
 ## Choose features on first launch
 
-Choose the features you want help setting up, or tap **Skip and try virtual
-keypad** to use the on-screen keys without hardware or permissions. Reopen
+Choose the features you want help setting up, or tap **Not now** to dismiss
+the guide without starting a session or requesting access. Reopen
 **Settings > Feature setup** at any time. Reviewing a choice does not enable
 it, and removing a choice from the guide does not revoke access. Each step
 checks Android's current state; you can finish with steps still pending.
@@ -83,21 +82,19 @@ it. Physical Studio camera controls, one-press app opening and cross-app
 navigation each have their own steps. If Android restricts access, leave that
 option off; see [deck behavior without special access](android-decks.md).
 
-## Run without hardware
+## Edit layouts without hardware
 
-1. In Settings choose **Connect virtual keypad** if it isn't already connected
-   (first-run **Skip and try virtual keypad** connects it). On Home press **Start** on Focus.
-   The first tile changes to **Pause** and the countdown advances. No USB
-   permission or foreground service is needed. Disconnecting the virtual
-   keypad disables input; reconnecting restores the selected page.
+1. Open Home with no keypad attached. The status is **Not connected**. You can
+   browse layouts and see their key faces, but touching a face won't execute it.
 2. In Profiles use **Manage profile > New profile** and create *Desk*. Under
    **Manage page** create *Tools*. On Desk's root page edit a key, choose
    *Open page: Tools*, and set its label, icon and color. Put *Back* or *Return
-   to root* on Tools. Choose *Desk* in the carousel, then navigate on Home.
+   to root* on Tools. Inspect both pages in Profiles. To exercise the bindings,
+   connect the wired keypad and press its keys.
 3. In Flows duplicate **Keypad check**. Give the copy a name, change a delay
    or add a step, then **Test run** and **Save workflow**. A test executes real
    steps. In Profiles assign the saved workflow to a Tools key. Press that key
-   on Home to see the steps run. **Run history** shows origin,
+   on the connected keypad to see the steps run. **Run history** shows origin,
    result and progress. For confirmation steps open Flows and approve or
    decline on the phone. Cancelling does not undo completed actions.
 4. In Plugins enable Audio; optional media access is explained before opening
@@ -107,7 +104,7 @@ option off; see [deck behavior without special access](android-decks.md).
    a short delay. Supported players expose Play/Pause and title with consent;
    without it the app sends ordinary media keys and does not invent a title
    or playback state. With artwork available on Audio, the unlocked phone's
-   virtual board shows one cover across the nine keys; a wired keypad shows
+   layout preview shows one cover across the nine keys; a wired keypad shows
    it on the LCDs. The cover stays on Audio, even during playback;
    a pinned non-music profile keeps its own background.
 5. Inspect the selection reason, matched rules and observed values in Profiles.
@@ -134,11 +131,11 @@ versions of the app cannot import format 3 exports.
    support. In **Settings → Refresh USB diagnostics**, look for `046D:C354`.
    If it's missing, try a data-capable cable or OTG adapter and, if the phone
    cannot supply enough power, a powered hub.
-2. Tap **Connect keypad** and approve the attached device when Android prompts.
+2. Tap **Connect to device** at the top of Home and approve the attached device when Android prompts.
    MX Pocket requires a visible session notification so **Disconnect** stays
    available while another app is open. On Android 13+ allow notification
    posting. If you denied it or blocked the session channel, enable it in the
-   app's Android notification settings and tap **Connect keypad** again.
+   app's Android notification settings and tap **Connect to device** again.
 3. On the factory Focus page, press **Start**, then use a page button to switch
    profiles. The notification's **Disconnect** ends the session. To connect
    on future attachments, enable **Settings → Connect automatically on USB
@@ -177,7 +174,7 @@ press can request a Phone shortcut, a saved launcher favorite or the camera
 viewfinder, not a capture. If Android suppresses the launch, tap the retry
 notification. Turn off the option or revoke the grant to return to notifications.
 
-Virtual presses and [workflow steps](workflows.md) do not inherit this
+[Workflow steps](workflows.md) do not inherit this
 authority. App/favorite launches and Android Home in workflows wait for approval
 on the visible, unlocked phone. For media, camera, navigation and game controls,
 see [Android keypad decks](android-decks.md).

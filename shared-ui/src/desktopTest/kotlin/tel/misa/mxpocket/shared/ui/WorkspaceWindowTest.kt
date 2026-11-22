@@ -51,15 +51,46 @@ class WorkspaceWindowTest {
         ui.onNodeWithText("Audio key 1").assertDoesNotExist()
     }
 
+    @Test fun onlyAConnectedDesktopSimulatorOffersKeyInput() {
+        val frame = FocusTimer().present(0)
+        val grid = virtualGrid(1, defaultDeck(), frame, null)
+        var sim by mutableStateOf(DesktopSimulator("Windows simulator"))
+        var tab by mutableStateOf(WorkspaceTab.SETTINGS)
+        val inputs = mutableListOf<PocketScreenEvent>()
+        ui.setContent {
+            val screen = PocketScreenState("", "Focus", frame.keys.map { it.toGridTile(true) },
+                listOf(ProfileChoice("focus", "Focus")), "focus", simulator = sim)
+            PocketTheme {
+                PocketWorkspace(tab, { tab = it }, screen, emptyList(), {
+                    when (it) {
+                        PocketScreenEvent.EnterPreview -> sim = sim.copy(grid = grid)
+                        PocketScreenEvent.StopPreview -> sim = sim.copy(grid = null)
+                        else -> inputs += it
+                    }
+                }, {}, {})
+            }
+        }
+        ui.onNodeWithText("Connect virtual keypad").performScrollTo().performClick()
+        ui.onNodeWithText("Home").performClick()
+        ui.onNodeWithContentDescription("Connect to device").assertDoesNotExist()
+        ui.onNodeWithContentDescription("Key 1, Start, Focus").performScrollTo().performClick()
+        ui.onNodeWithText("Settings").performClick()
+        ui.onNodeWithText("Disconnect virtual keypad").performScrollTo().performClick()
+        ui.onNodeWithText("Home").performClick()
+        ui.onNodeWithContentDescription("Key 1, Start, Focus").assertHasNoClickAction()
+        assertEquals(listOf(PocketScreenEvent.VirtualKey(0, grid)), inputs)
+    }
+
     @Test fun resizingAcrossNavigationRailPreservesTheOpenEditorAndNeverRunsAKey() {
         val repo = DeckRepository(File(temp.root, "deck.json"))
         val store = repo.asEditorStore()
         var width by mutableStateOf(380.dp)
         var tab by mutableStateOf(WorkspaceTab.HOME)
         val events = mutableListOf<PocketScreenEvent>()
-        val screen = PocketScreenState("Virtual keypad connected", "Focus",
-            FocusTimer().present(0).keys.map { it.toGridTile(true) },
-            listOf(ProfileChoice("focus", "Focus")), "focus", simulating = true)
+        val frame = FocusTimer().present(0)
+        val grid = virtualGrid(1, repo.state.value, frame, null)
+        val screen = PocketScreenState("Virtual keypad connected", "Focus", frame.keys.map { it.toGridTile(true) },
+            listOf(ProfileChoice("focus", "Focus")), "focus", simulator = DesktopSimulator("Windows simulator", grid))
         ui.setContent {
             // The test surface is fixed in pixels; change layout constraints, not platform.
             CompositionLocalProvider(LocalDensity provides Density(.75f)) {
@@ -81,7 +112,7 @@ class WorkspaceWindowTest {
         assertFocusBoard()
         ui.runOnIdle { width = 380.dp }
         ui.onNodeWithContentDescription("Key 1, Start, Focus").performClick()
-        assertEquals(listOf(PocketScreenEvent.VirtualKey(0)), events)
+        assertEquals(listOf(PocketScreenEvent.VirtualKey(0, grid)), events)
         events.clear()
         ui.onNodeWithText("Profiles").performClick()
         ui.onNodeWithText("Swap keys").performScrollTo().performClick()
