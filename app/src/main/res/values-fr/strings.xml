@@ -38,4 +38,7 @@
     <string name="previous">Page précédente</string>
     <string name="next">Page suivante</string>
     <string name="repaint">Actualiser les neuf écrans</string>
+    <string name="onenote">OneNote</string>
+    <string name="onenote_access">Outils OneNote de MX Pocket</string>
+    <string name="onenote_access_description">Lorsque OneNote est à l’écran, les touches du pavé permettent de sélectionner des outils de dessin comme le stylet et la gomme. MX Pocket ne lit jamais vos notes.</string>
 </resources>

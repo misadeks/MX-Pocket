@@ -38,4 +38,7 @@
     <string name="previous">Prethodna stranica</string>
     <string name="next">Sledeća stranica</string>
     <string name="repaint">Osvežite svih devet ekrana</string>
+    <string name="onenote">OneNote</string>
+    <string name="onenote_access">MX Pocket: alatke za OneNote</string>
+    <string name="onenote_access_description">Dok je OneNote na ekranu, tasterima na tastaturi možete da izaberete alatke za crtanje, poput olovke i gumice. MX Pocket nikada ne čita vaše beleške.</string>
 </resources>

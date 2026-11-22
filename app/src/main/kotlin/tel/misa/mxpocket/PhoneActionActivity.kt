@@ -26,12 +26,13 @@ import tel.misa.mxpocket.decks.teamsLauncher
 import tel.misa.mxpocket.ui.LanguagePreference
 
 private enum class ShortcutFailure {
-    STALE, LOCKED, TEAMS_MISSING, FAVORITE_UNAVAILABLE, NO_VIEWFINDER, APP_MISSING, RESTRICTED, NO_PHONE_HANDLER, PHONE_RESTRICTED;
+    STALE, LOCKED, TEAMS_MISSING, ONENOTE_MISSING, FAVORITE_UNAVAILABLE, NO_VIEWFINDER, APP_MISSING, RESTRICTED, NO_PHONE_HANDLER, PHONE_RESTRICTED;
 
     fun text(context: Context, app: PhoneApp?) = when (this) {
         STALE -> LanguagePreference.resourcesFor(context).getString(R.string.phone_action_stale)
         LOCKED -> LanguagePreference.resourcesFor(context).getString(R.string.phone_action_locked)
         TEAMS_MISSING -> AccessCopy.TeamsNotInstalled.text()
+        ONENOTE_MISSING -> tel.misa.mxpocket.i18n.OneNoteCopy.NotInstalled.text()
         FAVORITE_UNAVAILABLE -> AccessCopy.FavoriteUnavailable.text()
         NO_VIEWFINDER -> AccessCopy.NoViewfinder.text()
         APP_MISSING -> AccessCopy.AppNotInstalled.text()
@@ -122,6 +123,9 @@ private fun Context.tryShortcut(target: PocketSession.Target): ShortcutFailure? 
         is PocketSession.Target.FavoriteApp -> intentForFavoriteShortcut(target.component,
             (applicationContext as PocketApplication).session.favoriteApps) ?: return ShortcutFailure.FAVORITE_UNAVAILABLE
         is PocketSession.Target.Studio -> viewfinder(target.mode) ?: return ShortcutFailure.NO_VIEWFINDER
+        is PocketSession.Target.Uri -> Intent(Intent.ACTION_VIEW, Uri.parse(target.uri))
+        is PocketSession.Target.Share -> Intent(Intent.ACTION_SEND).setType("text/plain")
+            .putExtra(Intent.EXTRA_TEXT, target.text)
     }
     return startShortcut(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 }
@@ -158,6 +162,8 @@ private fun Context.tryPhoneApp(app: PhoneApp): ShortcutFailure? {
         PhoneApp.DIALER -> Intent(Intent.ACTION_DIAL, Uri.parse("tel:"))
         PhoneApp.WEB -> Intent(Intent.ACTION_VIEW, Uri.parse("https://www.logitech.com/"))
         PhoneApp.ALARMS -> Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS)
+        PhoneApp.ONENOTE -> packageManager.getLaunchIntentForPackage("com.microsoft.office.onenote")
+            ?: return ShortcutFailure.ONENOTE_MISSING
     }
     // Keep external apps out of the notification entry Activity's temporary task.
     if (this !is MainActivity) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

@@ -146,9 +146,12 @@ class KeypadService : Service() {
                 PhoneApp.DIALER -> D.Dialer.text()
                 PhoneApp.WEB -> D.Web.text()
                 PhoneApp.ALARMS -> D.Alarms.text()
+                PhoneApp.ONENOTE -> "OneNote"
             }
             is PocketSession.Target.FavoriteApp -> D.Favorite.text()
             is PocketSession.Target.Studio -> if (target.mode == tel.misa.mxpocket.decks.CameraMode.PHOTO) D.Camera.text() else D.Video.text()
+            is PocketSession.Target.Uri -> target.uri
+            is PocketSession.Target.Share -> "OneNote"
         }
         val title = strings.getString(R.string.phone_action_open, label)
         val note = Notification.Builder(this, PHONE_CHANNEL)
@@ -176,6 +179,7 @@ class KeypadService : Service() {
             PocketSession.Target.Teams -> false // Existing direct-launch consent does not include Teams.
             is PocketSession.Target.Phone -> target.app == PhoneApp.CAMERA || session.isPhoneShortcutPage
             is PocketSession.Target.FavoriteApp, is PocketSession.Target.Studio -> true
+            is PocketSession.Target.Uri, is PocketSession.Target.Share -> false
         }
         if (!eligible) return null
         return launchShortcut(target)?.let(::unavailable) ?: ok(D.LaunchRequested.text())

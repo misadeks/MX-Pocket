@@ -1,5 +1,7 @@
 package tel.misa.mxpocket
 
+import tel.misa.mxpocket.i18n.OneNoteCopy
+
 import tel.misa.mxpocket.ui.DeviceCopy as D
 import tel.misa.mxpocket.i18n.WorkspaceCopy as W
 import tel.misa.mxpocket.i18n.WorkflowCopy
@@ -80,7 +82,7 @@ internal typealias OpenKeypad = suspend (UsbManager, UsbDevice, (KeyEvent) -> Un
 internal class PocketSession(
     private val app: Context,
     registeredPlugins: List<PocketPlugin> = BuiltInPlugins.create(app.getString(R.string.focus),
-        app.getString(R.string.audio), app.getString(R.string.phone), app.getString(R.string.xo)),
+        app.getString(R.string.audio), app.getString(R.string.phone), app.getString(R.string.xo), app.getString(R.string.onenote)),
     private val usageDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val usageTimeMillis: () -> Long = System::currentTimeMillis,
     private val open: OpenKeypad = { manager, device, event, log, error ->
@@ -91,12 +93,16 @@ internal class PocketSession(
         fun render()
         fun openApp(app: PhoneApp): Boolean
         fun deckAction(command: DeckCommand, component: String?): DeckResult = unavailable(D.OpenToUse.text())
+        fun openUri(uri: String): Boolean = false
+        fun shareText(text: String): Boolean = false
     }
     data class Request(val name: String, val token: String = UUID.randomUUID().toString())
     sealed interface Target {
         data class Phone(val app: PhoneApp) : Target
         data class FavoriteApp(val component: String) : Target
         data class Studio(val mode: CameraMode) : Target
+        data class Uri(val uri: String) : Target
+        data class Share(val text: String) : Target
         data object Teams : Target
     }
     data class PhoneAction(val target: Target, val ticket: Request, val index: Int, val receipt: Long,
@@ -149,6 +155,9 @@ internal class PocketSession(
             audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)) },
         perform = ::perform, invalidateUi = ::invalidate, reportError = { id, error -> fail(D.PluginFailed.text(id), error) },
         observeDecks = deckState,
+        readActiveTool = { OneNoteAccessService.connected?.activeTool() },
+        readToolBar = { OneNoteAccessService.connected?.toolBar() ?: emptyList() },
+        readOneNoteSettings = { OneNoteAccessService.connected?.settings() },
     )
     var request: Request? = null
         private set
@@ -918,18 +927,48 @@ internal class PocketSession(
                 MediaCommand.PREVIOUS -> DeckCommand.PREVIOUS
                 MediaCommand.NEXT -> DeckCommand.NEXT
             }.id, fromPhysicalKey = physicalPressAt != null).message)
-            is PluginAction.OpenApp -> {
+            is PluginAction.OpenApp, is PluginAction.OpenUri, is PluginAction.ShareText -> {
                 if (physicalPressAt == null) return
                 if (screen != null && !freshAuthorizedPress()) {
                     message(D.Again.text())
-                } else if (screen?.openApp(action.app) != true) {
-                    message(offerPhysicalShortcut(Target.Phone(action.app)).message)
+                    return
+                }
+                val target = when (action) {
+                    is PluginAction.OpenApp -> Target.Phone(action.app)
+                    is PluginAction.OpenUri -> Target.Uri(action.uri)
+                    is PluginAction.ShareText -> Target.Share(action.text)
+                    else -> return
+                }
+                val opened = when (action) {
+                    is PluginAction.OpenApp -> screen?.openApp(action.app) == true
+                    is PluginAction.OpenUri -> screen?.openUri(action.uri) == true
+                    is PluginAction.ShareText -> screen?.shareText(action.text) == true
+                    else -> false
+                }
+                if (!opened) {
+                    message(offerPhysicalShortcut(target).message)
                 }
             }
             PluginAction.CompletionTone -> scope.launch {
                 val tone = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 50)
                 try { tone.startTone(ToneGenerator.TONE_PROP_ACK, 500); delay(600) } finally { tone.release() }
                 log("Focus session complete")
+            }
+            is PluginAction.AccessibilityClick -> {
+                if (!freshAuthorizedPress() || !app.isUnlockedAndInteractive()) return
+                val service = OneNoteAccessService.connected
+                message(when {
+                    service == null -> OneNoteCopy.EnableAccess.text()
+                    service.selectToolById(action.text) -> if ((action.text.startsWith("text:") || action.text.startsWith("style:") || action.text.startsWith("size:"))) OneNoteCopy.FormattingRequested.text()
+                        else OneNoteCopy.ToolRequested.text(action.text)
+                    else -> if ((action.text.startsWith("text:") || action.text.startsWith("style:") || action.text.startsWith("size:"))) OneNoteCopy.ShowToolbar.text()
+                        else OneNoteCopy.ShowTool.text(action.text)
+                })
+            }
+            is PluginAction.OneNoteSetting -> {
+                if (!freshAuthorizedPress() || !app.isUnlockedAndInteractive()) return
+                if (OneNoteAccessService.connected?.changeSetting(action.color, action.thicknessDelta, action.close) != true)
+                    message(OneNoteCopy.OpenPenSettings.text())
             }
             PluginAction.Repaint -> repaint()
             is PluginAction.SelectPlugin -> error("Navigation is handled by PluginEngine")
@@ -1115,6 +1154,7 @@ internal class PocketSession(
     }
     fun message(text: String) { status = text; screen?.render() }
     fun fail(text: String, error: Throwable) {
+        android.util.Log.e("PocketSession", "ERROR $text", error)
         log("ERROR $text: ${error.message}")
         message(D.Failure.text(text, error.message))
     }
