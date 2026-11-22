@@ -22,11 +22,11 @@ class ThemeAndProfilesTest {
     @get:Rule val ui = createComposeRule()
     @get:Rule val temp = TemporaryFolder()
 
-    private fun state(mode: ThemeMode = ThemeMode.SYSTEM) = PocketScreenState("Virtual keypad connected", "Focus",
+    private fun state(mode: ThemeMode = ThemeMode.SYSTEM) = PocketScreenState("Not connected", "Focus",
         FocusTimer().present(0).keys.map { it.toGridTile(true) },
-        defaultDeck().profiles.map { ProfileChoice(it.id, it.name) }, "focus", simulating = true, themeMode = mode)
+        defaultDeck().profiles.map { ProfileChoice(it.id, it.name) }, "focus", themeMode = mode)
 
-    @Test fun headerButtonFlipsBetweenLightAndDarkAndSettingsOffersAllThreeModes() {
+    @Test fun homeOffersConnectionAndOnlySettingsChangesTheAppearance() {
         var mode by mutableStateOf(ThemeMode.DARK)
         var tab by mutableStateOf(WorkspaceTab.HOME)
         val events = mutableListOf<PocketScreenEvent>()
@@ -38,9 +38,13 @@ class ThemeAndProfilesTest {
                 }, editor = {}, workflows = {})
             }
         }
-        ui.onNodeWithContentDescription("Switch to light theme").performClick()
-        ui.onNodeWithContentDescription("Switch to dark theme").performClick()
+        ui.onNodeWithContentDescription("Switch to light theme").assertDoesNotExist()
+        ui.onNodeWithContentDescription("Connect to device").performClick()
+        assertEquals(listOf(PocketScreenEvent.ToggleConnection), events)
         ui.onNodeWithText("Settings").performClick()
+        ui.onNodeWithText("Dark").assertIsSelected()
+        ui.onNodeWithText("Light").performScrollTo().performClick()
+        ui.onNodeWithText("Dark").performScrollTo().performClick()
         ui.onNodeWithText("System").performScrollTo().performClick()
         ui.runOnIdle {
             assertEquals(listOf(ThemeMode.LIGHT, ThemeMode.DARK, ThemeMode.SYSTEM),

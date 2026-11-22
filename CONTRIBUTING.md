@@ -100,12 +100,11 @@ adb -e shell am start -n tel.misa.mxpocket/.ui.UiPreviewActivity --es scene audi
 ```
 
 Scene IDs include `disconnected`, `focus`, `audio` and `phone`. Profile controls change
-fixtures; key and connection taps only display UI events. This host does not
+fixtures; keys are read-only and the connection button only displays a UI event. This host does not
 construct the live Activity/engine, register USB receivers, activate plugins,
 query USB/audio state or launch phone actions. It and its fixture data/manifest
-entry exist only in the debug build, not release builds. **Connect virtual
-keypad** in the live app still executes real phone controls; do not confuse it
-with this UI-only preview.
+entry exist only in the debug build, not release builds. Use the standalone
+Windows simulator to exercise on-screen keys; Android accepts keypad input only from USB.
 
 Use emulator light/dark mode, font scaling and screen sizes for visual checks.
 Run `:app:testDebugUnitTest --tests "tel.misa.mxpocket.ui.*"` for render/event and

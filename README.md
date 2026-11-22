@@ -30,15 +30,16 @@ to JDK 17 or 21 (x64 on Windows ARM64), run:
 ```
 
 On **Profiles**, swipe the profile carousel to the music-note profile, then click the center key on **Home** to toggle playback.
-Swipe to **Navigation** to see the same key become **Select**. The round button at the top of Home,
-or **Settings → Appearance**, switches between light and dark. The simulator
+Swipe to **Navigation** to see the same key become **Select**. Choose System,
+Light or Dark in **Settings → Appearance**. The simulator
 needs no Android SDK, phone or keypad; it doesn't change Windows media,
 navigate other apps or drive USB hardware.
 
 <a name="run-it-on-android"></a>
 
 **[Try it on Android](docs/workspace.md#install-the-android-app)** with a
-wired keypad or on-screen keys. Both run real phone actions.
+wired keypad. Home mirrors the keys; it never executes their actions. You can
+edit profiles before connecting hardware.
 **[Reuse the Kotlin driver](docs/driver.md)** in your own Android app.
 
 <a name="guides"></a>

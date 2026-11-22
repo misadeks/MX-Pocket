@@ -55,28 +55,26 @@ class FeatureSetupTest {
 
     private fun tap(label: String) = ui.onNodeWithText(label).performScrollTo().performClick()
 
-    @Test fun skipReturnsToWorkingVirtualKeypadWithoutPromptsOrService() {
+    @Test fun dismissingFirstRunLeavesThePhoneDisconnectedWithoutPromptsOrService() {
         Robolectric.buildActivity(MainActivity::class.java, launcher).setup().use { main ->
             val host = shadowOf(main.get())
-            val welcome = host.nextStartedActivityForResult
-            assertEquals(SetupActivity::class.java.name, welcome.intent.component?.className)
+            val welcome = host.nextStartedActivity
+            assertEquals(SetupActivity::class.java.name, welcome.component?.className)
             main.pause().stop()
-            var result = android.app.Activity.RESULT_CANCELED
-            ActivityScenario.launch<SetupActivity>(welcome.intent).use { wizard ->
-                ui.onNodeWithText("Skip and try virtual keypad").performClick()
+            ActivityScenario.launch<SetupActivity>(welcome).use { wizard ->
+                ui.onNodeWithText("Skip and try virtual keypad").assertDoesNotExist()
+                ui.onNodeWithText("Not now").performClick()
                 wizard.onActivity {
                     assertTrue(it.isFinishing)
-                    result = shadowOf(it).resultCode
+                    assertEquals(android.app.Activity.RESULT_CANCELED, shadowOf(it).resultCode)
                 }
             }
             main.start().resume()
-            host.receiveResult(welcome.intent, result, null)
-            assertTrue(app.session.preview)
-            assertTrue(app.session.phoneKey(0))
+            assertFalse(app.session.ready)
+            assertNull(app.session.request)
             assertNull(shadowOf(app).nextStartedService)
             assertNull(host.lastRequestedPermission)
         }
-        app.session.disconnect()
         shadowOf(app).clearNextStartedActivities()
         Robolectric.buildActivity(MainActivity::class.java, launcher).setup().use { main ->
             assertNull(shadowOf(main.get()).nextStartedActivity)

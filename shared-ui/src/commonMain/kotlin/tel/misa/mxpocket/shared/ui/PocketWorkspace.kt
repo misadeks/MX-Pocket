@@ -22,6 +22,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.semantics.*
@@ -52,6 +53,9 @@ fun virtualGrid(generation: Long, deck: DeckState, frame: PluginFrame, holds: Pl
         frame.keys.map { it.target() }, holds?.keys?.map { it.target() })
 }
 
+/** Only the standalone desktop host supplies this. A null grid means it is disconnected. */
+data class DesktopSimulator(val limitations: String, val grid: VirtualGrid? = null)
+
 data class PocketScreenState(
     val status: String,
     val pluginTitle: String,
@@ -65,13 +69,9 @@ data class PocketScreenState(
     val log: String = "",
     val automatic: Boolean = false,
     val directShortcuts: Boolean = false,
-    val simulating: Boolean = false,
-    /** Null for the physical Android host; otherwise displayed in place of unsupported device controls. */
-    val deviceLimit: String? = null,
+    val simulator: DesktopSimulator? = null,
     val usbReady: Boolean = false,
     val activePageId: String = "root",
-    val hardwareSummary: Boolean = false,
-    val virtualGrid: VirtualGrid? = null,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
 )
 
@@ -85,10 +85,11 @@ sealed interface PocketScreenEvent {
     data object ToggleConnection : PocketScreenEvent
     data class SetAutomatic(val enabled: Boolean) : PocketScreenEvent
     data class SetDirectShortcuts(val enabled: Boolean) : PocketScreenEvent
-    data object EnterPreview : PocketScreenEvent
-    data object StopPreview : PocketScreenEvent
+    sealed interface DesktopInput : PocketScreenEvent
+    data object EnterPreview : DesktopInput
+    data object StopPreview : DesktopInput
     data class SelectPlugin(val id: String) : PocketScreenEvent
-    data class VirtualKey(val index: Int, val grid: VirtualGrid? = null, val hold: Boolean = false) : PocketScreenEvent
+    data class VirtualKey(val index: Int, val grid: VirtualGrid, val hold: Boolean = false) : DesktopInput
     data class ChangePage(val delta: Int) : PocketScreenEvent
     data object Repaint : PocketScreenEvent
     data object ChooseImage : PocketScreenEvent
@@ -153,24 +154,21 @@ fun PocketWorkspace(
 fun HomeScreen(state: PocketScreenState, event: (PocketScreenEvent) -> Unit) {
     WorkspaceColumn(wide = true) {
         HomeHeader(state, event)
+        Text(state.status, Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            color = PocketColors.muted, style = MaterialTheme.typography.bodySmall)
+        state.simulator?.let { Note(it.limitations) }
         BoxWithConstraints {
             val split = maxWidth >= 720.dp
-            val summary: @Composable () -> Unit = {
-                NowOnKeypad(state, event)
-                ConnectionCard(state, event)
-            }
             // With hardware the mirror is display-only: keys are pressed on the device, never twice.
-            val operable = state.simulating || !state.hardwareSummary
-            val tiles = if (operable) state.tiles else state.tiles.map { it.copy(readOnly = true) }
+            val grid = state.simulator?.grid
+            val tiles = if (grid != null) state.tiles else state.tiles.map { it.copy(readOnly = true) }
             val keypad: @Composable () -> Unit = {
                 PocketCard {
-                    PocketLabel(if (operable) "Keypad" else "Keypad · live")
-                    if (!operable) KeypadGrid(tiles, { _, _ -> }, Modifier.widthIn(max = 480.dp).align(Alignment.CenterHorizontally))
-                    else key(state.activeId, state.activePageId, state.simulating, state.virtualGrid) {
+                    if (grid == null) KeypadGrid(tiles, { _, _ -> }, Modifier.widthIn(max = 480.dp).align(Alignment.CenterHorizontally))
+                    else key(grid) {
                         // Replacing the clickable nodes cancels a pointer/key still down on the old board.
-                        val grid = state.virtualGrid
                         val holds = buildMap<Int, () -> Unit> {
-                            grid?.page?.keys?.forEachIndexed { index, binding ->
+                            grid.page.keys.forEachIndexed { index, binding ->
                                 if (binding.holdAction != null) put(index) {
                                     if (grid.holds?.get(index)?.actionable == true)
                                         event(PocketScreenEvent.VirtualKey(index, grid, hold = true))
@@ -178,34 +176,33 @@ fun HomeScreen(state: PocketScreenState, event: (PocketScreenEvent) -> Unit) {
                             }
                         }
                         KeypadGrid(tiles, { index, pressed ->
-                            if (!pressed && (grid == null || grid.page.keys[index].action != null))
+                            if (!pressed && grid.page.keys[index].action != null)
                                 event(PocketScreenEvent.VirtualKey(index, grid))
                         }, Modifier.widthIn(max = 480.dp).align(Alignment.CenterHorizontally), holds)
                     }
                 }
             }
             if (split) Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                Column(Modifier.weight(.85f), verticalArrangement = Arrangement.spacedBy(14.dp)) { summary() }
+                Column(Modifier.weight(.85f)) { NowOnKeypad(state, event) }
                 Column(Modifier.weight(1.15f)) { keypad() }
-            } else Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { summary(); keypad() }
+            } else Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { NowOnKeypad(state, event); keypad() }
         }
     }
 }
 
-private data class ConnectionLook(val title: String, val short: String, val icon: ShellIcon, val color: Color)
+private data class ConnectionLook(val label: String, val color: Color)
 
 @Composable
 private fun connectionLook(state: PocketScreenState) = when {
-    state.simulating -> ConnectionLook("Virtual keypad", "Virtual", ShellIcon.EYE, PocketColors.accent)
-    state.usbReady -> ConnectionLook("Connected: USB session active", "Connected", ShellIcon.CHECK, PocketColors.success)
-    state.connectionActive -> ConnectionLook("Connecting…", "Connecting", ShellIcon.BOLT, PocketColors.warning)
-    else -> ConnectionLook("Not connected", "Not connected", ShellIcon.LINK, PocketColors.muted)
+    state.simulator?.grid != null -> ConnectionLook("Virtual keypad", PocketColors.accent)
+    state.usbReady -> ConnectionLook("USB connected", PocketColors.success)
+    state.connectionActive -> ConnectionLook("Connecting…", PocketColors.warning)
+    else -> ConnectionLook("Not connected", PocketColors.muted)
 }
 
 @Composable
 private fun HomeHeader(state: PocketScreenState, event: (PocketScreenEvent) -> Unit) {
     val look = connectionLook(state)
-    val dark = PocketColors.dark
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Box(Modifier.weight(1f)) { WorkspaceTitle("MX Pocket") }
         // The state is spelled out next to the dot; color never carries it alone.
@@ -213,13 +210,19 @@ private fun HomeHeader(state: PocketScreenState, event: (PocketScreenEvent) -> U
             Row(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 PocketDot(look.color)
-                Text(look.short, style = MaterialTheme.typography.labelLarge, color = PocketColors.text)
+                Text(look.label, style = MaterialTheme.typography.labelLarge, color = PocketColors.text)
             }
         }
-        Surface(onClick = { event(PocketScreenEvent.SetTheme(if (dark) ThemeMode.LIGHT else ThemeMode.DARK)) },
-            shape = CircleShape, color = PocketColors.accent,
-            modifier = Modifier.size(48.dp).semantics { contentDescription = if (dark) "Switch to light theme" else "Switch to dark theme" }) {
-            Box(contentAlignment = Alignment.Center) { PocketIcon(if (dark) ShellIcon.SUN else ShellIcon.MOON, PocketColors.onAccent, 22.dp) }
+        if (state.simulator == null) Surface(onClick = { event(PocketScreenEvent.ToggleConnection) },
+            shape = CircleShape, color = PocketColors.accent, modifier = Modifier.size(48.dp).semantics {
+                role = Role.Button
+                contentDescription = when {
+                    state.usbReady -> "Disconnect device"
+                    state.connectionActive -> "Cancel connection"
+                    else -> "Connect to device"
+                }
+            }) {
+            Box(contentAlignment = Alignment.Center) { PocketIcon(ShellIcon.LINK, PocketColors.onAccent, 22.dp) }
         }
     }
 }
@@ -227,20 +230,23 @@ private fun HomeHeader(state: PocketScreenState, event: (PocketScreenEvent) -> U
 @Composable
 private fun NowOnKeypad(state: PocketScreenState, event: (PocketScreenEvent) -> Unit) {
     val profileName = state.profiles.find { it.id == state.activeId }?.name ?: state.pluginTitle
-    val pageName = state.pluginTitle.substringAfter(" / ", "")
+    val pageName = state.pluginTitle.removePrefix("$profileName / ").takeIf { state.pluginTitle != profileName }
+    val type = MaterialTheme.typography
+    // Reserve all three text lines at the current font scale, including when optional lines are absent.
+    val rowHeight = with(LocalDensity.current) {
+        type.headlineMedium.lineHeight.toDp() + type.titleMedium.lineHeight.toDp() + type.bodyMedium.lineHeight.toDp() + 8.dp
+    }.coerceAtLeast(52.dp)
     PocketCard {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().height(rowHeight), verticalAlignment = Alignment.CenterVertically) {
             RoundPageButton(ShellIcon.CHEVRON_LEFT, "Previous page") { event(PocketScreenEvent.ChangePage(-1)) }
             Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    PocketDot(PocketColors.accent)
-                    PocketLabel("Now on keypad", color = PocketColors.accent)
-                }
                 Text(profileName, Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold, color = PocketColors.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (pageName.isNotBlank()) Text(pageName, color = PocketColors.accent, style = MaterialTheme.typography.titleMedium)
-                if (state.reason.isNotBlank()) Note(state.reason)
+                if (!pageName.isNullOrBlank()) Text(pageName, color = PocketColors.accent, style = type.titleMedium,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (state.reason.isNotBlank()) Text(state.reason, style = type.bodyMedium, color = PocketColors.muted,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             RoundPageButton(ShellIcon.CHEVRON_RIGHT, "Next page") { event(PocketScreenEvent.ChangePage(1)) }
         }
@@ -252,27 +258,6 @@ private fun RoundPageButton(icon: ShellIcon, label: String, onClick: () -> Unit)
     Surface(onClick = onClick, shape = CircleShape, color = PocketColors.control, border = BorderStroke(1.dp, PocketColors.cardStroke),
         modifier = Modifier.size(52.dp).semantics { contentDescription = label }) {
         Box(contentAlignment = Alignment.Center) { PocketIcon(icon, PocketColors.text, 20.dp) }
-    }
-}
-
-@Composable
-private fun ConnectionCard(state: PocketScreenState, event: (PocketScreenEvent) -> Unit) {
-    val look = connectionLook(state)
-    PocketCard {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Surface(shape = MaterialTheme.shapes.medium, color = look.color.copy(alpha = .14f)) {
-                Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) { PocketIcon(look.icon, look.color, 20.dp) }
-            }
-            Column(Modifier.weight(1f)) {
-                Text(look.title, style = MaterialTheme.typography.titleMedium, color = PocketColors.title)
-                Text(state.status, Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                    color = PocketColors.muted, style = MaterialTheme.typography.bodySmall)
-            }
-        }
-        state.deviceLimit?.let { Note(it) }
-        if (state.deviceLimit == null) PocketButton(if (state.connectionActive) "Disconnect" else "Connect keypad",
-            { event(PocketScreenEvent.ToggleConnection) }, Modifier.fillMaxWidth(),
-            icon = ShellIcon.LINK, tone = if (state.connectionActive) PocketTone.DANGER else PocketTone.PRIMARY)
     }
 }
 
@@ -422,10 +407,7 @@ private fun SettingsScreen(state: PocketScreenState, event: (PocketScreenEvent) 
         }
         PocketCard("Connection", ShellIcon.LINK, caps = true) {
             PocketDivider()
-            PocketButton(if (state.simulating) "Disconnect virtual keypad" else "Connect virtual keypad", {
-                event(if (state.simulating) PocketScreenEvent.StopPreview else PocketScreenEvent.EnterPreview)
-            }, Modifier.fillMaxWidth(), ShellIcon.EYE, enabled = !state.connectionActive)
-            if (state.deviceLimit == null) {
+            if (state.simulator == null) {
                 PocketLabel("Status")
                 Text(state.status)
                 PocketButton(if (state.connectionActive) "Disconnect keypad" else "Connect keypad",
@@ -436,9 +418,15 @@ private fun SettingsScreen(state: PocketScreenState, event: (PocketScreenEvent) 
                     state.automatic) { event(PocketScreenEvent.SetAutomatic(it)) }
                 PocketSwitchRow("Open apps directly from keypad", "Needs Display over other apps; otherwise a notification is shown",
                     state.directShortcuts) { event(PocketScreenEvent.SetDirectShortcuts(it)) }
-            } else Note(state.deviceLimit)
+            } else {
+                val connected = state.simulator.grid != null
+                PocketButton(if (connected) "Disconnect virtual keypad" else "Connect virtual keypad", {
+                    event(if (connected) PocketScreenEvent.StopPreview else PocketScreenEvent.EnterPreview)
+                }, Modifier.fillMaxWidth(), ShellIcon.EYE)
+                Note(state.simulator.limitations)
+            }
         }
-        if (state.deviceLimit == null) PocketCard("Display", ShellIcon.MONITOR, caps = true) {
+        if (state.simulator == null) PocketCard("Display", ShellIcon.MONITOR, caps = true) {
             PocketDivider()
             PocketListRow(ShellIcon.IMAGE, "Choose keypad background", "Image behind all nine keys for this session") { event(PocketScreenEvent.ChooseImage) }
             PocketListRow(ShellIcon.REFRESH, "Repaint all keys", "Redraw all nine 118 × 118 LCD regions") { event(PocketScreenEvent.Repaint) }
@@ -450,11 +438,11 @@ private fun SettingsScreen(state: PocketScreenState, event: (PocketScreenEvent) 
                 if (state.reason.isNotBlank()) Note(state.reason)
             }
             PocketInner { Text("Display profile: 480 x 480 panel; nine 118 x 118 visible regions. An upload acknowledgement does not verify LCD visibility.") }
-            if (state.deviceLimit == null) PocketButton("Refresh USB diagnostics", { event(PocketScreenEvent.RefreshDiagnostics) },
+            if (state.simulator == null) PocketButton("Refresh USB diagnostics", { event(PocketScreenEvent.RefreshDiagnostics) },
                 Modifier.fillMaxWidth(), ShellIcon.REFRESH, PocketTone.ACCENT)
             PocketLabel("Device descriptor details")
             PocketInner { SelectableReadout(state.diagnostics) }
-            if (state.deviceLimit == null) PocketButton("Export session log", { event(PocketScreenEvent.SaveLog) },
+            if (state.simulator == null) PocketButton("Export session log", { event(PocketScreenEvent.SaveLog) },
                 Modifier.fillMaxWidth(), ShellIcon.DOWNLOAD)
             PocketLabel("Session log")
             PocketInner { SelectableReadout(state.log.ifEmpty { "No events yet." }) }

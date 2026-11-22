@@ -7,6 +7,7 @@ import android.content.pm.ActivityInfo
 import android.content.pm.ApplicationInfo
 import android.content.pm.ResolveInfo
 import android.media.session.PlaybackState as P
+import android.os.Looper
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -15,14 +16,14 @@ import org.robolectric.Robolectric
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import tel.misa.mxpocket.KeypadSessionTest
 import tel.misa.mxpocket.MainActivity
-import tel.misa.mxpocket.PocketApplication
 import tel.misa.mxpocket.installTestCamera
 
 @RunWith(org.robolectric.RobolectricTestRunner::class)
-@Config(sdk = [28, 35])
+@Config(sdk = [28, 35], application = KeypadSessionTest.FakeApp::class)
 class AndroidDeckTest {
-    private val app get() = RuntimeEnvironment.getApplication() as PocketApplication
+    private val app get() = RuntimeEnvironment.getApplication() as KeypadSessionTest.FakeApp
     @Before fun broadcasts() {
         shadowOf(app).grantPermissions("tel.misa.mxpocket.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION")
     }
@@ -50,33 +51,37 @@ class AndroidDeckTest {
         store.setSelected(target, false)
         assertNull(store.intentFor(target))
     }
-    @Test fun foregroundKeyOpensOnlyRationaleAndVirtualStudioCannotCapture() {
+    @Test fun trackKeyIsReadOnlyAndPhysicalStudioKeysOpenOnlyUnlockedViewfinders() {
         val session = app.session
         assertFalse(session.runDeckAction("studio.record").success)
         assertFalse(session.runDeckAction("navigation.activate").success)
         Robolectric.buildActivity(MainActivity::class.java).setup().use { controller ->
             val activity = controller.get()
-            session.startPreview(); session.selectProfile("audio")
+            session.selectProfile("audio")
+            app.connectKeypad()
             assertFalse(session.runDeckAction("media.access").success)
-            session.phoneKey(7)
+            assertTrue(session.frame().keys[7].readOnly)
+            app.press(8)
             assertNull(shadowOf(activity).nextStartedActivity)
             session.pluginSettings("audio")!!.second()
             assertEquals(DeckAccessActivity::class.java.name, shadowOf(activity).nextStartedActivity.component?.className)
             session.selectProfile("studio")
-            session.phoneKey(1)
-            assertTrue(session.status.contains("physical Studio keypad"))
+            shadowOf(Looper.getMainLooper()).idle()
+            app.press(2)
+            assertEquals("Not sent", session.frame().keys[1].footer)
             assertNull(shadowOf(activity).nextStartedActivity)
             val native = installTestCamera(app)
-            for ((index, mode) in listOf(7 to CameraMode.PHOTO, 6 to CameraMode.VIDEO)) {
-                session.phoneKey(index)
+            for ((controlId, mode) in listOf(8 to CameraMode.PHOTO, 7 to CameraMode.VIDEO)) {
+                app.press(controlId)
                 val viewfinder = shadowOf(activity).nextStartedActivity
                 assertEquals(native, viewfinder.component)
                 assertEquals(mode.action, viewfinder.action)
                 assertNull(viewfinder.extras)
             }
             shadowOf(app.getSystemService(KeyguardManager::class.java)).setKeyguardLocked(true)
-            session.phoneKey(7)
+            app.press(8)
             assertNull(shadowOf(activity).nextStartedActivity)
+            session.disconnect()
         }
         Robolectric.buildActivity(CameraControlsActivity::class.java).setup().use {
             assertFalse(CameraControlsAccess(app).enabled)
@@ -142,16 +147,15 @@ class AndroidDeckTest {
         val music = android.media.AudioManager.STREAM_MUSIC
         Robolectric.buildActivity(MainActivity::class.java).setup().use {
             val session = app.session
-            session.startPreview(); session.selectProfile("audio")
-            fun settle() = shadowOf(android.os.Looper.getMainLooper()).idle()
             audio.setStreamVolume(music, 0, 0)
-            settle()
+            session.selectProfile("audio")
+            app.connectKeypad()
             assertFalse(audio.isStreamMute(music))
             assertEquals("Mute", session.frame().keys[1].label)
-            assertTrue(session.phoneKey(1)); settle()
+            app.press(2)
             assertTrue(audio.isStreamMute(music))
             assertEquals("Unmute", session.frame().keys[1].label)
-            assertTrue(session.phoneKey(1)); settle()
+            app.press(2)
             assertFalse(audio.isStreamMute(music))
             assertEquals("Mute", session.frame().keys[1].label)
             session.disconnect()
