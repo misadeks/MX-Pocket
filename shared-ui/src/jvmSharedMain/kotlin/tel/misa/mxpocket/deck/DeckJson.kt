@@ -69,7 +69,8 @@ object DeckJson {
         }
 
         validateDeck(state)
-        return state
+        val upgraded = state.upgradeNavigationControls()
+        return if (upgraded === state || fits(upgraded)) upgraded else state
     }
 
     private fun DeckState.withoutStockTeamsTimer(): DeckState {

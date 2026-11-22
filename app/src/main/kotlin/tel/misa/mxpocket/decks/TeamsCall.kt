@@ -3,15 +3,23 @@ package tel.misa.mxpocket.decks
 import tel.misa.mxpocket.i18n.KeypadCopy as K
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.os.Build
 import tel.misa.mxpocket.isUnlockedAndInteractive
 import tel.misa.mxpocket.PocketNotificationListener
+import tel.misa.mxpocket.calls.keypadPhoto
 
-/** Ephemeral identity, never displayed, persisted, exported or logged. */
+/** Notification identity stays local; optional caller details are for the physical display only. */
 internal class TeamsCall(private val app: Context) {
     val access = TeamsAccess(app)
     private var owner: PocketNotificationListener? = null
     private var notice: TeamsObservation.Notice? = null
+    private var incoming: TeamsObservation.Incoming? = null
+    private var callerGeneration: Long? = null
+    var callerName: String? = null
+        private set
+    var callerPhoto: Bitmap? = null
+        private set
     private var boundary = -1L
     private var revision = -1L
     private var confirmedOngoing = false
@@ -26,6 +34,19 @@ internal class TeamsCall(private val app: Context) {
         waitingForChange = null
         window = null
         toolbarService = null
+    }
+
+    /** Only the physical face requests private data. A replacement invalidates even a same-key photo. */
+    fun refreshCaller(onKeypad: Boolean): Boolean {
+        val notice = incoming
+        val generation = state.generation.takeIf { onKeypad && notice?.allowsDetails == true && access.callerDetails }
+        if (generation == callerGeneration) return false
+        val hadDetails = callerName != null || callerPhoto != null
+        val caller = if (generation != null && notice != null) owner?.teamsCaller(notice) else null
+        callerName = caller?.name
+        callerPhoto = caller?.icon?.keypadPhoto(app)
+        callerGeneration = generation
+        return hadDetails || callerName != null || callerPhoto != null
     }
 
     fun refresh(physical: Boolean, visible: Boolean, installed: Boolean, pluginEnabled: Boolean): TeamsState {
@@ -70,19 +91,21 @@ internal class TeamsCall(private val app: Context) {
             toolbar != null || confirmedOngoing -> CallStatus.JOINED
             currentNotice != null -> if (currentNotice.typedOngoing) CallStatus.NOTIFICATION else CallStatus.UNTYPED
             observation == TeamsObservation.None -> CallStatus.NO_SIGNAL
-            observation == TeamsObservation.Incoming -> CallStatus.INCOMING
+            observation is TeamsObservation.Incoming -> CallStatus.INCOMING
             observation == TeamsObservation.Screening -> CallStatus.SCREENING
             else -> CallStatus.UNAVAILABLE
         }
         val next = TeamsState(installed, status, muted.takeIf { waitingForChange == null }, state.generation, visible)
         val currentRevision = listener?.teamsRevision ?: -1L
-        val changed = newCall || notice != currentNotice || revision != currentRevision ||
+        val nextIncoming = observation as? TeamsObservation.Incoming
+        val changed = newCall || notice != currentNotice || incoming != nextIncoming || revision != currentRevision ||
             toolbarService !== service || window != toolbar?.window || next != state
         state = if (changed) next.copy(generation = state.generation + 1) else next
         owner = listener
         toolbarService = service
         boundary = listener?.teamsBoundary ?: -1L
         notice = currentNotice
+        incoming = nextIncoming
         revision = currentRevision
         window = toolbar?.window
         return state

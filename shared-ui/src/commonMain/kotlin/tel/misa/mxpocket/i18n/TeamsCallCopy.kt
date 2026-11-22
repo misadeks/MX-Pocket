@@ -19,6 +19,7 @@ internal object TeamsCallCopy {
     val Unknown = Copy("Unknown", "Inconnu", "Nepoznato")
     val TypeUnknown = Copy("Type unknown", "Type inconnu", "Nepoznat tip")
     val Incoming = Copy("Incoming", "Appel entrant", "Dolazni poziv")
+    val IncomingCall = Copy("Incoming Teams call", "Appel Teams entrant", "Dolazni Teams poziv")
     val Screening = Copy("Screening", "Filtrage", "Provera poziva")
     val NoSignal = Copy("No signal", "Aucun signal", "Nema signala")
     val CheckFilters = Copy("Check filters", "Vérifier les filtres", "Proveri filtere")

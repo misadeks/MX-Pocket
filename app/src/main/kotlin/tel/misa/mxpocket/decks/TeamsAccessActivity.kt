@@ -23,7 +23,7 @@ class TeamsAccessActivity : DeckActivity() {
     private var state by mutableStateOf(TeamsSetupState(false, false, false, false))
     private fun refresh() {
         state = TeamsSetupState(access.enabled, access.granted, access.toolbarGranted,
-            Build.VERSION.SDK_INT >= 34, access.toolbarProfileEligible)
+            Build.VERSION.SDK_INT >= 34, access.toolbarProfileEligible, access.callerDetails)
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,6 +41,10 @@ class TeamsAccessActivity : DeckActivity() {
         when (action) {
             TeamsSetupAction.TOGGLE -> {
                 access.enabled = !access.enabled && state.supported
+                TeamsEvents.refresh?.invoke()
+            }
+            TeamsSetupAction.TOGGLE_CALLER -> {
+                access.callerDetails = !access.callerDetails && state.supported
                 TeamsEvents.refresh?.invoke()
             }
             TeamsSetupAction.NOTIFICATIONS, TeamsSetupAction.TOOLBAR -> try {

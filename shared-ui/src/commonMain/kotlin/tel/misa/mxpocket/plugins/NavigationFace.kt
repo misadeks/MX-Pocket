@@ -7,7 +7,8 @@ import tel.misa.mxpocket.i18n.KeypadCopy as K
 fun C.navigationFace(systemAccess: Boolean?, shortcutAvailable: Boolean = false): KeyTile {
     val color = when (this) {
         C.ACTIVATE -> 0xffa6e4ce
-        C.UP, C.DOWN, C.REVERSE, C.FORWARD -> 0xff245650
+        C.UP, C.DOWN, C.REVERSE, C.FORWARD, C.DIRECTION_UP, C.DIRECTION_DOWN,
+        C.DIRECTION_LEFT, C.DIRECTION_RIGHT -> 0xff245650
         else -> 0xff263943
     }.toInt()
     if (accessibilityKey) {
@@ -30,8 +31,8 @@ fun C.navigationFace(systemAccess: Boolean?, shortcutAvailable: Boolean = false)
     val title = when (this) { C.REVERSE -> K.PrevFocus.text(); C.NAV_ACCESS -> K.AccessInfo.text(); else -> displayLabel }
     val hint = when {
         this == C.NAV_ACCESS -> if (systemAccess == true) K.NavOn else K.NavOff
-        this == C.RECENTS -> if (systemAccess == true) K.RecentApps else K.NeedsAccess
         systemAccess == null -> K.AndroidOnly
+        this == C.RECENTS -> if (systemAccess) K.RecentApps else K.NeedsAccess
         else -> when (this) {
             C.BACK -> if (systemAccess) K.AndroidBack else K.PocketBack
             C.HOME -> K.AndroidHome

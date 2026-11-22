@@ -26,8 +26,8 @@ enum class DeckAccess(private val titleCopy: Copy, private val disclosureCopy: C
 }
 
 data class TeamsSetupState(val enabled: Boolean, val notifications: Boolean, val toolbar: Boolean,
-    val supported: Boolean, val toolbarProfileEligible: Boolean = false, val message: String = "")
-enum class TeamsSetupAction { TOGGLE, NOTIFICATIONS, TOOLBAR, DONE }
+    val supported: Boolean, val toolbarProfileEligible: Boolean = false, val callerDetails: Boolean = false, val message: String = "")
+enum class TeamsSetupAction { TOGGLE, TOGGLE_CALLER, NOTIFICATIONS, TOOLBAR, DONE }
 
 val TeamsToolbarDisclosure get() = AccessCopy.TeamsToolbarInstructions.text()
 
@@ -48,6 +48,12 @@ fun TeamsSetupScreen(state: TeamsSetupState, status: CallStatus, onAction: (Team
             if (state.notifications && status == CallStatus.NO_SIGNAL) Text(AccessCopy.TeamsFilterInstructions.text())
             OutlinedButton({ onAction(TeamsSetupAction.NOTIFICATIONS) }) {
                 Text(if (state.notifications) AccessCopy.NotificationAccessOn.text() else AccessCopy.NotificationAccessOff.text())
+            }
+            if (state.enabled && state.supported) {
+                Text(AccessCopy.TeamsCallerDisclosure.text())
+                OutlinedButton({ onAction(TeamsSetupAction.TOGGLE_CALLER) }) {
+                    Text((if (state.callerDetails) AccessCopy.HideTeamsCaller else AccessCopy.ShowTeamsCaller).text())
+                }
             }
             Text(AccessCopy.TeamsToolbarInstructions.text())
             OutlinedButton({ onAction(TeamsSetupAction.TOOLBAR) }) {

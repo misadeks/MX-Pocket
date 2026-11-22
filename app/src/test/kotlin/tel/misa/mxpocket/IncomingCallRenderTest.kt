@@ -16,7 +16,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import tel.misa.mxpocket.calls.CallStamp
 import tel.misa.mxpocket.calls.DialerNotice
-import tel.misa.mxpocket.calls.photo
+import tel.misa.mxpocket.calls.keypadPhoto
 import tel.misa.mxpocket.plugins.*
 
 @RunWith(RobolectricTestRunner::class)
@@ -42,7 +42,7 @@ class IncomingCallRenderTest {
         for ((state, sample) in listOf("details" to notice, "unavailable" to null)) {
             val keys = phoneCallFrame(PhoneLine.RINGING, sample?.name, sample != null, 1).keys
             val native = keys.mapIndexed { i, face ->
-                (if (i == CALL_PHOTO) sample?.photo(ui.activity) else null) ?: images.image(i, face)
+                (if (i == CALL_PHOTO) sample?.icon?.keypadPhoto(ui.activity) else null) ?: images.image(i, face)
             }
             val panel = mirror.render(keys, native)
             native.forEachIndexed { i, bitmap -> assertAperturePixels(panel, i, bitmap) }

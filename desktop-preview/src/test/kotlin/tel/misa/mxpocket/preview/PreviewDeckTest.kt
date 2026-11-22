@@ -13,6 +13,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import tel.misa.mxpocket.FocusTimer
 import tel.misa.mxpocket.plugins.present
+import tel.misa.mxpocket.decks.CallStatus
 import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.DeckActions
 import tel.misa.mxpocket.deck.DeckKey
@@ -242,13 +243,13 @@ class PreviewDeckTest {
         val deck = PreviewDeck(DeckRepository(File(folder.root, "deck.json"))).apply { simulator = true }
         deck.repository.selectProfile("navigation").getOrThrow()
         assertEquals("Navigate", deck.profileName)
-        val up = deck.repository.state.value.activePage.keys[1].action!!
+        val up = deck.repository.state.value.activePage.keys[6].action!!
         assertEquals(DeckCommand.UP, navigationCommands[up.params.getValue("index").toInt()])
         val tiles = deck.tiles(0)
-        check(tiles.map { it.label } == listOf("Back", "Scroll up", "Home", "Prev focus", "Select",
-            "Next focus", "Recents", "Scroll down", "Accessibility"))
+        assertEquals(listOf("Back", "Home", "Recents", "Prev focus", "Select", "Next focus",
+            "Scroll up", "Scroll down", "More"), tiles.map { it.label })
         check(tiles.none { it.enabled && !it.readOnly })
-        check(tiles[6].let { !it.enabled && it.label == "Recents" && it.footer.contains("Android") })
+        check(tiles[2].let { !it.enabled && it.label == "Recents" && it.footer.contains("Android") })
         tiles.take(8).forEachIndexed { index, tile -> check(deck.press(index, 0).startsWith(tile.label)) }
         check(deck.repository.state.value.activePage.id == "root")
         deck.press(8, 0)
@@ -342,15 +343,15 @@ class PreviewDeckTest {
         val repo = DeckRepository(File(folder.root, "deck.json"))
         repo.openProfileRoot("audio").getOrThrow()
         repo.enterGame().getOrThrow()
-        repo.showTeamsCall(true)
+        repo.showTeamsCall(CallStatus.JOINED)
         repo.setDisabledPlugins(setOf("audio"))
         assertEquals("game.xo", repo.operatingState.value.activeProfileId)
         check(repo.swapKeys("game.xo", "root", 0, 1).isFailure)
         repo.changePage(-1).getOrThrow()
         assertEquals("@home", repo.operatingState.value.activeProfileId)
-        repo.showTeamsCall(true)
+        repo.showTeamsCall(CallStatus.JOINED)
         assertEquals("@home", repo.operatingState.value.activeProfileId)
-        repo.showTeamsCall(false); repo.showTeamsCall(true)
+        repo.showTeamsCall(CallStatus.NO_SIGNAL); repo.showTeamsCall(CallStatus.JOINED)
         assertEquals("in-call", repo.operatingState.value.activePage.id)
     }
     @Test fun disablingHidesOnlyOwnedProfilesAndLeavesCustomBindingsIntact() {
