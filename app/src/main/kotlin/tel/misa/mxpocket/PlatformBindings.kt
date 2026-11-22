@@ -8,12 +8,12 @@ import tel.misa.mxpocket.workflow.WorkflowField
 import tel.misa.mxpocket.workflow.WorkflowOrigin
 
 internal fun PocketSession.platformBindings(): List<Pair<String,ActionCall>> = buildList {
-    for (command in DeckCommand.entries.filterNot { it.legacyCapture || it.nativeControl }) {
+    for (command in DeckCommand.entries.filterNot { it.legacyCapture || it.nativeControl || it.deck in disabledPlugins.value }) {
         if (command == DeckCommand.OPEN) deckState.value.favorites.forEach {
             add("Launch ${it.label}" to ActionCall(command.id,mapOf("component" to it.component)))
         } else add("${command.deck}: ${command.label}" to ActionCall(command.id))
     }
-    for (choice in tel.misa.mxpocket.plugins.PhoneApp.entries) {
+    if ("phone" !in disabledPlugins.value) for (choice in tel.misa.mxpocket.plugins.PhoneApp.entries) {
         add("Phone: ${choice.name.lowercase().replaceFirstChar(Char::uppercaseChar)}" to
             ActionCall("phone.open",mapOf("app" to choice.name)))
     }
@@ -27,7 +27,7 @@ internal fun PocketSession.pluginDetails(id: String): String {
         "audio" -> if (state.media.access) "Media access on. ${state.media.status}" else "Media access off. Basic media keys available."
         "navigation" -> if (state.navigationEnabled) "System navigation enabled." else "Basic in-app navigation; system access off."
         "teams" -> "Work opens Teams on this phone. Call tools keep the meeting mic on the center key. Automatic switching is optional."
-        "game.xo" -> "Choose single player against the computer or local 1v1. Play and change modes on the keypad."
+        "game.xo" -> "Press Previous and Next together on the keypad to play. Press either one again to exit."
         "focus" -> "Timer, pause, reset, and duration presets. No permission required."
         "phone" -> "Camera, settings, dialer, browser and alarms. Direct shortcuts are optional."
         else -> ""

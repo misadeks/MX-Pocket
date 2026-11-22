@@ -37,6 +37,7 @@ class MainActivityTest {
     }
     @Test fun previewRunsTimerAndChangesPageWithoutClaimingUsbSuccess() {
         ActivityScenario.launch(MainActivity::class.java).use {
+            ui.onNodeWithText("Focus").performClick()
             ui.onNodeWithText("Connect virtual keypad").performClick()
             ui.onNodeWithContentDescription("Key 1, Start", substring = true).performClick()
             ui.onNodeWithContentDescription("Key 1, Pause", substring = true).assertExists()
@@ -65,6 +66,7 @@ class MainActivityTest {
             val key = deck.state.value.activePage.keys.first().copy(label = "Open Audio", action = null,
                 holdAction = ActionCall(DeckActions.PROFILE, mapOf(DeckActions.PROFILE_ID to "audio")))
             scene.onActivity { deck.setKey("focus", "root", 0, key).getOrThrow() }
+            ui.onNodeWithText("Focus").performClick()
             ui.onNodeWithText("Connect virtual keypad").performClick()
             val slot = ui.onNodeWithContentDescription("Key 1, Open Audio", substring = true)
             slot.performClick()

@@ -22,6 +22,33 @@ class WorkspaceWindowTest {
     @get:Rule val ui = createComposeRule()
     @get:Rule val temp = TemporaryFolder()
 
+    @Test fun switchingOffTheEditedProfileHidesItsKeysButNotACustomNamesake() {
+        val repo = DeckRepository(File(temp.root, "deck.json"))
+        val custom = repo.duplicateProfile("audio", "Audio").getOrThrow()
+        repo.renameProfile("audio", "My player").getOrThrow()
+        repo.selectProfile("audio").getOrThrow()
+        val store = repo.asEditorStore()
+        ui.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(.75f)) {
+                Box(Modifier.requiredWidth(900.dp)) { PocketTheme {
+                    LayoutEditor(store, availableFactoryKeyBindings(repo.state.collectAsState().value.disabledPluginIds),
+                        emptyMap(), {}, {})
+                } }
+            }
+        }
+        ui.onNodeWithContentDescription("Key 1,", substring = true).performClick()
+        ui.onNodeWithTag("key-label").assertExists()
+        ui.runOnIdle { repo.setDisabledPlugins(setOf("audio")) }
+        ui.onNodeWithTag("key-label").assertDoesNotExist()
+        ui.onNodeWithText("My player", substring = true).assertDoesNotExist()
+        ui.onNodeWithText("Tic Tac Toe", substring = true).assertDoesNotExist()
+        ui.onNodeWithText("Audio").performClick()
+        assertTrue(repo.state.value.visibleProfiles.any { it.id == custom })
+        ui.onNodeWithContentDescription("Key 1,", substring = true).performClick()
+        ui.onNodeWithTag("choose-binding").performClick()
+        ui.onNodeWithText("Audio key 1").assertDoesNotExist()
+    }
+
     @Test fun resizingAcrossNavigationRailPreservesTheOpenEditorAndNeverRunsAKey() {
         val repo = DeckRepository(File(temp.root, "deck.json"))
         val store = repo.asEditorStore()

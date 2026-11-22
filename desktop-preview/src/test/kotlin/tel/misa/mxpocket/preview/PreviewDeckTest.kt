@@ -84,6 +84,7 @@ class PreviewDeckTest {
     @Test fun legacyOwnerAndExplicitMediaCommandsKeepTheirMeaningsOnEditedPages() {
         val repo = DeckRepository(File(folder.root, "deck.json"))
         val deck = PreviewDeck(repo)
+        deck.select("focus")
         fun bind(i: Int, command: DeckCommand, migrated: Boolean = false) {
             val owner = if (migrated) mapOf(DeckActions.LEGACY_SLOT_OWNER to "audio") else emptyMap()
             repo.setKey("focus", "root", i, DeckKey(action = ActionCall(command.id, owner))).getOrThrow()
@@ -106,12 +107,20 @@ class PreviewDeckTest {
         check(deck.press(2, 0).startsWith("Invalid action parameters"))
         check(deck.tiles(0)[3].label == "5 / 15")
     }
-    @Test fun pageButtonsUseFolderHistoryBeforeCyclingProfiles() {
+    @Test fun launcherPaginatesAndBrowseAlwaysOpensProfileRoots() {
         val repo = DeckRepository(File(folder.root, "deck.json"))
         val deck = PreviewDeck(repo)
         val page = repo.createPage("focus", "Projects").getOrThrow()
+        val extras = List(4) { repo.createProfile("Custom $it").getOrThrow() }
+        check(deck.profileName == "Home")
+        check(deck.tiles(0)[8].label == "More profiles")
+        deck.press(8, 0)
+        deck.press(2, 0)
+        assertEquals(extras.last(), deck.profileId)
+        deck.select("focus")
+        repo.openPage(page).getOrThrow()
         deck.cycle(1)
-        assertEquals(page, repo.state.value.activePage.id)
+        assertEquals("audio", deck.profileId)
         deck.cycle(-1)
         assertEquals("root", repo.state.value.activePage.id)
         assertEquals("focus", deck.profileId)
@@ -120,6 +129,7 @@ class PreviewDeckTest {
     @Test fun focusUsesTheProductionFrameAndKeepsPerKeyVisualOverrides() {
         val repo = DeckRepository(File(folder.root, "deck.json"))
         val deck = PreviewDeck(repo)
+        deck.select("focus")
         val factory = FocusTimer().present(0).keys
         assertEquals(factory, deck.tiles(0))
         val state = repo.state.value
@@ -147,15 +157,17 @@ class PreviewDeckTest {
     @Test fun factoryNavigationTimerAndSimulatedAudio() {
     val deck = PreviewDeck(DeckRepository(File(folder.root, "deck.json")))
     fun label(key: Int, now: Long = 0) = deck.tiles(now)[key - 1].label
+    check(deck.profileName == "Home")
+    deck.press(0, 0)
     check(deck.profileName == "Focus")
     deck.press(6, 0) // 15-minute preset
     deck.press(0, 0)
     check(label(2, 1_000) == "14:59")
 
     deck.cycle(-1)
-    check(deck.profileId == "teams")
+    check(deck.profileName == "Home")
     deck.cycle(-1)
-    check(deck.profileId == "game.xo")
+    check(deck.profileId == "teams")
     deck.cycle(-1)
     check(deck.profileName == "Navigation")
     check(deck.press(1, 1_000).contains("No system action"))
@@ -180,7 +192,7 @@ class PreviewDeckTest {
     check(before[7].readOnly)
     for (slot in 6..8) { check(!before[slot].enabled || before[slot].readOnly); deck.press(slot, 1_000) }
     check(before == deck.tiles(0))
-    repeat(deck.repository.state.value.profiles.sumOf { it.pages.size }) {
+    repeat(deck.profiles.size + 1) {
         check(deck.tiles(1_000).size == 9)
         deck.cycle(1)
     }
@@ -189,7 +201,7 @@ class PreviewDeckTest {
 
     @Test fun xoUsesThePlayableAndroidBoard() {
         val deck = PreviewDeck(DeckRepository(File(folder.root, "deck.json")))
-        deck.select("game.xo")
+        deck.repository.enterGame().getOrThrow()
         fun press(slot: Int) = deck.press(slot, 0)
         fun label(slot: Int) = deck.tiles(0)[slot].label
         check(label(0) == "1 Player" && label(2) == "2 Players")
@@ -203,8 +215,66 @@ class PreviewDeckTest {
         for (slot in listOf(0, 3, 1, 4)) press(slot)
         check(press(2).startsWith("X wins"))
         deck.cycle(1)
-        deck.cycle(-1)
+        check(deck.profileName == "Home")
+        deck.repository.enterGame().getOrThrow()
         press(4)
         check(label(2) == "2 Players")
+    }
+
+    @Test fun allPluginsOffLeavesAnEditableLayoutWithoutPruningTheBackup() {
+        val repo = DeckRepository(File(folder.root, "deck.json"))
+        val backup = repo.exportJson()
+        val allPlugins = repo.state.value.profiles.map { it.id }.toSet()
+        repo.setDisabledPlugins(allPlugins)
+        val blank = repo.state.value.visibleProfiles.single()
+        assertEquals(backup, repo.exportJson())
+        repo.openProfileRoot(blank.id).getOrThrow()
+        repo.setKey(blank.id, blank.rootPageId, 0, DeckKey(label = "Kept")).getOrThrow()
+        repo.setDisabledPlugins(emptySet())
+        assertEquals("Kept", repo.state.value.activePage.keys.first().label)
+        check(repo.state.value.profiles.map { it.id }.containsAll(allPlugins))
+        val fresh = DeckRepository(File(folder.root, "limited.json"), allPlugins)
+        fresh.importJson(backup).getOrThrow()
+        fresh.restoreDefaults().getOrThrow()
+        check(fresh.state.value.activeProfileId !in allPlugins)
+        check(fresh.state.value.visibleProfiles.size == 1)
+    }
+
+    @Test fun disablingHidesOnlyOwnedProfilesAndLeavesCustomBindingsIntact() {
+        val file = File(folder.root, "deck.json")
+        val repo = DeckRepository(file)
+        val host = PreviewDeck(repo)
+        val copy = repo.duplicateProfile("audio", "Audio").getOrThrow()
+        val child = repo.createPage("audio", "My controls").getOrThrow()
+        repo.renameProfile("audio", "Renamed").getOrThrow()
+        val rules = listOf(tel.misa.mxpocket.deck.DeckRule("foregroundApp", "sample.app"))
+        repo.setRules("audio", rules).getOrThrow()
+        repo.setPinned("audio").getOrThrow()
+        repo.openPage(child).getOrThrow()
+        val backup = repo.exportJson()
+        host.setPluginEnabled("audio", false)
+        assertEquals("focus", host.profileId)
+        check(host.profiles.any { it.first == copy } && host.profiles.none { it.first == "audio" || it.first == "game.xo" })
+        check(repo.selectProfile("audio").isFailure && repo.setDefault("audio").isFailure)
+        assertEquals(backup, repo.exportJson())
+        val cold = DeckRepository(file, setOf("audio"))
+        check(cold.state.value.visibleProfiles.none { it.id == "audio" })
+        host.select(copy)
+        repo.setDefault(copy).getOrThrow()
+        repo.setAutomatic(true).getOrThrow()
+        for (time in listOf(0L, 2000L)) repo.observe(mapOf("foregroundApp" to "sample.app"), time).getOrThrow()
+        assertEquals(copy, host.profileId)
+        check("audio" !in repo.decision.value.scores)
+        check(!host.tiles(0).first().enabled)
+        host.setPluginEnabled("audio", true)
+        check(host.tiles(0).first().enabled)
+        repo.selectProfile("audio").getOrThrow()
+        assertEquals(child, repo.state.value.activePage.id)
+        assertEquals(rules, repo.state.value.activeProfile.rules)
+        assertEquals("Renamed", host.profileName)
+        val game = repo.state.value.profiles.single { it.id == "game.xo" }
+        check(repo.setKey(game.id, game.rootPageId, 0, DeckKey(label = "Edit")).isFailure)
+        check(repo.deleteProfile(game.id).isFailure && repo.selectProfile(game.id).isFailure)
+        check(repo.createPage(copy, "Still editable").isSuccess)
     }
 }

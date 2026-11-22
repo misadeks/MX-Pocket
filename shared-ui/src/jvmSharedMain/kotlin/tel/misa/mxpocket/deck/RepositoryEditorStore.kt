@@ -57,6 +57,6 @@ private class RepositoryEditorStore(private val repo: DeckRepository) : DeckEdit
 
     private fun conflict(message: String) = Result.failure<Unit>(IllegalStateException(message))
     private fun navigate(expected: String, action: () -> Result<Unit>) =
-        if (state.value.activeProfileId != expected) conflict("The active profile changed. Select it again before navigating.")
+        if (repo.operatingState.value.activeProfileId != expected) conflict("The active profile changed. Select it again before navigating.")
         else action()
 }

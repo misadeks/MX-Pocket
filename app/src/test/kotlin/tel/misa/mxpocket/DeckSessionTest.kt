@@ -65,6 +65,8 @@ class DeckSessionTest {
         repo.save().getOrThrow()
         val reloaded = PocketSession(app)
         reloaded.attach(screen)
+        assertEquals(PROFILE_HOME, reloaded.deck.operatingState.value.activeProfileId)
+        reloaded.openProfile("studio")
         verifyLoaded(reloaded, 2)
         // Explicit v2 actions are not positional plugin bindings.
         reloaded.deck.setKey("studio","root",0,DeckKey(action = ActionCall("media.volume-down"))).getOrThrow()
@@ -157,6 +159,7 @@ class DeckSessionTest {
         }
         val device = ReflectionHelpers.newInstance(UsbDevice::class.java)
         ReflectionHelpers.setField(device,"mName","simulated")
+        session.selectProfile("focus")
         session.connect(session.reserve(device)!!,app.getSystemService(UsbManager::class.java),device,{}, { error("Unexpected shortcut") })
         main.idle()
         emit(KeyEvent(1,true))

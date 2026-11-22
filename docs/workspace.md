@@ -7,12 +7,27 @@ With the virtual keypad connected, tap the nine-key board on Home instead.
 **Plugins** turns features on or off, **Flows** lets you build and run workflows,
 and **Settings** contains USB preferences, background images and diagnostics.
 
+Turning off a plugin hides its own profile and pages from Home, Keypad, and
+the action pickers on that host. If it was on the keypad, the keypad shows an
+available profile instead. Turn it back on in **Plugins** to use its saved
+layout again. Custom profiles stay visible, even if they contain keys for a
+disabled plugin; those bindings are kept for when the plugin is enabled again.
+
 **Keypad** edits the board. Its active-page preview uses the same key faces as
 the LCDs, including Audio transport symbols, the volume indicator and cover
 art when available. Selecting a key there edits its label, icon, color or
 action; it never runs the action. Other pages can be edited without activating
 their plugins. In a narrow window, Back returns from the key editor; a wider
 window keeps the board and key details side by side.
+Home starts on a nine-key profile launcher. Pick a profile to open its first
+page; **More profiles** shows the next group when needed. **Previous page**
+and **Next page** browse Home and the available profile roots. They skip
+submenus such as Teams Call tools; open those with their assigned keys.
+
+For Tic Tac Toe, press **Previous** and **Next** together on the keypad
+(**Page Up** and **Page Down** in the Windows simulator). Release both, then
+press either one to return. The game has no regular menu entry or layout
+editor. Its switch remains in **Plugins**.
 
 To give a key a second action, select it in **Keypad**, choose **Hold** under
 **Key actions**, pick an action, and save the key. **Tap** and **Hold** are

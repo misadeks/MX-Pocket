@@ -23,7 +23,7 @@ data class ForegroundControls(val enabled: Boolean, val granted: Boolean,
 @Composable
 internal fun RuleSection(profile: DeckProfile, profiles: List<DeckProfile>, signals: Map<String, String>, writable: Boolean,
                          foreground: ForegroundControls?, addApp: (String, () -> Unit) -> Unit,
-                         edit: (Int) -> Unit, remove: (Int) -> Unit) {
+                         edit: (Int) -> Unit, remove: (Int) -> Unit, disabledIds: Set<String>) {
     var showSignals by rememberSaveable { mutableStateOf(false) }
     var choosing by rememberSaveable { mutableStateOf(false) }
     var advanced by rememberSaveable { mutableStateOf(false) }
@@ -53,7 +53,14 @@ internal fun RuleSection(profile: DeckProfile, profiles: List<DeckProfile>, sign
                     val mapped = profiles.filter { p -> p.rules.any { it.signal == FOREGROUND_APP && it.value == app.packageId } }
                     TextButton(onClick = { addApp(app.packageId) { choosing = false } },
                         enabled = writable && mapped.isEmpty() && app.packageId.length <= DeckLimits.RULE_VALUE) {
-                        Column { Text(app.label); Text(if (mapped.isEmpty()) app.packageId else "Mapped to ${mapped.joinToString { it.name }}") }
+                        Column {
+                            Text(app.label)
+                            Text(when {
+                                mapped.isEmpty() -> app.packageId
+                                mapped.all { it.id in disabledIds } -> "Mapped to a disabled plugin"
+                                else -> "Mapped to ${mapped.filterNot { it.id in disabledIds }.joinToString { it.name }}"
+                            })
+                        }
                     }
                 } }
             }

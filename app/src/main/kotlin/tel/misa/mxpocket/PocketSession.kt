@@ -94,13 +94,13 @@ internal class PocketSession(
 
     private val main = Handler(Looper.getMainLooper())
     private val physicalKeys = PhysicalChordInput(main)
+    private val pageButtons = PageButtons()
     private data class PluginSlot(val index: Int, val generation: Int)
     private val physicalOwners = arrayOfNulls<PluginSlot>(9)
     private val audio = app.getSystemService(AudioManager::class.java)
     private val logs = ArrayDeque<String>()
     private var screen: Screen? = null
     private val sessionScope = CoroutineScope(Dispatchers.Main.immediate + SupervisorJob())
-    val deck = DeckRepository(app)
     private val switches = app.getSharedPreferences("plugins", Context.MODE_PRIVATE)
     private val detectApps = MutableStateFlow(switches.getBoolean("detectForegroundApps", false))
     val detectForegroundApps = detectApps.asStateFlow()
@@ -108,8 +108,10 @@ internal class PocketSession(
         switches.edit().putBoolean("detectForegroundApps", enabled).apply()
         detectApps.value = enabled
     }
-    private val disabled = MutableStateFlow(switches.getStringSet("disabled", emptySet()).orEmpty().toSet())
+    private val disabled = MutableStateFlow(switches.getStringSet("disabled", emptySet()).orEmpty()
+        .intersect(registeredPlugins.map { it.descriptor.id }.toSet()))
     val disabledPlugins = disabled.asStateFlow()
+    val deck = DeckRepository(app, disabled.value)
     private val _signals = MutableStateFlow(emptyMap<String,String>())
     val signals = _signals.asStateFlow()
     private var visibleKey = false
@@ -128,7 +130,7 @@ internal class PocketSession(
         readAudio = { AudioSnapshot(audio.getStreamVolume(AudioManager.STREAM_MUSIC),
             audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC)) },
         perform = ::perform, invalidateUi = ::invalidate, reportError = { id, error -> fail("Plugin $id failed", error) },
-        observeDecks = deckState,
+        observeDecks = deckState, navigate = ::selectProfile,
     )
     var request: Request? = null
         private set
@@ -163,7 +165,7 @@ internal class PocketSession(
         request != null -> "Connecting"
         else -> "Disconnected"
     }
-    val isPhoneShortcutPage get() = deck.state.value.let {
+    val isPhoneShortcutPage get() = deck.operatingState.value.let {
         it.activeProfileId == "phone" && it.activePage.id == it.activeProfile.rootPageId && plugins.selectedId == "phone"
     }
     private var signalClock: Job? = null
@@ -192,7 +194,7 @@ internal class PocketSession(
 
     init {
         sessionScope.launch {
-            deck.state.collect { physicalKeys.cancel(); syncLayout(); invalidate() }
+            deck.operatingState.collect { physicalKeys.cancel(); syncLayout(); invalidate() }
         }
         sessionScope.launch { workflows.status.collect { invalidate() } }
         sessionScope.launch { workflows.definitions.collect { invalidate() } }
@@ -200,7 +202,7 @@ internal class PocketSession(
     }
 
     private fun syncLayout() {
-        val state = deck.state.value
+        val state = deck.operatingState.value
         if (lastLayout?.let { it.profile != state.activeProfileId || it.page != state.activePage } == true)
             plugins.setEnabled(false) // Release held keys before rebinding even if the plugin ID is unchanged.
         val id = selectedPlugin(state.activePage)
@@ -242,11 +244,12 @@ internal class PocketSession(
         })
     }
     private fun selectedPlugin(page: DeckPage) = page.selectedSlotOwner(::hasPlugin)
-    private fun layout() = deck.state.value.let { Layout(it.activeProfileId, it.activePage, plugins.generation, disabled.value) }
+    private fun layout() = deck.operatingState.value.let { Layout(it.activeProfileId, it.activePage, plugins.generation, disabled.value) }
 
     fun setPluginEnabled(id: String, enabled: Boolean) {
         require(hasPlugin(id))
         disabled.value = if (enabled) disabled.value - id else disabled.value + id
+        deck.setDisabledPlugins(disabled.value)
         switches.edit().putStringSet("disabled", disabled.value).apply()
         if (id == TEAMS) refreshTeams()
         syncLayout()
@@ -268,7 +271,7 @@ internal class PocketSession(
     }
 
     private fun canShowTrack(): Boolean {
-        if ("audio" in disabled.value || deck.state.value.activeProfileId != "audio") return false
+        if ("audio" in disabled.value || deck.operatingState.value.activeProfileId != "audio") return false
         val ticket = request
         if (ticket != null) return output != null && !preview && app.hasKeypadAccess(ticket)
         return screen != null && app.isUnlockedAndInteractive()
@@ -281,7 +284,7 @@ internal class PocketSession(
         if ((mediaState.title.isNotEmpty() || mediaState.artwork != null) && !canShowTrack()) media.refreshDisplay()
         images.useArtwork(visibleArtwork(deckState.value.media))
         val native = plugins.render()
-        val page = deck.state.value.activePage
+        val page = deck.operatingState.value.activePage
         val keys = page.keys.mapIndexed { index, key ->
             val displayed = if (hold || key.action == null) key.holdAction else key.action
             bindingFace(index, if (displayed == key.action) key else key.copy(action = displayed), native)
@@ -300,14 +303,15 @@ internal class PocketSession(
             call.params["index"]?.toIntOrNull()?.let(native.keys::getOrNull)
             else workflowTile(call) ?: platformTile(call)
         val registered = tile != null || call?.id in setOf(DeckActions.PAGE, DeckActions.PROFILE,
-            DeckActions.BACK, DeckActions.ROOT, "sound.play","phone.open","keypad.status")
+            DeckActions.BACK, DeckActions.ROOT, MORE_PROFILES, "sound.play","phone.open","keypad.status")
         val cameraControl = tile?.inputToken?.let(DeckCommand::fromId)?.takeIf { it.nativeControl }
         val available = registered && key.enabled && call != null && (plugin == null || plugin == plugins.selectedId) &&
             (cameraControl == null || isStudioKey(index, cameraControl)) &&
             (tile?.inputToken?.startsWith("${DeckCommand.TEAMS_MIC.id}:") != true || isTeamsMicKey(index)) &&
-            ownerOf(call) !in disabled.value && (tile?.enabled != false)
+            ownerOf(call) !in disabled.value && call.targetProfileId() !in disabled.value &&
+            call.targetProfileId() != GAME_PROFILE && (tile?.enabled != false)
         val footer = when {
-            !key.enabled || ownerOf(call) in disabled.value -> "Disabled"
+            !key.enabled || ownerOf(call) in disabled.value || call?.targetProfileId() in disabled.value -> "Disabled"
             ownerOf(call) == TEAMS && tile != null -> if (tile.enabled && !available) "Unavailable" else tile.footer
             tile?.glyph == NavigationGlyph.ACCESS_INFO ||
                 tile?.glyph == NavigationGlyph.RECENTS && !tile.enabled -> tile.footer
@@ -326,7 +330,7 @@ internal class PocketSession(
 
     private fun configuredApps(state: tel.misa.mxpocket.deck.DeckState, enabled: Boolean): Set<String> =
         if (!enabled || !state.automatic || !state.activeProfile.automatic || state.pinnedProfileId != null) emptySet()
-        else state.profiles.asSequence().filter { it.automatic }.flatMap { it.rules }
+        else state.visibleProfiles.asSequence().filter { it.automatic }.flatMap { it.rules }
             .filter { it.signal == FOREGROUND_APP }.map { it.value }.toSet()
 
     private fun updateObservation() {
@@ -390,7 +394,7 @@ internal class PocketSession(
     private fun sampleContext(foregroundApp: String? = _signals.value[FOREGROUND_APP]) {
         val time = LocalDateTime.now()
         val connected = output != null && request != null
-        val state = deck.state.value
+        val state = deck.operatingState.value
         val snapshot = mapOf("foreground" to (screen != null).toString(),
             "activity" to if (screen != null) "MX Pocket" else "Not observed",
             "mediaActive" to (audio.isMusicActive && "audio" !in disabled.value).toString(), "keypadConnected" to connected.toString(),
@@ -412,6 +416,13 @@ internal class PocketSession(
 
     fun selectProfile(id: String) {
         deck.selectProfile(id).onFailure { fail("Cannot select profile", it) }
+        syncLayout()
+        invalidate()
+    }
+
+    fun openProfile(id: String) {
+        if (id == PROFILE_HOME) deck.showHome()
+        else deck.openProfileRoot(id).onFailure { fail("Cannot open profile", it) }
         syncLayout()
         invalidate()
     }
@@ -461,8 +472,8 @@ internal class PocketSession(
     private fun workflowActions() = listOf(
         WorkflowActionSpec("sound.play","Play a sound"),
         WorkflowActionSpec("keypad.status","Set key status",listOf(WorkflowField("key","Key index (0-8)",(0..8).map(Int::toString)), WorkflowField("text","Status text"))),
-        WorkflowActionSpec(DeckActions.PROFILE,"Switch profile",listOf(WorkflowField("profileId","Profile ID",deck.state.value.profiles.map { it.id }))),
-        WorkflowActionSpec(DeckActions.PAGE,"Open page in active profile",listOf(WorkflowField("pageId","Page ID",deck.state.value.profiles.flatMap { p -> p.pages.map { it.id } }.distinct()))),
+        WorkflowActionSpec(DeckActions.PROFILE,"Switch profile",listOf(WorkflowField("profileId","Profile ID",deck.state.value.visibleProfiles.map { it.id }))),
+        WorkflowActionSpec(DeckActions.PAGE,"Open page in active profile",listOf(WorkflowField("pageId","Page ID",deck.state.value.visibleProfiles.flatMap { p -> p.pages.map { it.id } }.distinct()))),
         WorkflowActionSpec(DeckActions.BACK,"Previous page"), WorkflowActionSpec(DeckActions.ROOT,"Profile root"),
         WorkflowActionSpec("phone.open","Open a phone app",listOf(WorkflowField("app","Phone app",PhoneApp.entries.map { it.name })), requiresConfirmation = true),
     ) + platformWorkflowActions()
@@ -481,7 +492,9 @@ internal class PocketSession(
         return when (call.id) {
             DeckActions.BACK -> result(deck.back())
             DeckActions.ROOT -> result(deck.root())
-            DeckActions.PROFILE -> result(deck.selectProfile(call.params["profileId"].orEmpty()))
+            DeckActions.PROFILE -> result(if (deck.operatingState.value.activeProfileId == PROFILE_HOME)
+                deck.openProfileRoot(call.params["profileId"].orEmpty()) else deck.selectProfile(call.params["profileId"].orEmpty()))
+            MORE_PROFILES -> result(deck.moreProfiles())
             DeckActions.PAGE -> result(deck.openPage(call.params["pageId"].orEmpty()))
             "sound.play" -> {
                 try {
@@ -600,6 +613,7 @@ internal class PocketSession(
     fun disconnect(reason: String = app.getString(R.string.not_connected)) {
         inputGeneration++
         physicalKeys.disconnect()
+        pageButtons.reset()
         physicalOwners.fill(null)
         request = null
         preview = false
@@ -630,7 +644,7 @@ internal class PocketSession(
     /** The Home board resolves a visible click or long-click. Neither is a USB down or a chord member. */
     fun phoneKey(index: Int, hold: Boolean = false): Boolean {
         if (screen == null || output == null || visibleKey) return false
-        val key = deck.state.value.activePage.keys.getOrNull(index) ?: return false
+        val key = deck.operatingState.value.activePage.keys.getOrNull(index) ?: return false
         val call = (if (hold) key.holdAction else key.action) ?: return false
         if (hold && !app.isUnlockedAndInteractive()) return false
         val face = frame().keys[index]
@@ -649,8 +663,10 @@ internal class PocketSession(
         log("${if (event.synthetic) "CANCEL" else "KEY"} 0x${event.controlId.toString(16)} " +
             if (event.pressed) "press" else "release")
         when (event.controlId) {
-            0x01a1 -> if (event.pressed && !event.synthetic) changePage(-1)
-            0x01a2 -> if (event.pressed && !event.synthetic) changePage(1)
+            0x01a1, 0x01a2 -> pageButtons.input(if (event.controlId == 0x01a1) -1 else 1,
+                event.pressed, event.synthetic, ::changePage) {
+                deck.enterGame().onFailure { message(it.message ?: "Game unavailable") }
+            }
             in 1..9 -> {
                 val index = event.controlId - 1
                 if (!event.pressed || event.synthetic) {
@@ -682,7 +698,7 @@ internal class PocketSession(
             if (tap != null) dispatchKey(index, tap, event, virtual = false, pressAt = arrivedAt)
             return
         }
-        val profile = deck.state.value.activeProfile
+        val profile = deck.operatingState.value.activeProfile
         fun authorized() = app.isUnlockedAndInteractive() && app.hasKeypadAccess(ticket)
         fun current() = request == ticket && binding == layout() && actionable(frame())
         if (hold != null && (!authorized() || SystemClock.elapsedRealtime() - arrivedAt !in 0 until 2_000L)) return
@@ -690,7 +706,7 @@ internal class PocketSession(
         val originalHold = hold?.let { holdFace() }
         val deadline = if (hold != null) arrivedAt + ViewConfiguration.getLongPressTimeout() else 0L
         physicalKeys.press(index, arrivedAt, epoch, partners, current = {
-            current() && (partners.isEmpty() || (deck.state.value.activeProfile == profile &&
+            current() && (partners.isEmpty() || (deck.operatingState.value.activeProfile == profile &&
                 SystemClock.elapsedRealtime() - arrivedAt in 0 until 2_000L && authorized()))
         }, single = { deferred ->
             if (hold != null) {
@@ -706,9 +722,7 @@ internal class PocketSession(
                 dispatchKey(index, tap, event, virtual = false, pressAt = arrivedAt.takeUnless { deferred })
             }
         }, chord = { chord ->
-            val id = plugins.selectedId
             plugins.chord(chord) // Neither member lends a synchronous user-press authority to the callback.
-            followPluginSelection(id)
         })
     }
 
@@ -743,7 +757,6 @@ internal class PocketSession(
                 if (slot in physicalOwners) return
                 if (!virtual) physicalOwners[index] = slot
                 plugins.key(PluginKeyEvent(slot.index, event.pressed, event.synthetic))
-                followPluginSelection(call.params.getValue("pluginId"))
             } else if (event.pressed && !event.synthetic) {
                 press(call.commandBinding(), virtual, index)
             }
@@ -754,13 +767,8 @@ internal class PocketSession(
         }
     }
 
-    private fun followPluginSelection(previous: String) {
-        if (plugins.selectedId != previous && deck.state.value.profiles.any { it.id == plugins.selectedId })
-            selectProfile(plugins.selectedId)
-    }
-
     fun cancelPhysicalGesture() {
-        if (plugins.chords.isEmpty() && deck.state.value.activePage.keys.none { it.holdAction != null }) return
+        if (plugins.chords.isEmpty() && deck.operatingState.value.activePage.keys.none { it.holdAction != null }) return
         physicalKeys.cancel()
         receipts = LongArray(9) // Also reject input posted from the USB thread before this boundary.
         invalidate()
@@ -1058,7 +1066,7 @@ internal class PocketSession(
     }
 
     private fun isTeamsMicKey(index: Int): Boolean {
-        val layout = deck.state.value
+        val layout = deck.operatingState.value
         val key = layout.activePage.keys[index]
         return index == 4 && layout.activeProfileId == TEAMS && layout.activePage.id == IN_CALL &&
             key.action == ActionCall("plugin.key", mapOf("pluginId" to TEAMS, "index" to "4")) &&
@@ -1066,7 +1074,7 @@ internal class PocketSession(
     }
 
     private fun isStudioKey(index: Int, command: DeckCommand): Boolean {
-        val state = deck.state.value
+        val state = deck.operatingState.value
         val key = state.activePage.keys[index]
         val call = key.action ?: return false
         return state.activeProfileId == "studio" && state.activePage.id == state.activeProfile.rootPageId &&

@@ -8,6 +8,7 @@ import java.awt.FileDialog
 import androidx.compose.ui.awt.ComposeWindow
 import java.io.File
 import java.nio.file.Files
+import java.util.prefs.Preferences
 import kotlinx.coroutines.delay
 import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.*
@@ -39,11 +40,14 @@ fun main() = application {
             Files.createDirectories(it.toPath())
         }
     }
-    val repo = remember { DeckRepository(File(directory, "deck.json")) }
+    val registry = remember { defaultDeck().profiles }
+    val switches = remember { Preferences.userNodeForPackage(PreviewDeck::class.java) }
+    val repo = remember { DeckRepository(File(directory, "deck.json"),
+        registry.filter { switches.getBoolean("disabled.${it.id}", false) }.map { it.id }.toSet()) }
     val host = remember { PreviewDeck(repo) }
     val workflows = remember(directory) { DesktopWorkflowStore(directory) }
     val workflowState by workflows.state.collectAsState()
-    val deck by repo.state.collectAsState()
+    val deck by repo.operatingState.collectAsState()
     var tab by remember { mutableStateOf(WorkspaceTab.HOME) }
     var simulating by remember { mutableStateOf(true) }
     var message by remember { mutableStateOf("Virtual keypad connected. No USB messages are sent.") }
@@ -77,7 +81,12 @@ fun main() = application {
     Window(::exitApplication, title = "${deck.activeProfile.name} - MX Pocket",
         state = rememberWindowState(width = 1120.dp, height = 760.dp),
         onPreviewKeyEvent = {
-            if (it.type == KeyEventType.KeyUp && it.key == Key.Escape) {
+            if (!setup && simulating && tab == WorkspaceTab.HOME && it.key in listOf(Key.PageUp, Key.PageDown)) {
+                host.pageButtons.input(if (it.key == Key.PageUp) -1 else 1, it.type == KeyEventType.KeyDown, false,
+                    { delta -> repo.changePage(delta).onFailure { error -> status(error.message ?: "Cannot change profile.") } },
+                    { repo.enterGame().onFailure { error -> status(error.message ?: "Game unavailable.") } })
+                true
+            } else if (it.type == KeyEventType.KeyUp && it.key == Key.Escape) {
                 when {
                     setup -> { setup = false; true }
                     nestedBack != null -> { nestedBack?.invoke(); true }
@@ -86,7 +95,7 @@ fun main() = application {
                 }
             } else false
         }) {
-        val profiles = deck.profiles.map { ProfileChoice(it.id, it.name) }
+        val profiles = deck.visibleProfiles.map { ProfileChoice(it.id, it.name) }
         val board = remember(deck, time, revision, simulating) { host.board(time, deck) }
         val tiles = board.faces.map { it.toGridTile(simulating) }
         val state = PocketScreenState(status = message, pluginTitle = if (deck.activeProfile.name == deck.activePage.name)
@@ -96,25 +105,25 @@ fun main() = application {
             log = history.joinToString("\n"), simulating = simulating, deviceLimit = DEVICE_LIMIT,
             activePageId = deck.activePage.id, hardwareSummary = !simulating,
             virtualGrid = board.grid.takeIf { simulating })
-        val plugins = defaultDeck().profiles.map {
-            PluginItem(it.id, it.name, true, "Local simulation", when (it.id) {
+        val plugins = registry.map {
+            PluginItem(it.id, it.name, it.id !in deck.disabledPluginIds, "Local simulation", when (it.id) {
                 "focus" -> "Timer and presets run locally. No completion sound."
                 "audio" -> "Volume and playback are simulated. Windows media is unchanged."
-                "game.xo" -> "Play against the computer or a second player on this keypad."
+                "game.xo" -> "On Home, press Page Up and Page Down together to play. Press either one again to exit."
                 else -> "Android device actions do not run on Windows."
-            }, profiles.any { profile -> profile.id == it.id }, it.id == deck.defaultProfileId, null, canToggle = false)
+            }, profiles.any { profile -> profile.id == it.id }, it.id == deck.defaultProfileId, null)
         }
         val options = buildList {
             add(BindingOption("Back", ActionCall(DeckActions.BACK)))
             add(BindingOption("Return to root", ActionCall(DeckActions.ROOT)))
-            DeckCommand.entries.filter { it.deck in setOf("audio", "navigation", "teams") }.forEach {
+            DeckCommand.entries.filter { it.deck in setOf("audio", "navigation", "teams") && it.deck !in deck.disabledPluginIds }.forEach {
                 add(BindingOption("${it.deck}: ${it.label}", ActionCall(it.id)))
             }
             profiles.forEach { add(BindingOption("Profile: ${it.name}", ActionCall(DeckActions.PROFILE, mapOf("profileId" to it.id)))) }
             workflowState.definitions.forEach {
                 add(BindingOption("Workflow: ${it.name} (Android execution)", ActionCall("workflow.run", mapOf("workflowId" to it.id))))
             }
-            addAll(factoryKeyBindings)
+            addAll(availableFactoryKeyBindings(deck.disabledPluginIds))
         }
         val backup = { save: Boolean ->
             try { chooseBackup(window, repo, save)?.let(::status) }
@@ -142,6 +151,10 @@ fun main() = application {
                         is PocketScreenEvent.VirtualKey -> if (simulating && tab == WorkspaceTab.HOME && !setup)
                             host.press(event, now())?.let(::status)
                         is PocketScreenEvent.DefaultProfile -> repo.setDefault(event.id).getOrThrow()
+                        is PocketScreenEvent.EnablePlugin -> {
+                            switches.putBoolean("disabled.${event.id}", !event.enabled)
+                            host.setPluginEnabled(event.id, event.enabled)
+                        }
                         PocketScreenEvent.FeatureSetup -> { setupReview = false; setup = true }
                         else -> status(DEVICE_LIMIT)
                     }

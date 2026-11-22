@@ -14,10 +14,16 @@ import tel.misa.mxpocket.FOREGROUND_APP
 import tel.misa.mxpocket.decks.*
 
 /** Own one instance per app session. Successful edits replace the file before publishing the new snapshot. */
-class DeckRepository(private val file: File) {
+class DeckRepository(private val file: File, disabledPluginIds: Set<String> = emptySet()) {
 
     private val mutable: MutableStateFlow<DeckState>
     val state: StateFlow<DeckState>
+    private val operating: MutableStateFlow<DeckState>
+    val operatingState: StateFlow<DeckState>
+    private var home = true
+    private var homeBatch = 0
+    private var game = false
+    private val gameProfile = defaultDeck().profiles.single { it.id == GAME_PROFILE }
     private val mutableReason: MutableStateFlow<String>
     val reason: StateFlow<String>
     private val mutableDecision: MutableStateFlow<DeckDecision>
@@ -63,10 +69,12 @@ class DeckRepository(private val file: File) {
             loadError = "Saved deck unreadable; import a backup or restore defaults"
             defaultDeck()
         }
-        val initial = loaded.withBuiltIns()
-        saved = initial.snapshot()
-        mutable = MutableStateFlow(saved)
+        saved = loaded.withBuiltIns().withAvailability(disabledPluginIds).snapshot()
+        val initial = saved.availableSelection()
+        mutable = MutableStateFlow(initial)
         state = mutable.asStateFlow()
+        operating = MutableStateFlow(initial.homeProjection(0).snapshot())
+        operatingState = operating.asStateFlow()
         mutableReason = MutableStateFlow(initial.selectionReason)
         reason = mutableReason.asStateFlow()
         mutableDecision = MutableStateFlow(DeckDecision(initial.selectionReason))
@@ -74,14 +82,66 @@ class DeckRepository(private val file: File) {
     }
 
     @Synchronized fun exportJson(): String = DeckJson.encode(saved)
+
+    @Synchronized fun setDisabledPlugins(ids: Set<String>) {
+        if (saved.disabledPluginIds == ids) return
+        saved = saved.withAvailability(ids)
+        publish()
+    }
+
+    private fun DeckState.withAvailability(ids: Set<String>) =
+        copy(disabledPluginIds = java.util.Collections.unmodifiableSet(HashSet(ids)))
+
+    private fun DeckState.withAvailableLayout(): DeckState {
+        if (visibleProfiles.isNotEmpty()) return this
+        // Materialize a blank custom layout only if the user edits/navigates. Just toggling plugins
+        // must not add a profile to backups (which may already be at their byte limit).
+        val blank = DeckProfile("local.blank", "My layout", "root", listOf(DeckPage("root", "Home")))
+        return copy(profiles = profiles + blank, histories = histories + (blank.id to listOf("root"))).snapshot()
+    }
+
+    private fun DeckState.availableSelection() = if (activeProfileId !in disabledPluginIds && activeProfileId != GAME_PROFILE) this else
+        withAvailableLayout().let { it.copy(activeProfileId = it.availableDefaultId,
+            pinnedProfileId = null, selectionReason = "Selected an available profile") }
+
     fun importJson(text: String) = edit(recover = true, force = true, navigation = true) {
         DeckJson.decode(text).withPrivateReason().withBuiltIns()
     }
     fun restoreDefaults() = edit(recover = true, force = true, navigation = true) { defaultDeck() }
     fun save() = edit(force = true) { it }
 
+    @Synchronized fun showHome() {
+        home = true
+        game = false
+        homeBatch = 0
+        showingCall = false
+        resumeCall = false
+        clearObservation()
+        publish()
+    }
+
+    @Synchronized fun moreProfiles(): Result<Unit> = runCatching {
+        check(home && !game && state.value.visibleProfiles.size > 9) { "No more launcher pages" }
+        val count = (state.value.visibleProfiles.size + 7) / 8
+        homeBatch = (homeBatch.coerceAtMost(count - 1) + 1) % count
+        publish()
+    }
+
+    @Synchronized fun enterGame(): Result<Unit> = runCatching {
+        check(GAME_PROFILE !in saved.disabledPluginIds) { "Enable Tic Tac Toe first." }
+        game = true
+        clearObservation()
+        publish()
+    }
+
+    fun openProfileRoot(id: String) = edit(navigation = true) { old ->
+        val profile = old.availableProfile(id)
+        old.copy(activeProfileId = id, pinnedProfileId = old.pinnedProfileId?.let { id },
+            selectionReason = "Manually selected").withHistory(listOf(profile.rootPageId))
+    }
+
     fun selectProfile(id: String, source: SelectionSource = SelectionSource.USER) = edit(navigation = true) { old ->
-        val profile = old.profile(id)
+        val profile = old.availableProfile(id)
         if (source == SelectionSource.AUTOMATIC) {
             require(old.automatic && old.activeProfile.automatic && profile.automatic && old.pinnedProfileId == null) {
                 "Automatic selection is disabled"
@@ -98,9 +158,9 @@ class DeckRepository(private val file: File) {
     fun setPinned(id: String?) = edit(navigation = true) { old ->
         if (id == null && old.pinnedProfileId == null) old
         else if (id == null) old.copy(pinnedProfileId = null, selectionReason = "Last selected by manual pin (now unpinned)")
-        else old.copy(activeProfileId = old.profile(id).id, pinnedProfileId = id, selectionReason = "Manually pinned")
+        else old.copy(activeProfileId = old.availableProfile(id).id, pinnedProfileId = id, selectionReason = "Manually pinned")
     }
-    fun setDefault(id: String) = edit { it.copy(defaultProfileId = it.profile(id).id) }
+    fun setDefault(id: String) = edit { it.copy(defaultProfileId = it.availableProfile(id).id) }
     fun setAutomatic(enabled: Boolean) = edit { it.copy(automatic = enabled) }
     fun setProfileAutomatic(id: String, enabled: Boolean) = updateProfile(id) { it.copy(automatic = enabled) }
     fun setRules(id: String, rules: List<DeckRule>) = updateProfile(id) {
@@ -121,24 +181,16 @@ class DeckRepository(private val file: File) {
         if (history.size > 1) old.withHistory(history.dropLast(1)) else old
     }
 
-    fun changePage(delta: Int): Result<Unit> {
-        val deck = state.value
-        val pages = deck.activeProfile.pages
-        return when {
-            delta < 0 && deck.histories.getValue(deck.activeProfileId).size > 1 -> back()
-            deck.activeProfileId == TEAMS && pages.indexOf(deck.activePage) + delta !in pages.indices -> cycleProfile(delta)
-            pages.size > 1 -> openPage(pages[Math.floorMod(pages.indexOf(deck.activePage) + delta, pages.size)].id)
-            else -> cycleProfile(delta)
+    @Synchronized fun changePage(delta: Int): Result<Unit> {
+        if (game) {
+            game = false
+            publish()
+            return Result.success(Unit)
         }
-    }
-
-    fun cycleProfile(delta: Int) = edit(navigation = true) { old ->
-        val profiles = old.profiles
-        val current = profiles.indexOfFirst { it.id == old.activeProfileId }
-        val index = Math.floorMod(current.toLong() + delta, profiles.size.toLong()).toInt()
-        val id = profiles[index].id
-        old.copy(activeProfileId = id, pinnedProfileId = old.pinnedProfileId?.let { id },
-            selectionReason = if (old.pinnedProfileId != null) "Manually cycled and pinned" else "Manually cycled")
+        val ids = listOf(PROFILE_HOME) + state.value.visibleProfiles.map { it.id }
+        val current = ids.indexOf(operating.value.activeProfileId)
+        val id = ids[Math.floorMod(current.toLong() + delta, ids.size.toLong()).toInt()]
+        return if (id == PROFILE_HOME) Result.success(showHome()) else openProfileRoot(id)
     }
 
     fun createProfile(name: String) = create { id, old ->
@@ -146,7 +198,7 @@ class DeckRepository(private val file: File) {
         old.copy(profiles = old.profiles + profile, histories = old.histories + (id to listOf("root")))
     }
     fun duplicateProfile(id: String, name: String) = create { newId, old ->
-        val profile = old.profile(id)
+        val profile = old.availableProfile(id)
         // Page IDs are scoped to the profile, so internal page links remain valid in a copy.
         val copy = profile.copy(id = newId, name = name, pages = profile.pages.map { page ->
             page.mapActions { action ->
@@ -158,8 +210,8 @@ class DeckRepository(private val file: File) {
     }
     fun renameProfile(id: String, name: String) = updateProfile(id) { it.copy(name = name) }
     fun deleteProfile(id: String) = edit { old ->
-        old.profile(id)
-        require(old.profiles.size > 1) { "Cannot delete the last profile" }
+        old.availableProfile(id)
+        require(old.visibleProfiles.size > 1) { "Cannot delete the last available profile" }
         val remaining = old.profiles.filterNot { it.id == id }.map { profile ->
             profile.copy(pages = profile.pages.map { page ->
                 page.mapActions { call -> call.takeUnless { it.id == DeckActions.PROFILE && it.params[DeckActions.PROFILE_ID] == id } }
@@ -223,7 +275,7 @@ class DeckRepository(private val file: File) {
      */
     @Synchronized
     fun observe(signals: Map<String, String>, nowMillis: Long): Result<Unit> {
-        if (confirmedCall) return Result.success(Unit)
+        if (confirmedCall || game) return Result.success(Unit)
         val deck = state.value
         if (!deck.automatic || !deck.activeProfile.automatic || deck.pinnedProfileId != null || nowMillis < 0L) {
             clearObservation()
@@ -231,7 +283,7 @@ class DeckRepository(private val file: File) {
         }
         if (nowMillis < lastSample) clearObservation()
         lastSample = nowMillis
-        val eligible = deck.profiles.filter { it.automatic }
+        val eligible = deck.visibleProfiles.filter { it.automatic }
         val matches = eligible.associate { profile ->
             profile.id to profile.rules.filter { it.matches(signals) }.locked()
         }
@@ -240,11 +292,11 @@ class DeckRepository(private val file: File) {
         val incumbent = scores[deck.activeProfileId] ?: 0
         val target = when {
             best == null -> null
-            best.value == 0 -> deck.defaultProfileId.takeIf { it in scores }
+            best.value == 0 -> deck.availableDefaultId.takeIf { !home && it in scores }
             incumbent > 0 && best.value - incumbent < SCORE_MARGIN -> deck.activeProfileId
             else -> best.key
         }
-        if (target == null || target == deck.activeProfileId) candidate = null
+        if (target == null || target == deck.activeProfileId && !home) candidate = null
         else if (candidate != target) {
             candidate = target
             candidateSince = nowMillis
@@ -254,7 +306,7 @@ class DeckRepository(private val file: File) {
                 else if (rules.any { it.signal == FOREGROUND_APP }) APP_MATCH_REASON
                 else "Automatic: score ${scores[target]} — " + rules.take(4).joinToString { "${it.signal}=${it.value} (+${it.weight})" } +
                     if (rules.size > 4) " and ${rules.size - 4} more" else ""
-            val result = edit { it.copy(activeProfileId = target, selectionReason = explanation) }
+            val result = edit(navigation = true) { it.copy(activeProfileId = target, selectionReason = explanation) }
             mutableDecision.value = DeckDecision(reason.value, scores.locked(), matches.locked(), candidate)
             return result
         }
@@ -286,9 +338,9 @@ class DeckRepository(private val file: File) {
         confirmedCall = joined == true
         if (joined == true && !callEpisode) {
             callEpisode = true
-            showingCall = saved.callProjection() != null
+            showingCall = saved.availableSelection().callProjection() != null
         } else if (joined == true && resumeCall) {
-            showingCall = saved.callProjection() != null
+            showingCall = saved.availableSelection().callProjection() != null
             resumeCall = false
         } else if (joined != true) {
             resumeCall = joined == null && (showingCall || resumeCall)
@@ -299,7 +351,7 @@ class DeckRepository(private val file: File) {
     }
 
     private fun DeckState.callProjection(): DeckState? {
-        val teams = profiles.find { it.id == TEAMS && it.automatic } ?: return null
+        val teams = visibleProfiles.find { it.id == TEAMS && it.automatic } ?: return null
         if (pinnedProfileId != null || !activeProfile.automatic || teams.pages.none { it.id == IN_CALL }) return null
         val history = listOf(teams.rootPageId, IN_CALL).distinct()
         return copy(activeProfileId = TEAMS, histories = (histories + (TEAMS to history.locked())).locked(),
@@ -307,20 +359,31 @@ class DeckRepository(private val file: File) {
     }
 
     private fun publish() {
-        val projection = if (showingCall) saved.callProjection() else null
+        val available = saved.availableSelection()
+        val projection = if (showingCall) available.callProjection() else null
         if (projection == null) showingCall = false
-        val next = projection ?: saved
+        val next = projection ?: available
         mutableReason.value = next.selectionReason
         if (mutable.value != next) clearObservation()
         mutable.value = next
+        if (GAME_PROFILE in saved.disabledPluginIds) game = false
+        val surface = when {
+            game -> next.operatingProjection(gameProfile, "Previous or Next exits the game").snapshot()
+            showingCall -> next
+            home -> next.homeProjection(homeBatch).snapshot()
+            else -> next
+        }
+        operating.value = surface
     }
 
     @Synchronized
     private fun edit(recover: Boolean = false, force: Boolean = false, navigation: Boolean = false,
         update: (DeckState) -> DeckState): Result<Unit> = try {
         check(recover || loadError == null) { loadError.orEmpty() }
-        val previous = if (navigation) state.value else saved
-        val change = update(previous)
+        val previous = if (navigation) state.value else saved.withAvailableLayout()
+        val updated = update(previous)
+        val change = if (updated.disabledPluginIds != saved.disabledPluginIds)
+            updated.withAvailability(saved.disabledPluginIds) else updated
         val next = if (navigation && showingCall && !recover && change.activeProfileId != TEAMS && TEAMS in change.histories)
             change.copy(histories = change.histories + (TEAMS to saved.histories.getValue(TEAMS))) else change
         val persistent = if (navigation && showingCall && !recover && next.selectionReason == "Local Teams call")
@@ -333,7 +396,7 @@ class DeckRepository(private val file: File) {
             cleanupWarning = null
             saved = snapshot
         }
-        if (navigation) { showingCall = false; resumeCall = false }
+        if (navigation) { showingCall = false; resumeCall = false; home = false; game = false }
         publish()
         clearObservation()
         Result.success(Unit)
@@ -376,10 +439,15 @@ private fun DeckState.addBuiltIn(profile: DeckProfile): DeckState {
 }
 
 private fun DeckState.profile(id: String) = profiles.firstOrNull { it.id == id } ?: error("Unknown profile")
+private fun DeckState.availableProfile(id: String): DeckProfile {
+    require(id != GAME_PROFILE) { "Use Previous and Next together to open the game." }
+    require(id !in disabledPluginIds) { "Enable this plugin first." }
+    return profile(id)
+}
 private fun DeckProfile.page(id: String) = pages.firstOrNull { it.id == id } ?: error("Unknown page")
 private fun DeckState.withHistory(history: List<String>) = copy(histories = histories + (activeProfileId to history))
 private fun DeckState.withProfile(id: String, update: (DeckProfile) -> DeckProfile): DeckState {
-    val next = update(profile(id))
+    val next = update(availableProfile(id))
     return copy(profiles = profiles.map { if (it.id == id) next else it })
 }
 private fun DeckProfile.withPage(id: String, update: (DeckPage) -> DeckPage): DeckProfile {

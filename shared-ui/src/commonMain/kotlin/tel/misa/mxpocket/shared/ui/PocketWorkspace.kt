@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import tel.misa.mxpocket.deck.DeckPage
 import tel.misa.mxpocket.deck.DeckState
+import tel.misa.mxpocket.deck.PROFILE_HOME
 import tel.misa.mxpocket.plugins.KeyTile
 import tel.misa.mxpocket.plugins.PluginFrame
 
@@ -140,6 +141,19 @@ fun HomeScreen(state: PocketScreenState, event: (PocketScreenEvent) -> Unit) {
         BoxWithConstraints {
             val split = maxWidth >= 720.dp
             val controls: @Composable () -> Unit = {
+                if (state.activeId == PROFILE_HOME) {
+                    PocketCard("Choose a profile") {
+                        state.profiles.chunked(2).forEach { row ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                row.forEach { profile ->
+                                    PocketButton(profile.name, { event(PocketScreenEvent.SelectPlugin(profile.id)) },
+                                        Modifier.weight(1f).heightIn(min = 48.dp), icon = PocketStyle.accent(profile.id).icon)
+                                }
+                                if (row.size == 1) Spacer(Modifier.weight(1f))
+                            }
+                        }
+                    }
+                }
                 PocketCard {
                     ConnectionBadge(state)
                     state.deviceLimit?.let { Note(it) }
@@ -151,7 +165,7 @@ fun HomeScreen(state: PocketScreenState, event: (PocketScreenEvent) -> Unit) {
                         }, enabled = !state.connectionActive)
                     }
                 }
-                Column {
+                if (state.activeId != PROFILE_HOME) Column {
                     PocketLabel("Profiles")
                     if (split) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) { ProfileChips(state, event) }
                     else Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -175,6 +189,8 @@ fun HomeScreen(state: PocketScreenState, event: (PocketScreenEvent) -> Unit) {
                         }
                         Text(state.tiles.joinToString(", ") { it.label.ifBlank { "(blank)" } }, style = PocketMono)
                     }
+                    if (state.activeId != PROFILE_HOME) PocketButton("Profile launcher", { event(PocketScreenEvent.SelectPlugin(PROFILE_HOME)) },
+                        Modifier.fillMaxWidth(), icon = ShellIcon.HOME)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         PocketButton("Previous page", { event(PocketScreenEvent.ChangePage(-1)) }, Modifier.weight(1f), icon = ShellIcon.CHEVRON_LEFT)
                         PocketButton("Next page", { event(PocketScreenEvent.ChangePage(1)) }, Modifier.weight(1f), trailingIcon = ShellIcon.CHEVRON_RIGHT)

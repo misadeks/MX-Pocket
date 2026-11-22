@@ -28,16 +28,16 @@ internal fun AndroidWorkspace(
     val plugins = session.plugins.descriptors.map { plugin ->
         PluginItem(plugin.id, plugin.title, plugin.id !in disabled,
             plugin.capabilities.joinToString { it.name.lowercase().replace('_', ' ') }, session.pluginDetails(plugin.id),
-            deck.profiles.any { it.id == plugin.id }, deck.defaultProfileId == plugin.id, session.pluginSettings(plugin.id)?.first)
+            deck.visibleProfiles.any { it.id == plugin.id }, deck.defaultProfileId == plugin.id, session.pluginSettings(plugin.id)?.first)
     }
     PocketWorkspace(tab, select, state, plugins, event, editor = {
         val options = buildList {
             add(BindingOption("Back", ActionCall(DeckActions.BACK)))
             add(BindingOption("Return to root", ActionCall(DeckActions.ROOT)))
-            deck.profiles.forEach { add(BindingOption("Profile: ${it.name}", ActionCall(DeckActions.PROFILE, mapOf("profileId" to it.id)))) }
+            deck.visibleProfiles.forEach { add(BindingOption("Profile: ${it.name}", ActionCall(DeckActions.PROFILE, mapOf("profileId" to it.id)))) }
             flows.forEach { add(BindingOption("Workflow: ${it.name}", ActionCall("workflow.run", mapOf("workflowId" to it.id)))) }
             add(BindingOption("Play a sound", ActionCall("sound.play")))
-            addAll(factoryKeyBindings)
+            addAll(availableFactoryKeyBindings(disabled))
             session.platformBindings().forEach { (label, call) -> add(BindingOption(label, call)) }
         }
         LayoutEditor(remember(session.deck) { session.deck.asEditorStore() }, options, signals, onExport, onImport,

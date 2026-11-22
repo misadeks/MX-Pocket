@@ -75,7 +75,8 @@ fun LayoutEditor(
     val scope = rememberCoroutineScope()
     val writer = remember(repo, scope) { Writer(scope, repo) }
     var selectedProfile by rememberSaveable { mutableStateOf(deck.activeProfileId) }
-    val profile = deck.profiles.find { it.id == selectedProfile } ?: deck.activeProfile
+    val visible = deck.visibleProfiles
+    val profile = visible.find { it.id == selectedProfile } ?: deck.activeProfile
     var selectedPage by rememberSaveable(profile.id) { mutableStateOf(deck.histories.getValue(profile.id).last()) }
     val page = profile.pages.find { it.id == selectedPage } ?: profile.pages.first { it.id == profile.rootPageId }
     val bindings = remember(profile.pages, actions) { localBindings(actions, profile.pages) }
@@ -126,12 +127,12 @@ fun LayoutEditor(
 
             val library: @Composable () -> Unit = {
                 WorkspaceTitle("Layouts")
-                EditorNote("On deck: ${deck.activeProfile.name} / ${deck.activePage.name}")
-                LibraryGroup("Profile", deck.profiles.map { it.id to it.name }, profile.id, !writer.busy, ::selectProfile,
+                EditorNote("On deck: ${live?.pluginTitle ?: "${deck.activeProfile.name} / ${deck.activePage.name}"}")
+                LibraryGroup("Profile", visible.map { it.id to it.name }, profile.id, !writer.busy, ::selectProfile,
                     listOf(Command.CREATE_PROFILE, Command.COPY_PROFILE, Command.RENAME_PROFILE, Command.DELETE_PROFILE),
                     allowed = { cmd -> writable && when (cmd) {
                         Command.CREATE_PROFILE, Command.COPY_PROFILE -> deck.profiles.size < DeckLimits.PROFILES
-                        Command.DELETE_PROFILE -> deck.profiles.size > 1
+                        Command.DELETE_PROFILE -> visible.size > 1
                         else -> true
                     } }, choose = { command = it })
                 LibraryGroup("Page", profile.pages.map { it.id to it.name }, page.id, !writer.busy, ::selectPage,
@@ -184,7 +185,7 @@ fun LayoutEditor(
                     TextButton(onClick = {
                         if (swapping) finishSwap() else { show(Pane.PREVIEW); swapping = true }
                     }, enabled = writable) { Text(if (swapping) "Cancel swap" else "Swap keys") }
-                    if (profile.id != deck.activeProfileId) {
+                    if (profile.id != (live?.activeId ?: deck.activeProfileId)) {
                         TextButton(onClick = { writer.edit(DeckEdit.Select(profile.id)) }, enabled = writable) {
                             Text(if (deck.pinnedProfileId == null) "Use this profile" else "Switch pinned profile")
                         }
@@ -221,7 +222,7 @@ fun LayoutEditor(
                         writer.edit(DeckEdit.Rules(profile.id, profile.rules, profile.rules +
                             DeckRule(tel.misa.mxpocket.FOREGROUND_APP, pkg, tel.misa.mxpocket.APP_RULE_WEIGHT)), done)
                     }, edit = { removingRule = false; rule = it },
-                        remove = { removingRule = true; rule = it }) }
+                        remove = { removingRule = true; rule = it }, disabledIds = deck.disabledPluginIds) }
                     PocketCard("Layout backups", ShellIcon.DOCUMENT) {
                         EditorNote("Export profiles, pages and context rules together.")
                         EditorActions {
@@ -317,7 +318,7 @@ private fun ProfileSettings(profile: DeckProfile, deck: DeckState, decision: Dec
                             writable: Boolean, edit: (DeckEdit) -> Unit) {
     EditorHeading("Profile selection")
     val pinned = profile.id == deck.pinnedProfileId
-    val defaultName = deck.profiles.first { it.id == deck.defaultProfileId }.name
+    val defaultName = deck.visibleProfiles.first { it.id == deck.availableDefaultId }.name
     val pinnedName = deck.profiles.find { it.id == deck.pinnedProfileId }?.name
     EditorNote("Default: $defaultName · " + (pinnedName?.let { "Pinned: $it" } ?: "Not pinned"))
     EditorActions {

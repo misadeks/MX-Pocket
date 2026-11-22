@@ -113,10 +113,15 @@ class DeckRepositoryTest {
             histories = factory.histories + ("custom" to listOf("root")))
         file.writeText(DeckJson.encode(state))
         val loaded = DeckRepository(file)
-        assertEquals(game.copy(name = "Tic Tac Toe", pages = listOf(root.copy(name = "Tic Tac Toe"), extra)), loaded.state.value.activeProfile)
+        assertEquals(game.copy(name = "Tic Tac Toe", pages = listOf(root.copy(name = "Tic Tac Toe"), extra)),
+            loaded.state.value.profiles.single { it.id == game.id })
+        assertFalse(loaded.state.value.visibleProfiles.any { it.id == game.id })
         assertEquals(other, loaded.state.value.profiles.single { it.id == "custom" })
-        loaded.renameProfile(game.id, "Game night").getOrThrow()
-        loaded.renamePage(game.id, "root", "Board").getOrThrow()
+        assertTrue(loaded.renameProfile(game.id, "Game night").isFailure)
+        assertTrue(loaded.renamePage(game.id, "root", "Board").isFailure)
+        loaded.selectProfile(other.id).getOrThrow()
+        loaded.renameProfile(other.id, "Game night").getOrThrow()
+        loaded.renamePage(other.id, "root", "Board").getOrThrow()
         val restored = DeckRepository(file).state.value
         assertEquals("Game night", restored.activeProfile.name)
         assertEquals("Board", restored.activePage.name)
@@ -292,7 +297,10 @@ class DeckRepositoryTest {
 
     @Test fun deletedXoStaysDeletedAcrossColdLoadAndBackupRestore() {
         repo.selectProfile("phone").getOrThrow()
-        repo.deleteProfile("game.xo").getOrThrow()
+        // A backup from before the built-in game became read-only.
+        val old = repo.state.value
+        repo.importJson(DeckJson.encode(old.copy(profiles = old.profiles.filterNot { it.id == GAME_PROFILE },
+            histories = old.histories - GAME_PROFILE, xoProfileRemoved = true))).getOrThrow()
         val expected = repo.state.value
         assertFalse(expected.profiles.any { it.id == "game.xo" })
         val reloaded = DeckRepository(file)

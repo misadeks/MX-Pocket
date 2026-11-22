@@ -392,10 +392,10 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
                 session.startPreview()
             }
             PocketScreenEvent.StopPreview -> session.disconnect("Virtual keypad disconnected. Reconnect to resume this layout.")
-            is PocketScreenEvent.SelectPlugin -> session.selectProfile(event.id)
+            is PocketScreenEvent.SelectPlugin -> session.openProfile(event.id)
             is PocketScreenEvent.VirtualKey -> if (resumed && !navigating && tab == WorkspaceTab.HOME &&
                 event.grid != null && event.grid == presentation?.virtualGrid) synchronized(session.deck) {
-                if (event.grid == homeGrid(session.deck.state.value, session.frame()))
+                if (event.grid == homeGrid(session.deck.operatingState.value, session.frame()))
                     session.phoneKey(event.index, hold = event.hold)
             }
             is PocketScreenEvent.ChangePage -> session.changePage(event.delta)
@@ -412,15 +412,15 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
     }
 
     override fun render() {
-        val deck = session.deck.state.value
+        val deck = session.deck.operatingState.value
         val frame = session.frame()
         val state = PocketScreenState(
             status = session.status,
             pluginTitle = if (deck.activePage.name == deck.activeProfile.name) deck.activeProfile.name
                 else "${deck.activeProfile.name} / ${deck.activePage.name}",
             tiles = frame.keys.mapIndexed { i, key -> key.toGridTile(session.ready, session.keyImage(i, key).asImageBitmap()) },
-            profiles = deck.profiles.map { ProfileChoice(it.id, it.name) },
-            activeId = deck.activeProfileId, reason = session.deck.reason.value,
+            profiles = deck.visibleProfiles.map { ProfileChoice(it.id, it.name) },
+            activeId = deck.activeProfileId, reason = deck.selectionReason,
             simulating = session.preview, panelArt = session.panelArt?.asImageBitmap(),
             connectionLabel = session.connectionLabel,
             connectionActive = target != null || session.request != null,

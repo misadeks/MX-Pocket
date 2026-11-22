@@ -21,6 +21,7 @@ class PluginEngine(
     private val invalidateUi: () -> Unit,
     private val reportError: (String, Throwable) -> Unit,
     private val observeDecks: StateFlow<DeckState> = MutableStateFlow(DeckState()),
+    private val navigate: ((String) -> Unit)? = null,
 ) : Closeable {
     private val entries = plugins.toList()
     val descriptors: List<PluginDescriptor> = entries.map { it.descriptor }
@@ -183,7 +184,7 @@ class PluginEngine(
             require(capability == null || capability in descriptor.capabilities) {
                 "Plugin ${descriptor.id} did not declare $capability capability"
             }
-            if (action is PluginAction.SelectPlugin) select(action.id) else perform(action, scope)
+            if (action is PluginAction.SelectPlugin) (navigate ?: ::select)(action.id) else perform(action, scope)
         }
     }
 }

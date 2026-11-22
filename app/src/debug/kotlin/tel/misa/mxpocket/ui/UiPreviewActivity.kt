@@ -22,7 +22,7 @@ class UiPreviewActivity : AppCompatActivity() {
 
     private fun handleEvent(event: PocketScreenEvent) {
         when (event) {
-            is PocketScreenEvent.SelectPlugin -> scene = event.id
+            is PocketScreenEvent.SelectPlugin -> scene = if (event.id == tel.misa.mxpocket.deck.PROFILE_HOME) "disconnected" else event.id
             is PocketScreenEvent.ChangePage -> {
                 val index = scenes.ids.indexOf(scene)
                 scene = scenes.ids[Math.floorMod(index + event.delta, scenes.ids.size)]

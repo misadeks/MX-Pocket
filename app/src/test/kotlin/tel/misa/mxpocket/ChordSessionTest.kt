@@ -146,6 +146,7 @@ class ChordSessionTest {
         }
         for (i in 0..8) session.deck.setKey("focus", "root", i,
             DeckKey(action = ActionCall("plugin.key", mapOf("pluginId" to "probe", "index" to "$i")))).getOrThrow()
+        session.selectProfile("focus")
         session.attach(object : PocketSession.Screen {
             override fun render() {}
             override fun openApp(app: PhoneApp): Boolean { launches++; return true }

@@ -59,8 +59,7 @@ class PhonePlugin(title: String) : PocketPlugin {
             2 -> PluginAction.OpenApp(PhoneApp.DIALER)
             3 -> PluginAction.OpenApp(PhoneApp.WEB)
             5 -> PluginAction.OpenApp(PhoneApp.ALARMS)
-            6 -> PluginAction.SelectPlugin("focus")
-            7 -> PluginAction.SelectPlugin("audio")
+            6, 7 -> tel.misa.mxpocket.deck.phoneShortcutProfile(event.index)?.let(PluginAction::SelectPlugin)
             8 -> PluginAction.Repaint
             else -> null
         }
