@@ -93,8 +93,9 @@ fun main() = application {
         val state = PocketScreenState(status = message, pluginTitle = if (deck.activeProfile.name == deck.activePage.name)
             deck.activeProfile.name else "${deck.activeProfile.name} / ${deck.activePage.name}",
             tiles = tiles, profiles = profiles, activeId = deck.activeProfileId, reason = deck.selectionReason,
-            connectionLabel = "Offline", diagnostics = "No USB diagnostics: Windows has no HID adapter.",
-            log = history.joinToString("\n"), simulating = simulating, deviceLimit = DEVICE_LIMIT)
+            connectionLabel = if (simulating) "Virtual keypad" else "Disconnected", diagnostics = "No USB diagnostics: Windows has no HID adapter.",
+            log = history.joinToString("\n"), simulating = simulating, deviceLimit = DEVICE_LIMIT,
+            activePageId = deck.activePage.id, hardwareSummary = !simulating)
         val plugins = defaultDeck().profiles.map {
             PluginItem(it.id, it.name, true, "Local simulation", when (it.id) {
                 "focus" -> "Timer and presets run locally. No completion sound."
@@ -146,7 +147,7 @@ fun main() = application {
                 } catch (e: Exception) { status(e.message ?: "Workspace operation failed.") }
             }, editor = {
                 LayoutEditor(remember(repo) { repo.asEditorStore() }, options, emptyMap(), { backup(true) }, { backup(false) },
-                    backHandler = registerBack)
+                    live = state, backHandler = registerBack)
             }, workflows = { DesktopWorkflows(workflows, registerBack) })
         }
     }

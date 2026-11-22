@@ -58,6 +58,26 @@ class DeckRepositoryTest {
     private fun pluginKey(id: String, index: Int) =
         DeckKey(action = ActionCall("plugin.key", mapOf("pluginId" to id, "index" to index.toString())))
 
+    @Test fun existingGameDisplaysNewNameWithoutRenamingCustomProfilesPagesOrKeys() {
+        val factory = defaultDeck()
+        val old = factory.profiles.single { it.id == "game.xo" }
+        val root = old.pages.single().copy(name = "X-O", keys = old.pages.single().keys.map { it.copy(label = "X-O") })
+        val extra = root.copy(id = "other")
+        val game = old.copy(name = "X-O", pages = listOf(root, extra))
+        val other = game.copy(id = "custom")
+        val state = factory.copy(activeProfileId = game.id, profiles = factory.profiles.filter { it.id != game.id } + game + other,
+            histories = factory.histories + ("custom" to listOf("root")))
+        file.writeText(DeckJson.encode(state))
+        val loaded = DeckRepository(file)
+        assertEquals(game.copy(name = "Tic Tac Toe", pages = listOf(root.copy(name = "Tic Tac Toe"), extra)), loaded.state.value.activeProfile)
+        assertEquals(other, loaded.state.value.profiles.single { it.id == "custom" })
+        loaded.renameProfile(game.id, "Game night").getOrThrow()
+        loaded.renamePage(game.id, "root", "Board").getOrThrow()
+        val restored = DeckRepository(file).state.value
+        assertEquals("Game night", restored.activeProfile.name)
+        assertEquals("Board", restored.activePage.name)
+    }
+
     @Test fun freshAndRestoredNavigationDefaultsUsePhysicalOrderWithoutChangingOtherDecks() {
         fun checkDefaults() {
             for (profile in repo.state.value.profiles) {

@@ -1,24 +1,25 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package tel.misa.mxpocket.shared.ui
 
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 
-enum class WorkspaceTab(val label: String, val symbol: String) {
-    HOME("Home", "\u2302"), KEYPAD("Keypad", "\u25A6"), PLUGINS("Plugins", "\u229E"),
-    WORKFLOWS("Flows", "\u21C4"), SETTINGS("Settings", "\u2699"),
+enum class WorkspaceTab(val label: String) {
+    HOME("Home"), KEYPAD("Keypad"), PLUGINS("Plugins"), WORKFLOWS("Flows"), SETTINGS("Settings"),
 }
 
 data class ProfileChoice(val id: String, val name: String)
@@ -40,6 +41,9 @@ data class PocketScreenState(
     val panelArt: ImageBitmap? = null,
     /** Null for the physical Android host; otherwise displayed in place of unsupported device controls. */
     val deviceLimit: String? = null,
+    val usbReady: Boolean = false,
+    val activePageId: String = "root",
+    val hardwareSummary: Boolean = false,
 )
 
 data class PluginItem(
@@ -79,10 +83,12 @@ fun PocketWorkspace(
         val rail = maxWidth >= 840.dp
         Column {
             Row(Modifier.weight(1f)) {
-                if (rail) NavigationRail {
+                if (rail) NavigationRail(containerColor = PocketColors.nav) {
                     WorkspaceTab.entries.forEach { item ->
-                        NavigationRailItem(item == tab, { select(item) }, icon = { Text(item.symbol) },
-                            label = { Text(item.label) })
+                        NavigationRailItem(item == tab, { select(item) }, icon = { TabIcon(item) },
+                            label = { Text(item.label) }, colors = NavigationRailItemDefaults.colors(
+                                selectedIconColor = PocketColors.accent, selectedTextColor = PocketColors.accent,
+                                indicatorColor = PocketColors.navIndicator))
                     }
                 }
                 Box(Modifier.fillMaxSize()) {
@@ -97,10 +103,12 @@ fun PocketWorkspace(
                     }
                 }
             }
-            if (!rail) NavigationBar(windowInsets = WindowInsets(0)) {
+            if (!rail) NavigationBar(windowInsets = WindowInsets(0), containerColor = PocketColors.nav, tonalElevation = 0.dp) {
                 WorkspaceTab.entries.forEach { item ->
-                    NavigationBarItem(item == tab, { select(item) }, icon = { Text(item.symbol) },
-                        label = { Text(item.label, maxLines = 1) })
+                    NavigationBarItem(item == tab, { select(item) }, icon = { TabIcon(item) },
+                        label = { Text(item.label, maxLines = 1) }, colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = PocketColors.accent, selectedTextColor = PocketColors.accent,
+                            indicatorColor = PocketColors.navIndicator))
                 }
             }
         }
@@ -109,34 +117,96 @@ fun PocketWorkspace(
 
 @Composable
 fun HomeScreen(state: PocketScreenState, event: (PocketScreenEvent) -> Unit) {
-    Section("MX Pocket") {
-        Text(state.status, Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-        if (state.deviceLimit == null) {
-            Button(onClick = { event(PocketScreenEvent.ToggleConnection) }) {
-                Text(if (state.connectionActive) "Disconnect" else "Connect keypad")
+    Section("MX Pocket", wide = true) {
+        BoxWithConstraints {
+            val split = maxWidth >= 720.dp
+            val controls: @Composable () -> Unit = {
+                PocketCard {
+                    ConnectionBadge(state)
+                    state.deviceLimit?.let { Note(it) }
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (state.deviceLimit == null) PocketButton(if (state.connectionActive) "Disconnect" else "Connect keypad",
+                            { event(PocketScreenEvent.ToggleConnection) }, tone = if (state.connectionActive) PocketTone.DANGER else PocketTone.PRIMARY)
+                        PocketButton(if (state.simulating) "Disconnect virtual keypad" else "Connect virtual keypad", {
+                            event(if (state.simulating) PocketScreenEvent.StopPreview else PocketScreenEvent.EnterPreview)
+                        }, enabled = !state.connectionActive)
+                    }
+                }
+                Column {
+                    PocketLabel("Profiles")
+                    if (split) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) { ProfileChips(state, event) }
+                    else Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        ProfileChips(state, event)
+                    }
+                }
             }
-        } else Note(state.deviceLimit)
-        OutlinedButton(onClick = {
-            event(if (state.simulating) PocketScreenEvent.StopPreview else PocketScreenEvent.EnterPreview)
-        }, enabled = !state.connectionActive) {
-            Text(if (state.simulating) "Disconnect virtual keypad" else "Connect virtual keypad")
-        }
-        HorizontalDivider()
-        Heading(state.pluginTitle)
-        if (state.reason.isNotBlank()) Note(state.reason)
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            state.profiles.forEach { profile ->
-                FilterChip(selected = profile.id == state.activeId, label = { Text(profile.name) },
-                    onClick = { event(PocketScreenEvent.SelectPlugin(profile.id)) })
+            val keypad: @Composable () -> Unit = {
+                PocketCard {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        PocketIconTile(PocketStyle.accent(state.activeId), 40.dp)
+                        Column {
+                            Heading(state.pluginTitle)
+                            if (state.reason.isNotBlank()) Note(state.reason)
+                        }
+                    }
+                    if (state.hardwareSummary) PocketInner {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            PocketIcon(ShellIcon.KEYBOARD)
+                            PocketLabel("Keypad shows:")
+                        }
+                        Text(state.tiles.joinToString(", ") { it.label.ifBlank { "(blank)" } }, style = PocketMono)
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        PocketButton("Previous page", { event(PocketScreenEvent.ChangePage(-1)) }, Modifier.weight(1f), icon = ShellIcon.CHEVRON_LEFT)
+                        PocketButton("Next page", { event(PocketScreenEvent.ChangePage(1)) }, Modifier.weight(1f), trailingIcon = ShellIcon.CHEVRON_RIGHT)
+                    }
+                    if (!state.hardwareSummary) KeypadGrid(state.tiles, { index, pressed ->
+                        if (!pressed) event(PocketScreenEvent.TapKey(index))
+                    }, Modifier.widthIn(max = 480.dp).align(Alignment.CenterHorizontally), state.panelArt)
+                    if (state.deviceLimit == null) {
+                        PocketDivider()
+                        PocketButton("Repaint all nine LCDs", { event(PocketScreenEvent.Repaint) }, Modifier.fillMaxWidth(), ShellIcon.REFRESH)
+                        PocketButton("Choose custom image for all nine keys", { event(PocketScreenEvent.ChooseImage) }, Modifier.fillMaxWidth(), ShellIcon.IMAGE)
+                    }
+                    Text("480 × 480 panel · Nine 118 × 118 visible key regions.", style = PocketMono, color = PocketColors.faint)
+                }
             }
+            if (split) Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                Column(Modifier.weight(.85f), verticalArrangement = Arrangement.spacedBy(14.dp)) { controls() }
+                Column(Modifier.weight(1.15f)) { keypad() }
+            } else Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { controls(); keypad() }
         }
-        KeypadGrid(state.tiles, { index, pressed ->
-            // A completed grid click emits a down/up pair. phoneKey is already one complete click.
-            if (!pressed) event(PocketScreenEvent.TapKey(index))
-        }, Modifier.widthIn(max = 480.dp).fillMaxWidth().align(Alignment.CenterHorizontally), state.panelArt)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            TextButton(onClick = { event(PocketScreenEvent.ChangePage(-1)) }) { Text("Previous page") }
-            TextButton(onClick = { event(PocketScreenEvent.ChangePage(1)) }) { Text("Next page") }
+    }
+}
+
+@Composable
+private fun ProfileChips(state: PocketScreenState, event: (PocketScreenEvent) -> Unit) {
+    state.profiles.forEach { profile ->
+        val accent = PocketStyle.accent(profile.id)
+        FilterChip(selected = profile.id == state.activeId, label = { Text(profile.name) },
+            shape = CircleShape, leadingIcon = { PocketIcon(accent.icon, if (profile.id == state.activeId) Color(accent.tint) else PocketColors.muted, 16.dp) },
+            colors = FilterChipDefaults.filterChipColors(containerColor = PocketColors.chip, selectedContainerColor = Color(accent.fill),
+                labelColor = PocketColors.muted, selectedLabelColor = Color.White),
+            onClick = { event(PocketScreenEvent.SelectPlugin(profile.id)) })
+    }
+}
+
+@Composable
+private fun ConnectionBadge(state: PocketScreenState) {
+    val (label, icon, color) = when {
+        state.simulating -> Triple("Virtual keypad", ShellIcon.EYE, Color(0xff93c5fd))
+        state.usbReady -> Triple("Connected: USB session active", ShellIcon.CHECK, PocketColors.success)
+        state.connectionActive -> Triple("Connecting…", ShellIcon.BOLT, PocketColors.warning)
+        else -> Triple("Not connected", ShellIcon.LINK, PocketColors.muted)
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Surface(shape = MaterialTheme.shapes.medium, color = color.copy(alpha = .14f)) {
+            Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) { PocketIcon(icon, color, 20.dp) }
+        }
+        Column {
+            Text(label, style = MaterialTheme.typography.titleMedium)
+            Text(state.status, Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                color = PocketColors.muted, style = MaterialTheme.typography.bodySmall)
         }
     }
 }
@@ -144,15 +214,30 @@ fun HomeScreen(state: PocketScreenState, event: (PocketScreenEvent) -> Unit) {
 @Composable
 private fun PluginsScreen(plugins: List<PluginItem>, event: (PocketScreenEvent) -> Unit) {
     Section("Plugins") {
+        Note(if (plugins.any { it.canToggle }) "Enable the controls you use. Android access is configured separately."
+            else "Available in this simulator. Android access is configured on the phone.")
         for (plugin in plugins) {
-            HorizontalDivider()
-            SettingSwitch(plugin.title, plugin.enabled, plugin.canToggle) { event(PocketScreenEvent.EnablePlugin(plugin.id, it)) }
-            if (plugin.capabilities.isNotBlank()) Note("Capabilities: ${plugin.capabilities}")
-            Text(plugin.details)
-            if (plugin.profileAvailable) TextButton(onClick = { event(PocketScreenEvent.DefaultProfile(plugin.id)) },
-                enabled = !plugin.isDefault) { Text(if (plugin.isDefault) "Default profile" else "Make default profile") }
-            plugin.settingsLabel?.let { label ->
-                OutlinedButton(onClick = { event(PocketScreenEvent.PluginSettings(plugin.id)) }, enabled = plugin.enabled) { Text(label) }
+            PocketCard {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    PocketIconTile(PocketStyle.accent(plugin.id))
+                    Column(Modifier.weight(1f)) {
+                        Heading(plugin.title)
+                        Text("Capabilities: ${plugin.capabilities.ifBlank { "none" }}", color = PocketColors.faint, style = PocketMono)
+                    }
+                    Switch(plugin.enabled, { event(PocketScreenEvent.EnablePlugin(plugin.id, it)) }, enabled = plugin.canToggle,
+                        modifier = Modifier.semantics { contentDescription = plugin.title })
+                }
+                Text(plugin.details, style = MaterialTheme.typography.bodyLarge)
+                if (plugin.profileAvailable || plugin.settingsLabel != null) {
+                    PocketDivider()
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        plugin.settingsLabel?.let { PocketButton(it, { event(PocketScreenEvent.PluginSettings(plugin.id)) }, enabled = plugin.enabled) }
+                        if (plugin.profileAvailable) {
+                            if (plugin.isDefault) PocketTag("Default profile", PocketColors.accent)
+                            else PocketTextLink("Make default profile", { event(PocketScreenEvent.DefaultProfile(plugin.id)) })
+                        }
+                    }
+                }
             }
         }
     }
@@ -161,29 +246,43 @@ private fun PluginsScreen(plugins: List<PluginItem>, event: (PocketScreenEvent) 
 @Composable
 private fun SettingsScreen(state: PocketScreenState, event: (PocketScreenEvent) -> Unit) {
     Section("Settings") {
-        OutlinedButton(onClick = { event(PocketScreenEvent.FeatureSetup) }) { Text("Feature setup") }
-        if (state.deviceLimit == null) {
-            Text(state.status)
-            Button(onClick = { event(PocketScreenEvent.ToggleConnection) }) {
-                Text(if (state.connectionActive) "Disconnect keypad" else "Connect keypad")
+        PocketButton("Feature setup", { event(PocketScreenEvent.FeatureSetup) }, Modifier.fillMaxWidth(), ShellIcon.SETTINGS, PocketTone.ACCENT)
+        PocketCard("Connection", ShellIcon.LINK, caps = true) {
+            PocketDivider()
+            if (state.deviceLimit == null) {
+                PocketLabel("Status")
+                Text(state.status)
+                PocketButton(if (state.connectionActive) "Disconnect keypad" else "Connect keypad",
+                    { event(PocketScreenEvent.ToggleConnection) }, Modifier.fillMaxWidth(), ShellIcon.SWAP,
+                    if (state.connectionActive) PocketTone.DANGER else PocketTone.NEUTRAL)
+                PocketDivider()
+                PocketSwitchRow("Connect automatically on USB attach", "Start a session when Android reports this keypad attached",
+                    state.automatic) { event(PocketScreenEvent.SetAutomatic(it)) }
+                PocketSwitchRow("Open apps directly from keypad", "Needs Display over other apps; otherwise a notification is shown",
+                    state.directShortcuts) { event(PocketScreenEvent.SetDirectShortcuts(it)) }
+            } else Note(state.deviceLimit)
+        }
+        if (state.deviceLimit == null) PocketCard("Display", ShellIcon.MONITOR, caps = true) {
+            PocketDivider()
+            PocketListRow(ShellIcon.IMAGE, "Choose keypad background", "Image behind all nine keys for this session") { event(PocketScreenEvent.ChooseImage) }
+            PocketListRow(ShellIcon.REFRESH, "Repaint all keys", "Redraw all nine 118 × 118 LCD regions") { event(PocketScreenEvent.Repaint) }
+        }
+        PocketCard("Diagnostics", ShellIcon.DOCUMENT, caps = true) {
+            PocketDivider()
+            PocketInner {
+                Text(listOf(state.pluginTitle, state.connectionLabel).filter { it.isNotBlank() }.joinToString("  |  "))
+                if (state.reason.isNotBlank()) Note(state.reason)
             }
-            SettingSwitch("Connect automatically on USB attach", state.automatic) { event(PocketScreenEvent.SetAutomatic(it)) }
-            SettingSwitch("Open apps directly from keypad", state.directShortcuts) { event(PocketScreenEvent.SetDirectShortcuts(it)) }
-            HorizontalDivider()
-            Heading("Display")
-            OutlinedButton(onClick = { event(PocketScreenEvent.ChooseImage) }) { Text("Choose keypad background") }
-            OutlinedButton(onClick = { event(PocketScreenEvent.Repaint) }) { Text("Repaint all keys") }
-        } else Text(state.deviceLimit)
-        HorizontalDivider()
-        Heading("Diagnostics")
-        Text(listOf(state.pluginTitle, state.connectionLabel).filter { it.isNotBlank() }.joinToString("  |  "))
-        Note(state.reason)
-        Text("480 x 480 panel; nine 118 x 118 visible regions. An upload acknowledgement does not verify LCD visibility.")
-        if (state.deviceLimit == null) OutlinedButton(onClick = { event(PocketScreenEvent.RefreshDiagnostics) }) { Text("Refresh USB diagnostics") }
-        SelectableReadout(state.diagnostics)
-        Heading("Session log")
-        if (state.deviceLimit == null) OutlinedButton(onClick = { event(PocketScreenEvent.SaveLog) }) { Text("Export session log") }
-        SelectableReadout(state.log.ifEmpty { "No events yet." })
+            PocketInner { Text("Display profile: 480 x 480 panel; nine 118 x 118 visible regions. An upload acknowledgement does not verify LCD visibility.") }
+            if (state.deviceLimit == null) PocketButton("Refresh USB diagnostics", { event(PocketScreenEvent.RefreshDiagnostics) },
+                Modifier.fillMaxWidth(), ShellIcon.REFRESH, PocketTone.ACCENT)
+            PocketLabel("Device descriptor details")
+            PocketInner { SelectableReadout(state.diagnostics) }
+            if (state.deviceLimit == null) PocketButton("Export session log", { event(PocketScreenEvent.SaveLog) },
+                Modifier.fillMaxWidth(), ShellIcon.DOWNLOAD)
+            PocketLabel("Session log")
+            PocketInner { SelectableReadout(state.log.ifEmpty { "No events yet." }) }
+        }
     }
 }
 
@@ -194,22 +293,10 @@ private fun SelectableReadout(text: String) {
 }
 
 @Composable
-private fun SettingSwitch(label: String, value: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).toggleable(value, enabled, role = Role.Switch, onValueChange = onChange),
-        verticalAlignment = Alignment.CenterVertically) {
-        Text(label, Modifier.weight(1f))
-        Switch(value, null, enabled = enabled)
-    }
-}
-
-@Composable
-private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-        Column(Modifier.widthIn(max = 720.dp).fillMaxWidth().verticalScroll(rememberScrollState()).padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(title, Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium)
-            content()
-        }
+private fun Section(title: String, wide: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
+    WorkspaceColumn(wide) {
+        WorkspaceTitle(title)
+        content()
     }
 }
 

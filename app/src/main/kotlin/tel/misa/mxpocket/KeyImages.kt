@@ -13,8 +13,9 @@ import android.text.TextUtils
 import android.util.LruCache
 import tel.misa.mxpocket.driver.KeypadProtocol
 import tel.misa.mxpocket.plugins.KeyTile
-import tel.misa.mxpocket.plugins.NavigationGlyph
-import tel.misa.mxpocket.plugins.PlayerGlyph
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.toArgb
+import tel.misa.mxpocket.plugins.paintKeyFace
 
 /** Entries are immutable after drawing. Views and an in-flight upload may outlive a cache entry. */
 internal class KeyImages(private val appIcon: (String) -> Bitmap?) {
@@ -60,61 +61,15 @@ internal class KeyImages(private val appIcon: (String) -> Bitmap?) {
             canvas.drawColor(0xab000000.toInt())
         }
         val photo = art != null || backdrop != null
-        val whiteInk = photo || Color.luminance(tile.background) < .179f
-        val ink = if (whiteInk) Color.WHITE else Color.BLACK
-        val subdued = if (whiteInk) 0xffbec4ca.toInt() else 0xff42484e.toInt()
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-        val glyph = tile.glyph
-        val primary = tile.primary
-        val caption = tile.showLabel
-        val withFooter = tile.showFooter && tile.footer.isNotBlank() && tile.footer != tile.label
-        val face = when (glyph) {
-            is PlayerGlyph -> 53f
-            is NavigationGlyph -> if (withFooter) 29f else 38f
-            null -> if (caption) 21f else if (withFooter) 47f else 59f
-        }
         val appImage = tile.iconComponent?.takeIf { tile.icon.isBlank() }?.let(appIcon)
-        if (glyph is PlayerGlyph && tile.icon.isBlank()) {
-            val color = if (photo) contrastInk(bitmap, 37, 31, 81, 75) else ink
-            canvas.drawKeyGlyph(glyph, 59f, face, 49.5f, if (tile.enabled) color else mutedInk(color), photo)
-        } else if (glyph is NavigationGlyph && tile.icon.isBlank()) {
-            val diameter = if (withFooter) 35f else 48f
-            val disk = diameter + 8f
-            val lightDisk = primary && tile.enabled
-            if (photo || primary) {
-                paint.color = if (lightDisk) Color.WHITE else 0xdd17191c.toInt()
-                canvas.drawCircle(59f, face, disk / 2, paint)
-            }
-            canvas.drawKeyGlyph(glyph, 59f, face, diameter,
-                if (!tile.enabled) 0xff9a9fa4.toInt() else if (lightDisk) Color.BLACK else if (photo || primary) Color.WHITE else ink)
-        } else if (appImage != null) {
-            canvas.drawBitmap(appImage, null, Rect(41, 3, 77, 39), Paint(Paint.FILTER_BITMAP_FLAG))
-        } else {
-            caption(canvas, bitmap, tile.icon.ifBlank { "${index+1}" }, face, 20f, 1, false, ink, photo)
-        }
-        val labelY = when (glyph) {
-            is PlayerGlyph -> 94f
-            is NavigationGlyph -> if (withFooter) 67f else 87f
-            null -> if (withFooter) 62f else 70f
-        }
-        if (caption) caption(canvas, bitmap, tile.label, labelY, if (glyph is PlayerGlyph) 17f else 19f, 2, true, ink, photo)
-        if (withFooter) caption(canvas, bitmap, tile.footer, if (caption) 100f else 94f, 15f, 1, false, subdued, photo)
-        tile.volumeLevel?.fraction?.let { fraction ->
-            val y = if (caption) 74f else 85f
-            val color = if (photo) contrastInk(bitmap, 28,y.toInt()-2,90,y.toInt()+2) else ink
-            // A two-tone rail is visible even at zero; fill length, not color, encodes the level.
-            paint.color = if (color == Color.BLACK) 0xffeeeeee.toInt() else 0xff1b1d20.toInt()
-            canvas.drawRoundRect(27f,y-3f,91f,y+3f,3f,3f,paint)
-            paint.style = Paint.Style.STROKE; paint.strokeWidth = 1.5f; paint.color = color
-            canvas.drawRoundRect(27f,y-3f,91f,y+3f,3f,3f,paint)
-            paint.style = Paint.Style.FILL
-            if (fraction > 0f) canvas.drawRoundRect(27f,y-3f,27f+64f*fraction,y+3f,3f,3f,paint)
+        androidx.compose.ui.graphics.Canvas(bitmap.asImageBitmap()).paintKeyFace(index, tile, appImage?.asImageBitmap(),
+            if (!photo) null else { l, t, r, b -> androidx.compose.ui.graphics.Color(contrastInk(bitmap, l, t, r, b)) }
+        ) { text, ink ->
+            caption(canvas, bitmap, text.text, text.center, text.size, text.lines, text.bold, ink.toArgb(), photo)
         }
         images.put(key, bitmap)
         return bitmap
     }
-
-    private fun mutedInk(color: Int) = if (color == Color.BLACK) 0xff56585a.toInt() else 0xff999da0.toInt()
 
     private fun contrastInk(bitmap: Bitmap, left: Int, top: Int, right: Int, bottom: Int): Int {
         var sum = 0f; var count = 0

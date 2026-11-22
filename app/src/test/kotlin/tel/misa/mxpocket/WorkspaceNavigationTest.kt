@@ -59,17 +59,32 @@ class WorkspaceNavigationTest {
         assertFalse(FOREGROUND_APP in session.signals.value)
     }
 
+    @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
     @Test fun openTheLayoutEditorWorkflowLibraryAndConnectionSettingsFromHome() {
+        fun capture(name: String) = compose.runOnIdle {
+            val view = compose.activity.window.decorView
+            val bitmap = android.graphics.Bitmap.createBitmap(view.width, view.height, android.graphics.Bitmap.Config.ARGB_8888)
+            view.draw(android.graphics.Canvas(bitmap))
+            java.io.File("build/reports/workspace-preview/android-$name.png").apply {
+                parentFile.mkdirs()
+                outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            }
+        }
+        capture("home")
         compose.onNodeWithText("Keypad").performClick()
         compose.onNodeWithText("Key positions").assertExists()
+        capture("keypad")
         compose.onNodeWithText("Flows").performClick()
         compose.onNodeWithText("Keypad check").assertExists()
+        capture("flows")
         compose.onNodeWithText("New workflow").performClick()
         compose.onNodeWithText("Workflow name").assertExists()
         compose.onNodeWithText("Plugins").performClick()
         compose.onNodeWithText("Edit favorites").assertExists()
+        capture("plugins")
         compose.onNodeWithText("Settings").performClick()
         compose.onNodeWithText("Connect automatically on USB attach").assertExists()
+        capture("settings")
         compose.onNodeWithText("Feature setup").performClick()
         assertEquals(SetupActivity::class.java.name, shadowOf(compose.activity).nextStartedActivity.component?.className)
     }

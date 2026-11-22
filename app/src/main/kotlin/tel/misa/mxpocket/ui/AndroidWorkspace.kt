@@ -41,7 +41,7 @@ internal fun AndroidWorkspace(
             session.platformBindings().forEach { (label, call) -> add(BindingOption(label, call)) }
         }
         LayoutEditor(remember(session.deck) { session.deck.asEditorStore() }, options, signals, onExport, onImport,
-            foreground = ForegroundControls(detection, usageGranted, session::setDetectForegroundApps, onUsageSettings) {
+            live = state, foreground = ForegroundControls(detection, usageGranted, session::setDetectForegroundApps, onUsageSettings) {
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     try {
                         session.favoriteApps.discover().mapNotNull { app ->

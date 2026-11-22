@@ -73,7 +73,8 @@ class PreviewDeckTest {
         val tiles = deck.tiles(0)
         check(tiles.map { it.label } == listOf("Back", "Scroll up", "Home", "Prev focus", "Select",
             "Next focus", "Recents", "Scroll down", "Access info"))
-        check(tiles.filterNot { it.enabled }.single().let { it.label == "Recents" && it.footer == "Needs access" })
+        check(tiles.none { it.enabled && !it.readOnly })
+        check(tiles[6].let { !it.enabled && it.label == "Recents" && it.footer == "Needs access" })
         check(tiles.last().footer == "System nav off")
         tiles.forEachIndexed { index, tile -> check(deck.press(index, 0).startsWith(tile.label)) }
     }
@@ -110,7 +111,7 @@ class PreviewDeckTest {
     deck.press(3, 1_000); check(label(8) == original)
     val before = deck.tiles(0)
     check(before[7].readOnly)
-    for (slot in 6..8) { check(!before[slot].enabled); deck.press(slot, 1_000) }
+    for (slot in 6..8) { check(!before[slot].enabled || before[slot].readOnly); deck.press(slot, 1_000) }
     check(before == deck.tiles(0))
     repeat(deck.profileCount) {
         check(deck.tiles(1_000).size == 9)
@@ -124,19 +125,19 @@ class PreviewDeckTest {
         deck.select("game.xo")
         fun press(slot: Int) = deck.press(slot, 0)
         fun label(slot: Int) = deck.tiles(0)[slot].label
-        check(label(0) == "1 PLAYER" && label(2) == "2 PLAYERS")
+        check(label(0) == "1 Player" && label(2) == "2 Players")
         press(0)
         press(0)
         check(label(0) == "X" && label(4) == "O")
         press(1)
-        check(press(3).startsWith("CPU WINS"))
+        check(press(3).startsWith("CPU wins"))
         press(8)
         press(2)
         for (slot in listOf(0, 3, 1, 4)) press(slot)
-        check(press(2).startsWith("X WINS"))
+        check(press(2).startsWith("X wins"))
         deck.cycle(1)
         deck.cycle(-1)
         press(4)
-        check(label(2) == "2 PLAYERS")
+        check(label(2) == "2 Players")
     }
 }
