@@ -21,6 +21,7 @@ object DeckActions {
 // Not a legal saved profile ID. The launcher is an operating view, not part of a layout backup.
 const val PROFILE_HOME = "@home"
 const val PHONE_CALL_VIEW = "@phone-call"
+const val TEAMS_INCOMING_VIEW = "@teams-incoming"
 const val GAME_PROFILE = "game.xo"
 const val MORE_PROFILES = "home.more"
 
@@ -101,7 +102,7 @@ data class DeckState(
     /** Local host preference, never part of a layout backup. Factory profiles use their plugin ID. */
     val disabledPluginIds: Set<String> = emptySet(),
 ) {
-    val visibleProfiles get() = profiles.filterNot { it.id in disabledPluginIds || it.id in setOf(GAME_PROFILE, PROFILE_HOME, PHONE_CALL_VIEW) }
+    val visibleProfiles get() = profiles.filterNot { it.id in disabledPluginIds || it.id in setOf(GAME_PROFILE, PROFILE_HOME, PHONE_CALL_VIEW, TEAMS_INCOMING_VIEW) }
     // Keep the legacy target available to editors, explicit bindings and workflow validation.
     val navigationProfiles get() = visibleProfiles.filterNot { it == stockPhoneProfile }
     val availableDefaultId get() = visibleProfiles.firstOrNull { it.id == defaultProfileId }?.id ?: navigationProfiles.first().id

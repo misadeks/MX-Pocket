@@ -249,6 +249,7 @@ internal class PocketSession(
     private fun syncLayout() {
         val state = deck.operatingState.value
         if (state.activeProfileId != PHONE_CALL_VIEW) callBoard.forget()
+        if (!incomingTeamsVisible && teams.refreshCaller(false)) retireCallPixels()
         if (lastLayout?.let { it.profile != state.activeProfileId || it.page != state.activePage } == true)
             plugins.setEnabled(false) // Release held keys before rebinding even if the plugin ID is unchanged.
         val id = selectedPlugin(state.activePage)
@@ -316,13 +317,12 @@ internal class PocketSession(
         if ((previous.joined || state.joined) && previous.generation != state.generation)
             cancelPhysicalGesture()
         decks.value = decks.value.copy(teams = state)
-        deck.showTeamsCall(when (state.status) {
-            CallStatus.JOINED -> true
-            CallStatus.NO_KEYPAD, CallStatus.DISABLED, CallStatus.OFF, CallStatus.NO_SIGNAL,
-            CallStatus.INCOMING, CallStatus.SCREENING -> false
-            else -> null // Inconclusive evidence withdraws the page without undoing a manual override.
-        })
+        deck.showTeamsCall(state.status)
+        if (teams.refreshCaller(incomingTeamsVisible)) retireCallPixels()
     }
+
+    private val incomingTeamsVisible get() = deck.operatingState.value.activeProfileId == TEAMS_INCOMING_VIEW
+
     private fun selectedPlugin(page: DeckPage) = page.selectedSlotOwner(::hasPlugin)
     private fun layout() = deck.operatingState.value.let { Layout(it.activeProfileId, it.activePage, plugins.generation, disabled.value) }
 
@@ -364,6 +364,7 @@ internal class PocketSession(
         if ((mediaState.title.isNotEmpty() || mediaState.artwork != null) && !canShowTrack()) media.refreshDisplay()
         images.useArtwork(visibleArtwork(deckState.value.media))
         if (callBoard.visible) return callBoard.frame()
+        if (incomingTeamsVisible) return incomingTeamsFrame(teams.callerName)
         val native = plugins.render()
         val page = deck.operatingState.value.activePage
         val keys = page.keys.mapIndexed { index, key ->
@@ -407,13 +408,21 @@ internal class PocketSession(
         return key.copy(label = caption).present(tile, actionLabel(call), footer, available, onHome = state.activeProfileId == PROFILE_HOME)
     }
 
-    fun homeTiles() = (if (callBoard.visible) callBoard.homeFrame() else frame()).keys.mapIndexed { i, tile ->
+    fun homeTiles() = when {
+        callBoard.visible -> callBoard.homeFrame()
+        incomingTeamsVisible -> incomingTeamsFrame()
+        else -> frame()
+    }.keys.mapIndexed { i, tile ->
         tile.toGridTile(ready, images.image(i, tile).asImageBitmap())
     }
 
-    fun keyImage(index: Int, tile: KeyTile): Bitmap =
-        if (index == CALL_PHOTO && callBoard.visible) callBoard.photo ?: images.image(index, tile)
-        else images.image(index, tile)
+    fun keyImage(index: Int, tile: KeyTile): Bitmap {
+        if (index == CALL_PHOTO) {
+            if (callBoard.visible) callBoard.photo?.let { return it }
+            if (incomingTeamsVisible) teams.callerPhoto?.let { return it }
+        }
+        return images.image(index, tile)
+    }
     val panelArt get() = images.artwork
 
     private fun workflowContext() = WorkflowContext(request != null && output != null,
@@ -892,7 +901,7 @@ internal class PocketSession(
         val connected = output ?: return
         val scope = hardwareScope ?: return
         if (painting?.isActive == true) return
-        if (callBoard.visible) refreshPhoneCall()
+        refreshCallFace(layout().profile)
         val frame = frame()
         val layout = layout()
         if (scanLayout != layout) { scanLayout = layout; nextKey = 0 }
@@ -910,7 +919,7 @@ internal class PocketSession(
             painting = scope.launch {
                 try {
                     val result = connected.writeGrid(art, keys.map { it.image }, gridHasArt) {
-                        if (layout.profile == PHONE_CALL_VIEW) refreshPhoneCall()
+                        refreshCallFace(layout.profile)
                         val latest = frame()
                         output === connected && this@PocketSession.layout() == layout &&
                             target(latest) == target && keys.indices.all { keys[it].matches(desiredKey(layout, latest, it)) }
@@ -921,7 +930,7 @@ internal class PocketSession(
                         GridWrite.ACKNOWLEDGED -> {
                             paintedTarget = target
                             gridHasArt = art != null
-                            if (layout.profile != PHONE_CALL_VIEW || target.screen == screenGeneration)
+                            if (retainCallPixels(layout, target))
                                 for (i in keys.indices) lcd[i] = keys[i]
                         }
                         GridWrite.CLEARED -> { gridHasArt = false; lcd.fill(null); splitTarget = target }
@@ -949,14 +958,14 @@ internal class PocketSession(
                 try {
                     val sent = if (connected is RenderedKeypad) {
                         connected.setKeyImage(index, key.image, coverArt = art != null) {
-                            if (layout.profile == PHONE_CALL_VIEW) refreshPhoneCall()
-                            layout.profile != PHONE_CALL_VIEW || (callBoard.visible && target.screen == screenGeneration)
+                            refreshCallFace(layout.profile)
+                            retainCallPixels(layout, target)
                         }
                     } else {
                         connected.setKeyImage(index, key.image)
                         true
                     }
-                    if (sent && output === connected && (layout.profile != PHONE_CALL_VIEW || target.screen == screenGeneration))
+                    if (sent && output === connected && retainCallPixels(layout, target))
                         lcd[index] = key
                 } catch (e: CancellationException) {
                     throw e
@@ -982,6 +991,17 @@ internal class PocketSession(
     }
 
     private var receiptSequence = 0L
+
+    private fun refreshCallFace(profile: String) {
+        when (profile) {
+            PHONE_CALL_VIEW -> refreshPhoneCall()
+            TEAMS_INCOMING_VIEW -> refreshTeams()
+        }
+    }
+
+    private fun retainCallPixels(layout: Layout, target: GridTarget) =
+        (layout.profile != PHONE_CALL_VIEW && layout.profile != TEAMS_INCOMING_VIEW) ||
+            (deck.operatingState.value.activeProfileId == layout.profile && target.screen == screenGeneration)
 
     private fun retireReceipts(indices: List<Int>? = null) {
         receipts = if (indices == null) LongArray(9)

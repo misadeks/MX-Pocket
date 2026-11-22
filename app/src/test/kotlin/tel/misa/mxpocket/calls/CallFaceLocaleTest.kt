@@ -34,6 +34,17 @@ class CallFaceLocaleTest {
                 assertEquals("answer:42", lcd[CALL_ACCEPT].inputToken)
                 assertEquals("decline:42", lcd[CALL_DECLINE].inputToken)
                 assertEquals(listOf(6, 8), lcd.indices.filterNot { lcd[it].readOnly })
+                val teams = incomingTeamsFrame().keys
+                assertEquals("Teams", teams[CALL_IDENTITY].label)
+                assertEquals(incoming, teams[CALL_IDENTITY].footer)
+                assertEquals(IntegrationApp.TEAMS, teams[CALL_PHOTO].glyph)
+                val named = incomingTeamsFrame("Fixture").keys[CALL_IDENTITY]
+                assertEquals("Fixture", named.label)
+                assertEquals(when (language) {
+                    AppLanguage.FRENCH -> "Appel Teams entrant"
+                    AppLanguage.SERBIAN_LATIN -> "Dolazni Teams poziv"
+                    else -> "Incoming Teams call"
+                }, named.footer)
             }
         } finally {
             AppLocale.update(previous, emptyList())

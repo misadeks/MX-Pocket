@@ -84,7 +84,7 @@ internal class CallBoard(
         line = next
         stamp = notice?.stamp
         name = notice?.name
-        photo = notice?.photo(context)
+        photo = notice?.icon?.keypadPhoto(context)
         generation++
         invalidatePixels()
     }

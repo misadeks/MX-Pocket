@@ -13,6 +13,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import tel.misa.mxpocket.FocusTimer
 import tel.misa.mxpocket.plugins.present
+import tel.misa.mxpocket.decks.CallStatus
 import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.DeckActions
 import tel.misa.mxpocket.deck.DeckKey
@@ -342,15 +343,15 @@ class PreviewDeckTest {
         val repo = DeckRepository(File(folder.root, "deck.json"))
         repo.openProfileRoot("audio").getOrThrow()
         repo.enterGame().getOrThrow()
-        repo.showTeamsCall(true)
+        repo.showTeamsCall(CallStatus.JOINED)
         repo.setDisabledPlugins(setOf("audio"))
         assertEquals("game.xo", repo.operatingState.value.activeProfileId)
         check(repo.swapKeys("game.xo", "root", 0, 1).isFailure)
         repo.changePage(-1).getOrThrow()
         assertEquals("@home", repo.operatingState.value.activeProfileId)
-        repo.showTeamsCall(true)
+        repo.showTeamsCall(CallStatus.JOINED)
         assertEquals("@home", repo.operatingState.value.activeProfileId)
-        repo.showTeamsCall(false); repo.showTeamsCall(true)
+        repo.showTeamsCall(CallStatus.NO_SIGNAL); repo.showTeamsCall(CallStatus.JOINED)
         assertEquals("in-call", repo.operatingState.value.activePage.id)
     }
     @Test fun disablingHidesOnlyOwnedProfilesAndLeavesCustomBindingsIntact() {

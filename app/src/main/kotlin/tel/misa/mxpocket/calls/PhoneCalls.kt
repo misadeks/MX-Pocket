@@ -93,6 +93,17 @@ internal data class CallStamp(val key: String, val posted: Long, val boundary: L
     val accept: PendingIntent?, val decline: PendingIntent?, val publisher: String, val restricted: Boolean = false)
 internal class DialerNotice(val stamp: CallStamp, val name: String?, val icon: Icon?)
 
+internal class CallerDetails(val name: String?, val icon: Icon?)
+
+@RequiresApi(34)
+internal fun Notification.embeddedCaller(): CallerDetails {
+    val person = extras.getParcelable(Notification.EXTRA_CALL_PERSON, Person::class.java)
+    val name = person?.name?.take(128)?.toString()?.filterNot { it.isISOControl() }?.trim()?.takeIf { it.isNotEmpty() }
+    return CallerDetails(name, person?.icon.embeddedBitmap())
+}
+
+private fun Icon?.embeddedBitmap() = this?.takeIf { it.type == Icon.TYPE_BITMAP || it.type == Icon.TYPE_ADAPTIVE_BITMAP }
+
 @RequiresApi(34)
 internal fun StatusBarNotification.isFromDialer(dialer: String?, packages: PackageManager): Boolean {
     if (user != Process.myUserHandle() || opPkg != packageName) return false
@@ -137,18 +148,15 @@ internal fun dialerNotice(notes: Array<StatusBarNotification>, dialer: String, p
                 .singleOrNull()?.isAuthenticationRequired == false) }
     val accept = action(Notification.EXTRA_ANSWER_INTENT)
     val decline = action(Notification.EXTRA_DECLINE_INTENT)
-    val person = extras.getParcelable(Notification.EXTRA_CALL_PERSON, Person::class.java)
-    // Only the dialer's display label; never infer identity from a phone URI, People or contacts.
-    val name = person?.name?.take(128)?.toString()?.filterNot { it.isISOControl() }?.trim()?.takeIf { it.isNotEmpty() }
+    val caller = sbn.notification.embeddedCaller()
     val controls = accept != null && decline != null && accept != decline
-    fun embedded(icon: Icon?) = icon?.takeIf { it.type == Icon.TYPE_BITMAP || it.type == Icon.TYPE_ADAPTIVE_BITMAP }
     val notice = DialerNotice(CallStamp(sbn.key, sbn.postTime, boundary, accept.takeIf { controls },
-        decline.takeIf { controls }, sbn.packageName, restricted), name, embedded(person?.icon) ?: embedded(sbn.notification.getLargeIcon()))
-    return NoticeRead(if (name == null) RingReason.NO_CALLER_LABEL else RingReason.LABEL_AVAILABLE, notice)
+        decline.takeIf { controls }, sbn.packageName, restricted), caller.name, caller.icon ?: sbn.notification.getLargeIcon().embeddedBitmap())
+    return NoticeRead(if (caller.name == null) RingReason.NO_CALLER_LABEL else RingReason.LABEL_AVAILABLE, notice)
 }
 
-internal fun DialerNotice.photo(context: Context): Bitmap? {
-    val drawable = icon?.loadDrawable(context) ?: return null
+internal fun Icon.keypadPhoto(context: Context): Bitmap? {
+    val drawable = embeddedBitmap()?.loadDrawable(context) ?: return null
     // Embedded hardware bitmaps cannot be drawn to the LCD's software canvas.
     val source = (drawable as? BitmapDrawable)?.bitmap
     if (source?.isRecycled == true) return null

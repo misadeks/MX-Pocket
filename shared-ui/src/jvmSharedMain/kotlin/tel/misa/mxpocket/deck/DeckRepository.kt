@@ -31,6 +31,8 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
     private var showingPhone = false
     private val phonePage = DeckPage("call", "Phone call")
     private val phoneView = DeckProfile(PHONE_CALL_VIEW, phonePage.name, phonePage.id, listOf(phonePage))
+    private val incomingPage = DeckPage("incoming", "Incoming call")
+    private val incomingTeamsView = DeckProfile(TEAMS_INCOMING_VIEW, "Teams", incomingPage.id, listOf(incomingPage))
     private var gameReturnId: String? = null
     private val gameProfile = defaultDeck().profiles.single { it.id == GAME_PROFILE }
     private val mutableReason: MutableStateFlow<String>
@@ -50,10 +52,11 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
     private var lastSample = -1L
     // The call page is a temporary projection. Never serialize a meeting or undo an editor change.
     private var saved: DeckState
-    private var showingCall = false
-    private var callEpisode = false
+    private var teamsPage: CallStatus? = null
+    private val showingCall get() = teamsPage == CallStatus.JOINED
+    private var callEpisode: CallStatus? = null
     private var resumeCall = false
-    private var confirmedCall = false
+    private var teamsCallActive = false
     private var teamsInForeground = false
     private var teamsWorkOverridden = false
 
@@ -130,7 +133,7 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
         home = true
         game = false
         homeBatch = 0
-        showingCall = false
+        teamsPage = null
         resumeCall = false
         clearObservation()
         publish()
@@ -149,6 +152,7 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
         // Dismiss the phone overlay without publishing its underlying layout on the way to the game.
         if (!game) gameReturnId = if (home && !showingCall) PROFILE_HOME else state.value.activeProfileId
         showingPhone = false
+        if (teamsPage == CallStatus.INCOMING) teamsPage = null
         if (teamsInForeground) teamsWorkOverridden = true
         game = true
         clearObservation()
@@ -202,8 +206,8 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
     }
 
     @Synchronized fun changePage(delta: Int): Result<Unit> {
-        if (showingPhone) {
-            showingPhone = false
+        if (showingPhone || teamsPage == CallStatus.INCOMING) {
+            if (showingPhone) showingPhone = false else teamsPage = null
             publish()
             return Result.success(Unit)
         }
@@ -305,8 +309,8 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
         val teamsApp = allowTeamsWork && signals[FOREGROUND_APP] == TEAMS_PACKAGE
         if (!teamsApp) teamsWorkOverridden = false
         teamsInForeground = teamsApp
-        if ((confirmedCall || game) && teamsApp) teamsWorkOverridden = true
-        if (showingPhone || game || confirmedCall || teamsApp && teamsWorkOverridden) return Result.success(Unit)
+        if ((teamsCallActive || game) && teamsApp) teamsWorkOverridden = true
+        if (showingPhone || game || teamsCallActive || teamsApp && teamsWorkOverridden) return Result.success(Unit)
         if (!deck.activeProfile.automatic || deck.pinnedProfileId != null || nowMillis < 0L) {
             clearObservation()
             return Result.success(Unit)
@@ -398,23 +402,25 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
         else -> null
     }
 
-    /** null means uncertain (lock, access loss). Release our page but do not steal it again after a manual override. */
-    @Synchronized fun showTeamsCall(joined: Boolean?) {
-        confirmedCall = joined == true
-        val wasShowing = showingCall
-        if (joined == true && !callEpisode) {
-            callEpisode = true
-            showingCall = !game && saved.availableSelection().callProjection() != null
-        } else if (joined == true && resumeCall) {
-            showingCall = !game && saved.availableSelection().callProjection() != null
+    @Synchronized fun showTeamsCall(status: CallStatus) {
+        val previous = teamsPage
+        teamsCallActive = status == CallStatus.JOINED || status == CallStatus.INCOMING
+        if (teamsCallActive) {
+            if (callEpisode != status || resumeCall)
+                teamsPage = status.takeIf { !game && saved.availableSelection().callProjection() != null }
+            callEpisode = status
             resumeCall = false
-        } else if (joined != true) {
-            resumeCall = joined == null && (showingCall || resumeCall)
-            showingCall = false
-            if (joined == false) callEpisode = false
+        } else {
+            val ended = status == CallStatus.NO_SIGNAL || status == CallStatus.SCREENING ||
+                status == CallStatus.NO_KEYPAD || status == CallStatus.OFF || status == CallStatus.DISABLED
+            // Uncertain evidence hides the face, but does not rearm a dismissed episode.
+            resumeCall = !ended && (teamsPage != null || resumeCall)
+            if (ended) callEpisode = null
+            teamsPage = null
         }
-        if (showingCall != wasShowing) {
+        if (teamsPage != previous) {
             if (showingCall) home = false
+            clearObservation()
             publish()
         }
     }
@@ -435,9 +441,9 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
 
     private fun publish() {
         val available = saved.availableSelection()
-        val projection = if (showingCall) available.callProjection() else null
-        if (projection == null) showingCall = false
-        val next = projection ?: available
+        val projection = if (teamsPage != null) available.callProjection() else null
+        if (projection == null) teamsPage = null
+        val next = if (showingCall) checkNotNull(projection) else available
         mutableReason.value = next.selectionReason
         if (mutable.value != next) clearObservation()
         mutable.value = next
@@ -445,6 +451,7 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
         val surface = when {
             showingPhone -> next.operatingProjection(phoneView, "Phone call on this device").snapshot()
             game -> next.operatingProjection(gameProfile, "Previous or Next exits the game").snapshot()
+            teamsPage == CallStatus.INCOMING -> next.operatingProjection(incomingTeamsView, "Local Teams call").snapshot()
             showingCall -> next
             home -> next.homeProjection(homeBatch).snapshot()
             else -> next
@@ -477,7 +484,7 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
             if (!manual || recover || previous.activeProfileId != next.activeProfileId || previous.selectionReason != next.selectionReason)
                 ruleSelected = !manual
             showingPhone = false
-            showingCall = false
+            teamsPage = null
             resumeCall = false
             home = false
             game = false
