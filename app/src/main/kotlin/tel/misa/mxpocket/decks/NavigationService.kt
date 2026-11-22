@@ -2,10 +2,12 @@ package tel.misa.mxpocket.decks
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
+import android.os.Build
 import android.view.View
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo as Node
 import tel.misa.mxpocket.isUnlockedAndInteractive
+import tel.misa.mxpocket.i18n.AccessCopy
 import tel.misa.mxpocket.i18n.KeypadCopy as K
 
 /** No event subscriptions, gesture injection, text extraction, window enumeration or persistent node references. */
@@ -14,7 +16,24 @@ class NavigationService : AccessibilityService() {
         internal var connected: NavigationService? = null
             private set
     }
-    override fun onServiceConnected() { connected = this }
+    internal var shortcutAvailable = false
+        private set
+
+    override fun onServiceConnected() {
+        connected = this
+        refreshShortcut()
+    }
+    override fun onSystemActionsChanged() = refreshShortcut()
+    private fun refreshShortcut() {
+        shortcutAvailable = Build.VERSION.SDK_INT >= 31 && systemActions.orEmpty().any { it.id == GLOBAL_ACTION_ACCESSIBILITY_SHORTCUT }
+    }
+    internal fun runAccessibilityShortcut(): DeckResult {
+        if (!isUnlockedAndInteractive()) return unavailable(K.UnlockNavigation.text())
+        refreshShortcut()
+        return if (Build.VERSION.SDK_INT >= 31 && shortcutAvailable && performGlobalAction(GLOBAL_ACTION_ACCESSIBILITY_SHORTCUT))
+            ok(K.RequestedControl.text(K.AccessibilityShortcut.text()))
+        else unavailable(AccessCopy.ShortcutUnavailable.text())
+    }
     override fun onAccessibilityEvent(event: AccessibilityEvent?) = Unit
     override fun onInterrupt() = Unit
     override fun onUnbind(intent: Intent?): Boolean {

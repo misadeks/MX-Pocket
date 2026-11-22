@@ -245,7 +245,7 @@ class KeypadPaintTest {
             override fun deckAction(command: DeckCommand, component: String?) = ok("Handled").also { actions += command }
         }
         val expected = listOf(DeckCommand.BACK, DeckCommand.UP, DeckCommand.HOME, DeckCommand.REVERSE,
-            DeckCommand.ACTIVATE, DeckCommand.FORWARD, DeckCommand.RECENTS, DeckCommand.DOWN, DeckCommand.NAV_ACCESS)
+            DeckCommand.ACTIVATE, DeckCommand.FORWARD, DeckCommand.RECENTS, DeckCommand.DOWN)
         try {
             p.session.attach(screen)
             p.session.selectProfile("navigation"); main.idle()
@@ -255,6 +255,13 @@ class KeypadPaintTest {
                 p.press(i + 1)
                 assertEquals("Window ${i + 1}", if (i == 6) emptyList() else listOf(expected[i]), actions)
             }
+            actions.clear()
+            p.press(9)
+            assertEquals("accessibility", p.session.deck.state.value.activePage.id)
+            p.press(1)
+            assertEquals(listOf(DeckCommand.TALKBACK_SETTINGS), actions)
+            p.press(9)
+            assertEquals("root", p.session.deck.state.value.activePage.id)
             actions.clear()
             // Showing a disclosure and sending Back are not exceptions to the lock guard.
             val guard = app.getSystemService(android.app.KeyguardManager::class.java)

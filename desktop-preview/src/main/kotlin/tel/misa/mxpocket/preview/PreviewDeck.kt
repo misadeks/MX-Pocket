@@ -149,7 +149,7 @@ class PreviewDeck(val repository: DeckRepository, private val sendMedia: (MediaK
                 KeyTile(command?.displayLabel ?: "-", K.AndroidOnly.text(), 0xff49345f.toInt(), enabled = false,
                     glyph = command?.legend(), showLabel = command != null, showFooter = command != null, quietFace = true)
             }
-            "navigation" -> navigationCommands[action.index].navigationFace(systemAccess = null)
+            "navigation" -> (action.command ?: navigationCommands[action.index]).navigationFace(systemAccess = null)
             "teams" -> TeamsState().tile(action.command ?: teamsSlots[action.index]).let { tile ->
                 tile.copy(label = if (tile.readOnly) K.CallStatus.text() else tile.label,
                     enabled = false, footer = K.AndroidOnly.text())

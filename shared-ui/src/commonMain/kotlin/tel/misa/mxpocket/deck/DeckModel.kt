@@ -1,6 +1,7 @@
 package tel.misa.mxpocket.deck
 
 import tel.misa.mxpocket.actions.ActionCall
+import tel.misa.mxpocket.decks.DeckCommand
 
 /** Stable IDs for host-dispatched navigation. Page IDs are local to a profile. */
 object DeckActions {
@@ -102,7 +103,7 @@ data class DeckState(
 }
 
 object DeckLimits {
-    const val VERSION = 4
+    const val VERSION = 5
     const val MAX_BYTES = 512 * 1024
     const val PROFILES = 16
     const val PAGES = 32
@@ -128,6 +129,25 @@ private fun pluginRoot(id: String, name: String, slots: Iterable<Int> = 0..8) = 
     DeckKey(action = ActionCall("plugin.key", mapOf("pluginId" to id, "index" to index.toString())))
 })
 
+const val ACCESSIBILITY_PAGE = "accessibility"
+private fun navigationPages(): List<DeckPage> {
+    val old = pluginRoot("navigation", "Navigation", navigationFactorySlots)
+    val open = DeckKey(action = ActionCall(DeckActions.PAGE, mapOf(DeckActions.PAGE_ID to ACCESSIBILITY_PAGE)))
+    val tools = listOf(DeckCommand.TALKBACK_SETTINGS, DeckCommand.CAPTION_SETTINGS, DeckCommand.NIGHT_LIGHT_SETTINGS,
+        DeckCommand.ACCESSIBILITY_SHORTCUT, DeckCommand.NAV_ACCESS).map { DeckKey(action = ActionCall(it.id)) }
+    return listOf(old.copy(keys = old.keys.dropLast(1) + open), DeckPage(ACCESSIBILITY_PAGE, "Accessibility",
+        tools + List(3) { DeckKey() } + DeckKey(label = "Back to Navigation", action = ActionCall(DeckActions.ROOT))))
+}
+
+internal fun DeckState.withAccessibilityPage(): DeckState {
+    val oldRoot = pluginRoot("navigation", "Navigation", navigationFactorySlots)
+    val owner = profiles.find { it.id == "navigation" && it.rootPageId == oldRoot.id && oldRoot in it.pages } ?: return this
+    if (owner.pages.size >= DeckLimits.PAGES || owner.pages.any { it.id == ACCESSIBILITY_PAGE }) return this
+    val (root, tools) = navigationPages()
+    val updated = owner.copy(pages = owner.pages.map { if (it == oldRoot) root else it } + tools)
+    return copy(profiles = profiles.map { if (it == owner) updated else it })
+}
+
 internal fun DeckState.upgradeStockNavigationRoot(): DeckState {
     val legacy = pluginRoot("navigation", "Navigation")
     val owner = profiles.find { it.id == "navigation" && it.rootPageId == legacy.id && legacy in it.pages } ?: return this
@@ -146,7 +166,7 @@ fun defaultDeck(): DeckState {
         plugin("phone", "Phone"),
         plugin("launcher", "Launcher"),
         plugin("studio", "Studio").copy(automatic = false),
-        plugin("navigation", "Navigation", slots = navigationFactorySlots),
+        DeckProfile("navigation", "Navigation", "root", navigationPages()),
         plugin("game.xo", tel.misa.mxpocket.plugins.TIC_TAC_TOE_TITLE),
         tel.misa.mxpocket.decks.teamsProfile(),
         plugin("onenote", "OneNote"),

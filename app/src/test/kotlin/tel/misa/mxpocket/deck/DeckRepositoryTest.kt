@@ -234,14 +234,38 @@ class DeckRepositoryTest {
                     assertEquals(pluginKey("teams", 4), profile.pages.last().keys[4])
                     continue
                 }
-                val slots = if (profile.id == "navigation") listOf(0, 3, 1, 6, 4, 8, 2, 5, 7) else (0..8).toList()
-                assertEquals(profile.id, slots.map { pluginKey(profile.id, it) }, profile.pages.single().keys)
+                if (profile.id == "navigation") {
+                    assertEquals(expectedNavigationRoot(), profile.pages.first().keys)
+                    assertEquals(ActionCall(DeckActions.ROOT), profile.pages.single { it.id == ACCESSIBILITY_PAGE }.keys[8].action)
+                } else assertEquals(profile.id, (0..8).map { pluginKey(profile.id, it) }, profile.pages.single().keys)
             }
+
         }
         checkDefaults()
         repo.setKey("navigation", "root", 1, DeckKey()).getOrThrow()
         repo.restoreDefaults().getOrThrow()
         checkDefaults()
+    }
+
+    private fun expectedNavigationRoot() = listOf(0, 3, 1, 6, 4, 8, 2, 5).map { pluginKey("navigation", it) } +
+        DeckKey(action = ActionCall(DeckActions.PAGE, mapOf(DeckActions.PAGE_ID to "accessibility")))
+
+    @Test fun v4UpgradesOnlyStockNavigationWithoutOverwritingUserPagesOrBindings() {
+        val state = repo.state.value
+        val nav = state.profiles.single { it.id == "navigation" }
+        val old = DeckPage("root", "Navigation", listOf(0,3,1,6,4,8,2,5,7).map { pluginKey("navigation", it) })
+        fun migrate(vararg pages: DeckPage): DeckProfile {
+            val document = state.copy(version = 4, profiles = state.profiles.map {
+                if (it.id == "navigation") nav.copy(name = "My pad", pages = pages.toList()) else it
+            })
+            repo.importJson(DeckJson.encode(document)).getOrThrow()
+            return repo.state.value.profiles.single { it.id == "navigation" }.also { assertEquals("My pad", it.name) }
+        }
+        assertEquals(expectedNavigationRoot(), migrate(old).pages.first().keys)
+        val edited = old.copy(keys = old.keys.mapIndexed { i, k -> if (i == 8) k.copy(holdAction = ActionCall(DeckActions.ROOT)) else k })
+        assertEquals(listOf(edited), migrate(edited).pages)
+        val existing = old.copy(id = "accessibility", name = "My tools")
+        assertEquals(listOf(old, existing), migrate(old, existing).pages)
     }
 
     // The v1 on-disk format, independent of the current default generator and writer.
@@ -279,7 +303,7 @@ class DeckRepositoryTest {
         val loaded = DeckRepository(file)
         val state = loaded.state.value
         val originalKeys = (0..8).map { pluginKey("navigation", it) }
-        assertEquals(listOf(0, 3, 1, 6, 4, 8, 2, 5, 7).map(originalKeys::get), state.activePage.keys)
+        assertEquals(expectedNavigationRoot(), state.activePage.keys)
         assertEquals(originalKeys, state.activeProfile.pages.single { it.id == "copy" }.keys)
         assertEquals(originalKeys, state.profiles.single { it.id == "copy" }.pages.single().keys)
         assertEquals(state, DeckRepository(file).state.value) // retry before a save
@@ -321,8 +345,7 @@ class DeckRepositoryTest {
         nav.put("pages", historicalNavigation().getJSONArray("profiles").getJSONObject(0).getJSONArray("pages"))
         repo.importJson(exported.toString()).getOrThrow()
         val result = repo.state.value.profiles.associateBy { it.id }
-        assertEquals(listOf(0, 3, 1, 6, 4, 8, 2, 5, 7).map { pluginKey("navigation", it) },
-            result.getValue("navigation").pages.single().keys)
+        assertEquals(expectedNavigationRoot(), result.getValue("navigation").pages.first().keys)
         assertEquals((0..8).map { pluginKey("audio", it) }, result.getValue(copy).pages.single().keys)
     }
 
