@@ -58,18 +58,20 @@ class TeamsCallTest {
         assertFalse(info.metaData?.containsKey(NotificationListenerService.META_DATA_DISABLED_FILTER_TYPES) == true)
     }
 
-    @Test fun onlyOneLocalTypedOngoingTeamsCallIsEligible() {
+    @Test fun onlyOneLocalTeamsCallNoticeIsEligible() {
         for (rejected in listOf(note("com.android.dialer"), note("other.voip"), note(poster = "delegate"),
             note(user = UserHandle.getUserHandleForUid(1_010_000)), note(styled = false, kind = Notification.CATEGORY_MESSAGE))) {
             assertSame(TeamsObservation.None, teamsObservation(arrayOf(rejected)))
         }
-        assertSame(TeamsObservation.Untyped, teamsObservation(arrayOf(note(styled = false))))
+        assertFalse((teamsObservation(arrayOf(note(styled = false))) as TeamsObservation.Notice).typedOngoing)
+        assertFalse((teamsObservation(arrayOf(note(type = 0))) as TeamsObservation.Notice).typedOngoing)
+        assertSame(TeamsObservation.Unavailable, teamsObservation(arrayOf(note(type = 0, kind = Notification.CATEGORY_MESSAGE))))
         assertSame(TeamsObservation.Incoming, teamsObservation(arrayOf(note(type = Notification.CallStyle.CALL_TYPE_INCOMING))))
         assertSame(TeamsObservation.Screening, teamsObservation(arrayOf(note(type = Notification.CallStyle.CALL_TYPE_SCREENING))))
         assertSame(TeamsObservation.Unavailable, teamsObservation(arrayOf(note(), note(id = 2, styled = false))))
         assertSame(TeamsObservation.None, teamsObservation(emptyArray()))
         assertSame(TeamsObservation.Unavailable, teamsObservation(arrayOf(note(), note(id = 2))))
-        assertTrue(teamsObservation(arrayOf(note("com.android.dialer"), note())) is TeamsObservation.Ongoing)
+        assertTrue((teamsObservation(arrayOf(note("com.android.dialer"), note())) as TeamsObservation.Notice).typedOngoing)
     }
 
     @Implements(UserManager::class)
@@ -339,6 +341,63 @@ class TeamsCallTest {
             shadowOf(listener).addActiveNotification(note(user = work))
             shadowOf(listener).addActiveNotification(note("other.voip")); signal()
             assertEquals(CallStatus.NO_SIGNAL, session.deckState.value.teams.status)
+            val untyped = note(styled = false).also { it.notification.extras.remove(Notification.EXTRA_CALL_TYPE) }
+            fun publish(vararg notes: StatusBarNotification) {
+                listener.cancelAllNotifications()
+                notes.forEach { shadowOf(listener).addActiveNotification(it); listener.onNotificationPosted(it) }
+                main.idle()
+            }
+            window.root = cameraNode(pkg = "other.app")
+            publish(untyped)
+            assertEquals(CallStatus.UNTYPED, session.deckState.value.teams.status)
+            window.root = cameraNode(pkg = TEAMS_PACKAGE).also { shadowOf(it).addChild(cameraNode("Mic", TEAMS_PACKAGE)) }
+            service.onAccessibilityEvent(null); main.idle()
+            assertEquals(CallStatus.UNTYPED, session.deckState.value.teams.status)
+            window.root = root
+            for ((type, status) in listOf(Notification.CallStyle.CALL_TYPE_INCOMING to CallStatus.INCOMING,
+                Notification.CallStyle.CALL_TYPE_SCREENING to CallStatus.SCREENING)) {
+                publish(note(type = type))
+                assertEquals(status, session.deckState.value.teams.status)
+            }
+            publish(untyped, note(id = 2))
+            assertEquals(CallStatus.UNAVAILABLE, session.deckState.value.teams.status)
+            publish(untyped)
+            assertEquals(CallStatus.JOINED, session.deckState.value.teams.status)
+            assertEquals(IN_CALL, session.deck.state.value.activePage.id)
+            assertEquals(1, clicks) // no automatic action
+            val before = controls.refresh(true, true, true, true)
+            var dispatchChecks = 0
+            assertFalse(controls.pressMic(before) {
+                if (++dispatchChecks == 2) listener.onNotificationPosted(untyped) // same key and post time
+                true
+            }.success)
+            assertEquals(2, dispatchChecks)
+            main.idle()
+            assertNotEquals(before.generation, controls.refresh(true, true, true, true).generation)
+            app.emit(KeyEvent(5, true)) // physical down queued before the first replacement
+            val page = session.deck.state.value
+            repeat(15) {
+                listener.onNotificationPosted(untyped); main.idle()
+                assertSame(page, session.deck.state.value) // still the original page projection
+            }
+            app.emit(KeyEvent(5, false)); main.idle()
+            assertEquals(1, clicks)
+            center()
+            assertEquals(2, clicks)
+            window.root = null
+            service.onAccessibilityEvent(null); main.idle()
+            assertEquals(CallStatus.UNTYPED, session.deckState.value.teams.status)
+            assertEquals("launcher", session.deck.state.value.activeProfileId)
+            window.root = root
+            service.onAccessibilityEvent(null); main.idle()
+            assertTrue(session.deckState.value.teams.joined)
+            assertEquals(IN_CALL, session.deck.state.value.activePage.id)
+            val joinedUntyped = controls.refresh(true, true, true, true)
+            window.root = null // no refresh before dispatch
+            assertFalse(controls.pressMic(joinedUntyped) { true }.success)
+            assertEquals(2, clicks)
+            publish(call) // upgrading to typed must not inherit the untyped confirmation
+            assertEquals(CallStatus.NOTIFICATION, session.deckState.value.teams.status)
             listener.onListenerDisconnected(); main.idle()
             assertFalse(session.deckState.value.teams.joined)
             assertEquals("launcher", session.deck.state.value.activeProfileId)

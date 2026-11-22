@@ -83,10 +83,9 @@ internal fun localTeams(sbn: StatusBarNotification) =
 internal sealed interface TeamsObservation {
     data object Unavailable : TeamsObservation
     data object None : TeamsObservation
-    data object Untyped : TeamsObservation
     data object Incoming : TeamsObservation
     data object Screening : TeamsObservation
-    class Ongoing(val key: String, val posted: Long) : TeamsObservation
+    data class Notice(val key: String, val posted: Long, val typedOngoing: Boolean) : TeamsObservation
 }
 
 internal fun teamsObservation(notifications: Array<StatusBarNotification>): TeamsObservation {
@@ -99,11 +98,15 @@ internal fun teamsObservation(notifications: Array<StatusBarNotification>): Team
     }
     if (calls.size > 1) return TeamsObservation.Unavailable
     val n = calls.singleOrNull() ?: return TeamsObservation.None
-    if (!n.notification.callStyle()) return TeamsObservation.Untyped
-    return when (n.notification.extras.getInt(Notification.EXTRA_CALL_TYPE)) {
-        Notification.CallStyle.CALL_TYPE_ONGOING -> TeamsObservation.Ongoing(n.key, n.postTime)
+    val type = n.notification.extras.getInt(Notification.EXTRA_CALL_TYPE)
+    return when (type) {
         Notification.CallStyle.CALL_TYPE_INCOMING -> TeamsObservation.Incoming
         Notification.CallStyle.CALL_TYPE_SCREENING -> TeamsObservation.Screening
-        else -> TeamsObservation.Untyped
+        else -> {
+            val ongoing = n.notification.callStyle() && type == Notification.CallStyle.CALL_TYPE_ONGOING
+            if (ongoing || n.notification.category == Notification.CATEGORY_CALL)
+                TeamsObservation.Notice(n.key, n.postTime, ongoing)
+            else TeamsObservation.Unavailable
+        }
     }
 }
