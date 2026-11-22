@@ -1,98 +1,62 @@
 # MX Pocket
 
-MX Pocket turns the **wired Logitech MX Creative Keypad** into a control surface
-for Android. Start a focus timer, change tracks, open a favorite app, or assign
-a workflow to one of nine LCD keys. Two physical page buttons switch what the
-keys do. You can also use the app with on-screen keys, or reuse its Kotlin USB
-driver without the app.
+MX Pocket turns the **wired Logitech MX Creative Keypad** from a desktop
+accessory into nine tactile controls for your Android phone. Over USB-C, the
+phone changes what each key shows and does. No root or companion PC.
 
-The hardware target is the USB **Keypad** (`046D:C354`), not the wireless
-**Dialpad** sold with it. Android talks to the keypad directly through USB
-Host; it doesn't need root or Logi Options+. The Windows simulator does not
-drive hardware.
+On the **Music** layout, press the center key to pause the track.
+Switch to **Navigation**: that same key now says **Select**, and the key below
+it says **Scroll down**. With [Android navigation access](docs/android-decks.md)
+enabled, you can keep reading in a supported app without swiping the screen.
+
+![Two illustrated nine-key keypads. On Music, the center key shows Pause and the key below reads “Druga Strana”. On Navigation, those keys become Select and Scroll down.](docs/images/audio-and-navigation.png)
+
+*LCD layouts on an illustrated keypad. Now playing:
+[“Druga Strana” by Luzeri & Lava](https://music.apple.com/us/song/druga-strana/1834721562)
+from DEPRESIJA. The key artwork is original to this demo, not the album cover.*
+
+The trick is under the keys: **one 480 × 480 LCD**, visible through nine
+windows. A native Kotlin driver runs in Android userspace, reads key presses
+over USB HID and sends JPEGs back to that panel. Two physical page buttons
+switch layouts. The driver targets the wired Keypad, not the wireless Dialpad.
 
 ## Quick start
 
-Clone the repository and open a terminal in its root. Set `JAVA_HOME` to a
-JDK 17 or 21. Commands below use the included Gradle wrapper in PowerShell;
-for Android builds on Linux/macOS, substitute
-`./gradlew` for `.\gradlew.bat`.
+<a name="try-it-on-windows-without-hardware"></a>
 
-### Try it on Windows without hardware
+**Try the two layouts on Windows.** From the repository root with `JAVA_HOME` set
+to JDK 17 or 21 (x64 on Windows ARM64), run:
 
 ```powershell
 .\gradlew.bat :desktop-preview:run
 ```
 
-No Android SDK, phone or keypad is needed. On Windows ARM64, use an **x64
-JDK** for the desktop runtime. On **Home**, select **Focus** and click **Start** to see the
-countdown. Select **Audio** to try simulated media keys, or play **Tic Tac Toe**
-using the nine keys as board squares. **Keypad** edits and saves layouts
-locally using the same editor as Android. The simulator doesn't change Windows
-volume, open phone apps, or run Android workflows.
+On **Home**, choose the profile with the music-note icon and click the center key to toggle playback.
+Choose **Navigation** to see the same key become **Select**. The simulator
+needs no Android SDK, phone or keypad; it doesn't change Windows media,
+navigate other apps or drive USB hardware.
 
-### Run it on Android
+<a name="run-it-on-android"></a>
 
-Install Android SDK Platform 35, Build Tools 35.0.0 and Platform-Tools using
-SDK Manager. Set `ANDROID_HOME` to that SDK or open the project in Android
-Studio to configure it. On an Android 9 (API 28) or newer phone, enable USB
-debugging, connect it to your computer and accept its debugging prompt.
-Install the debug app, then open **MX Pocket** on the phone:
+**[Try it on Android](docs/workspace.md#install-the-android-app)** with a
+wired keypad or on-screen keys. Both run real phone actions.
+**[Reuse the Kotlin driver](docs/driver.md)** in your own Android app.
 
-```powershell
-.\gradlew.bat :app:installDebug
-```
+<a name="guides"></a>
 
-- **Without the keypad:** Choose **Skip and try virtual keypad** on first
-  launch, or **Home → Connect virtual keypad** later. On **Focus**, tap
-  **Start**; the key becomes **Pause**. Unlike the Windows demo, these keys
-  run real Android actions. The timer needs no USB or special access.
-- **With the keypad:** Disconnect the computer and attach one keypad to a
-  USB-host-capable phone using a data cable or OTG adapter. If first-run
-  setup is open, choose **Use a USB keypad** and finish setup. On **Home**, tap
-  **Connect keypad**. Allow access to this USB device and allow the session
-  notification so you can disconnect from outside the app. Home lists the
-  nine key labels under **Keypad shows:**. Press **Start** on the physical
-  Focus keypad, not on the phone, then try a page button. If it doesn't
-  connect, see [USB setup and troubleshooting](docs/workspace.md#connect-a-wired-keypad).
-
-Notification *access* for player titles and artwork is separate from permission
-to *show* the session notification. It is optional, as are Usage Access for
-app-based profile switching, accessibility for cross-app navigation or supported
-camera buttons, and **Display over other apps** for one-press background app
-shortcuts. Leave these off unless you want the corresponding feature.
+[Key layouts and permissions](docs/android-decks.md) · [Workflows](docs/workflows.md) · [Write a plugin](docs/plugins.md) · [Contribute](CONTRIBUTING.md)
 
 The **Teams** profile opens the Android client on this phone. Choose **Call
 tools** for its manual meeting page, or **Teams setup** for optional local call
 switching. Teams uses separate grants; enabling Audio does not enable Teams.
 See [Teams call controls and client limits](docs/android-decks.md#teams-on-this-phone).
 
-## Guides
+<a name="hardware-evidence-and-credits"></a>
 
-| I want to… | Start here |
-| --- | --- |
-| Set up profiles, pages and automatic switching | [Android workspace walkthrough](docs/workspace.md) |
-| Use media, launcher, camera, navigation or game keys | [Android keypad decks and their permissions](docs/android-decks.md) |
-| Assign several actions to one key | [Build and test a workflow](docs/workflows.md) |
-| Use the USB driver in another Android app | [Build the Kotlin AAR and connect a keypad](docs/driver.md) |
-| Add a deck in Kotlin | [Compiled-in plugins and the Counter example](docs/plugins.md) |
-| Build, test or contribute | [Contributor guide](CONTRIBUTING.md) |
+## Credits
 
-## Hardware evidence and credits
-
-The driver treats the screen as **one 480 × 480 panel with nine visible
-118 × 118 regions**. This layout comes from the upstream protocol research.
-An acknowledged upload means the keypad answered, not that the picture appeared
-or stayed visible. Software tests cannot establish phone power compatibility,
-all eleven physical controls or reconnect behavior; use the
+[MIT license](LICENSE). The [driver credits and upstream notices](mx-driver/src/main/assets/mx-pocket-provenance.txt)
+trace the protocol to Julian Waller's `node-logitech-mx-creative-console` and
+related open-source work. For what requires a real device, see the
 [hardware checklist](docs/workspace.md#hardware-acceptance-manual-not-established-by-jvm-tests).
-The driver doesn't replay experimental ownership or keepalive packets or flash
-firmware.
-
-MX Pocket is [MIT licensed](LICENSE). Its protocol code draws on Julian
-Waller's `node-logitech-mx-creative-console`, with cross-checks from
-`logilinux` and `mx-creative-console-webhid` and SDK examples from
-`logilinux-sdk`. The [provenance file](mx-driver/src/main/assets/mx-pocket-provenance.txt)
-records the sources, revisions, differences and upstream MIT notices; it ships
-in the APK and AAR. The generated Gradle wrapper is
-[Apache-2.0 licensed](LICENSES/Apache-2.0.txt); see [NOTICE](NOTICE).
+The Gradle wrapper is [Apache-2.0 licensed](LICENSES/Apache-2.0.txt); see [NOTICE](NOTICE).

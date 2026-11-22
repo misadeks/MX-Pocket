@@ -7,7 +7,7 @@ Activity. The host app supplies the USB grant, images and connection lifetime.
 
 ## Add the library
 
-With the [build prerequisites](../README.md#quick-start) installed, run this
+With the [build prerequisites](../CONTRIBUTING.md#tooling-and-local-checks) installed, run this
 from the repository root:
 
 ```powershell

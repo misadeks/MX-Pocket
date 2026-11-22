@@ -40,6 +40,15 @@
   Use window constraints, not platform identity, for compact and wide layouts.
   Keep key execution separate from editing, resize and preview fixtures.
   Preserve accessible insets, touch targets and selectable diagnostics.
+- Use the approved MX keypad SVG as the only device housing in Android and
+  desktop views, including virtual keypads, editors and previews. If the SVG
+  is missing, obtain it from the maintainer; do not redraw or substitute it.
+- Align the SVG's key-window masks with the driver's nine visible regions.
+  Through each mask, show the corresponding pixels from the production LCD
+  frame for the same layout and state. Run demo and virtual states through
+  that same renderer. Do not invent glyphs or layouts, enhance colors, or
+  present a simulated frame as output from a connected device. Keep editor
+  controls, selection outlines and resize handles outside the LCD image.
 - `MainActivity`: visible USB/notification permission and phone UI.
   `KeypadService` gates the hardware lifetime; `PocketSession` owns input,
   plugin actions and LCDs independently of Activity recreation. Preserve the
