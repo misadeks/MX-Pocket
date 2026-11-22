@@ -87,6 +87,30 @@ library (AAR) to receive key presses and releases and upload key images without
 the MX Pocket app or its plugins. The [driver guide](docs/driver.md) shows how
 to add the library, obtain USB permission and connect to the wired keypad.
 
+## Architecture
+
+The driver reports which physical key changed; the active layout determines
+what it does. On Music, for example, the center key asks Android to play or
+pause. The key press does not prove playback changed. When player state is
+available, the app uses it to render the key face and sends the image to the
+driver. The driver handles images and key events, not tracks or layouts.
+
+- [`:mx-driver`](mx-driver) is a standalone Android library (AAR). It opens
+  the wired keypad through Android USB Host with the user's permission. The
+  [JVM protocol sources](mx-driver/src/jvmShared/kotlin) handle input reports
+  and LCD commands independently of Android.
+- [`:app`](app) owns Android actions and permissions. `MainActivity` handles
+  visible USB consent; `KeypadService` keeps the connection alive across
+  Activity recreation. `PocketSession` routes physical input and LCD updates.
+  [Compiled-in plugins](docs/plugins.md) request actions through `PluginHost`,
+  not USB. Connecting the keypad does not grant notification or accessibility access.
+- [`:shared-ui`](shared-ui/src/commonMain) renders the same Compose screens
+  on Android and Windows. Screens receive state and send typed events back to
+  the host; the host performs platform actions. Android Home is a read-only mirror.
+- [`:desktop-preview`](desktop-preview) is the Windows host. For a wired keypad
+  it uses the same protocol sources over native Windows HID, not the Android
+  AAR. Its clickable simulator needs no USB and cannot verify physical LCD output.
+
 <a name="hardware-evidence-and-credits"></a>
 
 ## Credits
