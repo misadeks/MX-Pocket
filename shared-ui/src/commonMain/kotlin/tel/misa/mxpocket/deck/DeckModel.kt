@@ -145,14 +145,14 @@ fun defaultDeck(): DeckState {
         plugin("audio", "Audio", listOf(DeckRule("mediaActive", "true", 3))),
         plugin("phone", "Phone"),
         plugin("launcher", "Launcher"),
-        plugin("studio", "Studio"),
+        plugin("studio", "Studio").copy(automatic = false),
         plugin("navigation", "Navigation", slots = navigationFactorySlots),
         plugin("game.xo", tel.misa.mxpocket.plugins.TIC_TAC_TOE_TITLE),
         tel.misa.mxpocket.decks.teamsProfile(),
         plugin("onenote", "OneNote"),
     )
     return DeckState(
-        DeckLimits.VERSION, profiles, "focus", "focus", null, false,
+        DeckLimits.VERSION, profiles, "launcher", "launcher", null, false,
         profiles.associate { it.id to listOf(it.rootPageId) },
     )
 }
