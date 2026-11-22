@@ -178,6 +178,21 @@ MX Pocket doesn’t resolve caller URIs, download photos, inspect notification
 titles/text, look up contacts or store caller data. Home and the desktop
 simulator do not display caller identity or photos.
 
+Phone can publish the notification just before Android reports ringing. If a
+fresh, matching notification arrived during that transition, the keypad may
+show its caller label and picture without enabling Accept or Decline. An old
+notification left over from the previous call is not used.
+
+If a regular mobile call still has no label, check **Settings → Diagnostics**
+before disconnecting the keypad. With caller details enabled, **Last ringing
+caller check** shows a single code, not a name, number, timestamp or notification
+identifier. `HIDDEN` means the lock-screen policy blocked the read;
+`NO_TRUSTED_CALL` / `AMBIGUOUS_CALL` mean zero / multiple matching notifications;
+`STALE_NOTICE` means the notice failed the timing check. `NO_CALL_STYLE` means
+the dialer did not use the standard call format; `NO_CALL_STYLE_WITH_CALL_PERSON`
+means it included a typed call-person field but lacked that format. `NO_CALLER_LABEL`
+means the standard call had no usable label. Share just the code, not the USB log.
+
 **Key 7 Accept** and **key 9 Decline** appear only while ringing, for a single
 matching Phone notification with two distinct actions owned by the posting
 package and UID. A press
