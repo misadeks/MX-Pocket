@@ -5,7 +5,7 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.vector.PathParser
 
 /** Original 24-unit LCD legends. Physical and simulated keys draw these same paths. */
-enum class DeckGlyph : KeyGlyph { FOLDER, PROFILE, TIMER, RESET, MINUS, PLUS, CAMERA, VIDEO, STOP, SETTINGS, PHONE, DECLINE, WEB, REFRESH, FLOW, COMPASS, GRID, GAME }
+enum class DeckGlyph : KeyGlyph { FOLDER, PROFILE, TIMER, RESET, MINUS, PLUS, CAMERA, VIDEO, STOP, SETTINGS, PHONE, DECLINE, WEB, REFRESH, FLOW, COMPASS, GRID, GAME, CALLER }
 
 /** Original conversation and spiral-notebook outlines, used when the host has no installed icon. */
 enum class IntegrationApp(internal val outline: String) : KeyGlyph {
@@ -82,6 +82,7 @@ private val symbols: Map<KeyGlyph, List<Mark>> = mapOf(
     DeckGlyph.SETTINGS to outline("M3,6H11 M16,6H21 M3,12H6 M11,12H21 M3,18H14 M19,18H21 M13,4V8 M8,10V14 M16,16V20"),
     DeckGlyph.PHONE to outline("M5,3L9,4L10,8L8,10Q10,14 14,16L16,14L20,15L21,19Q20,22 16,21Q6,18 3,8Q2,5 5,3Z"),
     DeckGlyph.DECLINE to outline("M2,14Q2,8 12,8Q22,8 22,14L21,16L17,16L16,12Q12,11 8,12L7,16H3Z"),
+    DeckGlyph.CALLER to outline("M12,3A4,4 0 1,1 12,11A4,4 0 1,1 12,3Z M4,21V19Q4,14 12,14Q20,14 20,19V21"),
     DeckGlyph.WEB to outline("M12,3A9,9 0 1,1 12,21A9,9 0 1,1 12,3Z M3,12H21 M12,3Q5,12 12,21Q19,12 12,3Z"),
     DeckGlyph.REFRESH to outline("M20,4V10H14 M20,10A8,8 0 1,0 19,17"),
     DeckGlyph.FLOW to outline("M4,5H10V10H4Z M14,14H20V19H14Z M7,10V16.5H13"),

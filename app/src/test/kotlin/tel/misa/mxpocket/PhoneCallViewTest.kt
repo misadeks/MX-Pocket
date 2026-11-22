@@ -2,6 +2,7 @@ package tel.misa.mxpocket
 
 import android.Manifest
 import android.app.Notification
+import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Person
@@ -13,6 +14,8 @@ import android.os.Looper
 import android.os.Process
 import android.os.SystemClock
 import android.os.UserHandle
+import android.provider.Settings
+import android.service.notification.NotificationListenerService.Ranking
 import android.service.notification.StatusBarNotification
 import android.telecom.TelecomManager
 import android.telephony.SubscriptionManager
@@ -30,6 +33,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.annotation.LooperMode
 import org.robolectric.shadows.ShadowSubscriptionManager.SubscriptionInfoBuilder
+import org.robolectric.util.ReflectionHelpers
 import tel.misa.mxpocket.calls.*
 import tel.misa.mxpocket.deck.PHONE_CALL_VIEW
 import tel.misa.mxpocket.deck.PROFILE_HOME
@@ -60,6 +64,7 @@ class PhoneCallViewTest {
         user: UserHandle = Process.myUserHandle(), person: Person? = null, posted: Long = System.currentTimeMillis()) =
         StatusBarNotification(pkg, poster, 1, null, Process.myUid(), 0, 0, Notification().apply {
             category = Notification.CATEGORY_CALL
+            actions = listOfNotNull(accept, decline).map { Notification.Action.Builder(null, "", it).build() }.toTypedArray()
             extras.putString(Notification.EXTRA_TEMPLATE, Notification.CallStyle::class.java.name)
             extras.putInt(Notification.EXTRA_CALL_TYPE, Notification.CallStyle.CALL_TYPE_INCOMING)
             extras.putParcelable(Notification.EXTRA_CALL_PERSON, person)
@@ -80,6 +85,16 @@ class PhoneCallViewTest {
         assertNull(private.name)
         assertNull(private.icon)
         assertNull(dialerNotice(arrayOf(note()), pkg, LineState.OFF_HOOK, 0))
+        val secured = note().also { n ->
+            n.notification.actions[0] = Notification.Action.Builder(n.notification.actions[0])
+                .setAuthenticationRequired(true).build()
+            n.notification.extras.putString(Notification.EXTRA_TITLE, "Not an identity source")
+        }
+        val locked = dialerNotice(arrayOf(secured), pkg, LineState.RINGING, 0, restricted = true) { true }!!
+        assertNull(locked.name)
+        assertNull(locked.stamp.accept)
+        assertNull(locked.stamp.decline)
+        assertNull(dialerNotice(arrayOf(secured), pkg, LineState.RINGING, 0, restricted = true) { false })
     }
 
     @Test fun pinsDismissalAndUncertaintyNeverRearmAnEpisode() {
@@ -200,7 +215,7 @@ class PhoneCallViewTest {
             post(note(accept = action(3), decline = action(4), person = caller)); main.idle()
             app.press(7); assertEquals(1, count(3))
             state(TelephonyManager.CALL_STATE_OFFHOOK); main.idle()
-            assertEquals("Dialing or active", session.frame().keys[0].label)
+            assertEquals("Dialing or active", session.frame().keys[CALL_IDENTITY].footer)
             assertFalse(session.frame().keys.any { !it.readOnly })
             app.press(0x01a2); session.refreshPhoneCall(); main.idle()
             assertEquals(previous, session.deck.operatingState.value.activeProfileId)
@@ -219,7 +234,7 @@ class PhoneCallViewTest {
                 assertEquals(0, count(1)); assertEquals(0, count(2))
                 session.openProfile("focus")
             }
-            state(TelephonyManager.CALL_STATE_IDLE); state(TelephonyManager.CALL_STATE_OFFHOOK); main.idle()
+            state(TelephonyManager.CALL_STATE_IDLE); state(TelephonyManager.CALL_STATE_RINGING); main.idle()
             assertEquals(PHONE_CALL_VIEW, session.deck.operatingState.value.activeProfileId)
             shadowOf(app).denyPermissions(Manifest.permission.READ_PHONE_STATE)
             session.refreshPhoneCall(); main.idle()
@@ -229,7 +244,7 @@ class PhoneCallViewTest {
         } finally { session.disconnect(); controller.destroy() }
     }
 
-    @Test fun ringingNeedsOnlyPhoneStateAndNeverDisplaysOnALockedHandset() {
+    @Test fun onlyRingingTriggersAnEpisodeEvenWhenLockedAndTelecomInCallIsNotDirection() {
         shadowOf(app).grantPermissions(Manifest.permission.READ_PHONE_STATE)
         val sub = SubscriptionInfoBuilder.newBuilder().setId(10).setSimSlotIndex(0).buildSubscriptionInfo()
         shadowOf(app.getSystemService(SubscriptionManager::class.java)).setActiveSubscriptionInfos(sub)
@@ -240,26 +255,106 @@ class PhoneCallViewTest {
         session.phoneAccess.enabled = true
         session.refreshPhoneCall()
         assertEquals(CallCopy.ConnectKeypad, session.phoneCallBlocker)
-        app.connectKeypad()
+        shadowOf(telecom).setCallState(TelephonyManager.CALL_STATE_OFFHOOK)
+        val telecomCalls = shadowOf(app.getSystemService(TelecomManager::class.java))
+        telecomCalls.setIsInCall(true)
+        app.connectKeypad() // Cold attach to an ongoing call.
         try {
+            assertEquals(PROFILE_HOME, session.deck.operatingState.value.activeProfileId)
+            shadowOf(telecom).setCallState(TelephonyManager.CALL_STATE_IDLE)
+            session.refreshPhoneCall()
+            assertEquals(LineState.CALL, session.phoneAccess.state())
+            assertEquals(PROFILE_HOME, session.deck.operatingState.value.activeProfileId)
+            telecomCalls.setIsInCall(false)
             lock.setKeyguardLocked(true)
-            shadowOf(telecom).setCallState(TelephonyManager.CALL_STATE_RINGING)
-            session.refreshPhoneCall()
-            assertEquals(CallCopy.UnlockPhone, session.phoneCallBlocker)
-            assertEquals(PROFILE_HOME, session.deck.operatingState.value.activeProfileId)
-            lock.setKeyguardLocked(false)
             power.setIsInteractive(false)
-            session.refreshPhoneCall()
-            assertEquals(PROFILE_HOME, session.deck.operatingState.value.activeProfileId)
-            assertEquals(CallCopy.UnlockPhone, session.phoneCallBlocker)
-            power.setIsInteractive(true)
+            shadowOf(telecom).setCallState(TelephonyManager.CALL_STATE_RINGING)
             session.refreshPhoneCall()
             assertEquals(PHONE_CALL_VIEW, session.deck.operatingState.value.activeProfileId)
             assertTrue(session.frame().keys.all { it.readOnly })
-            lock.setKeyguardLocked(true); session.refreshPhoneCall()
-            lock.setKeyguardLocked(false); session.refreshPhoneCall()
+            assertEquals("Incoming call", session.frame().keys[CALL_IDENTITY].footer)
+            assertTrue(app.getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked)
+            app.press(0x01a1)
+            power.setIsInteractive(true); lock.setKeyguardLocked(false)
+            shadowOf(telecom).setCallState(TelephonyManager.CALL_STATE_OFFHOOK)
+            session.refreshPhoneCall()
             assertEquals(PROFILE_HOME, session.deck.operatingState.value.activeProfileId)
             assertEquals(CallCopy.WaitForIdle, session.phoneCallBlocker)
+            shadowOf(telecom).setCallState(TelephonyManager.CALL_STATE_IDLE)
+            session.refreshPhoneCall()
+            assertNull(session.phoneCallBlocker)
+            shadowOf(telecom).setCallState(TelephonyManager.CALL_STATE_RINGING)
+            session.refreshPhoneCall()
+            assertEquals(PHONE_CALL_VIEW, session.deck.operatingState.value.activeProfileId)
+            session.disconnect()
+            assertEquals(PROFILE_HOME, session.deck.operatingState.value.activeProfileId)
         } finally { session.disconnect() }
+    }
+
+    @Test fun screenOffRejectsPriorFaceAndOnlyAllowsCurrentLockscreenSafeDetailsAndActions() {
+        shadowOf(app).grantPermissions(Manifest.permission.READ_PHONE_STATE)
+        val sub = SubscriptionInfoBuilder.newBuilder().setId(10).setSimSlotIndex(0).buildSubscriptionInfo()
+        shadowOf(app.getSystemService(SubscriptionManager::class.java)).setActiveSubscriptionInfos(sub)
+        shadowOf(telecom).setTelephonyManagerForSubscriptionId(10, telecom)
+        shadowOf(app.getSystemService(TelecomManager::class.java)).setDefaultDialerPackage(pkg)
+        val access = session.phoneAccess
+        access.enabled = true
+        access.details = true
+        val shared = NotificationAccess(app).component
+        shadowOf(app.getSystemService(NotificationManager::class.java)).setNotificationListenerAccessGranted(shared, true)
+        val controller = Robolectric.buildService(PocketNotificationListener::class.java).create()
+        val listener = controller.get()
+        val power = app.getSystemService(android.os.PowerManager::class.java)
+        val lock = app.getSystemService(android.app.KeyguardManager::class.java)
+        val color = Color.rgb(123, 41, 189)
+        val bmp = Bitmap.createBitmap(24, 24, Bitmap.Config.ARGB_8888).apply { eraseColor(color) }
+        val caller = Person.Builder().setName("Fixture").setIcon(Icon.createWithBitmap(bmp)).build()
+        fun attempts() = shadowOf(app).broadcastIntents.count { it.action?.startsWith("test.call.") == true }
+        app.connectKeypad()
+        try {
+            listener.onListenerConnected()
+            SystemClock.sleep(5)
+            shadowOf(telecom).setCallState(TelephonyManager.CALL_STATE_RINGING)
+            val n = note(person = caller)
+            shadowOf(listener).addActiveNotification(n)
+            listener.onNotificationPosted(n); main.idle()
+            assertEquals(color, app.lcd.getValue(CALL_PHOTO).getPixel(59,59))
+            app.emit(KeyEvent(7, true)) // Delivered after lock, against the old paint receipt.
+            shadowOf(power).setIsInteractive(false)
+            shadowOf(lock).setKeyguardLocked(true)
+            session.refreshPhoneCall(); main.idle()
+            assertEquals(0, attempts())
+            assertEquals(CallCopy.NoCallerDetails.text(), session.frame().keys[CALL_IDENTITY].label)
+            assertNotEquals(color, app.lcd.getValue(CALL_PHOTO).getPixel(59,59))
+            // Give this notification an actual lock-screen ranking (Robolectric defaults to an empty map).
+            val rank = Ranking()
+            ReflectionHelpers.setField(rank, "mKey", n.key)
+            ReflectionHelpers.setField(rank, "mMatchesInterruptionFilter", true)
+            ReflectionHelpers.setField(rank, "mVisibilityOverride", Ranking.VISIBILITY_NO_OVERRIDE)
+            ReflectionHelpers.setField(rank, "mImportance", NotificationManager.IMPORTANCE_HIGH)
+            shadowOf(rank).setChannel(NotificationChannel("call", "Call", NotificationManager.IMPORTANCE_HIGH))
+            ReflectionHelpers.getField<MutableMap<String, Ranking>>(listener.currentRanking, "mRankings")[n.key] = rank
+            Settings.Secure.putInt(app.contentResolver, "lock_screen_show_notifications", 1)
+            Settings.Secure.putInt(app.contentResolver, "lock_screen_allow_private_notifications", 1)
+            session.refreshPhoneCall(); main.idle()
+            assertEquals("Fixture", session.frame().keys[CALL_IDENTITY].label)
+            assertEquals(color, app.lcd.getValue(CALL_PHOTO).getPixel(59,59))
+            assertFalse(session.homeTiles().any { it.label.contains("Fixture") })
+            app.emit(KeyEvent(7, true)); app.emit(KeyEvent(7, false)); main.idle()
+            assertEquals(0, attempts()) // Held across the transition: release is not a fresh action.
+            Settings.Secure.putInt(app.contentResolver, "lock_screen_allow_private_notifications", 0)
+            app.press(9) // Re-check policy even before a ranking/power broadcast or poll.
+            assertEquals(0, attempts())
+            assertTrue(session.frame().keys.all { it.readOnly })
+            Settings.Secure.putInt(app.contentResolver, "lock_screen_allow_private_notifications", 1)
+            session.refreshPhoneCall(); main.idle()
+            app.press(9); app.press(7)
+            assertEquals(1, attempts())
+            assertTrue(lock.isKeyguardLocked)
+            assertFalse(power.isInteractive)
+            access.enabled = false; session.refreshPhoneCall(); main.idle()
+            assertFalse(session.frame().keys.any { it.label == "Fixture" })
+            assertNotEquals(PHONE_CALL_VIEW, session.deck.operatingState.value.activeProfileId)
+        } finally { session.disconnect(); controller.destroy() }
     }
 }

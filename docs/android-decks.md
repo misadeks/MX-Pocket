@@ -112,13 +112,19 @@ and revocable in Android settings.
 
 In **Settings → Phone calls**, turn on **Show calls on the keypad** and grant
 the optional Android Phone permission (`READ_PHONE_STATE`). On Android 12+
-this reads ringing, off-hook or idle for active mobile subscriptions. It does
-not read the call log, contacts, microphone or phone number. A call temporarily
-replaces the layout on an authorized USB keypad while the phone is unlocked
-and its screen is on. You do not need a Phone layout, the Phone shortcuts plugin,
+this switches the physical keypad as soon as Android reports a single ringing
+mobile line, without waiting for a name or for the call to be answered. Outgoing
+calls and connecting mid-conversation do not open it. It does not read the
+call log, contacts, microphone or incoming-number extra. The same setting
+works with the phone locked or its screen off. You do not need a Phone layout, the Phone shortcuts plugin,
 a profile rule or notification access. A pinned layout or active
 game stays in place. Settings explains when the view is blocked.
 “Dialing or active” does **not** mean the other person answered.
+
+Connect and authorize the keypad first. Screen-off operation needs the phone
+to keep USB host power and the connected-device session running. Some phones
+cut OTG power, restrict USB data while locked, or suspend the app. MX Pocket
+does not wake the phone, dismiss the keyguard or override those policies.
 
 Either page key leaves immediately, without accepting or declining. You can
 also choose a layout in the app. Updates for that call won't pull you back;
@@ -131,21 +137,37 @@ opt-in. If not already granted, allow **MX Pocket** in Android’s **Notificatio
 access**. Basic ringing does not need this grant. Android's grant can expose notifications from other apps.
 MX Pocket checks the publisher and Android user before reading the default
 Phone app's [CallStyle](https://developer.android.com/reference/android/app/Notification.CallStyle)
-fields. It uses the display label (name or number) and an embedded bitmap
-if supplied; it doesn't resolve caller URIs, download a photo, look up a
-contact, or store caller data. Home and the desktop simulator do not display
-the caller's identity or photo.
+fields. The caller’s picture is at top center and the dialer’s display label
+(name or number) is in the center. A saved contact is not enough: the dialer
+must supply the label in its call-person field. When it does not, the keypad
+says **Caller details unavailable**; it does not assume a withheld number.
+An embedded caller bitmap takes priority over a dialer-supplied large bitmap.
+MX Pocket doesn’t resolve caller URIs, download photos, inspect notification
+titles/text, look up contacts or store caller data. Home and the desktop
+simulator do not display caller identity or photos.
 
 **Key 7 Accept** and **key 9 Decline** appear only while ringing, for a single
 matching Phone notification with two distinct Phone-owned actions. A press
 must match the acknowledged LCD face and a fresh check of the notification
 and carrier state. There is no Hang up key. Use the system Phone app if the
 notification is absent, ambiguous, filtered, unsupported or lacks controls.
-Without usable caller details the keypad says **Private / unknown**. Android
-12–13 supports the state-only view; Android 9–11 needs the system Phone app.
-Lock, disconnect, or loss of Phone permission withdraws the view; loss of
-notification access removes caller details and actions. Both options default
-off. No dialer-role change is required.
+While locked or screen-off, anyone at the authorized keypad can see the
+permitted caller details and use eligible controls. If Android hides the
+notification or its contents, or visibility cannot be established, only call
+state is available. Actions must also be identifiable in the displayed
+notification and must not require authentication. Unlock and use Phone when
+the keypad has no controls. Disconnecting or losing Phone permission withdraws
+the view; losing notification access removes details and controls. Both existing
+options start off; there’s no extra screen-off switch. Android 12–13 supports
+the state-only view; Android 9–11 needs the system Phone app.
+
+**WhatsApp and Viber:** there is no app-specific incoming-call detector.
+Android’s [`isInCall`](https://developer.android.com/reference/android/telecom/TelecomManager#isInCall())
+can report a call registered with Telecom, but not which app owns it or
+whether it is incoming, outgoing or answered. That signal alone never switches
+your layout. If only that signal remains on an already-open call view, it shows
+**Call**, without identity or controls. No WhatsApp/Viber notifications are read
+and no dialer role is requested.
 
 ## Teams on this phone
 

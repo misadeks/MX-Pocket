@@ -15,13 +15,14 @@ import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.Process
 import android.service.notification.StatusBarNotification
+import android.telecom.TelecomManager
 import android.telephony.SubscriptionManager
 import android.telephony.TelephonyManager
 import androidx.annotation.RequiresApi
 import tel.misa.mxpocket.NotificationAccess
 import tel.misa.mxpocket.PocketNotificationListener
 
-internal enum class LineState { UNKNOWN, IDLE, RINGING, OFF_HOOK, MULTIPLE }
+internal enum class LineState { UNKNOWN, IDLE, RINGING, OFF_HOOK, MULTIPLE, CALL }
 
 internal class PhoneCallAccess(private val context: Context) {
     private val prefs = context.getSharedPreferences("phone-call-view", Context.MODE_PRIVATE)
@@ -41,6 +42,22 @@ internal class PhoneCallAccess(private val context: Context) {
 
     fun state(): LineState {
         if (!enabled || !phoneGranted || Build.VERSION.SDK_INT < 31) return LineState.UNKNOWN
+        val carrier = carrierState()
+        if (carrier != LineState.IDLE && carrier != LineState.UNKNOWN) return carrier
+        // Telecom can include self-managed calls. It does not identify their source or direction.
+        val inCall = try { context.getSystemService(TelecomManager::class.java)?.isInCall }
+            catch (_: SecurityException) { null }
+            catch (_: IllegalStateException) { null }
+            catch (_: UnsupportedOperationException) { null }
+        return when (inCall) {
+            true -> LineState.CALL
+            false -> LineState.IDLE
+            null -> carrier
+        }
+    }
+
+    @RequiresApi(31)
+    private fun carrierState(): LineState {
         return try {
             val subs = context.getSystemService(SubscriptionManager::class.java)?.activeSubscriptionInfoList
             if (subs.isNullOrEmpty()) return LineState.UNKNOWN
@@ -62,16 +79,18 @@ internal class PhoneCallAccess(private val context: Context) {
 
 /** These references never enter profile, workflow, diagnostic or preview state. */
 internal data class CallStamp(val key: String, val posted: Long, val boundary: Long,
-    val accept: PendingIntent?, val decline: PendingIntent?, val publisher: String)
+    val accept: PendingIntent?, val decline: PendingIntent?, val publisher: String, val restricted: Boolean = false)
 internal class DialerNotice(val stamp: CallStamp, val name: String?, val icon: Icon?)
 
 @RequiresApi(34)
-internal fun dialerNotice(notes: Array<StatusBarNotification>, dialer: String, state: LineState, boundary: Long): DialerNotice? {
+internal fun dialerNotice(notes: Array<StatusBarNotification>, dialer: String, state: LineState, boundary: Long,
+    restricted: Boolean = false, visibleOnLockScreen: (StatusBarNotification) -> Boolean = { false }): DialerNotice? {
     val sbn = notes.filter {
         it.packageName == dialer && it.user == Process.myUserHandle() && it.opPkg == dialer && it.notification.let { n ->
             n.category == Notification.CATEGORY_CALL || n.extras.getString(Notification.EXTRA_TEMPLATE) == Notification.CallStyle::class.java.name
         }
     }.singleOrNull() ?: return null
+    if (restricted && !visibleOnLockScreen(sbn)) return null
     val extras = sbn.notification.extras
     if (extras.getString(Notification.EXTRA_TEMPLATE) != Notification.CallStyle::class.java.name) return null
     val ringing = state == LineState.RINGING
@@ -79,17 +98,18 @@ internal fun dialerNotice(notes: Array<StatusBarNotification>, dialer: String, s
     if (!(ringing && type == Notification.CallStyle.CALL_TYPE_INCOMING ||
             state == LineState.OFF_HOOK && type == Notification.CallStyle.CALL_TYPE_ONGOING)) return null
     fun action(field: String) = if (!ringing) null else extras.getParcelable(field, PendingIntent::class.java)
-        ?.takeIf { it.creatorPackage == dialer && it.creatorUid == sbn.uid }
+        ?.takeIf { intent -> intent.creatorPackage == dialer && intent.creatorUid == sbn.uid &&
+            (!restricted || sbn.notification.actions.orEmpty().filter { it.actionIntent == intent }
+                .singleOrNull()?.isAuthenticationRequired == false) }
     val accept = action(Notification.EXTRA_ANSWER_INTENT)
     val decline = action(Notification.EXTRA_DECLINE_INTENT)
     val person = extras.getParcelable(Notification.EXTRA_CALL_PERSON, Person::class.java)
     // Only the dialer's display label; never infer identity from a phone URI, People or contacts.
     val name = person?.name?.take(128)?.toString()?.filterNot { it.isISOControl() }?.trim()?.takeIf { it.isNotEmpty() }
     val controls = accept != null && decline != null && accept != decline
+    fun embedded(icon: Icon?) = icon?.takeIf { it.type == Icon.TYPE_BITMAP || it.type == Icon.TYPE_ADAPTIVE_BITMAP }
     return DialerNotice(CallStamp(sbn.key, sbn.postTime, boundary, accept.takeIf { controls },
-        decline.takeIf { controls }, dialer), name, person?.icon?.takeIf {
-        name != null && it.type in setOf(Icon.TYPE_BITMAP, Icon.TYPE_ADAPTIVE_BITMAP)
-    })
+        decline.takeIf { controls }, dialer, restricted), name, embedded(person?.icon) ?: embedded(sbn.notification.getLargeIcon()))
 }
 
 internal fun DialerNotice.photo(context: Context): Bitmap? {
