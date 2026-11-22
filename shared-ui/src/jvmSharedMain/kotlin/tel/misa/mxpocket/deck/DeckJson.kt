@@ -22,6 +22,7 @@ object DeckJson {
             root
         }
         val xoProfileRemoved = if (obj.has("xoProfileRemoved")) obj.remove("xoProfileRemoved") as Boolean else false
+        val teamsRemoved = if (obj.has("teamsProfileRemoved")) obj.remove("teamsProfileRemoved") as Boolean else false
         obj.fields("version", "profiles", "activeProfileId", "defaultProfileId", "pinnedProfileId", "automatic", "histories", "selectionReason")
         val state = DeckState(
             version = obj.get("version") as Int,
@@ -38,6 +39,7 @@ object DeckJson {
             },
             selectionReason = obj.string("selectionReason"),
             xoProfileRemoved = xoProfileRemoved,
+            teamsProfileRemoved = teamsRemoved,
         )
         if (state.version == 1 || state.version == 2) {
             val validated = state.copy(version = DeckLimits.VERSION)
@@ -136,7 +138,10 @@ object DeckJson {
             .put("activeProfileId", deck.activeProfileId).put("defaultProfileId", deck.defaultProfileId)
             .put("pinnedProfileId", deck.pinnedProfileId ?: JSONObject.NULL).put("automatic", deck.automatic)
             .put("histories", histories).put("selectionReason", deck.selectionReason)
-            .apply { if (deck.xoProfileRemoved) put("xoProfileRemoved", true) }.toString()
+            .apply {
+                if (deck.xoProfileRemoved) put("xoProfileRemoved", true)
+                if (deck.teamsProfileRemoved) put("teamsProfileRemoved", true)
+            }.toString()
     }
 
     private fun JSONObject.string(name: String) = get(name) as String

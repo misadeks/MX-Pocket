@@ -1,0 +1,7 @@
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:packageNames="com.microsoft.teams"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
+    android:notificationTimeout="150"
+    android:canRetrieveWindowContent="true"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:description="@string/teams_toolbar_description" />

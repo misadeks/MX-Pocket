@@ -20,6 +20,7 @@ data class BindingOption(val label: String, val call: ActionCall)
 val factoryKeyBindings = defaultDeck().profiles.flatMap { profile ->
     profile.pages.single { it.id == profile.rootPageId }.keys.mapIndexedNotNull { physical, key ->
         val call = key.action ?: return@mapIndexedNotNull null
+        if (call.id != "plugin.key") return@mapIndexedNotNull null
         val suffix = if (profile.id == "navigation") ": ${navigationCommands[call.params.getValue("index").toInt()].label}" else ""
         BindingOption("${profile.name} key ${physical + 1}$suffix", call)
     }

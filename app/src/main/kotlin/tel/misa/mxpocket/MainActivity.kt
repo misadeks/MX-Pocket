@@ -446,6 +446,8 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
     override fun deckAction(command: DeckCommand, component: String?): DeckResult {
         if (!resumed || !isUnlockedAndInteractive()) return unavailable("Open MX Pocket on the unlocked phone.")
         val intent = when (command) {
+            DeckCommand.TEAMS_OPEN -> teamsLauncher() ?: return unavailable("Teams is not installed in this profile.")
+            DeckCommand.TEAMS_ACCESS -> Intent(this, TeamsAccessActivity::class.java)
             DeckCommand.OPEN -> session.favoriteApps.intentFor(component) ?: return unavailable("Favorite no longer available.")
             DeckCommand.EDIT -> Intent(this, FavoritesActivity::class.java)
             DeckCommand.STUDIO, DeckCommand.VIDEO -> viewfinder(if (command == DeckCommand.STUDIO) CameraMode.PHOTO else CameraMode.VIDEO)

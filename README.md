@@ -44,6 +44,11 @@ wired keypad or on-screen keys. Both run real phone actions.
 
 [Key layouts and permissions](docs/android-decks.md) · [Workflows](docs/workflows.md) · [Write a plugin](docs/plugins.md) · [Contribute](CONTRIBUTING.md)
 
+The **Teams** profile opens the Android client on this phone. Choose **Call
+tools** for its manual meeting page, or **Teams setup** for optional local call
+switching. Teams uses separate grants; enabling Audio does not enable Teams.
+See [Teams call controls and client limits](docs/android-decks.md#teams-on-this-phone).
+
 <a name="hardware-evidence-and-credits"></a>
 
 ## Credits

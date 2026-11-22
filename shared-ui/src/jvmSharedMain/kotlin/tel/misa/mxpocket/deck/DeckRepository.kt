@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.FOREGROUND_APP
+import tel.misa.mxpocket.decks.*
 
 /** Own one instance per app session. Successful edits replace the file before publishing the new snapshot. */
 class DeckRepository(private val file: File) {
@@ -31,6 +32,12 @@ class DeckRepository(private val file: File) {
     private var candidate: String? = null
     private var candidateSince = 0L
     private var lastSample = -1L
+    // The call page is a temporary projection. Never serialize a meeting or undo an editor change.
+    private var saved: DeckState
+    private var showingCall = false
+    private var callEpisode = false
+    private var resumeCall = false
+    private var confirmedCall = false
 
     init {
         val loaded = try {
@@ -56,8 +63,9 @@ class DeckRepository(private val file: File) {
             loadError = "Saved deck unreadable; import a backup or restore defaults"
             defaultDeck()
         }
-        val initial = loaded.withBuiltInXo()
-        mutable = MutableStateFlow(initial.snapshot())
+        val initial = loaded.withBuiltIns()
+        saved = initial.snapshot()
+        mutable = MutableStateFlow(saved)
         state = mutable.asStateFlow()
         mutableReason = MutableStateFlow(initial.selectionReason)
         reason = mutableReason.asStateFlow()
@@ -65,14 +73,14 @@ class DeckRepository(private val file: File) {
         decision = mutableDecision.asStateFlow()
     }
 
-    fun exportJson(): String = DeckJson.encode(state.value)
-    fun importJson(text: String) = edit(recover = true, force = true) {
-        DeckJson.decode(text).withPrivateReason().withBuiltInXo()
+    @Synchronized fun exportJson(): String = DeckJson.encode(saved)
+    fun importJson(text: String) = edit(recover = true, force = true, navigation = true) {
+        DeckJson.decode(text).withPrivateReason().withBuiltIns()
     }
-    fun restoreDefaults() = edit(recover = true, force = true) { defaultDeck() }
+    fun restoreDefaults() = edit(recover = true, force = true, navigation = true) { defaultDeck() }
     fun save() = edit(force = true) { it }
 
-    fun selectProfile(id: String, source: SelectionSource = SelectionSource.USER) = edit { old ->
+    fun selectProfile(id: String, source: SelectionSource = SelectionSource.USER) = edit(navigation = true) { old ->
         val profile = old.profile(id)
         if (source == SelectionSource.AUTOMATIC) {
             require(old.automatic && old.activeProfile.automatic && profile.automatic && old.pinnedProfileId == null) {
@@ -87,7 +95,7 @@ class DeckRepository(private val file: File) {
             })
     }
 
-    fun setPinned(id: String?) = edit { old ->
+    fun setPinned(id: String?) = edit(navigation = true) { old ->
         if (id == null && old.pinnedProfileId == null) old
         else if (id == null) old.copy(pinnedProfileId = null, selectionReason = "Last selected by manual pin (now unpinned)")
         else old.copy(activeProfileId = old.profile(id).id, pinnedProfileId = id, selectionReason = "Manually pinned")
@@ -100,15 +108,15 @@ class DeckRepository(private val file: File) {
         it.copy(rules = rules.toList())
     }
 
-    fun openPage(id: String) = edit { old ->
+    fun openPage(id: String) = edit(navigation = true) { old ->
         require(old.activeProfile.pages.any { it.id == id }) { "Unknown page" }
         val history = old.histories.getValue(old.activeProfileId)
         val previous = history.indexOf(id)
         val next = if (previous >= 0) history.take(previous + 1) else history + id
         old.withHistory(next)
     }
-    fun root() = edit { it.withHistory(listOf(it.activeProfile.rootPageId)) }
-    fun back() = edit { old ->
+    fun root() = edit(navigation = true) { it.withHistory(listOf(it.activeProfile.rootPageId)) }
+    fun back() = edit(navigation = true) { old ->
         val history = old.histories.getValue(old.activeProfileId)
         if (history.size > 1) old.withHistory(history.dropLast(1)) else old
     }
@@ -118,12 +126,13 @@ class DeckRepository(private val file: File) {
         val pages = deck.activeProfile.pages
         return when {
             delta < 0 && deck.histories.getValue(deck.activeProfileId).size > 1 -> back()
+            deck.activeProfileId == TEAMS && pages.indexOf(deck.activePage) + delta !in pages.indices -> cycleProfile(delta)
             pages.size > 1 -> openPage(pages[Math.floorMod(pages.indexOf(deck.activePage) + delta, pages.size)].id)
             else -> cycleProfile(delta)
         }
     }
 
-    fun cycleProfile(delta: Int) = edit { old ->
+    fun cycleProfile(delta: Int) = edit(navigation = true) { old ->
         val profiles = old.profiles
         val current = profiles.indexOfFirst { it.id == old.activeProfileId }
         val index = Math.floorMod(current.toLong() + delta, profiles.size.toLong()).toInt()
@@ -159,6 +168,7 @@ class DeckRepository(private val file: File) {
         val defaultId = if (id == old.defaultProfileId) remaining.first().id else old.defaultProfileId
         old.copy(profiles = remaining, defaultProfileId = defaultId, histories = old.histories - id,
             xoProfileRemoved = old.xoProfileRemoved || id == "game.xo",
+            teamsProfileRemoved = old.teamsProfileRemoved || id == TEAMS,
             activeProfileId = if (id == old.activeProfileId) defaultId else old.activeProfileId,
             pinnedProfileId = old.pinnedProfileId?.takeUnless { it == id },
             selectionReason = if (id == old.activeProfileId) "Default selected after profile deletion" else old.selectionReason)
@@ -213,6 +223,7 @@ class DeckRepository(private val file: File) {
      */
     @Synchronized
     fun observe(signals: Map<String, String>, nowMillis: Long): Result<Unit> {
+        if (confirmedCall) return Result.success(Unit)
         val deck = state.value
         if (!deck.automatic || !deck.activeProfile.automatic || deck.pinnedProfileId != null || nowMillis < 0L) {
             clearObservation()
@@ -270,21 +281,61 @@ class DeckRepository(private val file: File) {
         return edit { update(id, it) }.map { id }
     }
 
+    /** null means uncertain (lock, access loss). Release our page but do not steal it again after a manual override. */
+    @Synchronized fun showTeamsCall(joined: Boolean?) {
+        confirmedCall = joined == true
+        if (joined == true && !callEpisode) {
+            callEpisode = true
+            showingCall = saved.callProjection() != null
+        } else if (joined == true && resumeCall) {
+            showingCall = saved.callProjection() != null
+            resumeCall = false
+        } else if (joined != true) {
+            resumeCall = joined == null && (showingCall || resumeCall)
+            showingCall = false
+            if (joined == false) callEpisode = false
+        }
+        publish()
+    }
+
+    private fun DeckState.callProjection(): DeckState? {
+        val teams = profiles.find { it.id == TEAMS && it.automatic } ?: return null
+        if (pinnedProfileId != null || !activeProfile.automatic || teams.pages.none { it.id == IN_CALL }) return null
+        val history = listOf(teams.rootPageId, IN_CALL).distinct()
+        return copy(activeProfileId = TEAMS, histories = (histories + (TEAMS to history.locked())).locked(),
+            selectionReason = "Local Teams call")
+    }
+
+    private fun publish() {
+        val projection = if (showingCall) saved.callProjection() else null
+        if (projection == null) showingCall = false
+        val next = projection ?: saved
+        mutableReason.value = next.selectionReason
+        if (mutable.value != next) clearObservation()
+        mutable.value = next
+    }
+
     @Synchronized
-    private fun edit(recover: Boolean = false, force: Boolean = false, update: (DeckState) -> DeckState): Result<Unit> = try {
+    private fun edit(recover: Boolean = false, force: Boolean = false, navigation: Boolean = false,
+        update: (DeckState) -> DeckState): Result<Unit> = try {
         check(recover || loadError == null) { loadError.orEmpty() }
-        val previous = state.value
-        val next = update(previous)
-        if (force || previous != next) {
-            val snapshot = next.snapshot()
+        val previous = if (navigation) state.value else saved
+        val change = update(previous)
+        val next = if (navigation && showingCall && !recover && change.activeProfileId != TEAMS && TEAMS in change.histories)
+            change.copy(histories = change.histories + (TEAMS to saved.histories.getValue(TEAMS))) else change
+        val persistent = if (navigation && showingCall && !recover && next.selectionReason == "Local Teams call")
+            next.copy(selectionReason = "Manually selected") else next
+        if (force || saved != persistent) {
+            val snapshot = persistent.snapshot()
             validateDeck(snapshot)
             write(DeckJson.encode(snapshot))
             loadError = null
             cleanupWarning = null
-            mutableReason.value = snapshot.selectionReason
-            clearObservation()
-            mutable.value = snapshot
-        } else clearObservation()
+            saved = snapshot
+        }
+        if (navigation) { showingCall = false; resumeCall = false }
+        publish()
+        clearObservation()
         Result.success(Unit)
     } catch (e: Exception) {
         Result.failure(e)
@@ -313,10 +364,14 @@ class DeckRepository(private val file: File) {
     }
 }
 
-private fun DeckState.withBuiltInXo(): DeckState {
-    if (xoProfileRemoved || profiles.size >= DeckLimits.PROFILES || profiles.any { it.id == "game.xo" }) return this
-    val xo = defaultDeck().profile("game.xo")
-    val augmented = copy(profiles = profiles + xo, histories = histories + (xo.id to listOf(xo.rootPageId)))
+private fun DeckState.withBuiltIns(): DeckState {
+    val games = if (xoProfileRemoved) this else addBuiltIn(defaultDeck().profile("game.xo"))
+    return if (teamsProfileRemoved) games else games.addBuiltIn(teamsProfile(profiles.any { it.id == "focus" }))
+}
+
+private fun DeckState.addBuiltIn(profile: DeckProfile): DeckState {
+    if (profiles.size >= DeckLimits.PROFILES || profiles.any { it.id == profile.id }) return this
+    val augmented = copy(profiles = profiles + profile, histories = histories + (profile.id to listOf(profile.rootPageId)))
     return if (DeckJson.fits(augmented)) augmented else this
 }
 

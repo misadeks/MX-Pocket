@@ -5,7 +5,7 @@ import kotlinx.coroutines.flow.StateFlow
 import tel.misa.mxpocket.decks.DeckCommand
 import tel.misa.mxpocket.decks.DeckState
 
-enum class PluginCapability { AUDIO, OPEN_APPS, NAVIGATION, TONE, STUDIO, SYSTEM_NAVIGATION }
+enum class PluginCapability { AUDIO, OPEN_APPS, NAVIGATION, TONE, STUDIO, SYSTEM_NAVIGATION, TEAMS }
 
 /** Two distinct logical plugin slots in ascending order (not press order). */
 data class KeyChord(val first: Int, val second: Int) {
