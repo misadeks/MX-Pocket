@@ -3,14 +3,12 @@ package tel.misa.mxpocket.shared.ui
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.testTag
 import tel.misa.mxpocket.actions.ActionCall
@@ -24,7 +22,7 @@ fun parseTileColor(text: String): Int? {
     return (if (hex.length == 6) "FF$hex" else hex).toLong(16).toInt()
 }
 
-private fun displayColor(color: Int): String = "#" + if (color ushr 24 == 255)
+internal fun displayColor(color: Int): String = "#" + if (color ushr 24 == 255)
     (color and 0xffffff).toString(16).uppercase().padStart(6, '0')
 else color.toUInt().toString(16).uppercase().padStart(8, '0')
 
@@ -42,6 +40,7 @@ internal class KeyDraft(val original: DeckKey) {
     var label by mutableStateOf(original.label)
     var icon by mutableStateOf(original.icon)
     var color by mutableStateOf(displayColor(original.color))
+    var pendingColor by mutableStateOf<String?>(null)
     var enabled by mutableStateOf(original.enabled)
     var call by mutableStateOf(original.action)
     var holdCall by mutableStateOf(original.holdAction)
@@ -83,7 +82,7 @@ internal class KeyDraft(val original: DeckKey) {
                 listOf(it.original.action, it.original.holdAction, it.call, it.holdCall).flatMap { call ->
                     val parts = call.parts()
                     listOf(parts.size.toString()) + parts
-                } + listOf(it.category?.name.orEmpty())
+                } + listOf(it.category?.name.orEmpty()) + listOfNotNull(it.pendingColor)
         }, restore = { p ->
             val parts = p.listIterator(11)
             fun nextCall() = List(parts.next().toInt()) { parts.next() }.call()
@@ -96,7 +95,11 @@ internal class KeyDraft(val original: DeckKey) {
                 query = p[9]; attempted = p[10].toBoolean()
                 call = if (legacy) parts.asSequence().toList().call() else nextCall()
                 holdCall = if (legacy) null else nextCall()
-                if (parts.hasNext()) category = ActionCategory.entries.find { it.name == p.last() }
+                if (parts.hasNext()) {
+                    val savedCategory = parts.next()
+                    category = ActionCategory.entries.find { it.name == savedCategory }
+                }
+                pendingColor = if (parts.hasNext()) parts.next() else null
             }
         })
     }
@@ -111,21 +114,7 @@ internal fun KeyFields(index: Int, draft: KeyDraft, options: List<BindingOption>
         label = { Text(LayoutCopy.KeyLabel.text()) }, singleLine = true, isError = attempted && label.length > DeckLimits.LABEL)
     OutlinedTextField(icon, { icon = it }, Modifier.fillMaxWidth(), enabled = writable,
         label = { Text(LayoutCopy.IconText.text()) }, singleLine = true, isError = attempted && icon.length > DeckLimits.ICON)
-    OutlinedTextField(color, { color = it }, Modifier.fillMaxWidth(), enabled = writable,
-        label = { Text(LayoutCopy.KeyColor.text()) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii),
-        placeholder = { Text("#284454") }, isError = attempted && parseTileColor(color) == null)
-    Box {
-        var open by remember { mutableStateOf(false) }
-        TextButton(onClick = { open = true }, enabled = writable) { Text(LayoutCopy.ChooseColor.text()) }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            for ((name, hex) in palette) {
-                DropdownMenuItem(text = { Text(name.text()) }, leadingIcon = {
-                    Surface(Modifier.size(20.dp), shape = MaterialTheme.shapes.small,
-                        color = androidx.compose.ui.graphics.Color(parseTileColor(hex)!!)) {}
-                }, onClick = { color = hex; open = false })
-            }
-        }
-    }
+    KeyColorField(draft, writable)
     Text(LayoutCopy.KeyActions.text(), style = MaterialTheme.typography.titleSmall)
     for (target in BindingTarget.entries) {
         OutlinedButton(onClick = { query = ""; category = null; picking = target }, enabled = writable,
@@ -145,11 +134,6 @@ internal fun KeyFields(index: Int, draft: KeyDraft, options: List<BindingOption>
         TextButton(onClick = onClose) { Text(LayoutCopy.Cancel.text()) }
     }
 }
-
-private val palette = listOf(
-    LayoutCopy.Slate to "#284454", LayoutCopy.Blue to "#245CB5", LayoutCopy.Teal to "#176A63",
-    LayoutCopy.Amber to "#E9A73C", LayoutCopy.Berry to "#923F62", LayoutCopy.Graphite to "#373B42",
-)
 
 @Composable
 internal fun BindingDialog(options: List<BindingOption>, draft: KeyDraft) {

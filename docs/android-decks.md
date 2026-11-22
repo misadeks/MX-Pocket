@@ -4,6 +4,12 @@ Connect an authorized USB keypad at the top of **Home**. To change the active pr
 choose **Profiles > [profile name] > Profile settings and rules > Use on keypad**.
 Browsing a saved profile does not switch it, and touching a face on the phone never runs it.
 
+To change one key's background, open **Profiles > [profile] > [page]**, tap the key,
+then choose **Key color**. Pick a swatch, adjust the red, green and blue sliders, or
+enter `#RRGGBB` or `#AARRGGBB`. **Key default** removes the override and lets the
+binding supply its background again. **Apply color** updates the draft; **Save key**
+writes it to this profile and page. Unavailable keys retain their status styling.
+
 | Deck | How to use it | If access is missing |
 | --- | --- | --- |
 | App Launcher | Choose **Edit favorites**, check apps, then **Done**. Up to seven alphabetical favorites, an edit key and a page key fit on each keypad page. **Next apps** wraps. Real launcher icons appear on both the phone and LCD keys. | No permission prompt. Only exported, currently available `MAIN`/`LAUNCHER` activities in this Android profile are eligible. Removed/deselected targets do not launch. |

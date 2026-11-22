@@ -60,6 +60,7 @@ fun SavedProfilesEditor(
                     writer.error != null -> writer.error = null
                     command != null -> command = null
                     rule != null -> rule = null
+                    draft?.pendingColor != null -> draft.pendingColor = null
                     draft?.picking != null -> draft.pickerBack()
                     index != null -> index = null
                     page != null -> pageId = null
