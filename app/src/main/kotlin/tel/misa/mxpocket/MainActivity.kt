@@ -419,6 +419,7 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             simulating = session.preview, panelArt = session.panelArt?.asImageBitmap(),
             connectionLabel = session.connectionLabel,
             connectionActive = target != null || session.request != null,
+            usbReady = session.ready && !session.preview, activePageId = deck.activePage.id, hardwareSummary = !session.preview,
             diagnostics = diagnostics, log = session.logText(60), automatic = access.automatic, directShortcuts = direct.enabled,
         )
         presentation = state

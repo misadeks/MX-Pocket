@@ -47,8 +47,10 @@ sessions. It is broad at the OS level. This app uses the component solely as
 authorization for `MediaSessionManager`; it does not retrieve, log, or act
 on notifications. Spotify and other players use the same Android interface:
 there is no Spotify sign-in, SDK, playlist browser or downloaded artwork.
-While unlocked on **Audio**, the local cover spans Home's keypad and all nine
-LCD regions, paused or playing. A three-pixel black margin around the whole
+While unlocked on **Audio**, the local cover spans the virtual board on Home
+or all nine LCD regions on a wired keypad, paused or playing. With hardware
+connected, Home lists the labels; **Keypad** previews the active key faces
+without running their actions. A three-pixel black margin around the whole
 cover provides bezel clearance. Each label uses black or white against its own part of the picture.
 Other profiles keep their normal keys even during playback. Without usable
 art, the keys keep a neutral background (or the user's selected backdrop).

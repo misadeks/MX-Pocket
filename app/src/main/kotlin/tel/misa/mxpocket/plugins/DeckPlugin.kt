@@ -32,7 +32,7 @@ internal class DeckPlugin(id: String, title: String, capability: PluginCapabilit
         val media = state.media
         val volume = VolumeLevel(media.volume, media.maximum, media.muted)
         fun control(command: C, glyph: PlayerGlyph, footer: String = "", level: VolumeLevel? = null) = slot(command).let {
-            it.copy(tile = it.tile.copy(glyph = glyph, footer = footer, showLabel = false,
+            it.copy(tile = it.tile.copy(glyph = glyph, footer = footer, playerFace = true, showLabel = false,
                 showFooter = false, primary = command == C.PLAY, volumeLevel = level))
         }
         val transport = when (media.playing) {
@@ -47,7 +47,7 @@ internal class DeckPlugin(id: String, title: String, capability: PluginCapabilit
             control(C.PREVIOUS, PlayerGlyph.PREVIOUS), control(C.PLAY, transport), control(C.NEXT, PlayerGlyph.NEXT),
             control(C.BACK_10, PlayerGlyph.BACK_10),
             Slot(KeyTile(media.title.ifBlank { media.status }, media.status, tel.misa.mxpocket.decks.AUDIO_BACKGROUND.toInt(),
-                glyph = PlayerGlyph.TRACK, readOnly = true, showFooter = false)),
+                glyph = PlayerGlyph.TRACK, readOnly = true, playerFace = true, showFooter = false)),
             control(C.FORWARD_10, PlayerGlyph.FORWARD_10))
     }
     private val pages get() = ((state.favorites.size + 6) / 7).coerceAtLeast(1)
@@ -55,16 +55,19 @@ internal class DeckPlugin(id: String, title: String, capability: PluginCapabilit
     private fun launcher(): List<Slot> {
         return List(7) { index ->
             state.favorites.getOrNull(current * 7 + index)?.let { slot(C.OPEN, it.component) }
-                ?: Slot(KeyTile(if (index == 0) "No favorites" else "-", "Favorites", 0xff384674.toInt()))
+                ?: Slot(KeyTile(if (index == 0) "No favorites" else "-", "Favorites", 0xff384674.toInt(),
+                    readOnly = true, showLabel = index == 0, showFooter = false))
         } + listOf(slot(C.EDIT), Slot(KeyTile(if (pages > 1) "Next apps" else "Favorites",
-            "${current + 1} / $pages", 0xff384674.toInt(), inputToken = "page:$current/$pages"), next = pages > 1))
+            "${current + 1} / $pages", 0xff384674.toInt(), inputToken = "page:$current/$pages",
+            glyph = DeckGlyph.FOLDER, readOnly = pages == 1), next = pages > 1))
     }
     private fun slots(): List<Slot> = when (descriptor.id) {
         "launcher" -> launcher()
         "audio" -> player()
         "studio" -> listOf(C.SHUTTER, C.START_VIDEO, C.STOP_VIDEO, null, null, null,
             C.VIDEO, C.STUDIO, C.CAMERA_ACCESS).map { command ->
-            command?.let { slot(it) } ?: Slot(KeyTile("-", "", 0xff49345f.toInt(), enabled = false))
+            command?.let { slot(it) } ?: Slot(KeyTile("-", "", 0xff49345f.toInt(), enabled = false,
+                quietFace = true, showLabel = false, showFooter = false))
         }
         // These are persisted plugin.key indices, not the physical positions of the factory keys.
         "navigation" -> navigationCommands.map { slot(it) }

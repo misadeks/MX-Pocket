@@ -1,15 +1,23 @@
 # Workspace walkthrough
 
-After [installing the Android app](../README.md#run-it-on-android), use **Home**
-to press the nine keys and **Keypad** to edit them without running their actions.
+After [installing the Android app](../README.md#run-it-on-android), open
+**Home** to connect a keypad and choose a profile. With a wired keypad,
+**Keypad shows:** lists the nine labels; press the keys on the device.
+With the virtual keypad connected, tap the nine-key board on Home instead.
 **Plugins** turns features on or off, **Flows** lets you build and run workflows,
 and **Settings** contains USB preferences, background images and diagnostics.
 
-The Windows simulator uses the same workspace and layout editor. In a narrow
-window, selecting a key in **Keypad** opens its editor; Back returns without
-firing the key. A wider window keeps the board and key details side by side.
-Windows can save its own layouts, but does not observe Android apps or request
-Usage Access. The walkthrough below uses the Android host.
+**Keypad** edits the board. Its active-page preview uses the same key faces as
+the LCDs, including Audio transport symbols, the volume indicator and cover
+art when available. Selecting a key there edits its label, icon, color or
+action; it never runs the action. Other pages can be edited without activating
+their plugins. In a narrow window, Back returns from the key editor; a wider
+window keeps the board and key details side by side.
+
+The Windows simulator uses the same workspace and starts with the virtual
+keypad connected. It can save its own layouts, but has no USB connection,
+image upload, or Android permission and foreground-app detection controls.
+The walkthrough below uses the Android host.
 
 ## Choose features on first launch
 
@@ -48,8 +56,9 @@ option off; see [deck behavior without special access](android-decks.md).
    is visible or hosting a real session, a stable match selects Audio after
    a short delay. Supported players expose Play/Pause and title with consent;
    without it the app sends ordinary media keys and does not invent a title
-   or playback state. On Audio, an unlocked phone and the keypad show one inset
-   cover across the nine keys. The cover stays on Audio, even during playback;
+   or playback state. With artwork available on Audio, the unlocked phone's
+   virtual board shows one cover across the nine keys; a wired keypad shows
+   it on the LCDs. The cover stays on Audio, even during playback;
    a pinned non-music profile keeps its own background.
 5. Inspect the selection reason, matched rules and observed values in Keypad.
    Create or change weighted rules for an observed app-owned activity, device,

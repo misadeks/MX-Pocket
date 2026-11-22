@@ -6,7 +6,7 @@ import tel.misa.mxpocket.FocusTimer
 
 /** Registration order is the page-button order. Add your compiled-in plugin here. */
 object BuiltInPlugins {
-    fun create(focusTitle: String, audioTitle: String, phoneTitle: String, xoTitle: String = "X-O"): List<PocketPlugin> =
+    fun create(focusTitle: String, audioTitle: String, phoneTitle: String, xoTitle: String = TIC_TAC_TOE_TITLE): List<PocketPlugin> =
         listOf(FocusPlugin(focusTitle), DeckPlugin("audio", audioTitle, PluginCapability.AUDIO), PhonePlugin(phoneTitle),
             DeckPlugin("launcher", "App Launcher", PluginCapability.OPEN_APPS),
             DeckPlugin("studio", "Pocket Studio", PluginCapability.STUDIO),

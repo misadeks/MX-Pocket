@@ -51,8 +51,9 @@ Install the debug app, then open **MX Pocket** on the phone:
   USB-host-capable phone using a data cable or OTG adapter. If first-run
   setup is open, choose **Use a USB keypad** and finish setup. On **Home**, tap
   **Connect keypad**. Allow access to this USB device and allow the session
-  notification so you can disconnect from outside the app. Check that the
-  Focus labels appear on the keypad and try a page button. If it doesn't
+  notification so you can disconnect from outside the app. Home lists the
+  nine key labels under **Keypad shows:**. Press **Start** on the physical
+  Focus keypad, not on the phone, then try a page button. If it doesn't
   connect, see [USB setup and troubleshooting](docs/workspace.md#connect-a-wired-keypad).
 
 Notification *access* for player titles and artwork is separate from permission

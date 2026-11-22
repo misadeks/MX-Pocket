@@ -114,7 +114,7 @@ fun defaultDeck(): DeckState {
         plugin("launcher", "Launcher"),
         plugin("studio", "Studio"),
         plugin("navigation", "Navigation", slots = navigationFactorySlots),
-        plugin("game.xo", "X-O"),
+        plugin("game.xo", tel.misa.mxpocket.plugins.TIC_TAC_TOE_TITLE),
     )
     return DeckState(
         DeckLimits.VERSION, profiles, "focus", "focus", null, false,
