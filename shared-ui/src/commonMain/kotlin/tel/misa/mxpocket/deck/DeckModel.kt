@@ -1,6 +1,8 @@
 package tel.misa.mxpocket.deck
 
 import tel.misa.mxpocket.actions.ActionCall
+import tel.misa.mxpocket.plugins.PhoneSlot
+import tel.misa.mxpocket.plugins.legacyPhoneSlot
 import tel.misa.mxpocket.decks.DeckCommand
 
 /** Stable IDs for host-dispatched navigation. Page IDs are local to a profile. */
@@ -32,11 +34,7 @@ fun ActionCall.slotOwner(): String? = when {
 fun ActionCall.commandBinding() =
     if (id.startsWith("media.") && slotOwner() == "audio") copy(params = params - DeckActions.LEGACY_SLOT_OWNER) else this
 
-fun phoneShortcutProfile(slot: Int?) = when (slot) {
-    6 -> "focus"
-    7 -> "audio"
-    else -> null
-}
+fun phoneShortcutProfile(slot: Int?) = (slot?.let(::legacyPhoneSlot) as? PhoneSlot.SelectProfile)?.id
 
 fun ActionCall.targetProfileId(): String? = when {
     id == DeckActions.PROFILE -> params[DeckActions.PROFILE_ID]

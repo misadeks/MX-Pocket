@@ -135,6 +135,7 @@ class AdaptiveLayoutEditorTest {
         }
         fun choose(target: String, option: String) {
             ui.onNodeWithTag(target).performScrollTo().performClick()
+            if (option != "Unassigned") ui.onNodeWithText("Pages and profiles").performClick()
             ui.onNodeWithText(option).performClick()
         }
         fun save(expected: DeckKey) {

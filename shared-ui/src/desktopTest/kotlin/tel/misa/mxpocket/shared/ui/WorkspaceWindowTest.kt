@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -55,7 +56,7 @@ class WorkspaceWindowTest {
         ui.setContent {
             CompositionLocalProvider(LocalDensity provides Density(.75f)) {
                 Box(Modifier.requiredWidth(900.dp)) { PocketTheme {
-                    LayoutEditor(store, availableFactoryKeyBindings(repo.state.collectAsState().value.disabledPluginIds),
+                    LayoutEditor(store, globalBindings(repo.state.collectAsState().value.visibleProfiles),
                         emptyMap(), {}, {})
                 } }
             }
@@ -72,7 +73,7 @@ class WorkspaceWindowTest {
         ui.onNodeWithText("Swap keys").performScrollTo().performClick()
         ui.onNodeWithContentDescription("Key 1,", substring = true).performClick()
         ui.onNodeWithTag("choose-binding").performClick()
-        ui.onNodeWithText("Audio key 1").assertDoesNotExist()
+        ui.onNodeWithText("Media and volume").assertDoesNotExist()
     }
 
     @Test fun unsupportedPluginExplainsItselfWithoutAKeyboardOrClickTarget() {
@@ -97,15 +98,19 @@ class WorkspaceWindowTest {
         assertEquals(List(2) { PocketScreenEvent.DefaultProfile("focus") }, events)
     }
 
+    @OptIn(ExperimentalTestApi::class)
     @Test fun unavailableBindingCanBeReadAndReplacedWithoutChangingTheOtherGesture() {
-        val camera = BindingOption("Camera", ActionCall("camera.open"), "Requires the phone camera.")
-        val back = BindingOption("Back", ActionCall(DeckActions.BACK))
+        val camera = BindingOption(ActionCategory.CAMERA, "Open Camera", ActionCall("studio.open"), "Requires the phone camera.")
+        val back = BindingOption(ActionCategory.LAYOUT, "Back", ActionCall(DeckActions.BACK))
         val draft = KeyDraft(defaultDeck().activePage.keys.first().copy(action = camera.call, holdAction = back.call))
         draft.picking = BindingTarget.TAP
         ui.setContent { PocketTheme { BindingDialog(listOf(camera, back), draft) } }
-        ui.onNodeWithText("Camera").assertTextContains(camera.unavailableReason!!)
+        ui.onNodeWithText("Camera").performSemanticsAction(SemanticsActions.RequestFocus)
+            .performKeyInput { pressKey(Key.Enter) }
+        ui.onNodeWithText("Open Camera").assertTextContains(camera.unavailableReason!!)
             .assertHasNoClickAction().assert(SemanticsMatcher.keyNotDefined(SemanticsActions.RequestFocus))
         ui.runOnIdle { assertEquals(camera.call, draft.call) }
+        ui.onNodeWithText("All categories").performClick()
         ui.onNodeWithText("Unassigned").performClick()
         ui.runOnIdle {
             assertEquals(null, draft.call)

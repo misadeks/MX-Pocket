@@ -4,24 +4,10 @@ import tel.misa.mxpocket.actions.*
 import tel.misa.mxpocket.decks.DeckCommand
 import tel.misa.mxpocket.decks.pluginDetails
 import tel.misa.mxpocket.i18n.LayoutCopy
-import tel.misa.mxpocket.i18n.builtInDeckName
 import tel.misa.mxpocket.plugins.KeyTile
-import tel.misa.mxpocket.plugins.displayName
 import tel.misa.mxpocket.workflow.WorkflowActionSpec
 import tel.misa.mxpocket.workflow.WorkflowField
 import tel.misa.mxpocket.workflow.WorkflowOrigin
-
-internal fun PocketSession.platformBindings(): List<Pair<String,ActionCall>> = buildList {
-    for (command in DeckCommand.entries.filterNot { it.legacyCapture || it.nativeControl || it.deck in disabledPlugins.value }) {
-        if (command == DeckCommand.OPEN) deckState.value.favorites.forEach {
-            add(LayoutCopy.Launch.text(it.label) to ActionCall(command.id,mapOf("component" to it.component)))
-        } else add(LayoutCopy.CategoryAction.text(builtInDeckName(command.deck), command.displayLabel) to ActionCall(command.id))
-    }
-    if ("phone" !in disabledPlugins.value) for (choice in tel.misa.mxpocket.plugins.PhoneApp.entries) {
-        add(LayoutCopy.PhoneAction.text(choice.displayName()) to
-            ActionCall("phone.open",mapOf("app" to choice.name)))
-    }
-}
 
 internal fun PocketSession.pluginDetails(id: String) = deckState.value.pluginDetails(id)
 

@@ -79,6 +79,7 @@ internal fun bindingReason(call: ActionCall, simulator: Boolean): String? {
     return when (call.id) {
         DeckActions.BACK, DeckActions.ROOT, DeckActions.PAGE, MORE_PROFILES -> null
         DeckActions.PROFILE -> profileReason(call.params[DeckActions.PROFILE_ID].orEmpty())
+        "phone.open" -> H.Phone.text()
         "workflow.run" -> H.Workflow.text()
         else -> H.NotImplemented.text()
     }

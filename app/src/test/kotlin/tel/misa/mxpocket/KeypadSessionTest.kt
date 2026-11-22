@@ -592,6 +592,11 @@ class KeypadSessionTest {
             assertEquals(Intent.ACTION_DIAL, target?.action)
             assertEquals("tel:", target?.dataString)
             assertNull(tap(dialer))
+            press(4)
+            assertEquals("Open logitech.com", manager.getNotification(PHONE_NOTICE).extras.getString(Notification.EXTRA_TITLE))
+            val website = tap(shortcut())
+            assertEquals(Intent.ACTION_VIEW, website?.action)
+            assertEquals("https://www.logitech.com/", website?.dataString)
             press(1)
             val missing = shortcut()
             shadowOf(app).checkActivities(true)
@@ -761,6 +766,27 @@ class KeypadSessionTest {
         service.destroy()
     }
 
+    @Test fun savedPhoneOpenWebStillRequestsOnlyTheLogitechSiteInTheForeground() {
+        val session = app.session
+        val web = ActionCall("phone.open", mapOf("app" to "WEB", "url" to "https://example.com"))
+        val profile = session.deck.createProfile("Shortcuts").getOrThrow()
+        session.deck.setKey(profile, "root", 0, DeckKey(action = web)).getOrThrow()
+        session.selectProfile(profile)
+        app.connectKeypad()
+        try {
+            Robolectric.buildActivity(MainActivity::class.java).setup().use {
+                app.press(1)
+                val target = shadowOf(app).nextStartedActivity
+                assertEquals(Intent.ACTION_VIEW, target?.action)
+                assertEquals("https://www.logitech.com/", target?.dataString)
+            }
+            app.press(1)
+            assertNull(shadowOf(app).nextStartedActivity)
+        } finally {
+            session.disconnect()
+        }
+    }
+
     @Test fun customCameraBindingRequestsTheViewfinderButCannotCarryPhysicalAuthorityIntoAWorkflow() {
         val real = device("test-keypad")
         shadowOf(usb).addOrUpdateUsbDevice(real, true)
@@ -902,7 +928,8 @@ class KeypadSessionTest {
         try {
             Robolectric.buildActivity(MainActivity::class.java).setup().use { host ->
                 main.idle()
-                assertTrue(controls.all { (session.platformBindings().map { it.second }).contains(ActionCall(it.id)) })
+                val options = tel.misa.mxpocket.shared.ui.globalBindings(session.deck.state.value.visibleProfiles)
+                assertTrue(controls.all { command -> options.any { it.call == ActionCall(command.id) } })
                 assertTrue(controls.none { c -> session.platformWorkflowActions().any { it.id == c.id } })
                 app.press(2) // No system captioning activity: use Accessibility, never the third-party handler.
                 val fallback = shadowOf(host.get()).nextStartedActivity
