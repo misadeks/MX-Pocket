@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.pm.ApplicationInfo
 import android.content.pm.ResolveInfo
+import android.provider.MediaStore
 import android.view.View
 import android.view.accessibility.AccessibilityNodeInfo as Node
 import org.junit.Assert.*
@@ -103,6 +104,46 @@ class NativeCameraTest {
             shadowOf(it).setOnPerformActionListener { _, _ -> fail("Stop must not press the snapshot button"); false }
         }))
         assertEquals(4, clicks)
+    }
+
+    @Test fun samsungLabeledViewGroupIsAcceptedOnlyForTheDefaultCamera() {
+        val samsung = "com.sec.android.app.camera"
+        var clicks = 0
+        fun root(pkg: String, label: String): Node {
+            val parent = cameraNode(pkg = pkg)
+            val button = cameraNode(label, pkg).apply { className = "android.view.ViewGroup" }
+            shadowOf(button).setOnPerformActionListener { _, _ -> clicks++; true }
+            shadowOf(parent).addChild(button)
+            return parent
+        }
+        val photo = root(samsung, "Take picture")
+        val video = root(samsung, "Start recording")
+        val other = root(TEST_CAMERA, "Take picture")
+        assertTrue(clickCameraControl(samsung, DeckCommand.SHUTTER, { Node.obtain(photo) }) { true })
+        assertTrue(clickCameraControl(samsung, DeckCommand.START_VIDEO, { Node.obtain(video) }) { true })
+        assertFalse(clickCameraControl(TEST_CAMERA, DeckCommand.SHUTTER, { Node.obtain(other) }) { true })
+        assertFalse(clickCameraControl(samsung, DeckCommand.STOP_VIDEO, { Node.obtain(video) }) { true })
+        assertEquals(2, clicks)
+    }
+
+    @Test fun samsungVideoUsesOnlyItsOwnUnambiguousCaptureHandler() {
+        val app = RuntimeEnvironment.getApplication()
+        val samsung = "com.sec.android.app.camera"
+        val default = installTestCamera(app, samsung)
+        val captureIntent = Intent(MediaStore.ACTION_VIDEO_CAPTURE).setPackage(samsung)
+        val handler = ResolveInfo().apply {
+            isDefault = true
+            activityInfo = ActivityInfo().apply {
+                packageName = samsung; name = "$samsung.Camcorder"; exported = true; enabled = true
+                applicationInfo = ApplicationInfo().apply { packageName = samsung; enabled = true }
+            }
+        }
+        shadowOf(app.packageManager).addResolveInfoForIntent(captureIntent, handler)
+        assertEquals(default, app.viewfinder(CameraMode.PHOTO)?.component)
+        assertEquals(MediaStore.ACTION_VIDEO_CAPTURE, app.viewfinder(CameraMode.VIDEO)?.action)
+        assertEquals(ComponentName(samsung, "$samsung.Camcorder"), app.viewfinder(CameraMode.VIDEO)?.component)
+        handler.activityInfo.exported = false
+        assertEquals(MediaStore.INTENT_ACTION_VIDEO_CAMERA, app.viewfinder(CameraMode.VIDEO)?.action)
     }
 
     @Test fun missingOrSystemResolverNeverBecomesAStudioTarget() {
