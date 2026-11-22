@@ -67,6 +67,10 @@ See [Teams call controls and client limits](docs/android-decks.md#teams-on-this-
 
 The **OneNote** profile uses a separate, optional accessibility service to
 select drawing tools and change formatting while OneNote is on screen.
+Its keypad legends follow the visible toolbar: pens draw a narrow ink sample,
+highlighters a broad translucent band, and palette keys show a named swatch.
+Black-and-white stripes mean the ink color is unknown. A corner check marks an
+observed selection, not a successful key press.
 
 <a name="hardware-evidence-and-credits"></a>
 

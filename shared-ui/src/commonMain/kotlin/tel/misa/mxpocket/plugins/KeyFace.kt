@@ -70,6 +70,25 @@ fun Canvas.paintKeyFace(
         }, 2, true), captionInk)
     }
     if (footer) caption(FaceCaption(tile.footer, if (label) 100f else 94f, 15f, 1, false), subdued)
+    if (tile.enabled && (tile.selection == KeySelection.ON || tile.selection == KeySelection.UNKNOWN)) {
+        val badgeInk = photoInk?.invoke(91, 6, 111, 23) ?: ink
+        val center = androidx.compose.ui.geometry.Offset(101f, 16f)
+        p.style = PaintingStyle.Fill
+        if (photoInk != null) {
+            p.color = if (badgeInk == Color.Black) Color.White else Color(0xff16171a)
+            drawCircle(center, 10f, p)
+        }
+        p.color = badgeInk; p.style = PaintingStyle.Stroke; p.strokeWidth = 2.5f; p.strokeCap = StrokeCap.Round
+        if (tile.selection == KeySelection.ON) {
+            drawLine(center.copy(x = 95f), center.copy(x = 99.5f, y = 20f), p)
+            drawLine(center.copy(x = 99.5f, y = 20f), center.copy(x = 107f, y = 11.5f), p)
+        } else {
+            drawArc(97f, 9.5f, 105f, 17f, 195f, 250f, false, p)
+            drawLine(center.copy(y = 17f), center.copy(y = 18f), p)
+            p.style = PaintingStyle.Fill
+            drawCircle(center.copy(y = 22f), 1.25f, p)
+        }
+    }
     (tile.levelFraction ?: tile.volumeLevel?.fraction)?.coerceIn(0f, 1f)?.let { level ->
         val y = if (label) 74f else 85f
         val color = photoInk?.invoke(28, y.toInt()-2, 90, y.toInt()+2) ?: ink
