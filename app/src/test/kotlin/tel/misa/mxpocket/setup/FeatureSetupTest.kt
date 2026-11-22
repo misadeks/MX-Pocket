@@ -43,6 +43,7 @@ import tel.misa.mxpocket.decks.TeamsAccess
 import tel.misa.mxpocket.decks.TeamsCallListener
 import tel.misa.mxpocket.decks.TeamsToolbarService
 import tel.misa.mxpocket.decks.NavigationService
+import tel.misa.mxpocket.decks.OneNoteAccessService
 import tel.misa.mxpocket.decks.CameraControlsAccess
 import tel.misa.mxpocket.decks.DeckAccessActivity
 import tel.misa.mxpocket.decks.DeckCommand
@@ -228,10 +229,12 @@ class FeatureSetupTest {
         shadowOf(notices).setNotificationListenerAccessGranted(ComponentName(app, MediaSessionAccess::class.java), true)
         shadowOf(notices).setNotificationListenerAccessGranted(ComponentName(app, TeamsCallListener::class.java), true)
         Settings.Secure.putString(app.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
-            listOf(NavigationService::class.java, TeamsToolbarService::class.java).joinToString(":") { ComponentName(app, it).flattenToString() })
+            listOf(NavigationService::class.java, TeamsToolbarService::class.java, OneNoteAccessService::class.java)
+                .joinToString(":") { ComponentName(app, it).flattenToString() })
         shadowOf(app.getSystemService(AppOpsManager::class.java)).setMode(AppOpsManager.OPSTR_GET_USAGE_STATS, app.applicationInfo.uid,
             app.packageName, AppOpsManager.MODE_ALLOWED)
         ShadowSettings.setCanDrawOverlays(true)
+        app.session.setPluginEnabled("onenote", false)
         val device = ReflectionHelpers.newInstance(UsbDevice::class.java).also {
             ReflectionHelpers.setField(it, "mName", "authorized-keypad")
             ReflectionHelpers.setField(it, "mVendorId", 0x046d)
@@ -249,12 +252,15 @@ class FeatureSetupTest {
                 tap(Feature.STUDIO.title)
                 tap(Feature.MUSIC.title)
                 tap(Feature.PROFILES.title)
+                tap(Feature.ONENOTE.title)
                 ui.onNodeWithText("Review setup steps").performClick()
                 ui.onNodeWithText("This keypad is authorized").assertExists()
-                listOf(SetupAction.USB, SetupAction.POST, SetupAction.MEDIA, SetupAction.NAVIGATION, SetupAction.USAGE)
+                listOf(SetupAction.USB, SetupAction.POST, SetupAction.MEDIA, SetupAction.NAVIGATION, SetupAction.USAGE, SetupAction.ONENOTE_ACCESS)
                     .forEach { ui.onNodeWithText(it.label).assertDoesNotExist() }
                 ui.onNodeWithText(SetupAction.CAMERA.label).assertExists()
                 ui.onNodeWithText(SetupAction.DETECTION.label).assertExists()
+                tap(SetupAction.ONENOTE_PLUGIN.label)
+                assertFalse("onenote" in app.session.disabledPlugins.value)
                 assertFalse(app.session.detectForegroundApps.value)
                 assertFalse(CameraControlsAccess(app).enabled)
                 wizard.onActivity {

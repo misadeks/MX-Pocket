@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 
 import tel.misa.mxpocket.i18n.AccessCopy
 import tel.misa.mxpocket.i18n.Copy
+import tel.misa.mxpocket.i18n.OneNoteCopy
 
 enum class SetupFeature(private val titleCopy: Copy, private val summaryCopy: Copy) {
     USB(AccessCopy.Usb, AccessCopy.UsbSummary),
@@ -27,6 +28,7 @@ enum class SetupFeature(private val titleCopy: Copy, private val summaryCopy: Co
     DIRECT(AccessCopy.Direct, AccessCopy.DirectSummary),
     NAVIGATION(AccessCopy.Navigation, AccessCopy.NavigationSummary),
     PROFILES(AccessCopy.FeatureProfiles, AccessCopy.FeatureProfilesSummary),
+    ONENOTE(OneNoteCopy.DrawingTools, OneNoteCopy.DrawingSummary),
     TEAMS(AccessCopy.FeatureTeams, AccessCopy.FeatureTeamsSummary),
     TEAMS_CONTROLS(AccessCopy.FeatureMic, AccessCopy.FeatureMicSummary);
 
@@ -41,7 +43,8 @@ enum class SetupAction(private val copy: Copy) {
     DIRECT(AccessCopy.EnableDirect), NAVIGATION(AccessCopy.OpenAccessibility),
     USAGE(AccessCopy.OpenUsage), DETECTION(AccessCopy.EnableDetection), SWITCHING(AccessCopy.EnableSwitching),
     TEAMS(AccessCopy.EnableTeams), TEAMS_NOTICES(AccessCopy.OpenTeamsNotices), TOOLBAR(AccessCopy.OpenTeamsToolbar),
-    AUDIO_PLUGIN(AccessCopy.EnableAudio), STUDIO_PLUGIN(AccessCopy.EnableStudio), NAV_PLUGIN(AccessCopy.EnableNavigation), TEAMS_PLUGIN(AccessCopy.EnableTeamsPlugin);
+    AUDIO_PLUGIN(AccessCopy.EnableAudio), STUDIO_PLUGIN(AccessCopy.EnableStudio), NAV_PLUGIN(AccessCopy.EnableNavigation), TEAMS_PLUGIN(AccessCopy.EnableTeamsPlugin),
+    ONENOTE_PLUGIN(OneNoteCopy.EnablePlugin), ONENOTE_ACCESS(OneNoteCopy.AccessSettings);
 
     val label get() = copy.text()
 }

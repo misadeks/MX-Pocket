@@ -1,6 +1,11 @@
 package tel.misa.mxpocket.i18n
 
 object OneNoteCopy {
+    val DrawingTools = Copy("Use OneNote drawing tools", "Utiliser les outils de dessin de OneNote", "Korišćenje alatki za crtanje u aplikaciji OneNote")
+    val DrawingSummary = Copy("Use the keypad to select a pen or eraser while OneNote is on screen.", "Sélectionnez un stylet ou une gomme depuis le pavé lorsque OneNote est à l’écran.", "Tasterima na tastaturi izaberite olovku ili gumicu dok je OneNote na ekranu.")
+    val EnablePlugin = Copy("Enable OneNote", "Activer OneNote", "Uključi OneNote")
+    val AccessSettings = Copy("Open OneNote accessibility settings", "Ouvrir les paramètres d’accessibilité pour OneNote", "Otvori podešavanja pristupačnosti za OneNote")
+    val AccessTitle = Copy("OneNote accessibility access", "Accès aux fonctions d’accessibilité pour OneNote", "Pristup funkcijama pristupačnosti za OneNote")
     val Brand = Copy("OneNote", "OneNote", "OneNote")
     val Accessibility = Copy("accessibility", "accessibilité", "pristupačnost")
     val NotInstalled = Copy("OneNote is not installed.", "OneNote n’est pas installé.", "OneNote nije instaliran.")
