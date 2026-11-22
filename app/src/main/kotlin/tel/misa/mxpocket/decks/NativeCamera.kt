@@ -11,7 +11,7 @@ internal enum class CameraMode(val action: String) {
     PHOTO(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA), VIDEO(MediaStore.INTENT_ACTION_VIDEO_CAMERA)
 }
 
-/** Resolve the default handler, not a chooser, capture contract or arbitrary launcher activity. */
+/** Resolve the default camera and only use an exported handler that declares the requested action. */
 @Suppress("DEPRECATION")
 internal fun Context.viewfinder(mode: CameraMode): Intent? {
     val intent = Intent(mode.action)
@@ -25,7 +25,16 @@ internal fun Context.viewfinder(mode: CameraMode): Intent? {
     val handlesViewfinder = packageManager.queryIntentActivities(intent, flags).any { candidate ->
         candidate.activityInfo?.let { it.packageName == pkg && it.name == target.className } == true
     }
-    return if (handlesViewfinder) intent.setComponent(target) else null
+    if (!handlesViewfinder) return null
+    if (mode == CameraMode.VIDEO && pkg == "com.sec.android.app.camera") {
+        // Samsung's video-viewfinder action can open Photo; its video capture handler opens Video.
+        val capture = Intent(MediaStore.ACTION_VIDEO_CAPTURE).setPackage(pkg)
+        val candidates = packageManager.queryIntentActivities(capture, flags).mapNotNull { it.activityInfo }
+            .filter { it.packageName == pkg && it.exported && it.enabled && it.applicationInfo?.enabled == true }
+        val handler = candidates.singleOrNull()
+        if (handler?.name != null) return capture.setComponent(ComponentName(pkg, handler.name))
+    }
+    return intent.setComponent(target)
 }
 
 internal class CameraControlsAccess(context: Context) {
@@ -52,7 +61,8 @@ internal fun clickCameraControl(
     var candidate: Node? = null
     var budget = 256
     fun actionable(node: Node) = node.isVisibleToUser && node.isEnabled && node.isClickable &&
-        (node.className == "android.widget.Button" || node.className == "android.widget.ImageButton") &&
+        (node.className == "android.widget.Button" || node.className == "android.widget.ImageButton" ||
+            (pkg == "com.sec.android.app.camera" && node.className == "android.view.ViewGroup")) &&
         Node.AccessibilityAction.ACTION_CLICK in node.actionList
     fun inspect(node: Node, depth: Int): Boolean {
         if (--budget < 0 || depth > 24) return false // An incomplete scan cannot establish uniqueness.
