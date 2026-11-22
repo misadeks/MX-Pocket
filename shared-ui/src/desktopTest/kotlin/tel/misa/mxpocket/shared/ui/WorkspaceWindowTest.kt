@@ -52,7 +52,7 @@ class WorkspaceWindowTest {
         assertFocusBoard()
         ui.runOnIdle { width = 380.dp }
         ui.onNodeWithContentDescription("Key 1, Start, Focus").performClick()
-        assertEquals(listOf(PocketScreenEvent.TapKey(0)), events)
+        assertEquals(listOf(PocketScreenEvent.VirtualKey(0)), events)
         events.clear()
         ui.onNodeWithText("Keypad").performClick()
         ui.onNodeWithContentDescription("Key 1,", substring = true).performClick()

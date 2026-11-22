@@ -1,10 +1,14 @@
 package tel.misa.mxpocket.preview
 
 import tel.misa.mxpocket.FocusTimer
+import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.*
 import tel.misa.mxpocket.decks.DeckCommand
 import tel.misa.mxpocket.decks.navigationCommands
 import tel.misa.mxpocket.plugins.*
+import tel.misa.mxpocket.shared.ui.PocketScreenEvent
+import tel.misa.mxpocket.shared.ui.VirtualGrid
+import tel.misa.mxpocket.shared.ui.virtualGrid
 
 /** Uses the same saved deck and folder histories as the editor. Device effects never leave this host. */
 class PreviewDeck(val repository: DeckRepository) {
@@ -17,9 +21,9 @@ class PreviewDeck(val repository: DeckRepository) {
     private val tracks = listOf("Night train", "First light", "Homeward")
     private var track = 0
     private val knownPlugins = defaultDeck().profiles.map { it.id }.toSet()
-    private val selectedPlugin get() = deck.activePage.keys.firstNotNullOfOrNull {
-        it.action?.slotOwner()?.takeIf(knownPlugins::contains)
-    }
+    private var lastSnapshot: DeckState? = null
+    private var generation = 0L
+    fun resetInput() { generation++ }
 
     val profileName get() = deck.activeProfile.name
     val profileIndex get() = deck.profiles.indexOf(deck.activeProfile)
@@ -51,8 +55,8 @@ class PreviewDeck(val repository: DeckRepository) {
 
     private data class Binding(val plugin: String, val index: Int, val command: DeckCommand? = null)
 
-    private fun binding(slot: Int): Binding? {
-        val action = deck.activePage.keys[slot].action ?: return null
+    private fun binding(action: ActionCall?): Binding? {
+        if (action == null) return null
         if (action.id == "plugin.key") return Binding(action.params.getValue("pluginId"), action.params.getValue("index").toInt())
         val command = DeckCommand.fromId(action.id) ?: return null
         if (action.commandBinding().params.isNotEmpty()) return null
@@ -68,10 +72,9 @@ class PreviewDeck(val repository: DeckRepository) {
         return Binding(command.deck, index, command)
     }
 
-    fun tiles(now: Long): List<KeyTile> = deck.activePage.keys.indices.map { slot ->
-        val action = binding(slot)
-        val key = deck.activePage.keys[slot]
+    private fun face(deck: DeckState, key: DeckKey, selectedPlugin: String?, now: Long): KeyTile {
         val assigned = key.action
+        val action = binding(assigned)
         val dynamic = when (action?.command) {
             DeckCommand.MUTE, DeckCommand.UNMUTE, DeckCommand.MEDIA_ACCESS -> action.command.label
             DeckCommand.VOLUME_LEVEL -> "${if (muted) 0 else volume} / 15"
@@ -123,18 +126,58 @@ class PreviewDeck(val repository: DeckRepository) {
         val owner = assigned?.slotOwner()
         val ownerAvailable = owner == null || owner == selectedPlugin
         val available = key.enabled && ownerAvailable && (navigation || native?.enabled == true && dynamic != "-")
-        key.present(native, name ?: "-", when {
+        return key.present(native, name ?: "-", when {
             !key.enabled -> "Disabled"
             !ownerAvailable -> "Unavailable"
             native != null -> native.footer
             !available && assigned != null -> "Unavailable"
-            else -> native?.footer.orEmpty()
+            else -> ""
         }, available)
     }
 
-    fun press(slot: Int, now: Long): String {
-        val key = deck.activePage.keys[slot]
-        val call = key.action?.takeIf { key.enabled } ?: return "Unassigned key."
+    data class Board(val faces: List<KeyTile>, val grid: VirtualGrid)
+
+    fun board(now: Long, snapshot: DeckState = deck): Board {
+        // An edit away and back may be conflated by Compose. The repository publishes fresh immutable snapshots.
+        if (snapshot !== lastSnapshot) { generation++; lastSnapshot = snapshot }
+        val page = snapshot.activePage
+        val owner = page.selectedSlotOwner(knownPlugins::contains)
+        val pluginPage = if (owner == "game.xo") xo.interactionPage else 0
+        fun frame(hold: Boolean) = PluginFrame(page.keys.map { key ->
+            val call = if (hold) key.holdAction else key.action ?: key.holdAction
+            face(snapshot, key.copy(action = call), owner, now)
+        }, pluginPage)
+        val display = frame(false)
+        val holds = if (page.keys.any { it.holdAction != null }) frame(true) else null
+        return Board(display.keys, virtualGrid(generation, snapshot, display, holds))
+    }
+
+    fun tiles(now: Long): List<KeyTile> = board(now).faces
+
+    /** A stale Home callback is never reinterpreted as input to the currently displayed slot. */
+    fun press(event: PocketScreenEvent.VirtualKey, now: Long): String? = synchronized(repository) {
+        val current = board(now)
+        if (event.grid != current.grid) null else press(event.index, now, event.hold, current)
+    }
+
+    fun press(slot: Int, now: Long, hold: Boolean = false): String = synchronized(repository) {
+        press(slot, now, hold, board(now))
+    }
+
+    private fun press(slot: Int, now: Long, hold: Boolean, current: Board): String {
+        val key = current.grid.page.keys.getOrNull(slot) ?: return "Unassigned key."
+        val call = (if (hold) key.holdAction else key.action) ?: return "Unassigned key."
+        if (DeckCommand.fromId(call.id)?.deck in setOf("audio", "navigation") && call.commandBinding().params.isNotEmpty())
+            return "Invalid action parameters. No action sent."
+        val chosen = if (hold) current.grid.holds?.get(slot) else current.grid.taps[slot]
+        if (!current.grid.taps[slot].actionable || chosen?.actionable != true) {
+            val owner = current.grid.page.selectedSlotOwner(knownPlugins::contains)
+            val label = if (hold) face(deck, key.copy(action = call), owner, now).label else current.faces[slot].label
+            return when (binding(call)?.plugin) {
+                "phone" -> "$label is unavailable. No phone action sent."
+                else -> "$label is unavailable. No system action sent."
+            }
+        }
         val navigation = when (call.id) {
             DeckActions.BACK -> repository.back()
             DeckActions.ROOT -> repository.root()
@@ -144,11 +187,8 @@ class PreviewDeck(val repository: DeckRepository) {
         }
         if (navigation != null) return navigation.fold({ "On $profileName / ${deck.activePage.name}." },
             { it.message ?: "Cannot change page." })
-        if (DeckCommand.fromId(call.id)?.deck in setOf("audio", "navigation") && call.commandBinding().params.isNotEmpty())
-            return "Invalid action parameters. No action sent."
-        val (plugin, index, command) = binding(slot)
+        val (plugin, index, command) = binding(call)
             ?: return "${call.id} is not available in the Windows simulator. No action sent."
-        if (call.slotOwner()?.let { it != selectedPlugin } == true) return "Inactive plugin binding. No action sent."
         if (plugin == "game.xo") {
             xo.press(index)
             return xo.cells()[4].footer

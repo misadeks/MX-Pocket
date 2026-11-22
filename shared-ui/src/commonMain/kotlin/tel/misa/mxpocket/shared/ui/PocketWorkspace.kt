@@ -17,12 +17,30 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import tel.misa.mxpocket.deck.DeckPage
+import tel.misa.mxpocket.deck.DeckState
+import tel.misa.mxpocket.plugins.KeyTile
+import tel.misa.mxpocket.plugins.PluginFrame
 
 enum class WorkspaceTab(val label: String) {
     HOME("Home"), KEYPAD("Keypad"), PLUGINS("Plugins"), WORKFLOWS("Flows"), SETTINGS("Settings"),
 }
 
 data class ProfileChoice(val id: String, val name: String)
+
+/** Identifies the live input targets, not their paint (e.g. timer text or album art). */
+data class VirtualGrid(
+    val generation: Long, val profileId: String, val page: DeckPage, val pluginPage: Int,
+    val taps: List<Target>, val holds: List<Target>?,
+) {
+    data class Target(val token: String?, val actionable: Boolean)
+}
+
+fun virtualGrid(generation: Long, deck: DeckState, frame: PluginFrame, holds: PluginFrame?): VirtualGrid {
+    fun KeyTile.target() = VirtualGrid.Target(inputToken, enabled && !readOnly)
+    return VirtualGrid(generation, deck.activeProfileId, deck.activePage, frame.page,
+        frame.keys.map { it.target() }, holds?.keys?.map { it.target() })
+}
 
 data class PocketScreenState(
     val status: String,
@@ -44,6 +62,7 @@ data class PocketScreenState(
     val usbReady: Boolean = false,
     val activePageId: String = "root",
     val hardwareSummary: Boolean = false,
+    val virtualGrid: VirtualGrid? = null,
 )
 
 data class PluginItem(
@@ -59,7 +78,7 @@ sealed interface PocketScreenEvent {
     data object EnterPreview : PocketScreenEvent
     data object StopPreview : PocketScreenEvent
     data class SelectPlugin(val id: String) : PocketScreenEvent
-    data class TapKey(val index: Int) : PocketScreenEvent
+    data class VirtualKey(val index: Int, val grid: VirtualGrid? = null, val hold: Boolean = false) : PocketScreenEvent
     data class ChangePage(val delta: Int) : PocketScreenEvent
     data object Repaint : PocketScreenEvent
     data object ChooseImage : PocketScreenEvent
@@ -160,9 +179,22 @@ fun HomeScreen(state: PocketScreenState, event: (PocketScreenEvent) -> Unit) {
                         PocketButton("Previous page", { event(PocketScreenEvent.ChangePage(-1)) }, Modifier.weight(1f), icon = ShellIcon.CHEVRON_LEFT)
                         PocketButton("Next page", { event(PocketScreenEvent.ChangePage(1)) }, Modifier.weight(1f), trailingIcon = ShellIcon.CHEVRON_RIGHT)
                     }
-                    if (!state.hardwareSummary) KeypadGrid(state.tiles, { index, pressed ->
-                        if (!pressed) event(PocketScreenEvent.TapKey(index))
-                    }, Modifier.widthIn(max = 480.dp).align(Alignment.CenterHorizontally), state.panelArt)
+                    if (!state.hardwareSummary) key(state.activeId, state.activePageId, state.simulating, state.virtualGrid) {
+                        // Replacing the clickable nodes cancels a pointer/key still down on the old board.
+                        val grid = state.virtualGrid
+                        val holds = buildMap<Int, () -> Unit> {
+                            grid?.page?.keys?.forEachIndexed { index, binding ->
+                                if (binding.holdAction != null) put(index) {
+                                    if (grid.holds?.get(index)?.actionable == true)
+                                        event(PocketScreenEvent.VirtualKey(index, grid, hold = true))
+                                }
+                            }
+                        }
+                        KeypadGrid(state.tiles, { index, pressed ->
+                            if (!pressed && (grid == null || grid.page.keys[index].action != null))
+                                event(PocketScreenEvent.VirtualKey(index, grid))
+                        }, Modifier.widthIn(max = 480.dp).align(Alignment.CenterHorizontally), state.panelArt, holds)
+                    }
                     if (state.deviceLimit == null) {
                         PocketDivider()
                         PocketButton("Repaint all nine LCDs", { event(PocketScreenEvent.Repaint) }, Modifier.fillMaxWidth(), ShellIcon.REFRESH)
