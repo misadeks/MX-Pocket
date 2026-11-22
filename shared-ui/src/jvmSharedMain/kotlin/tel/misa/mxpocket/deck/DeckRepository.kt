@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.FOREGROUND_APP
+import tel.misa.mxpocket.APP_RULE_WEIGHT
 import tel.misa.mxpocket.decks.*
 
 /** Own one instance per app session. Successful edits replace the file before publishing the new snapshot. */
@@ -45,6 +46,8 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
     private var callEpisode = false
     private var resumeCall = false
     private var confirmedCall = false
+    private var teamsInForeground = false
+    private var teamsWorkOverridden = false
 
     init {
         val loaded = try {
@@ -112,6 +115,7 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
     fun save() = edit(force = true) { it }
 
     @Synchronized fun showHome() {
+        if (teamsInForeground) teamsWorkOverridden = true
         home = true
         game = false
         homeBatch = 0
@@ -131,6 +135,7 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
     @Synchronized fun enterGame(): Result<Unit> = runCatching {
         check(GAME_PROFILE !in saved.disabledPluginIds) { "Enable Tic Tac Toe first." }
         if (!game) gameReturnId = operating.value.activeProfileId
+        if (teamsInForeground) teamsWorkOverridden = true
         game = true
         clearObservation()
         publish()
@@ -276,9 +281,13 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
      * lead over a positive incumbent. With no matches use the default, if opted in.
      */
     @Synchronized
-    fun observe(signals: Map<String, String>, nowMillis: Long): Result<Unit> {
-        if (confirmedCall || game) return Result.success(Unit)
+    fun observe(signals: Map<String, String>, nowMillis: Long, allowTeamsWork: Boolean = false): Result<Unit> {
         val deck = state.value
+        val teamsApp = allowTeamsWork && signals[FOREGROUND_APP] == TEAMS_PACKAGE
+        if (!teamsApp) teamsWorkOverridden = false
+        teamsInForeground = teamsApp
+        if ((confirmedCall || game) && teamsApp) teamsWorkOverridden = true
+        if (game || confirmedCall || teamsApp && teamsWorkOverridden) return Result.success(Unit)
         if (!deck.automatic || !deck.activeProfile.automatic || deck.pinnedProfileId != null || nowMillis < 0L) {
             clearObservation()
             return Result.success(Unit)
@@ -286,8 +295,13 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
         if (nowMillis < lastSample) clearObservation()
         lastSample = nowMillis
         val eligible = deck.visibleProfiles.filter { it.automatic }
+        // Don't add a stored rule on upgrade or compete with an explicit mapping of this app.
+        val workRule = DeckRule(FOREGROUND_APP, TEAMS_PACKAGE, APP_RULE_WEIGHT).takeIf { rule ->
+            teamsApp && eligible.none { p -> p.rules.any { it.signal == rule.signal && it.value == rule.value } }
+        }
         val matches = eligible.associate { profile ->
-            profile.id to profile.rules.filter { it.matches(signals) }.locked()
+            val matching = profile.rules.filter { it.matches(signals) }
+            profile.id to (if (profile.id == TEAMS && workRule != null) matching + workRule else matching).locked()
         }
         val scores = matches.mapValues { (_, rules) -> rules.sumOf { it.weight } }
         val best = scores.maxByOrNull { it.value }
@@ -298,7 +312,8 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
             incumbent > 0 && best.value - incumbent < SCORE_MARGIN -> deck.activeProfileId
             else -> best.key
         }
-        if (target == null || target == deck.activeProfileId && !home) candidate = null
+        val openWork = target == TEAMS && workRule != null
+        if (target == null || !home && target == deck.activeProfileId && (!openWork || deck.activePage.id == deck.activeProfile.rootPageId)) candidate = null
         else if (candidate != target) {
             candidate = target
             candidateSince = nowMillis
@@ -308,7 +323,10 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
                 else if (rules.any { it.signal == FOREGROUND_APP }) APP_MATCH_REASON
                 else "Automatic: score ${scores[target]} — " + rules.take(4).joinToString { "${it.signal}=${it.value} (+${it.weight})" } +
                     if (rules.size > 4) " and ${rules.size - 4} more" else ""
-            val result = edit(navigation = true) { it.copy(activeProfileId = target, selectionReason = explanation) }
+            val result = edit(navigation = true, manual = false) {
+                val next = it.copy(activeProfileId = target, selectionReason = explanation)
+                if (openWork) next.withHistory(listOf(next.activeProfile.rootPageId)) else next
+            }
             mutableDecision.value = DeckDecision(reason.value, scores.locked(), matches.locked(), candidate)
             return result
         }
@@ -389,7 +407,7 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
     }
 
     @Synchronized
-    private fun edit(recover: Boolean = false, force: Boolean = false, navigation: Boolean = false,
+    private fun edit(recover: Boolean = false, force: Boolean = false, navigation: Boolean = false, manual: Boolean = true,
         update: (DeckState) -> DeckState): Result<Unit> = try {
         check(recover || loadError == null) { loadError.orEmpty() }
         val previous = if (navigation) state.value else saved.withAvailableLayout()
@@ -408,7 +426,13 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
             cleanupWarning = null
             saved = snapshot
         }
-        if (navigation) { showingCall = false; resumeCall = false; home = false; game = false }
+        if (navigation) {
+            showingCall = false
+            resumeCall = false
+            home = false
+            game = false
+            if (manual && teamsInForeground) teamsWorkOverridden = true
+        }
         publish()
         clearObservation()
         Result.success(Unit)
@@ -441,7 +465,7 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
 
 private fun DeckState.withBuiltIns(): DeckState {
     val games = if (xoProfileRemoved) this else addBuiltIn(defaultDeck().profile("game.xo"))
-    return if (teamsProfileRemoved) games else games.addBuiltIn(teamsProfile(profiles.any { it.id == "focus" }))
+    return if (teamsProfileRemoved) games else games.addBuiltIn(teamsProfile())
 }
 
 private fun DeckState.addBuiltIn(profile: DeckProfile): DeckState {

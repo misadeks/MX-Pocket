@@ -21,6 +21,66 @@ class DeckRepositoryTest {
     private val file: File get() = File(folder.root, "deck.json")
     private val repo by lazy { DeckRepository(file) }
 
+    @Test fun workEntryYieldsToConfirmedCallAndExplicitMappings() {
+        val foreground = mapOf("foregroundApp" to "com.microsoft.teams")
+        fun observe(time: Long) = repo.observe(foreground, time, allowTeamsWork = true).getOrThrow()
+        repo.setAutomatic(true).getOrThrow()
+        repo.showTeamsCall(true)
+        observe(0); observe(2000)
+        assertEquals("in-call", repo.state.value.activePage.id)
+        repo.selectProfile("phone").getOrThrow()
+        repo.showTeamsCall(false); observe(4000); observe(6000)
+        assertEquals("phone", repo.state.value.activeProfileId)
+        repo.observe(emptyMap(), 7000).getOrThrow()
+        repo.setRules("studio", listOf(DeckRule("foregroundApp", "com.microsoft.teams", 5))).getOrThrow()
+        observe(8000); observe(10000)
+        assertEquals("studio", repo.state.value.activeProfileId)
+    }
+
+    @Test fun homeAndGameYieldOnlyToFreshAuthorizedTeamsEntries() {
+        val fg = mapOf("foregroundApp" to "com.microsoft.teams")
+        fun sample(t: Long) = repo.observe(fg, t, allowTeamsWork = true).getOrThrow()
+        fun surface() = repo.operatingState.value.activeProfileId
+        repo.setAutomatic(true).getOrThrow()
+        assertEquals(PROFILE_HOME, surface())
+        repo.setDisabledPlugins(setOf("teams"))
+        assertFalse(repo.operatingState.value.visibleProfiles.any { it.id == "teams" })
+        sample(0); sample(2000); assertEquals(PROFILE_HOME, surface())
+        repo.observe(emptyMap(), 2500).getOrThrow()
+        repo.setDisabledPlugins(emptySet())
+        sample(3000); assertEquals(PROFILE_HOME, surface())
+        sample(5000); assertEquals("teams", surface())
+        assertEquals("Work", repo.operatingState.value.activePage.name)
+        repo.showHome()
+        sample(6000); sample(8000); assertEquals(PROFILE_HOME, surface())
+        repo.observe(emptyMap(), 9000).getOrThrow()
+        sample(10000); sample(12000); assertEquals("teams", surface())
+        repo.enterGame().getOrThrow()
+        repo.showTeamsCall(true)
+        sample(14000); repo.showTeamsCall(true); assertEquals(GAME_PROFILE, surface())
+        assertTrue(repo.operatingState.value.activePage.keys.all { it.action?.params?.get("pluginId") == GAME_PROFILE })
+        repo.changePage(1).getOrThrow()
+        assertEquals("root", repo.operatingState.value.activePage.id)
+        repo.showTeamsCall(false)
+    }
+
+    @Test fun oldTeamsWorkLosesOnlyItsExactTimerBindingAndNewEditsSurviveReload() {
+        val old = DeckKey(label = "Focus timer", action = ActionCall(DeckActions.PROFILE, mapOf(DeckActions.PROFILE_ID to "focus")))
+        fun keys(repo: DeckRepository) = repo.state.value.profiles.single { it.id == "teams" }.pages.first().keys
+        val factory = keys(repo)
+        assertEquals(DeckKey(), factory[6])
+        repo.setKey("teams", "root", 6, old).getOrThrow()
+        fun legacyFile() = file.writeText(JSONObject(repo.exportJson()).put("version", 3).toString())
+        legacyFile()
+        assertEquals(factory, keys(DeckRepository(file)))
+        val customized = old.copy(holdAction = ActionCall(DeckActions.ROOT))
+        repo.setKey("teams", "root", 6, customized).getOrThrow()
+        legacyFile()
+        assertEquals(customized, keys(DeckRepository(file))[6])
+        repo.setKey("teams", "root", 6, old).getOrThrow()
+        assertEquals(old, keys(DeckRepository(file))[6]) // deliberately restored in the new format
+    }
+
     @Test fun callProjectionRestoresExactPageAndNeverOverwritesAnExplicitChoice() {
         val child = repo.createPage("phone", "Tools").getOrThrow()
         repo.selectProfile("phone").getOrThrow()

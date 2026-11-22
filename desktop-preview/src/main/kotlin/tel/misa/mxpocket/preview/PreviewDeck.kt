@@ -127,8 +127,9 @@ class PreviewDeck(val repository: DeckRepository) {
                 glyph = listOf(DeckGlyph.CAMERA, DeckGlyph.VIDEO, DeckGlyph.STOP, null, null, null, DeckGlyph.VIDEO,
                     DeckGlyph.CAMERA, DeckGlyph.SETTINGS)[action.index], showLabel = dynamic != "-", showFooter = dynamic != "-", quietFace = true)
             "navigation" -> navigationCommands[action.index].navigationFace(systemAccess = null)
-            "teams" -> TeamsState().tile(action.command ?: teamsSlots[action.index]).copy(
-                enabled = false, footer = "Android only")
+            "teams" -> TeamsState().tile(action.command ?: teamsSlots[action.index]).let {
+                it.copy(label = if (it.readOnly) "Call status" else it.label, enabled = false, footer = "Android only")
+            }
             "launcher" -> KeyTile(dynamic.orEmpty(), "Android only", 0xff384674.toInt(), enabled = false,
                 showLabel = dynamic != "-", showFooter = dynamic != "-", quietFace = true)
             else -> null
