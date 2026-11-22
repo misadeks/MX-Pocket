@@ -37,12 +37,9 @@
             android:authorities="${applicationId}.captures" android:exported="false" android:grantUriPermissions="true">
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/capture_paths" />
         </provider>
-        <service android:name=".decks.MediaSessionAccess" android:exported="false"
-            android:label="@string/media_access" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+        <service android:name=".PocketNotificationListener" android:exported="false"
+            android:label="@string/app_name" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
             <intent-filter><action android:name="android.service.notification.NotificationListenerService" /></intent-filter>
-            <meta-data android:name="android.service.notification.default_filter_types" android:value="" />
-            <meta-data android:name="android.service.notification.disabled_filter_types"
-                android:value="ongoing|conversations|alerting|silent" />
         </service>
         <service android:name=".decks.NavigationService" android:exported="true"
             android:label="@string/navigation_access" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
@@ -54,22 +51,12 @@
             <intent-filter><action android:name="android.accessibilityservice.AccessibilityService" /></intent-filter>
             <meta-data android:name="android.accessibilityservice" android:resource="@xml/onenote_service" />
         </service>
-        <service android:name=".decks.TeamsCallListener" android:exported="false"
-            android:label="@string/teams_call_access" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
-            <intent-filter><action android:name="android.service.notification.NotificationListenerService" /></intent-filter>
-            <!-- Listener delivery classes are not CallStyle call types. Filter by publisher,
-                 Android user and the typed ongoing template inside the opted-in session. -->
-        </service>
         <service android:name=".decks.TeamsToolbarService" android:exported="true"
             android:label="@string/teams_toolbar_access" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter><action android:name="android.accessibilityservice.AccessibilityService" /></intent-filter>
             <meta-data android:name="android.accessibilityservice" android:resource="@xml/teams_toolbar" />
         </service>
         <service android:name=".KeypadService" android:exported="false" android:foregroundServiceType="connectedDevice" />
-        <service android:name=".calls.PhoneCallListener" android:exported="false"
-            android:label="@string/phone_call_access" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
-            <intent-filter><action android:name="android.service.notification.NotificationListenerService" /></intent-filter>
-        </service>
         <activity android:name=".PhoneActionActivity" android:exported="false" android:excludeFromRecents="true"
             android:taskAffinity="" android:noHistory="true" />
         <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop">

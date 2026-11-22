@@ -2,7 +2,6 @@ package tel.misa.mxpocket
 
 import android.app.NotificationManager
 import android.app.KeyguardManager
-import android.content.ComponentName
 import android.content.ContextWrapper
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -41,7 +40,6 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.util.ReflectionHelpers
-import tel.misa.mxpocket.decks.MediaSessionAccess
 import tel.misa.mxpocket.decks.SessionArtwork
 import tel.misa.mxpocket.driver.KeypadProtocol
 import tel.misa.mxpocket.plugins.KeyTile
@@ -128,8 +126,7 @@ class MediaPanelTest {
     @Test fun coverOnlyAppearsOnAudioWhetherPausedOrPlaying() {
         val session = app.session
         val listener = shadowOf(app.getSystemService(NotificationManager::class.java))
-        val token = ComponentName(app,MediaSessionAccess::class.java)
-        listener.setNotificationListenerAccessGranted(token,true)
+        val token = app.enableMusicSessions()
         val external = MediaSession(app,"player")
         val player = shadowOf(external.controller)
         val manager = shadowOf(app.getSystemService(MediaSessionManager::class.java))
@@ -172,17 +169,20 @@ class MediaPanelTest {
             assertNull(session.panelArt)
             state(P.STATE_PLAYING); awaitColor(Color.BLUE)
             listener.setNotificationListenerAccessGranted(token,false)
-            Robolectric.buildService(MediaSessionAccess::class.java).get().onListenerDisconnected()
+            val service = Robolectric.buildService(PocketNotificationListener::class.java).create()
+            service.get().onListenerConnected()
+            service.get().onListenerDisconnected()
             refresh()
             assertNull(session.panelArt)
             assertEquals("",session.deckState.value.media.title)
             assertTrue(player.callbacks.isEmpty())
             manager.clearControllers()
             listener.setNotificationListenerAccessGranted(token,true)
-            Robolectric.buildService(MediaSessionAccess::class.java).get().onListenerConnected()
+            service.get().onListenerConnected()
             refresh()
             assertEquals("No session",session.deckState.value.media.status)
             assertNull(session.panelArt)
+            service.destroy()
         }
         external.release()
     }
@@ -206,8 +206,7 @@ class MediaPanelTest {
     @Test fun otherPlayerStartingAndOldCallbacksCannotLeaveStaleTitlesOrControls() {
         val session = app.session
         val manager = shadowOf(app.getSystemService(MediaSessionManager::class.java))
-        shadowOf(app.getSystemService(NotificationManager::class.java)).setNotificationListenerAccessGranted(
-            ComponentName(app,MediaSessionAccess::class.java),true)
+        app.enableMusicSessions()
         shadowOf(app).grantPermissions("tel.misa.mxpocket.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION")
         val sessions = listOf("First", "Second").map { name ->
             MediaSession(app, name).also {
@@ -254,8 +253,7 @@ class MediaPanelTest {
                 else PackageManager.PERMISSION_DENIED
         }
         shadowOf(app).grantPermissions("tel.misa.mxpocket.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION")
-        shadowOf(app.getSystemService(NotificationManager::class.java)).setNotificationListenerAccessGranted(
-            ComponentName(app,MediaSessionAccess::class.java),true)
+        app.enableMusicSessions()
         val writes = mutableMapOf<Int, Bitmap>()
         val session = PocketSession(context) { _,_,_,_,_ ->
             object : KeypadOutput {
@@ -347,8 +345,7 @@ class MediaPanelTest {
                 if (u == uri) PackageManager.PERMISSION_GRANTED else PackageManager.PERMISSION_DENIED
         }
         shadowOf(app).grantPermissions("tel.misa.mxpocket.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION")
-        shadowOf(app.getSystemService(NotificationManager::class.java)).setNotificationListenerAccessGranted(
-            ComponentName(app,MediaSessionAccess::class.java),true)
+        app.enableMusicSessions()
         val reads = AtomicInteger()
         val color = Color.rgb(211,85,89)
         val bitmap = Bitmap.createBitmap(32,32,Bitmap.Config.ARGB_8888).apply { eraseColor(color) }
@@ -497,8 +494,7 @@ class MediaPanelTest {
 
     @Test fun lockedScreenWithoutAKeypadDoesNotReceiveLateTrackDetails() {
         shadowOf(app).grantPermissions("tel.misa.mxpocket.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION")
-        shadowOf(app.getSystemService(NotificationManager::class.java)).setNotificationListenerAccessGranted(
-            ComponentName(app,MediaSessionAccess::class.java),true)
+        app.enableMusicSessions()
         val external = MediaSession(app,"player")
         val player = shadowOf(external.controller)
         player.setPlaybackState(P.Builder().setState(P.STATE_PLAYING,0,1f).build())

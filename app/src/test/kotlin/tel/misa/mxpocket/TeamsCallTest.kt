@@ -50,7 +50,7 @@ class TeamsCallTest {
 
     @Test fun androidMayDeliverCallsInAnyNotificationRankingClass() {
         // NotificationManager filters snapshots as well as callbacks, before teamsObservation runs.
-        val info = app.packageManager.getServiceInfo(ComponentName(app, TeamsCallListener::class.java), PackageManager.GET_META_DATA)
+        val info = app.packageManager.getServiceInfo(NotificationAccess(app).component, PackageManager.GET_META_DATA)
         assertFalse(info.metaData?.containsKey(NotificationListenerService.META_DATA_DEFAULT_FILTER_TYPES) == true)
         assertFalse(info.metaData?.containsKey(NotificationListenerService.META_DATA_DISABLED_FILTER_TYPES) == true)
     }
@@ -79,7 +79,7 @@ class TeamsCallTest {
         shadowOf(app.packageManager).addResolveInfoForIntent(launcher, handler)
         shadowOf(app.packageManager).addResolveInfoForIntent(Intent(launcher).setPackage(TEAMS_PACKAGE), handler)
         assertEquals(TEAMS_PACKAGE, app.teamsLauncher()?.component?.packageName)
-        val listenerController = Robolectric.buildService(TeamsCallListener::class.java).create()
+        val listenerController = Robolectric.buildService(PocketNotificationListener::class.java).create()
         val serviceController = Robolectric.buildService(TeamsToolbarService::class.java).create()
         val listener = listenerController.get()
         listener.onListenerConnected()
@@ -113,8 +113,7 @@ class TeamsCallTest {
         shadowOf(usb).addOrUpdateUsbDevice(device, true)
         val session = app.session
         val notices = shadowOf(app.getSystemService(NotificationManager::class.java))
-        notices.setNotificationListenerAccessGranted(ComponentName(app, MediaSessionAccess::class.java), true)
-        val teams = ComponentName(app, TeamsCallListener::class.java)
+        val shared = app.enableMusicSessions()
         val call = note()
         fun signal() { listener.onNotificationPosted(call); main.idle() }
         fun center() { app.emit(KeyEvent(5, true)); app.emit(KeyEvent(5, false)); main.idle() }
@@ -150,14 +149,15 @@ class TeamsCallTest {
                     }
                 }
             }
-            bitmap(CallStatus.NEEDS_ACCESS) // the Audio grant cannot supply Teams evidence
-            notices.setNotificationListenerAccessGranted(teams, true)
-            signal()
+            bitmap(CallStatus.OFF) // Music and a shared grant cannot supply Teams evidence.
+            TeamsAccess(app).enabled = true
+            TeamsEvents.refresh?.invoke()
             val noSignal = bitmap(CallStatus.NO_SIGNAL)
             TeamsAccess(app).enabled = false
+            TeamsEvents.refresh?.invoke()
             shadowOf(listener).addActiveNotification(call)
             signal()
-            bitmap(CallStatus.OFF) // both Android grants are held, but the saved opt-out wins
+            bitmap(CallStatus.OFF)
             TeamsAccess(app).enabled = true
             signal()
             val partial = bitmap(CallStatus.NOTIFICATION)
@@ -256,10 +256,11 @@ class TeamsCallTest {
             shadowOf(listener).addActiveNotification(call); signal()
             session.selectProfile("phone")
             signal()
-            notices.setNotificationListenerAccessGranted(teams, false)
-            signal()
+            notices.setNotificationListenerAccessGranted(shared, false)
+            listener.onListenerDisconnected()
             assertFalse(session.deckState.value.teams.joined)
-            notices.setNotificationListenerAccessGranted(teams, true)
+            notices.setNotificationListenerAccessGranted(shared, true)
+            listener.onListenerConnected()
             signal()
             assertEquals("phone", session.deck.state.value.activeProfileId)
             val profiles = shadowOf(app.getSystemService(UserManager::class.java))

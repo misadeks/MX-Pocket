@@ -52,7 +52,6 @@ import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.DeckJson
 import tel.misa.mxpocket.deck.DeckKey
 import tel.misa.mxpocket.decks.Favorite
-import tel.misa.mxpocket.decks.MediaSessionAccess
 import tel.misa.mxpocket.workflow.StepKind
 import tel.misa.mxpocket.workflow.WorkflowDefinition
 import tel.misa.mxpocket.workflow.WorkflowPhase
@@ -136,8 +135,7 @@ class KeypadSessionTest {
             .setActions(P.ACTION_PLAY or P.ACTION_PAUSE or P.ACTION_SKIP_TO_NEXT or P.ACTION_SEEK_TO).build())
         state(true)
         shadowOf(app.getSystemService(MediaSessionManager::class.java)).addController(player)
-        shadowOf(app.getSystemService(NotificationManager::class.java)).setNotificationListenerAccessGranted(
-            ComponentName(app,MediaSessionAccess::class.java),true)
+        app.enableMusicSessions()
         val real = device("test-keypad")
         shadowOf(usb).addOrUpdateUsbDevice(real,true)
         val session = app.session
@@ -188,7 +186,7 @@ class KeypadSessionTest {
             assertNull(shadowOf(app).nextStartedActivity)
         }
         shadowOf(app.getSystemService(NotificationManager::class.java)).setNotificationListenerAccessGranted(
-            ComponentName(app,MediaSessionAccess::class.java),false)
+            NotificationAccess(app).component,false)
         app.sendBroadcast(Intent(Intent.ACTION_SCREEN_OFF)); main.idle()
         assertNull(session.deckState.value.media.playing)
         press(5)

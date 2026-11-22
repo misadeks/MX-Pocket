@@ -18,6 +18,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import tel.misa.mxpocket.KeypadSessionTest
 import tel.misa.mxpocket.MainActivity
+import tel.misa.mxpocket.NotificationAccess
 import tel.misa.mxpocket.installTestCamera
 
 @RunWith(org.robolectric.RobolectricTestRunner::class)
@@ -108,9 +109,10 @@ class AndroidDeckTest {
             assertTrue(MediaDeck.supported(state(P.STATE_PLAYING,1,1f,P.ACTION_FAST_FORWARD)).isEmpty())
             assertTrue(MediaDeck.supported(sample, unlocked = false).isEmpty())
             val media = MediaDeck(app) { true }
-            val token = ComponentName(app, MediaSessionAccess::class.java)
+            val shared = NotificationAccess(app)
             val notification = shadowOf(app.getSystemService(android.app.NotificationManager::class.java))
-            notification.setNotificationListenerAccessGranted(token,true)
+            notification.setNotificationListenerAccessGranted(shared.component,true)
+            shared.teams = true
             shadowOf(other.controller).setPlaybackState(state(P.STATE_PAUSED,0,0f))
             sessions.addController(other.controller)
             controller.setPlaybackState(state(P.STATE_PLAYING,1500,0f))
@@ -118,6 +120,8 @@ class AndroidDeckTest {
                 .putLong(android.media.MediaMetadata.METADATA_KEY_DURATION, 5000).build())
             sessions.addController(player.controller)
             val transport = shadowOf(player.controller.transportControls)
+            assertFalse(media.execute(DeckCommand.FORWARD_10).success) // Teams alone cannot inspect players.
+            shared.music = true
             assertTrue(media.execute(DeckCommand.FORWARD_10).success)
             assertEquals(P.ACTION_SEEK_TO, transport.lastPerformedAction)
             assertEquals(5000L, transport.seekToPositionMs)
@@ -126,7 +130,7 @@ class AndroidDeckTest {
             controller.setPlaybackState(state(P.STATE_PLAYING,-1,1f))
             assertFalse(media.execute(DeckCommand.FORWARD_10).success)
             assertNotEquals(P.ACTION_SEEK_TO, shadowOf(other.controller.transportControls).lastPerformedAction)
-            notification.setNotificationListenerAccessGranted(token,false)
+            notification.setNotificationListenerAccessGranted(shared.component,false)
             assertFalse(media.execute(DeckCommand.BACK_10).success)
         } finally { player.release(); other.release() }
     }

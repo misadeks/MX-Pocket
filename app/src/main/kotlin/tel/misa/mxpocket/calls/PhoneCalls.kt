@@ -2,10 +2,8 @@ package tel.misa.mxpocket.calls
 
 import android.Manifest
 import android.app.Notification
-import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Person
-import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -16,30 +14,30 @@ import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.Process
-import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
-import android.telecom.TelecomManager
 import android.telephony.SubscriptionManager
 import android.telephony.TelephonyManager
 import androidx.annotation.RequiresApi
+import tel.misa.mxpocket.NotificationAccess
+import tel.misa.mxpocket.PocketNotificationListener
 
 internal enum class LineState { UNKNOWN, IDLE, RINGING, OFF_HOOK, MULTIPLE }
 
 internal class PhoneCallAccess(private val context: Context) {
     private val prefs = context.getSharedPreferences("phone-call-view", Context.MODE_PRIVATE)
+    private val notifications = NotificationAccess(context)
     var enabled: Boolean
         get() = prefs.getBoolean("enabled", false)
         set(value) { prefs.edit().putBoolean("enabled", value).apply() }
     var details: Boolean
-        get() = prefs.getBoolean("details", false)
-        set(value) { prefs.edit().putBoolean("details", value).apply() }
+        get() = notifications.dialer
+        set(value) { notifications.dialer = value }
     val supported get() = Build.VERSION.SDK_INT >= 31 && context.packageManager.hasSystemFeature(PackageManager.FEATURE_TELEPHONY)
     val phoneGranted get() = context.checkSelfPermission(Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
-    val listener = ComponentName(context, PhoneCallListener::class.java)
-    val notificationGranted get() = context.getSystemService(NotificationManager::class.java).isNotificationListenerAccessGranted(listener)
+    val notificationGranted get() = notifications.granted
 
     fun notice(state: LineState, expectedKey: String? = null) = if (enabled && details && notificationGranted)
-        PhoneCallListener.current?.snapshot(state, expectedKey) else null
+        PocketNotificationListener.current?.phoneSnapshot(state, expectedKey) else null
 
     fun state(): LineState {
         if (!enabled || !phoneGranted || Build.VERSION.SDK_INT < 31) return LineState.UNKNOWN
@@ -70,11 +68,10 @@ internal class DialerNotice(val stamp: CallStamp, val name: String?, val icon: I
 @RequiresApi(34)
 internal fun dialerNotice(notes: Array<StatusBarNotification>, dialer: String, state: LineState, boundary: Long): DialerNotice? {
     val sbn = notes.filter {
-        it.packageName == dialer && it.user == Process.myUserHandle() && it.notification.let { n ->
+        it.packageName == dialer && it.user == Process.myUserHandle() && it.opPkg == dialer && it.notification.let { n ->
             n.category == Notification.CATEGORY_CALL || n.extras.getString(Notification.EXTRA_TEMPLATE) == Notification.CallStyle::class.java.name
         }
     }.singleOrNull() ?: return null
-    if (sbn.opPkg != dialer) return null
     val extras = sbn.notification.extras
     if (extras.getString(Notification.EXTRA_TEMPLATE) != Notification.CallStyle::class.java.name) return null
     val ringing = state == LineState.RINGING
@@ -115,39 +112,5 @@ internal fun DialerNotice.photo(context: Context): Bitmap? {
             drawable.setBounds(0, 0, it.width, it.height)
             try { drawable.draw(canvas) } catch (_: IllegalArgumentException) { return null }
         }
-    }
-}
-
-class PhoneCallListener : NotificationListenerService() {
-    companion object {
-        internal var current: PhoneCallListener? = null
-            private set
-        internal var refresh: (() -> Unit)? = null
-    }
-    private var boundary = 0L
-    override fun onListenerConnected() { current = this; refresh?.invoke() }
-    override fun onListenerDisconnected() = clear()
-    override fun onDestroy() { clear(); super.onDestroy() }
-    private fun clear() {
-        if (current === this) { current = null; refresh?.invoke() }
-    }
-    private fun dialer() = getSystemService(TelecomManager::class.java)?.defaultDialerPackage
-    private fun changed(sbn: StatusBarNotification) {
-        if (refresh == null || sbn.user != Process.myUserHandle() || sbn.packageName != dialer()) return
-        // Invalidate even same-key, same-millisecond replacements before admitting another press.
-        boundary++
-        refresh?.invoke()
-    }
-    override fun onNotificationPosted(sbn: StatusBarNotification) = changed(sbn)
-    override fun onNotificationRemoved(sbn: StatusBarNotification) = changed(sbn)
-
-    internal fun snapshot(state: LineState, expectedKey: String?): DialerNotice? {
-        if (Build.VERSION.SDK_INT < 34) return null
-        return try {
-            val pkg = dialer() ?: return null
-            val notes = if (expectedKey == null) activeNotifications else getActiveNotifications(arrayOf(expectedKey))
-            dialerNotice(notes, pkg, state, boundary)
-        } catch (_: SecurityException) { null }
-        catch (_: android.os.BadParcelableException) { null }
     }
 }
