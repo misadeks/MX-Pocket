@@ -7,11 +7,11 @@ making a precise swipe. Assign a workflow to one of the nine LCD keys, open a
 favorite app, start a focus timer or change tracks. Two page buttons switch
 layouts. To try MX Pocket without hardware, use the on-screen keys.
 
-**Planned: Microsoft Teams calls.** Joining a Teams call on the connected phone
-would switch the keypad to a meeting layout. Mute would stay in the same place,
-with keys for captions, raising your hand and opening meeting chat where Teams
-supports those actions. After the call, your previous layout would return
-unless you had chosen another.
+When you join a Microsoft Teams call on the connected Android phone, the keypad
+switches to a meeting layout. Mute stays in the same spot, with keys for
+captions, raising your hand and opening meeting chat where Teams supports those
+actions. When the call ends, the keypad returns to your previous layout unless
+you've selected another.
 
 MX Pocket supports the **wired Logitech MX Creative Keypad** (`046D:C354`),
 not the wireless **Dialpad** sold with it. Its Kotlin driver uses Android USB
