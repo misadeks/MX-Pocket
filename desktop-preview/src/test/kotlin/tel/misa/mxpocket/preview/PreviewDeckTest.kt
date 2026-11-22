@@ -177,7 +177,10 @@ class PreviewDeckTest {
     deck.cycle(-1)
     check(deck.profileName == "Navigation")
     check(deck.press(1, 1_000).contains("No system action"))
-    deck.cycle(5)
+    for (id in listOf("teams", "onenote", "@home", "focus")) {
+        deck.cycle(1)
+        assertEquals(id, deck.profileId)
+    }
     check(label(1, 1_000) == "Pause")
     deck.cycle(2)
     check(deck.profileName == "Phone")
