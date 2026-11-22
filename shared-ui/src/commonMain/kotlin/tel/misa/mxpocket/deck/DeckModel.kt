@@ -33,9 +33,19 @@ data class DeckKey(
     val color: Int = 0xff284454.toInt(),
     val action: ActionCall? = null,
     val enabled: Boolean = true,
+    val holdAction: ActionCall? = null,
 )
 
+internal fun DeckKey.mapActions(transform: (ActionCall) -> ActionCall?) =
+    copy(action = action?.let(transform), holdAction = holdAction?.let(transform))
+
 data class DeckPage(val id: String, val name: String, val keys: List<DeckKey> = List(9) { DeckKey() })
+
+/** A Hold slot cannot displace an existing Tap slot's plugin on the page. */
+fun DeckPage.selectedSlotOwner(registered: (String) -> Boolean): String? =
+    keys.firstNotNullOfOrNull { it.action?.slotOwner()?.takeIf(registered) }
+        ?: keys.firstNotNullOfOrNull { it.holdAction?.slotOwner()?.takeIf(registered) }
+
 data class DeckRule(val signal: String, val value: String, val weight: Int = 1)
 data class DeckDecision(
     val reason: String,

@@ -7,6 +7,7 @@ import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.os.Looper
 import android.os.SystemClock
+import android.view.ViewConfiguration
 import java.time.Duration
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
@@ -88,6 +89,12 @@ class ChordSessionTest {
         main.idle()
     }
     private fun waitWindow() = main.idleFor(Duration.ofMillis(150))
+    private val holdDelay get() = ViewConfiguration.getLongPressTimeout().toLong()
+    private fun pluginSlot(index: Int) = ActionCall("plugin.key", mapOf("pluginId" to "probe", "index" to "$index"))
+    private fun bindHold(index: Int, hold: ActionCall?, tap: ActionCall? = pluginSlot(index)) {
+        session.deck.setKey("focus", "root", index, DeckKey(action = tap, holdAction = hold)).getOrThrow()
+        main.idle()
+    }
     private fun status(index: Int, text: String) {
         assertTrue(runBlocking {
             session.actions.dispatch(ActionCall("keypad.status", mapOf("key" to "$index", "text" to text))).success
@@ -146,6 +153,80 @@ class ChordSessionTest {
         events.clear()
         report(9); report(2, 9); report()
         assertEquals(listOf("1&8"), events)
+    }
+
+    @Test fun releaseBeforeAtAndAfterDeadlineUsesArrivalEvenWhenTheTimerIsBehindTheRelease() {
+        bindHold(3, pluginSlot(5))
+        for (duration in listOf(holdDelay - 1, holdDelay, holdDelay + 1)) {
+            events.clear()
+            // Queue both edges before main handles down. An overdue callback cannot beat this up.
+            emit(KeyEvent(4, true)); SystemClock.sleep(duration); emit(KeyEvent(4, false))
+            main.idle()
+            val chosen = if (duration < holdDelay) "3" else "5"
+            assertEquals(listOf("$chosen+", "$chosen-"), events)
+        }
+        events.clear()
+        event(4, true); event(4, true)
+        main.idleFor(Duration.ofMillis(holdDelay - 1))
+        assertTrue(events.isEmpty())
+        main.idleFor(Duration.ofMillis(1)); assertEquals(listOf("5+"), events)
+        event(4, true); main.idleFor(Duration.ofMillis(holdDelay)); event(4, false); event(4, false)
+        assertEquals(listOf("5+", "5-"), events)
+    }
+
+    @Test fun chordConsumesBothHoldsButSingleDeadlineStillRunsFromOriginalDown() {
+        bindHold(0, pluginSlot(5)); bindHold(8, pluginSlot(6))
+        report(1); report(1, 9)
+        main.idleFor(Duration.ofMillis(holdDelay * 2)); report()
+        assertEquals(listOf("0&8"), events)
+        events.clear()
+        report(1); waitWindow(); assertTrue(events.isEmpty())
+        main.idleFor(Duration.ofMillis(holdDelay - PhysicalChordInput.WINDOW_MS))
+        assertEquals(listOf("5+"), events)
+        report(); report(9); report()
+        assertEquals(listOf("5+", "5-", "8+", "8-"), events)
+    }
+
+    @Test fun otherDownsDoNotCancelIndependentHoldTimersAndHoldOnlyNeverTaps() {
+        bindHold(3, pluginSlot(5), tap = null); bindHold(4, pluginSlot(6))
+        report(4); report(); assertTrue(events.isEmpty())
+        report(4, 5, 8)
+        assertEquals(listOf("7+"), events) // Unconfigured key is still immediate.
+        main.idleFor(Duration.ofMillis(holdDelay)); report()
+        assertEquals(listOf("7+", "5+", "6+", "5-", "6-", "7-"), events)
+    }
+
+    @Test fun delayedChoicesCannotSurvivePageBindingSessionGrantOrInputCancellation() {
+        bindHold(3, pluginSlot(5))
+        event(4, true); session.selectProfile("studio"); session.selectProfile("focus"); main.idle()
+        event(4, false)
+        event(4, true); bindHold(3, pluginSlot(6)); event(4, true); event(4, false)
+        event(4, true); event(4, false, synthetic = true)
+        event(4, true); session.cancelPhysicalGesture(); main.idle(); event(4, false)
+        event(4, true); shadowOf(usb).revokePermission(device, app.packageName)
+        main.idleFor(Duration.ofMillis(holdDelay)); event(4, false)
+        shadowOf(usb).addOrUpdateUsbDevice(device, true)
+        event(4, true)
+        val old = emit
+        session.disconnect(); connect(); old(KeyEvent(4, false))
+        main.idleFor(Duration.ofMillis(holdDelay)); assertTrue(events.isEmpty())
+        event(4, true); main.idleFor(Duration.ofMillis(holdDelay)); event(4, false)
+        assertEquals(listOf("6+", "6-"), events)
+    }
+
+    @Test fun holdRechecksSecondaryPluginRoleAndIdentityAndCannotAcquireFreshDownAuthority() {
+        bindHold(3, pluginSlot(0))
+        event(4, true); readOnly = true; main.idleFor(Duration.ofMillis(holdDelay)); event(4, false)
+        readOnly = false
+        event(4, true); token = "replacement"; main.idleFor(Duration.ofMillis(holdDelay)); event(4, false)
+        assertTrue(events.isEmpty())
+        effect = PluginAction.OpenApp(PhoneApp.CAMERA)
+        event(4, true); main.idleFor(Duration.ofMillis(holdDelay)); event(4, false)
+        assertEquals(listOf("0+", "0-"), events)
+        assertEquals(0, launches)
+        effect = PluginAction.Deck(DeckCommand.SHUTTER)
+        session.phoneKey(3, hold = true)
+        assertEquals(0, captures)
     }
 
     @Test fun tapTimeoutAndNonmatchingDownCommitInOrderButUnconfiguredKeysNeverWait() {

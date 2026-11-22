@@ -14,6 +14,18 @@ action; it never runs the action. Other pages can be edited without activating
 their plugins. In a narrow window, Back returns from the key editor; a wider
 window keeps the board and key details side by side.
 
+To give a key a second action, select it in **Keypad**, choose **Hold** under
+**Key actions**, pick an action, and save the key. **Tap** and **Hold** are
+independent; choose **Unassigned** for Hold and save to remove it. Existing
+layouts and factory keys have no Hold. Layout backups include assigned Holds.
+
+On an operational key with Hold assigned, releasing early runs Tap. Keeping
+the key down until Android's **Touch & hold delay** runs Hold once instead;
+releasing it does not also tap. The clock starts at the original press. A
+recognized physical two-key chord consumes both keys. Hold does not grant
+permission to launch an app in the background or operate the camera shutter.
+Keys without Hold keep their usual response time.
+
 The Windows simulator uses the same workspace and starts with the virtual
 keypad connected. It can save its own layouts, but has no USB connection,
 image upload, or Android permission and foreground-app detection controls.

@@ -77,9 +77,10 @@ phone still increments individual counters; phone input never joins a USB pair.
 There is no factory shortcut or change to the layout JSON.
 
 - Only an enabled, acknowledged slot with an available, enabled, acknowledged
-  partner waits. Other singles remain immediate. The window is **150 ms** from
+  partner waits for a chord. Singles without a Hold binding otherwise remain
+  immediate. The window is **150 ms** from
   arrival of the first down; both downs must be processed before it expires.
-- An early release delivers the ordinary down then up. Timeout commits the
+- Without a Hold binding, an early release delivers the ordinary down then up. Timeout commits the
   single down and its eventual release goes to the same slot. A nonmatching
   eligible down commits the older single first, then starts its own decision.
 - Pairs only: the first matching second down wins, even when pairs overlap.
@@ -95,6 +96,15 @@ There is no factory shortcut or change to the layout JSON.
   A chord or buffered single can update plugin state and use ordinary host
   capabilities, but does **not** convey direct-launch, capture or workflow
   authority. Keep actions requiring a fresh physical press on unchorded slots.
+
+Layout authors can assign one optional **Hold** independently of the Tap
+binding. Chords match the original Tap slots, never the Hold slots. If no
+chord wins, Android's system long-press timeout is measured from the original
+USB down, not from the end of the chord window. A selected `plugin.key` gets
+one down on selection and the matching up on release (immediately for a tap).
+Neither deferred choice is a fresh physical-down grant for launches or capture.
+Virtual Home actions retain virtual workflow origin; editor selection has no
+input authority at all.
 
 To author another plugin, copy the example into a named feature package, change
 its ID/title and implement its state, frame and input. Add a registry instance

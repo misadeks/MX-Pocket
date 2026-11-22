@@ -1,5 +1,7 @@
 package tel.misa.mxpocket.deck
 
+import tel.misa.mxpocket.actions.ActionCall
+
 private val identifier = Regex("[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}")
 private val hourPattern = Regex("(?:[01]?[0-9]|2[0-3])(?:-(?:[01]?[0-9]|2[0-3]))?")
 
@@ -59,27 +61,31 @@ fun validateDeck(deck: DeckState) {
             for (key in page.keys) {
                 text(key.icon, DeckLimits.ICON)
                 text(key.label, DeckLimits.LABEL)
-                val call = key.action ?: continue
-                validId(call.id)
-                require(call.params.size <= DeckLimits.PARAMS) { "Too many action parameters" }
-                for ((name, value) in call.params) {
-                    validId(name)
-                    text(value, DeckLimits.PARAM_VALUE)
-                }
-                when (call.id) {
-                    DeckActions.PAGE -> require(call.params.keys == setOf(DeckActions.PAGE_ID) &&
-                        call.params[DeckActions.PAGE_ID] in pageIds) { "Unknown target page" }
-                    DeckActions.PROFILE -> require(call.params.keys == setOf(DeckActions.PROFILE_ID) &&
-                        call.params[DeckActions.PROFILE_ID] in profileIds) { "Unknown target profile" }
-                    DeckActions.BACK, DeckActions.ROOT -> require(call.params.isEmpty()) { "Unexpected navigation parameters" }
-                    "plugin.key" -> {
-                        require(call.params.keys == setOf("pluginId", "index") && call.params["index"] in keyIndices) {
-                            "Invalid plugin key assignment"
-                        }
-                        validId(call.params.getValue("pluginId"))
-                    }
-                }
+                key.action?.let { validateAction(it, pageIds, profileIds) }
+                key.holdAction?.let { validateAction(it, pageIds, profileIds) }
             }
+        }
+    }
+}
+
+private fun validateAction(call: ActionCall, pageIds: Set<String>, profileIds: Set<String>) {
+    validId(call.id)
+    require(call.params.size <= DeckLimits.PARAMS) { "Too many action parameters" }
+    for ((name, value) in call.params) {
+        validId(name)
+        text(value, DeckLimits.PARAM_VALUE)
+    }
+    when (call.id) {
+        DeckActions.PAGE -> require(call.params.keys == setOf(DeckActions.PAGE_ID) &&
+            call.params[DeckActions.PAGE_ID] in pageIds) { "Unknown target page" }
+        DeckActions.PROFILE -> require(call.params.keys == setOf(DeckActions.PROFILE_ID) &&
+            call.params[DeckActions.PROFILE_ID] in profileIds) { "Unknown target profile" }
+        DeckActions.BACK, DeckActions.ROOT -> require(call.params.isEmpty()) { "Unexpected navigation parameters" }
+        "plugin.key" -> {
+            require(call.params.keys == setOf("pluginId", "index") && call.params["index"] in keyIndices) {
+                "Invalid plugin key assignment"
+            }
+            validId(call.params.getValue("pluginId"))
         }
     }
 }
