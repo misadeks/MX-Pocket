@@ -82,7 +82,7 @@ class NotificationAccessTest {
             shadowOf(listener).addActiveNotification(phoneEvent)
             deliver(teamsEvent); deliver(phoneEvent)
             assertSame(TeamsObservation.Unavailable, listener.teamsSnapshot())
-            assertNull(listener.phoneSnapshot(LineState.RINGING, null))
+            assertNull(listener.phoneSnapshot(LineState.RINGING, null).notice)
             assertEquals(0 to 0, teams to phone)
 
             access.teams = true
@@ -102,7 +102,7 @@ class NotificationAccessTest {
             notices.setNotificationListenerAccessGranted(access.component, false)
             deliver(teamsEvent); deliver(phoneEvent)
             assertSame(TeamsObservation.Unavailable, listener.teamsSnapshot())
-            assertNull(listener.phoneSnapshot(LineState.RINGING, null))
+            assertNull(listener.phoneSnapshot(LineState.RINGING, null).notice)
             assertEquals(2 to 2, teams to phone)
         } finally {
             TeamsEvents.refresh = null

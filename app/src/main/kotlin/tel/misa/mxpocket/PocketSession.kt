@@ -286,12 +286,13 @@ internal class PocketSession(
         val enabled = phoneAccess.enabled
         val blocker = if (enabled) phoneConnectionBlocker() else null
         val authorized = enabled && blocker == null
-        if (authorized && Build.VERSION.SDK_INT >= 34 && phoneAccess.details && phoneAccess.phoneGranted && phoneAccess.notificationGranted)
-            PocketNotificationListener.refreshPhone = phoneUpdate
+        val observeDetails = authorized && Build.VERSION.SDK_INT >= 34 && phoneAccess.details && phoneAccess.phoneGranted && phoneAccess.notificationGranted
+        if (observeDetails) PocketNotificationListener.refreshPhone = phoneUpdate
         else if (PocketNotificationListener.refreshPhone === phoneUpdate) PocketNotificationListener.refreshPhone = null
         val line = if (authorized) phoneAccess.state() else LineState.UNKNOWN
         val before = phoneCallBlocker
         callBoard.refresh(line)
+        if (!observeDetails) callBoard.clearDiagnostic()
         phoneAccessBlocker = blocker ?: CallCopy.LineUnavailable.takeIf { authorized && line == LineState.UNKNOWN }
         if (before != phoneCallBlocker) invalidate()
     }
@@ -1297,7 +1298,10 @@ internal class PocketSession(
     fun isCurrentShortcut(action: PhoneAction): Boolean =
         pendingAction == action && action.ticket == request && output != null && acknowledged(action.index, action.receipt)
 
-    fun logText(limit: Int = 250) = logs.takeLast(limit).joinToString("\n")
+    fun logText(limit: Int = 250) = buildList {
+        callBoard.lastRingReason?.let { add(CallCopy.LastRingCheck.text(it.name)) }
+        addAll(logs.takeLast(limit))
+    }.joinToString("\n")
     fun takePhoneAction(id: String?): PhoneAction? {
         val pending = pendingAction ?: return null
         if (id != pending.id) return null // An older tap must not consume the replacement.

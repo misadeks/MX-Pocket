@@ -12,8 +12,9 @@ import android.service.notification.StatusBarNotification
 import android.telecom.TelecomManager
 import androidx.annotation.RequiresApi
 import kotlinx.coroutines.flow.update
-import tel.misa.mxpocket.calls.DialerNotice
 import tel.misa.mxpocket.calls.LineState
+import tel.misa.mxpocket.calls.NoticeRead
+import tel.misa.mxpocket.calls.RingReason
 import tel.misa.mxpocket.calls.dialerNotice
 import tel.misa.mxpocket.calls.isFromDialer
 import tel.misa.mxpocket.decks.TEAMS_PACKAGE
@@ -97,15 +98,16 @@ class PocketNotificationListener : NotificationListenerService() {
         return observation
     }
 
-    internal fun phoneSnapshot(state: LineState, expectedKey: String?): DialerNotice? {
-        if (Build.VERSION.SDK_INT < 34 || current !== this || refreshPhone == null || !access.dialer || !access.granted) return null
+    internal fun phoneSnapshot(state: LineState, expectedKey: String?): NoticeRead {
+        val unavailable = NoticeRead(RingReason.LISTENER_UNAVAILABLE)
+        if (Build.VERSION.SDK_INT < 34 || current !== this || refreshPhone == null || !access.dialer || !access.granted) return unavailable
         return try {
-            val pkg = dialer() ?: return null
-            val notes = activeNotifications ?: return null
-            dialerNotice(notes, pkg, packageManager, state, phoneBoundary, !isUnlockedAndInteractive(), ::visibleOnLockScreen)
-                ?.takeIf { expectedKey == null || it.stamp.key == expectedKey }
-        } catch (_: SecurityException) { null }
-        catch (_: BadParcelableException) { null }
+            val pkg = dialer() ?: return NoticeRead(RingReason.NO_DEFAULT_DIALER)
+            val notes = activeNotifications ?: return unavailable
+            val read = dialerNotice(notes, pkg, packageManager, state, phoneBoundary, !isUnlockedAndInteractive(), ::visibleOnLockScreen)
+            if (expectedKey == null || read.notice?.stamp?.key == expectedKey) read else NoticeRead(RingReason.STALE_NOTICE)
+        } catch (_: SecurityException) { unavailable }
+        catch (_: BadParcelableException) { unavailable }
     }
 
     @RequiresApi(34)
