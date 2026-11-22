@@ -22,6 +22,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.semantics.*
@@ -163,7 +164,6 @@ fun HomeScreen(state: PocketScreenState, event: (PocketScreenEvent) -> Unit) {
             val tiles = if (grid != null) state.tiles else state.tiles.map { it.copy(readOnly = true) }
             val keypad: @Composable () -> Unit = {
                 PocketCard {
-                    PocketLabel(if (state.usbReady) "Keypad · live" else if (grid != null) "Keypad" else "Layout preview")
                     if (grid == null) KeypadGrid(tiles, { _, _ -> }, Modifier.widthIn(max = 480.dp).align(Alignment.CenterHorizontally))
                     else key(grid) {
                         // Replacing the clickable nodes cancels a pointer/key still down on the old board.
@@ -230,20 +230,23 @@ private fun HomeHeader(state: PocketScreenState, event: (PocketScreenEvent) -> U
 @Composable
 private fun NowOnKeypad(state: PocketScreenState, event: (PocketScreenEvent) -> Unit) {
     val profileName = state.profiles.find { it.id == state.activeId }?.name ?: state.pluginTitle
-    val pageName = state.pluginTitle.substringAfter(" / ", "")
+    val pageName = state.pluginTitle.removePrefix("$profileName / ").takeIf { state.pluginTitle != profileName }
+    val type = MaterialTheme.typography
+    // Reserve all three text lines at the current font scale, including when optional lines are absent.
+    val rowHeight = with(LocalDensity.current) {
+        type.headlineMedium.lineHeight.toDp() + type.titleMedium.lineHeight.toDp() + type.bodyMedium.lineHeight.toDp() + 8.dp
+    }.coerceAtLeast(52.dp)
     PocketCard {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().height(rowHeight), verticalAlignment = Alignment.CenterVertically) {
             RoundPageButton(ShellIcon.CHEVRON_LEFT, "Previous page") { event(PocketScreenEvent.ChangePage(-1)) }
             Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    PocketDot(PocketColors.accent)
-                    PocketLabel(if (state.usbReady || state.simulator?.grid != null) "Now on keypad" else "Selected layout", color = PocketColors.accent)
-                }
                 Text(profileName, Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold, color = PocketColors.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (pageName.isNotBlank()) Text(pageName, color = PocketColors.accent, style = MaterialTheme.typography.titleMedium)
-                if (state.reason.isNotBlank()) Note(state.reason)
+                if (!pageName.isNullOrBlank()) Text(pageName, color = PocketColors.accent, style = type.titleMedium,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (state.reason.isNotBlank()) Text(state.reason, style = type.bodyMedium, color = PocketColors.muted,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             RoundPageButton(ShellIcon.CHEVRON_RIGHT, "Next page") { event(PocketScreenEvent.ChangePage(1)) }
         }

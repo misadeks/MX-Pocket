@@ -1,12 +1,14 @@
 package tel.misa.mxpocket.shared.ui
 
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.asSkiaBitmap
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.*
 import androidx.compose.ui.unit.Density
 import org.jetbrains.skia.Image
 import org.junit.Test
+import org.junit.Assert.assertEquals
 import java.io.File
 import tel.misa.mxpocket.FocusTimer
 import tel.misa.mxpocket.deck.defaultDeck
@@ -14,6 +16,39 @@ import tel.misa.mxpocket.plugins.present
 
 @OptIn(ExperimentalTestApi::class)
 class WorkspaceRenderTest {
+    @Test fun switchingLayoutsKeepsNavigationAndKeypadInPlace() {
+        for ((width, fontScale) in listOf(390 to 1f, 390 to 1.6f, 1120 to 1f)) runDesktopComposeUiTest(width, 940) {
+            val short = PocketScreenState("Not connected", "Focus", FocusTimer().present(0).keys.map { it.toGridTile(false) },
+                listOf(ProfileChoice("focus", "Focus")), "focus")
+            val profile = "A long profile name including / punctuation"
+            val page = "A long page name that does not fit on one line"
+            val extended = short.copy(profiles = listOf(ProfileChoice("custom", profile)), activeId = "custom",
+                pluginTitle = "$profile / $page", reason = "Matched an automatic selection rule with a long description")
+            val state = mutableStateOf(short)
+            setContent {
+                CompositionLocalProvider(LocalDensity provides Density(1f, fontScale)) {
+                    PocketTheme { HomeScreen(state.value) { event ->
+                        if (event is PocketScreenEvent.ChangePage) state.value = if (event.delta > 0) extended else short
+                    } }
+                }
+            }
+            val next = onNodeWithContentDescription("Next page")
+            val firstKey = onNodeWithContentDescription("Key 1, Start, Focus")
+            val navBounds = next.fetchSemanticsNode().boundsInRoot
+            val keyBounds = firstKey.fetchSemanticsNode().boundsInRoot
+            onNodeWithText("Selected layout", ignoreCase = true).assertDoesNotExist()
+            onNodeWithText("Layout preview", ignoreCase = true).assertDoesNotExist()
+            next.performClick()
+            onNodeWithText(profile).assertExists()
+            onNodeWithText(page).assertExists()
+            assertEquals(navBounds, next.fetchSemanticsNode().boundsInRoot)
+            assertEquals(keyBounds, firstKey.fetchSemanticsNode().boundsInRoot)
+            onNodeWithContentDescription("Previous page").performClick()
+            onNodeWithText("Focus").assertExists()
+            assertEquals(navBounds, next.fetchSemanticsNode().boundsInRoot)
+        }
+    }
+
     @Test fun connectedUsbHomeMirrorsTheKeypadWithoutMaintenanceControls() = runDesktopComposeUiTest(390, 844) {
         val state = PocketScreenState("Keypad session ready.", "Focus", FocusTimer().present(0).keys.map { it.toGridTile(true) },
             defaultDeck().profiles.map { ProfileChoice(it.id, it.name) }, "focus", usbReady = true, connectionActive = true)
