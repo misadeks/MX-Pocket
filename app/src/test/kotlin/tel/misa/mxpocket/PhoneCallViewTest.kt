@@ -118,14 +118,16 @@ class PhoneCallViewTest {
         assertEquals("studio", current())
     }
 
-    @Test fun existingWorkflowCanStillTargetTheRetiredLayout() {
+    @Test fun enabledWorkflowsCanStillTargetTheRetiredLayout() {
+        app.workflowsEnabled = true
+        val workflows = checkNotNull(session.workflows)
         val deck = session.deck
         deck.importLegacyPhone()
         val step = WorkflowStep(StepKind.ACTION, "profile.switch", params = mapOf("profileId" to "phone"))
         val workflow = WorkflowDefinition(name = "My shortcuts", steps = listOf(step))
-        assertNull(session.workflows.validate(workflow))
-        assertNull(kotlinx.coroutines.runBlocking { session.workflows.save(workflow) })
-        assertTrue(session.workflows.run(workflow.id, tel.misa.mxpocket.workflow.WorkflowOrigin.MANUAL))
+        assertNull(workflows.validate(workflow))
+        assertNull(kotlinx.coroutines.runBlocking { workflows.save(workflow) })
+        assertTrue(workflows.run(workflow.id, tel.misa.mxpocket.workflow.WorkflowOrigin.MANUAL))
         main.idle()
         assertEquals("phone", deck.operatingState.value.activeProfileId)
     }
