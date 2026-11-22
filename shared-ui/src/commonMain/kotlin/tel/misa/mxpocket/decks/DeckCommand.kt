@@ -65,5 +65,5 @@ enum class DeckCommand(val id: String, private val copy: Copy, val deck: String)
 }
 
 /** Stable plugin indices, independent of the physical order on the factory Navigation page. */
-val navigationCommands = listOf(DeckCommand.BACK, DeckCommand.HOME, DeckCommand.RECENTS, DeckCommand.REVERSE,
-    DeckCommand.ACTIVATE, DeckCommand.FORWARD, DeckCommand.UP, DeckCommand.DOWN, DeckCommand.NAV_ACCESS)
+val navigationCommands = listOf(DeckCommand.BACK, DeckCommand.HOME, DeckCommand.RECENTS, DeckCommand.UP,
+    DeckCommand.ACTIVATE, DeckCommand.DOWN, DeckCommand.REVERSE, DeckCommand.NAV_ACCESS, DeckCommand.FORWARD)

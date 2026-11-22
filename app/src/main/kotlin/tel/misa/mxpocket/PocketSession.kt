@@ -396,7 +396,7 @@ internal class PocketSession(
             ownerOf(call) == TEAMS && tile != null -> if (tile.enabled && !available) K.Unavailable.text() else tile.footer
             ownerOf(call) == "onenote" && tile?.enabled == false -> tile.footer
             tile?.glyph == NavigationGlyph.ACCESS_INFO ||
-                tile?.glyph == NavigationGlyph.RECENTS && !tile.enabled -> tile.footer
+                tile?.enabled == false && tile.inputToken?.let(DeckCommand::fromId)?.deck == "navigation" -> tile.footer
             !available && call != null -> K.Unavailable.text()
             call?.id == "workflow.run" && workflows?.status?.value?.workflowId == call.params["workflowId"] -> tile?.footer.orEmpty()
             else -> feedback[index]?.invoke() ?: tile?.footer.orEmpty()

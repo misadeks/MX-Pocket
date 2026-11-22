@@ -300,7 +300,7 @@ class DeckRepositoryTest {
         checkDefaults()
     }
 
-    private fun expectedNavigationRoot() = (0..7).map { pluginKey("navigation", it) } +
+    private fun expectedNavigationRoot() = listOf(0, 1, 2, 6, 4, 8, 3, 5).map { pluginKey("navigation", it) } +
         DeckKey(label = "More", action = ActionCall(DeckActions.PAGE, mapOf(DeckActions.PAGE_ID to "accessibility")))
 
     @Test fun previousStockNavigationUpgradesButEditedRootIsPreserved() {
@@ -317,7 +317,12 @@ class DeckRepositoryTest {
         })))
         assertEquals(expectedNavigationRoot(), load(root).profiles.single { it.id == "navigation" }.pages.first().keys)
         val edited = root.copy(keys = root.keys.mapIndexed { i, key -> if (i == 0) key.copy(label = "Custom") else key })
-        assertEquals(edited, load(edited).profiles.single { it.id == "navigation" }.pages.first())
+        val retained = load(edited).profiles.single { it.id == "navigation" }.pages.first()
+        assertEquals(edited, retained)
+        // Old plugin.key bindings still execute their original commands, not the new physical positions.
+        assertEquals(listOf("navigation.back", "navigation.scroll-up", "navigation.home", "navigation.focus-previous",
+            "navigation.activate", "navigation.focus-next", "navigation.recents", "navigation.scroll-down"),
+            retained.keys.take(8).map { tel.misa.mxpocket.decks.navigationCommands[it.action!!.params.getValue("index").toInt()].id })
     }
 
     @Test fun v4UpgradesOnlyStockNavigationWithoutOverwritingUserPagesOrBindings() {

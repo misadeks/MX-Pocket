@@ -4,11 +4,13 @@ import android.content.Context
 import androidx.compose.ui.graphics.asImageBitmap
 import tel.misa.mxpocket.KeyImages
 import tel.misa.mxpocket.R
-import tel.misa.mxpocket.deck.navigationFactorySlots
+import tel.misa.mxpocket.deck.factoryProfiles
 import tel.misa.mxpocket.deck.GAME_PROFILE
+import tel.misa.mxpocket.i18n.displayKeyLabel
 import tel.misa.mxpocket.plugins.BuiltInPlugins
 import tel.misa.mxpocket.plugins.OneNoteFaces
 import tel.misa.mxpocket.plugins.PluginFrame
+import tel.misa.mxpocket.plugins.present
 import tel.misa.mxpocket.shared.ui.*
 
 /** Deterministic display fixtures. No activation callbacks, host, timers or platform services. */
@@ -42,7 +44,16 @@ class UiPreviewScenes(private val context: Context) {
                 "Stroke Eraser", "Shape select", "Lasso select")
             OneNoteFaces(context.resources).draw(toolbar.map { it to it }, active = "Stroke Eraser")
         } else frame
-        val keys = if (id == "navigation") navigationFactorySlots.map(frame.keys::get) else displayFrame.keys
+        val keys = if (id == "navigation") {
+            val profile = factoryProfiles().single { it.id == id }
+            val root = profile.pages.single { it.id == profile.rootPageId }
+            root.keys.map { key ->
+                val slot = key.action?.params?.get("index")?.toInt()
+                val native = slot?.let(frame.keys::get)
+                key.copy(label = profile.displayKeyLabel(root, key)).present(native, "", native?.footer.orEmpty(),
+                    available = key.enabled && native?.enabled != false)
+            }
+        } else displayFrame.keys
         val images = KeyImages { null }
         return PocketScreenState(
             status = if (id == "disconnected") "$note\n$disconnectedNote" else "$note\n${plugin.descriptor.title} fixture",

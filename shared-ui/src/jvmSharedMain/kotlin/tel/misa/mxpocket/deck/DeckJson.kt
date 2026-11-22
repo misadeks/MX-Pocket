@@ -65,12 +65,12 @@ object DeckJson {
             // A reordered v1/v2 root was a user edit, not the v3 stock root.
             if (state.version < 3 && nav === audio) return prior
             val upgraded = prior.withAccessibilityPage()
-            val result = if (upgraded === prior || fits(upgraded)) upgraded else prior
-            return result.upgradeNavigationControls()
+            return if (upgraded === prior || fits(upgraded)) upgraded else prior
         }
 
         validateDeck(state)
-        return state.upgradeNavigationControls()
+        val upgraded = state.upgradeNavigationControls()
+        return if (upgraded === state || fits(upgraded)) upgraded else state
     }
 
     private fun DeckState.withoutStockTeamsTimer(): DeckState {

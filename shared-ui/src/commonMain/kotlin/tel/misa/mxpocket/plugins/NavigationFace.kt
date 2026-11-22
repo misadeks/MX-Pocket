@@ -4,7 +4,7 @@ import tel.misa.mxpocket.decks.DeckCommand as C
 import tel.misa.mxpocket.i18n.KeypadCopy as K
 
 /** Null access means there is no Android host; do not advertise in-app navigation on a simulator. */
-fun C.navigationFace(systemAccess: Boolean?, shortcutAvailable: Boolean = false): KeyTile {
+fun C.navigationFace(systemAccess: Boolean?, shortcutAvailable: Boolean = false, allAppsSupported: Boolean = true): KeyTile {
     val color = when (this) {
         C.ACTIVATE -> 0xffa6e4ce
         C.UP, C.DOWN, C.REVERSE, C.FORWARD, C.DIRECTION_UP, C.DIRECTION_DOWN,
@@ -29,10 +29,13 @@ fun C.navigationFace(systemAccess: Boolean?, shortcutAvailable: Boolean = false)
             enabled = systemAccess != null && (accessibilityPanel || shortcutAvailable), detail = displayLabel)
     }
     val title = when (this) { C.REVERSE -> K.PrevFocus.text(); C.NAV_ACCESS -> K.AccessInfo.text(); else -> displayLabel }
+    val needsService = this == C.RECENTS || this == C.NOTIFICATIONS || this == C.ALL_APPS || this == C.LONG_PRESS
     val hint = when {
         this == C.NAV_ACCESS -> if (systemAccess == true) K.NavOn else K.NavOff
-        this == C.RECENTS -> if (systemAccess == true) K.RecentApps else K.NeedsAccess
         systemAccess == null -> K.AndroidOnly
+        this == C.ALL_APPS && !allAppsSupported -> K.Unavailable
+        needsService && !systemAccess -> K.NeedsAccess
+        this == C.RECENTS -> K.RecentApps
         else -> when (this) {
             C.BACK -> if (systemAccess) K.AndroidBack else K.PocketBack
             C.HOME -> K.AndroidHome
@@ -44,6 +47,6 @@ fun C.navigationFace(systemAccess: Boolean?, shortcutAvailable: Boolean = false)
     }?.text().orEmpty()
     return KeyTile(title, hint, color, inputToken = id, glyph = requireNotNull(legend()),
         readOnly = systemAccess == null && this == C.NAV_ACCESS,
-        showFooter = this == C.NAV_ACCESS || this == C.RECENTS && systemAccess != true,
-        enabled = this == C.NAV_ACCESS || systemAccess != null && (this != C.RECENTS || systemAccess))
+        showFooter = this == C.NAV_ACCESS || needsService && (systemAccess != true || this == C.ALL_APPS && !allAppsSupported),
+        enabled = this == C.NAV_ACCESS || systemAccess != null && (!needsService || systemAccess) && (this != C.ALL_APPS || allAppsSupported))
 }
