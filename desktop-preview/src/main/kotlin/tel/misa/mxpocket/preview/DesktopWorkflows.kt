@@ -20,10 +20,9 @@ import tel.misa.mxpocket.i18n.WorkflowCopy
 import tel.misa.mxpocket.workflow.*
 
 /**
- * Own one per desktop window and collect [state] for both the workflow tab and keypad binding catalog.
- * The binding for each saved definition is `workflow.run` with `workflowId` set to its stable ID.
- * The action catalog describes fields for editing/validation only; desktop does not dispatch actions,
- * schedule triggers, start runs, respond to confirmation, or grant endpoint access.
+ * The workflow editor and keypad binding catalog share [state] from one store per window. Bindings use
+ * `workflow.run` with the saved definition's stable `workflowId`. The desktop catalog supports
+ * editing and validation only; it cannot run or schedule workflows or approve endpoints.
  */
 class DesktopWorkflowStore(
     directory: File,

@@ -22,7 +22,7 @@ fun PluginCapability.displayName() = when (this) {
     PluginCapability.ACCESSIBILITY -> N.Accessibility
 }.text()
 
-/** Registration order is the page-button order. Add your compiled-in plugin here. */
+/** Plugins compiled into the Android app. Saved layouts determine page-button order. */
 object BuiltInPlugins {
     fun create(focusTitle: String, audioTitle: String, phoneTitle: String, xoTitle: String = TIC_TAC_TOE_TITLE, oneNoteTitle: String = "OneNote", resources: Resources? = null): List<PocketPlugin> =
         listOf(FocusPlugin(focusTitle), DeckPlugin("audio", audioTitle, PluginCapability.AUDIO), PhonePlugin(phoneTitle),
@@ -83,17 +83,14 @@ class PhonePlugin(title: String) : PocketPlugin {
 }
 
 /**
- * OneNote page. Logi Options/Options+ ships no native OneNote profile on PC (custom keystrokes only),
- * so in-app tool keys click OneNote's visible toolbar controls through the opt-in accessibility
- * service; the rest uses the actions Android exposes for OneNote: launch intent, deep link,
- * OneNote on the web and Send-to-OneNote (ACTION_SEND), which creates a quick note.
+ * Tool keys use the opt-in accessibility service to operate OneNote's visible toolbar.
+ * Launch, deep-link and share actions use Android intents.
  */
 class OneNotePlugin(title: String, resources: Resources? = null) : PocketPlugin {
     private val faces = OneNoteFaces(resources)
     override val descriptor = PluginDescriptor("onenote", title,
         setOf(PluginCapability.OPEN_APPS, PluginCapability.NAVIGATION, PluginCapability.ACCESSIBILITY))
 
-    // The ink toolbar's tools as (description, description); empty outside the draw view.
     private var tools: List<Pair<String, String>> = emptyList()
     private var lastTools: List<Pair<String, String>> = emptyList()
     private var active: String? = null

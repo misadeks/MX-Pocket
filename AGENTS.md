@@ -1,5 +1,8 @@
 # Agent instructions
 
+Start with the [architecture overview](README.md#architecture) for module
+ownership and the path from a physical key press to an LCD update.
+
 ## Change workflow
 
 - Read README.md, CONTRIBUTING.md and docs/plugins.md before changing feature
