@@ -54,7 +54,7 @@ internal fun pluginReason(id: String): String? = when (id) {
 }
 
 /** Profile IDs outside the built-in catalog belong to the user, not to an unknown plugin. */
-private val builtIns = defaultDeck().profiles.map { it.id }.toSet()
+private val builtIns = factoryProfiles().map { it.id }.toSet()
 internal fun profileReason(id: String) = if (id in builtIns) pluginReason(id) else null
 
 internal fun bindingReason(call: ActionCall, simulator: Boolean): String? {

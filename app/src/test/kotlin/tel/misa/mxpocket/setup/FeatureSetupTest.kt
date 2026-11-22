@@ -275,7 +275,6 @@ class FeatureSetupTest {
     @Test fun missingProfilePreferencesAndTeamsConsentRemainIndependentOfGrantsAndLiveServices() {
         shadowOf(app.getSystemService(AppOpsManager::class.java)).setMode(AppOpsManager.OPSTR_GET_USAGE_STATS,
             app.applicationInfo.uid, app.packageName, AppOpsManager.MODE_IGNORED)
-        app.session.deck.setAutomatic(false).getOrThrow()
         app.session.setPluginEnabled("teams", false)
         TeamsAccess(app).enabled = false
         shadowOf(notices).setNotificationListenerAccessGranted(ComponentName(app, MediaSessionAccess::class.java), true)
@@ -297,10 +296,9 @@ class FeatureSetupTest {
             tap(SetupAction.TEAMS.label)
             assertTrue(TeamsAccess(app).enabled)
             tap(SetupAction.DETECTION.label)
-            assertFalse(app.session.deck.state.value.automatic)
-            tap(SetupAction.SWITCHING.label)
+            ui.onNodeWithText("Enable profile switching").assertDoesNotExist()
             ui.onNodeWithText(SetupAction.USAGE.label).assertExists()
-            assertTrue(app.session.deck.state.value.automatic)
+            assertTrue(app.session.detectForegroundApps.value)
             wizard.onActivity { assertNull(shadowOf(it).nextStartedActivity) }
         }
     }

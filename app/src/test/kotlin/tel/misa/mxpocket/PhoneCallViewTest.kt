@@ -33,8 +33,13 @@ import org.robolectric.shadows.ShadowSubscriptionManager.SubscriptionInfoBuilder
 import tel.misa.mxpocket.calls.*
 import tel.misa.mxpocket.deck.PHONE_CALL_VIEW
 import tel.misa.mxpocket.deck.PROFILE_HOME
+import tel.misa.mxpocket.deck.importLegacyPhone
 import tel.misa.mxpocket.driver.KeyEvent
+import tel.misa.mxpocket.i18n.CallCopy
 import tel.misa.mxpocket.plugins.*
+import tel.misa.mxpocket.workflow.StepKind
+import tel.misa.mxpocket.workflow.WorkflowDefinition
+import tel.misa.mxpocket.workflow.WorkflowStep
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], application = KeypadSessionTest.FakeApp::class)
@@ -80,10 +85,8 @@ class PhoneCallViewTest {
     @Test fun pinsDismissalAndUncertaintyNeverRearmAnEpisode() {
         val deck = session.deck
         fun current() = deck.operatingState.value.activeProfileId
-        deck.setAutomatic(false).getOrThrow()
-        deck.showPhoneCall(true); deck.setAutomatic(true); deck.showPhoneCall(true)
-        assertEquals(PROFILE_HOME, current())
-        deck.showPhoneCall(false); deck.showPhoneCall(true)
+        deck.setProfileAutomatic("focus", false).getOrThrow()
+        deck.showPhoneCall(true)
         assertEquals(PHONE_CALL_VIEW, current())
         assertFalse(deck.exportJson().contains(PHONE_CALL_VIEW))
         assertFalse(deck.operatingState.value.visibleProfiles.any { it.id == PHONE_CALL_VIEW })
@@ -91,16 +94,40 @@ class PhoneCallViewTest {
         assertEquals(PROFILE_HOME, current())
         deck.showPhoneCall(null); deck.showPhoneCall(true)
         assertEquals(PROFILE_HOME, current())
+        assertEquals(CallCopy.WaitForIdle, deck.phoneCallBlocker)
         deck.setPinned("focus").getOrThrow()
         deck.showPhoneCall(false); deck.showPhoneCall(true)
+        assertEquals(CallCopy.Unpin, deck.phoneCallBlocker)
         deck.setPinned(null); deck.showPhoneCall(true)
         assertEquals("focus", current())
         deck.showPhoneCall(false); deck.showPhoneCall(true)
         deck.selectProfile("studio").getOrThrow()
+        val page = deck.createPage("studio", "Tools").getOrThrow()
+        deck.openPage(page).getOrThrow()
         deck.showPhoneCall(true); deck.showPhoneCall(false)
         assertEquals("studio", current())
-        deck.showPhoneCall(true); deck.showPhoneCall(false)
+        val before = deck.exportJson()
+        deck.showPhoneCall(true); assertEquals(PHONE_CALL_VIEW, current())
+        deck.showPhoneCall(null); deck.showPhoneCall(true)
         assertEquals("studio", current())
+        assertEquals(page, deck.operatingState.value.activePage.id)
+        assertEquals(before, deck.exportJson())
+        deck.enterGame().getOrThrow(); deck.showPhoneCall(false); deck.showPhoneCall(true)
+        assertEquals(CallCopy.LeaveGame, deck.phoneCallBlocker)
+        deck.changePage(1).getOrThrow(); deck.showPhoneCall(true)
+        assertEquals("studio", current())
+    }
+
+    @Test fun existingWorkflowCanStillTargetTheRetiredLayout() {
+        val deck = session.deck
+        deck.importLegacyPhone()
+        val step = WorkflowStep(StepKind.ACTION, "profile.switch", params = mapOf("profileId" to "phone"))
+        val workflow = WorkflowDefinition(name = "My shortcuts", steps = listOf(step))
+        assertNull(session.workflows.validate(workflow))
+        assertNull(kotlinx.coroutines.runBlocking { session.workflows.save(workflow) })
+        assertTrue(session.workflows.run(workflow.id, tel.misa.mxpocket.workflow.WorkflowOrigin.MANUAL))
+        main.idle()
+        assertEquals("phone", deck.operatingState.value.activeProfileId)
     }
 
     @Test fun physicalKeysRequireCurrentFaceAndLiveDialerCapabilityAndNeverExposeCallerInHome() {
@@ -126,7 +153,7 @@ class PhoneCallViewTest {
         }
         fun state(value: Int) { shadowOf(telecom).setCallState(value); session.refreshPhoneCall() }
         fun count(id: Int) = shadowOf(app).broadcastIntents.count { it.action == "test.call.$id" }
-        session.deck.setAutomatic(true).getOrThrow()
+        session.setPluginEnabled("phone", false)
         app.connectKeypad()
         try {
             // An already-held physical key on the outgoing layout cannot acquire a call action.
@@ -171,5 +198,39 @@ class PhoneCallViewTest {
             assertFalse(session.logText().contains("Fixture caller"))
             assertFalse(session.deck.exportJson().contains("Fixture caller"))
         } finally { session.disconnect(); controller.destroy() }
+    }
+
+    @Test fun ringingNeedsOnlyPhoneStateAndNeverDisplaysOnALockedHandset() {
+        shadowOf(app).grantPermissions(Manifest.permission.READ_PHONE_STATE)
+        val sub = SubscriptionInfoBuilder.newBuilder().setId(10).setSimSlotIndex(0).buildSubscriptionInfo()
+        shadowOf(app.getSystemService(SubscriptionManager::class.java)).setActiveSubscriptionInfos(sub)
+        shadowOf(telecom).setTelephonyManagerForSubscriptionId(10, telecom)
+        val lock = shadowOf(app.getSystemService(android.app.KeyguardManager::class.java))
+        val power = shadowOf(app.getSystemService(android.os.PowerManager::class.java))
+        session.deck.importLegacyPhone()
+        session.phoneAccess.enabled = true
+        session.refreshPhoneCall()
+        assertEquals(CallCopy.ConnectKeypad, session.phoneCallBlocker)
+        app.connectKeypad()
+        try {
+            lock.setKeyguardLocked(true)
+            shadowOf(telecom).setCallState(TelephonyManager.CALL_STATE_RINGING)
+            session.refreshPhoneCall()
+            assertEquals(CallCopy.UnlockPhone, session.phoneCallBlocker)
+            assertEquals(PROFILE_HOME, session.deck.operatingState.value.activeProfileId)
+            lock.setKeyguardLocked(false)
+            power.setIsInteractive(false)
+            session.refreshPhoneCall()
+            assertEquals(PROFILE_HOME, session.deck.operatingState.value.activeProfileId)
+            assertEquals(CallCopy.UnlockPhone, session.phoneCallBlocker)
+            power.setIsInteractive(true)
+            session.refreshPhoneCall()
+            assertEquals(PHONE_CALL_VIEW, session.deck.operatingState.value.activeProfileId)
+            assertTrue(session.frame().keys.all { it.readOnly })
+            lock.setKeyguardLocked(true); session.refreshPhoneCall()
+            lock.setKeyguardLocked(false); session.refreshPhoneCall()
+            assertEquals(PROFILE_HOME, session.deck.operatingState.value.activeProfileId)
+            assertEquals(CallCopy.WaitForIdle, session.phoneCallBlocker)
+        } finally { session.disconnect() }
     }
 }

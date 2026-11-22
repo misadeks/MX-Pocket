@@ -63,7 +63,7 @@ fun main() = application {
             Files.createDirectories(it.toPath())
         }
     }
-    val registry = remember { defaultDeck().profiles }
+    val registry = remember { factoryProfiles() }
     val switches = remember { Preferences.userNodeForPackage(PreviewDeck::class.java) }
     val repo = remember { DeckRepository(File(directory, "deck.json"),
         registry.filter { switches.getBoolean("disabled.${it.id}", false) }.map { it.id }.toSet()) }
@@ -134,7 +134,7 @@ fun main() = application {
         PreviewTheme(themeMode) {
         val acceptsPageKeys = LocalWindowInfo.current.isWindowFocused && !setup && simulating && tab == WorkspaceTab.HOME
         DisposableEffect(acceptsPageKeys) { onDispose { host.pageButtons.reset() } }
-        val profiles = deck.visibleProfiles.map { ProfileChoice(it.id, it.displayName(), profileReason(it.id)) }
+        val profiles = deck.navigationProfiles.map { ProfileChoice(it.id, it.displayName(), profileReason(it.id)) }
         val board = remember(deck, time, revision, simulating, usb.ready, tel.misa.mxpocket.i18n.AppLocale.current) { host.board(time, deck) }
         val pixels = board.faces.mapIndexed { i, face -> rememberKeyPixels(i, face) }
         LaunchedEffect(usb.ready, board.grid, pixels, repaint) {

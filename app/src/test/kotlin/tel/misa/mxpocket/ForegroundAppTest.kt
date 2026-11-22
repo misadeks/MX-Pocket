@@ -86,11 +86,10 @@ class ForegroundAppTest {
         session.attach(screen)
         try {
             grant(true); openTeams(); expectFocus()
-            deck.setAutomatic(true).getOrThrow(); openTeams(); expectFocus()
             grant(false); session.setDetectForegroundApps(true); openTeams(); expectFocus()
             grant(true); tick(); openTeams(); expectWork()
-            session.selectProfile("phone"); tick()
-            assertEquals("phone", deck.state.value.activeProfileId)
+            session.selectProfile("studio"); tick()
+            assertEquals("studio", deck.state.value.activeProfileId)
             leaveTeams(); openTeams(); expectWork()
             deck.openPage(IN_CALL).getOrThrow(); tick()
             assertEquals(IN_CALL, deck.state.value.activePage.id)
@@ -99,10 +98,11 @@ class ForegroundAppTest {
             session.setPluginEnabled(TEAMS, true); tick()
             deck.setProfileAutomatic(TEAMS, false).getOrThrow(); openTeams(); expectFocus()
             deck.setProfileAutomatic(TEAMS, true).getOrThrow(); tick()
-            deck.setPinned("phone").getOrThrow(); openTeams()
-            assertEquals("phone", deck.state.value.activeProfileId)
+            deck.setPinned("studio").getOrThrow(); openTeams()
+            assertEquals("studio", deck.state.value.activeProfileId)
             deck.setPinned(null).getOrThrow(); tick()
-            grant(false); openTeams(); expectFocus()
+            grant(false); openTeams()
+            assertEquals("studio", deck.state.value.activeProfileId) // No match displaces the manual choice.
             assertNull(session.signals.value[FOREGROUND_APP])
             assertFalse(deck.exportJson().contains(TEAMS_PACKAGE))
         } finally { session.detach(screen) }
@@ -129,7 +129,6 @@ class ForegroundAppTest {
         val audioRules = deck.state.value.profiles.first { it.id == "audio" }.rules
         deck.setRules("audio", audioRules + DeckRule(FOREGROUND_APP, player, APP_RULE_WEIGHT)).getOrThrow()
         deck.selectProfile("focus").getOrThrow()
-        deck.setAutomatic(true).getOrThrow()
         val profiles = deck.state.value.profiles
         val audio = shadowOf(app.getSystemService(AudioManager::class.java))
         val lock = shadowOf(app.getSystemService(KeyguardManager::class.java))
@@ -222,7 +221,6 @@ class ForegroundAppTest {
         val lock = shadowOf(app.getSystemService(KeyguardManager::class.java))
         fun advance(ms: Long) = main.idleFor(Duration.ofMillis(ms))
         deck.setRules("studio", listOf(DeckRule(FOREGROUND_APP, camera, APP_RULE_WEIGHT))).getOrThrow()
-        deck.setAutomatic(true).getOrThrow()
         session.setDetectForegroundApps(true)
         grant(true)
         lock.setKeyguardLocked(true)
@@ -295,7 +293,6 @@ class ForegroundAppTest {
         }
         val lock = shadowOf(app.getSystemService(KeyguardManager::class.java))
         session.deck.setRules("studio", listOf(DeckRule(FOREGROUND_APP, camera, APP_RULE_WEIGHT))).getOrThrow()
-        session.deck.setAutomatic(true).getOrThrow()
         session.setDetectForegroundApps(true)
         grant(true)
         session.attach(screen)

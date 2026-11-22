@@ -68,7 +68,8 @@ fun virtualGrid(generation: Long, deck: DeckState, frame: PluginFrame, holds: Pl
 data class DesktopSimulator(val limitations: String, val grid: VirtualGrid? = null, val supportsUsb: Boolean = false)
 
 data class PhoneCallSettings(val supported: Boolean, val enabled: Boolean, val phoneGranted: Boolean,
-    val supportsDetails: Boolean, val details: Boolean, val listenerGranted: Boolean)
+    val supportsDetails: Boolean, val details: Boolean, val listenerGranted: Boolean,
+    val blocker: tel.misa.mxpocket.i18n.Copy? = null)
 
 data class PocketScreenState(
     val status: String,
@@ -475,6 +476,7 @@ private fun SettingsScreen(state: PocketScreenState, event: (PocketScreenEvent) 
             if (calls.enabled) {
                 Note(CallCopy.PhonePermissionHint.text())
                 if (!calls.phoneGranted) PocketButton(CallCopy.AllowPhoneState.text(), { event(PocketScreenEvent.AllowPhoneState) })
+                else calls.blocker?.let { Note(it.text()) }
                 PocketDivider()
                 PocketSwitchRow(CallCopy.ShowDetails.text(),
                     if (calls.supportsDetails) CallCopy.DetailsHint.text()

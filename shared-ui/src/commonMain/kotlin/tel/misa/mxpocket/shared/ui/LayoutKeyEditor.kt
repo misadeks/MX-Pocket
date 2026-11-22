@@ -19,9 +19,9 @@ import tel.misa.mxpocket.i18n.*
 
 data class BindingOption(val label: String, val call: ActionCall, val unavailableReason: String? = null)
 
-private val factoryProfiles = defaultDeck().visibleProfiles
+private val slotTemplates = factoryProfiles().filterNot { it.id == GAME_PROFILE }
 val factoryKeyBindings: List<BindingOption> by derivedStateOf {
-    factoryProfiles.flatMap { profile ->
+    slotTemplates.flatMap { profile ->
         profile.pages.single { it.id == profile.rootPageId }.keys.mapIndexedNotNull { physical, key ->
             val call = key.action ?: return@mapIndexedNotNull null
             if (call.id != "plugin.key") return@mapIndexedNotNull null

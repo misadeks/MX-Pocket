@@ -16,6 +16,7 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import tel.misa.mxpocket.FocusTimer
 import tel.misa.mxpocket.deck.*
+import tel.misa.mxpocket.i18n.CallCopy
 import tel.misa.mxpocket.plugins.present
 
 class ThemeAndProfilesTest {
@@ -58,6 +59,19 @@ class ThemeAndProfilesTest {
             assertEquals(listOf(ThemeMode.LIGHT, ThemeMode.DARK, ThemeMode.SYSTEM),
                 events.filterIsInstance<PocketScreenEvent.SetTheme>().map { it.mode })
         }
+    }
+
+    @Test fun stateOnlyCallViewExplainsBlockerWithoutRequestingNotificationAccess() {
+        val calls = PhoneCallSettings(supported = true, enabled = true, phoneGranted = true, supportsDetails = true,
+            details = false, listenerGranted = false, blocker = CallCopy.Unpin)
+        ui.setContent {
+            PocketTheme {
+                PocketWorkspace(WorkspaceTab.SETTINGS, {}, state().copy(phoneCalls = calls), emptyList(), {},
+                    profiles = {}, workflows = {})
+            }
+        }
+        ui.onNodeWithText(CallCopy.Unpin.text()).performScrollTo().assertIsDisplayed()
+        ui.onNodeWithText(CallCopy.AllowAccess.text()).assertDoesNotExist()
     }
 
     @Test fun carouselSelectsATappedProfileAndNeverSwitchesOnItsOwn() {

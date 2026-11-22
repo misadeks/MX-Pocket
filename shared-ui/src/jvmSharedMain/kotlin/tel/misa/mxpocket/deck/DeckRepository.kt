@@ -13,6 +13,7 @@ import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.FOREGROUND_APP
 import tel.misa.mxpocket.APP_RULE_WEIGHT
 import tel.misa.mxpocket.decks.*
+import tel.misa.mxpocket.i18n.CallCopy
 import tel.misa.mxpocket.i18n.LayoutCopy
 import tel.misa.mxpocket.i18n.LauncherCopy
 
@@ -44,6 +45,7 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
     val cleanupWarning: String? get() = if (cleanupPending) LayoutCopy.CleanupWarning.text() else null
 
     private var candidate: String? = null
+    private var ruleSelected = false
     private var candidateSince = 0L
     private var lastSample = -1L
     // The call page is a temporary projection. Never serialize a meeting or undo an editor change.
@@ -103,16 +105,18 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
         copy(disabledPluginIds = java.util.Collections.unmodifiableSet(HashSet(ids)))
 
     private fun DeckState.withAvailableLayout(): DeckState {
-        if (visibleProfiles.isNotEmpty()) return this
+        if (navigationProfiles.isNotEmpty()) return this
         // Materialize a blank custom layout only if the user edits/navigates. Just toggling plugins
         // must not add a profile to backups (which may already be at their byte limit).
         val blank = DeckProfile("local.blank", "My layout", "root", listOf(DeckPage("root", "Home")))
         return copy(profiles = profiles + blank, histories = histories + (blank.id to listOf("root"))).snapshot()
     }
 
-    private fun DeckState.availableSelection() = if (activeProfileId !in disabledPluginIds && activeProfileId != GAME_PROFILE) this else
-        withAvailableLayout().let { it.copy(activeProfileId = it.availableDefaultId,
-            pinnedProfileId = null, selectionReason = "Selected an available profile") }
+    private fun DeckState.availableSelection() = withAvailableLayout().let { available ->
+        if (activeProfileId !in disabledPluginIds && activeProfileId != GAME_PROFILE) available else
+            available.copy(activeProfileId = available.availableDefaultId,
+                pinnedProfileId = null, selectionReason = "Selected an available profile")
+    }
 
     fun importJson(text: String) = edit(recover = true, force = true, navigation = true) {
         DeckJson.decode(text).withPrivateReason().withBuiltIns()
@@ -133,8 +137,9 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
     }
 
     @Synchronized fun moreProfiles(): Result<Unit> = runCatching {
-        check(home && !game && state.value.visibleProfiles.size > 9) { LauncherCopy.NoMore.text() }
-        val count = (state.value.visibleProfiles.size + 7) / 8
+        val size = state.value.navigationProfiles.size
+        check(home && !game && size > 9) { LauncherCopy.NoMore.text() }
+        val count = (size + 7) / 8
         homeBatch = (homeBatch.coerceAtMost(count - 1) + 1) % count
         publish()
     }
@@ -158,10 +163,10 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
             selectionReason = "Manually selected").withHistory(listOf(profile.rootPageId))
     }
 
-    fun selectProfile(id: String, source: SelectionSource = SelectionSource.USER) = edit(navigation = true) { old ->
+    fun selectProfile(id: String, source: SelectionSource = SelectionSource.USER) = edit(navigation = true, manual = source == SelectionSource.USER) { old ->
         val profile = old.availableProfile(id)
         if (source == SelectionSource.AUTOMATIC) {
-            require(old.automatic && old.activeProfile.automatic && profile.automatic && old.pinnedProfileId == null) {
+            require(old.activeProfile.automatic && profile.automatic && old.pinnedProfileId == null) {
                 LayoutCopy.SelectionDisabled.text()
             }
         }
@@ -179,7 +184,6 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
         else old.copy(activeProfileId = old.availableProfile(id).id, pinnedProfileId = id, selectionReason = "Manually pinned")
     }
     fun setDefault(id: String) = edit { it.copy(defaultProfileId = it.availableProfile(id).id) }
-    fun setAutomatic(enabled: Boolean) = edit { it.copy(automatic = enabled) }
     fun setProfileAutomatic(id: String, enabled: Boolean) = updateProfile(id) { it.copy(automatic = enabled) }
     fun setRules(id: String, rules: List<DeckRule>) = updateProfile(id) {
         require(rules.size <= DeckLimits.RULES) { LayoutCopy.TooManyRules.text() }
@@ -210,8 +214,9 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
             publish()
             return Result.success(Unit)
         }
-        val ids = listOf(PROFILE_HOME) + state.value.visibleProfiles.map { it.id }
+        val ids = listOf(PROFILE_HOME) + state.value.navigationProfiles.map { it.id }
         val current = ids.indexOf(operating.value.activeProfileId)
+        if (current < 0) return Result.success(showHome())
         val id = ids[Math.floorMod(current.toLong() + delta, ids.size.toLong()).toInt()]
         return if (id == PROFILE_HOME) Result.success(showHome()) else openProfileRoot(id)
     }
@@ -294,7 +299,7 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
     /**
      * Sample a complete snapshot on a monotonic clock, including ticks after the debounce period.
      * Only observed signal/value pairs score. Retain the current profile on a tie or a one-point
-     * lead over a positive incumbent. With no matches use the default, if opted in.
+     * lead over a positive incumbent. When a rule-selected layout loses its match, use the eligible default.
      */
     @Synchronized
     fun observe(signals: Map<String, String>, nowMillis: Long, allowTeamsWork: Boolean = false): Result<Unit> {
@@ -304,7 +309,7 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
         teamsInForeground = teamsApp
         if ((confirmedCall || game) && teamsApp) teamsWorkOverridden = true
         if (showingPhone || game || confirmedCall || teamsApp && teamsWorkOverridden) return Result.success(Unit)
-        if (!deck.automatic || !deck.activeProfile.automatic || deck.pinnedProfileId != null || nowMillis < 0L) {
+        if (!deck.activeProfile.automatic || deck.pinnedProfileId != null || nowMillis < 0L) {
             clearObservation()
             return Result.success(Unit)
         }
@@ -324,7 +329,9 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
         val incumbent = scores[deck.activeProfileId] ?: 0
         val target = when {
             best == null -> null
-            best.value == 0 -> deck.availableDefaultId.takeIf { !home && it in scores }
+            // Only unwind a rule-selected layout. No matching context must not kick the user
+            // out of a manually opened page (or out of the launcher).
+            best.value == 0 -> deck.availableDefaultId.takeIf { ruleSelected && !home && it in scores }
             incumbent > 0 && best.value - incumbent < SCORE_MARGIN -> deck.activeProfileId
             else -> best.key
         }
@@ -374,8 +381,8 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
         val wasShowing = showingPhone
         when (active) {
             true -> if (!phoneEpisode) {
+                showingPhone = phoneCallBlocker == null
                 phoneEpisode = true
-                showingPhone = phoneEligible()
             }
             false -> { showingPhone = false; phoneEpisode = false }
             null -> showingPhone = false
@@ -386,8 +393,12 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
         }
     }
 
-    private fun phoneEligible() = !game && saved.automatic && saved.activeProfile.automatic &&
-        saved.pinnedProfileId == null && "phone" !in saved.disabledPluginIds
+    val phoneCallBlocker get() = when {
+        saved.pinnedProfileId != null -> CallCopy.Unpin
+        game -> CallCopy.LeaveGame
+        phoneEpisode && !showingPhone -> CallCopy.WaitForIdle
+        else -> null
+    }
 
     /** null means uncertain (lock, access loss). Release our page but do not steal it again after a manual override. */
     @Synchronized fun showTeamsCall(joined: Boolean?) {
@@ -433,7 +444,6 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
         if (mutable.value != next) clearObservation()
         mutable.value = next
         if (game && GAME_PROFILE in saved.disabledPluginIds) leaveGame()
-        if (!phoneEligible()) showingPhone = false
         val surface = when {
             showingPhone -> next.operatingProjection(phoneView, "Phone call on this device").snapshot()
             game -> next.operatingProjection(gameProfile, "Previous or Next exits the game").snapshot()
@@ -465,6 +475,9 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
             saved = snapshot
         }
         if (navigation) {
+            // Opening a subpage does not change who selected its profile.
+            if (!manual || recover || previous.activeProfileId != next.activeProfileId || previous.selectionReason != next.selectionReason)
+                ruleSelected = !manual
             showingPhone = false
             showingCall = false
             resumeCall = false
