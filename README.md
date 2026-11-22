@@ -1,15 +1,23 @@
 # MX Pocket
 
-MX Pocket turns the **wired Logitech MX Creative Keypad** into a control surface
-for Android. Start a focus timer, change tracks, open a favorite app, or assign
-a workflow to one of nine LCD keys. Two physical page buttons switch what the
-keys do. You can also use the app with on-screen keys, or reuse its Kotlin USB
-driver without the app.
+MX Pocket lets you control Android by feel. Link a keypad layout to an app
+and put actions where your fingers expect them. In supported apps, use physical
+keys to move between items, scroll and select without tapping a small button or
+making a precise swipe. Assign a workflow to one of the nine LCD keys, open a
+favorite app, start a focus timer or change tracks. Two page buttons switch
+layouts. To try MX Pocket without hardware, use the on-screen keys.
 
-The hardware target is the USB **Keypad** (`046D:C354`), not the wireless
-**Dialpad** sold with it. Android talks to the keypad directly through USB
-Host; it doesn't need root or Logi Options+. The Windows simulator does not
-drive hardware.
+**Planned: Microsoft Teams calls.** Joining a Teams call on the connected phone
+would switch the keypad to a meeting layout. Mute would stay in the same place,
+with keys for captions, raising your hand and opening meeting chat where Teams
+supports those actions. After the call, your previous layout would return
+unless you had chosen another.
+
+MX Pocket supports the **wired Logitech MX Creative Keypad** (`046D:C354`),
+not the wireless **Dialpad** sold with it. Its Kotlin driver uses Android USB
+Host to read key presses and update the keypad display directly from the phone,
+without root, a companion PC or Logi Options+. You can use the driver without
+the app. The Windows simulator does not drive hardware.
 
 ## Quick start
 
