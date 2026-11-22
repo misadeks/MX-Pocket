@@ -255,6 +255,7 @@ class ChordSessionTest {
         bindHold(3, ActionCall("workflow.run", mapOf("workflowId" to flow.id)))
         session.phoneKey(3, hold = true)
         assertNull(session.workflows.status.value)
+        main.idle() // The rejected virtual run paints failure feedback. Wait for its new LCD receipt.
         event(4, true); main.idleFor(Duration.ofMillis(holdDelay)); event(4, false)
         assertEquals(WorkflowOrigin.PHYSICAL, session.workflows.status.value?.origin)
         assertTrue(events.isEmpty())
