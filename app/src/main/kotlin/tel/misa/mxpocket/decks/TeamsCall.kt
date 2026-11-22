@@ -11,10 +11,10 @@ import tel.misa.mxpocket.PocketNotificationListener
 internal class TeamsCall(private val app: Context) {
     val access = TeamsAccess(app)
     private var owner: PocketNotificationListener? = null
-    private var key: String? = null
+    private var notice: TeamsObservation.Notice? = null
     private var boundary = -1L
-    private var posted = -1L
-    private var confirmed = false
+    private var revision = -1L
+    private var confirmedOngoing = false
     private var waitingForChange: Boolean? = null
     private var window: Int? = null
     private var toolbarService: TeamsToolbarService? = null
@@ -22,7 +22,7 @@ internal class TeamsCall(private val app: Context) {
         private set
 
     fun forgetToolbar() {
-        confirmed = false
+        confirmedOngoing = false
         waitingForChange = null
         window = null
         toolbarService = null
@@ -43,46 +43,47 @@ internal class TeamsCall(private val app: Context) {
         val listener = PocketNotificationListener.current.takeIf { blocked == null }
         if (owner !== listener) owner?.forgetTeams()
         val observation = listener?.teamsSnapshot() ?: TeamsObservation.Unavailable
-        val ongoing = observation as? TeamsObservation.Ongoing
+        val currentNotice = observation as? TeamsObservation.Notice
         // The posting user is available on notifications, but not on accessibility nodes.
-        val toolbarGranted = ongoing != null && access.toolbarGranted
+        val toolbarGranted = currentNotice != null && access.toolbarGranted
         val toolbarBlocked = when {
-            ongoing == null -> null
+            currentNotice == null -> null
             !access.toolbarProfileEligible -> CallStatus.PROFILE_NOTICE
             !toolbarGranted -> CallStatus.TOOLBAR_OFF
             TeamsToolbarService.current == null -> CallStatus.TOOLBAR_DISCONNECTED
             else -> null
         }
-        val service = TeamsToolbarService.current.takeIf { ongoing != null && toolbarBlocked == null }
+        val service = TeamsToolbarService.current.takeIf { currentNotice != null && toolbarBlocked == null }
         val toolbar = service?.inspect()?.first
-        val newCall = owner !== listener || key != ongoing?.key || boundary != (listener?.teamsBoundary ?: -1L)
+        val newCall = owner !== listener || notice?.key != currentNotice?.key ||
+            notice?.typedOngoing != currentNotice?.typedOngoing || boundary != (listener?.teamsBoundary ?: -1L)
         if (newCall || service == null || toolbarService !== service) {
-            confirmed = false
+            confirmedOngoing = false
             waitingForChange = null
         }
-        // A template is publisher-reported, not proof on its own. Require the phone's joined
-        // controls before trusting it. It can then maintain the same call while backgrounded.
-        if (toolbar != null) confirmed = true
+        // Only an explicitly ongoing notice can maintain a previously confirmed call in the
+        // background. An untyped call notice requires the joined controls on every refresh.
+        if (toolbar != null && currentNotice?.typedOngoing == true) confirmedOngoing = true
         val muted = toolbar?.muted
         if (muted != null && muted != waitingForChange) waitingForChange = null
         val status = blocked ?: toolbarBlocked ?: when {
-            confirmed -> CallStatus.JOINED
-            ongoing != null -> CallStatus.NOTIFICATION
+            toolbar != null || confirmedOngoing -> CallStatus.JOINED
+            currentNotice != null -> if (currentNotice.typedOngoing) CallStatus.NOTIFICATION else CallStatus.UNTYPED
             observation == TeamsObservation.None -> CallStatus.NO_SIGNAL
-            observation == TeamsObservation.Untyped -> CallStatus.UNTYPED
             observation == TeamsObservation.Incoming -> CallStatus.INCOMING
             observation == TeamsObservation.Screening -> CallStatus.SCREENING
             else -> CallStatus.UNAVAILABLE
         }
         val next = TeamsState(installed, status, muted.takeIf { waitingForChange == null }, state.generation, visible)
-        val stamp = ongoing?.posted ?: -1L
-        val changed = newCall || stamp != posted || toolbarService !== service || window != toolbar?.window || next != state
+        val currentRevision = listener?.teamsRevision ?: -1L
+        val changed = newCall || notice != currentNotice || revision != currentRevision ||
+            toolbarService !== service || window != toolbar?.window || next != state
         state = if (changed) next.copy(generation = state.generation + 1) else next
         owner = listener
         toolbarService = service
         boundary = listener?.teamsBoundary ?: -1L
-        key = ongoing?.key
-        posted = stamp
+        notice = currentNotice
+        revision = currentRevision
         window = toolbar?.window
         return state
     }
@@ -98,12 +99,14 @@ internal class TeamsCall(private val app: Context) {
             !access.enabled || !access.granted || !access.toolbarGranted || !eligible())
             return unavailable(K.ChangedCallControls.text())
         val sent = service.inspect { toolbar ->
+            if (!authorized()) return@inspect false
             val current = PocketNotificationListener.current
-            val call = current?.teamsSnapshot() as? TeamsObservation.Ongoing
-            current != null && current === owner && current.teamsBoundary == boundary && call != null &&
-                call.key == key && call.posted == posted && service === TeamsToolbarService.current &&
+            val call = current?.teamsSnapshot() as? TeamsObservation.Notice
+            current != null && current === owner && current.teamsBoundary == boundary &&
+                current.teamsRevision == revision && call != null && call == notice && expected == state &&
+                service === TeamsToolbarService.current &&
                 toolbar.muted == expected.muted && toolbar.window == window && waitingForChange == null &&
-                access.enabled && access.granted && access.toolbarGranted && authorized() && eligible()
+                access.enabled && access.granted && access.toolbarGranted && eligible()
         }.second
         if (!sent) return unavailable(K.UseMeetingMic.text())
         waitingForChange = expected.muted

@@ -33,6 +33,8 @@ class PocketNotificationListener : NotificationListenerService() {
     private val access by lazy { NotificationAccess(this) }
     internal var teamsBoundary = 0L
         private set
+    internal var teamsRevision = 0L
+        private set
     private var observedTeamsKey: String? = null
     private fun dialer() = getSystemService(TelecomManager::class.java)?.defaultDialerPackage
 
@@ -69,7 +71,11 @@ class PocketNotificationListener : NotificationListenerService() {
         if (teams == null && phone == null) return
         if (sbn.user != Process.myUserHandle() || sbn.opPkg != sbn.packageName || !access.granted) return
         if (teams != null && sbn.packageName == TEAMS_PACKAGE) {
-            if (removed && sbn.key == observedTeamsKey) teamsBoundary++
+            if (sbn.key == observedTeamsKey) {
+                // Even a same-key, same-millisecond replacement invalidates a painted mic key.
+                teamsRevision++
+                if (removed) teamsBoundary++
+            }
             teams()
         }
         if (phone != null && sbn.isFromDialer(dialer(), packageManager)) {
@@ -87,7 +93,7 @@ class PocketNotificationListener : NotificationListenerService() {
             activeNotifications?.let(::teamsObservation) ?: TeamsObservation.Unavailable
         } catch (_: SecurityException) { TeamsObservation.Unavailable }
         catch (_: BadParcelableException) { TeamsObservation.Unavailable }
-        observedTeamsKey = (observation as? TeamsObservation.Ongoing)?.key
+        observedTeamsKey = (observation as? TeamsObservation.Notice)?.key
         return observation
     }
 

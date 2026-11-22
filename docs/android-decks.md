@@ -215,10 +215,10 @@ Android grant stops all three uses.
 | Readout | What it means |
 | --- | --- |
 | **No signal / Check filters** | No eligible Teams notice is visible. This is not a “No call” result. See the filter check below. |
-| **Call notice / Type unknown** | Teams posted a call-category notification without a supported call type. Use the controls in Teams. Incoming and screening notices also never switch pages. |
+| **Call notice / Type unknown** | Teams posted a call notice without a supported type. If you have joined, bring Teams to the foreground and show the **Mic** and **Hang up** buttons. The keypad can confirm the meeting only while those controls remain visible. |
 | **Call notice / Show controls** | Teams reported an ongoing call. Open the meeting on this phone and show its controls; the notice alone does not prove you joined. |
-| **Call notice / This profile** | Teams reported an ongoing call in MX Pocket's own profile, but Android did not confirm that only the personal profile is active. MX Pocket does not inspect the Teams window, switch to the call page or operate the mic. |
-| **In call / This phone** | A typed ongoing Teams notice and the joined toolbar were both observed on this phone. A hidden or unsupported mic still cannot be operated. |
+| **Call notice / This profile** | Teams posted a call notice in MX Pocket's own profile, but Android did not confirm that only the personal profile is active. MX Pocket does not inspect the Teams window, switch to the call page or operate the mic. |
+| **In call / This phone** | A local Teams call notice and the joined toolbar were both observed on this phone. A hidden or unsupported mic still cannot be operated. |
 
 If access is already on but Teams shows **No signal**, open **Notification
 access** in Teams setup → **MX Pocket**. Where Android offers filter
@@ -235,15 +235,17 @@ other listed profile is paused. Resuming work drops the meeting and mic
 confirmation. After pausing work again, show the joined toolbar to confirm
 the meeting again. MX Pocket never changes a profile's state.
 
-Entry requires **both** one
-[typed ongoing CallStyle](https://developer.android.com/develop/ui/compose/notifications/call-style)
-from Teams in the same Android user and the visible joined meeting controls.
+Entry requires **both** exactly one eligible call notification from Teams in the
+same Android user and the visible joined meeting controls. Explicit incoming
+and screening notices never qualify, even with the toolbar visible.
 The foreground check looks for the English **Mic** and **Hang up** buttons
 together in the same control group, as named in
 [Microsoft's Android TalkBack guide](https://support.microsoft.com/en-us/accessibility/teams/use-a-screen-reader-to-join-a-meeting-in-microsoft-teams).
 The Mic need not be actionable to recognize this pair. Hang up is never pressed.
-Once confirmed, the same notification can maintain
-the page with Teams in the background; hidden controls cannot be pressed.
+Only a [typed ongoing CallStyle](https://developer.android.com/develop/ui/compose/notifications/call-style)
+can maintain a confirmed page with Teams in the background. With an untyped
+call-category notice, hiding the meeting controls restores the previous page.
+Hidden controls cannot be pressed.
 No presence, media activity, chat content or caller identity is used. No
 call data or automatic page selection is written to a backup.
 
