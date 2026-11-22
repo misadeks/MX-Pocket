@@ -38,7 +38,7 @@ fun TeamsSetupScreen(state: TeamsSetupState, status: CallStatus, onAction: (Team
             OutlinedButton({ onAction(TeamsSetupAction.TOGGLE) }, enabled = state.supported || state.enabled) {
                 Text(if (state.enabled) "Turn off Teams call status" else "Enable Teams call status")
             }
-            Text("In Notification access, select MX Pocket Teams calls. Audio access is separate.")
+            Text("Call status is on by default. It cannot read notifications unless you allow MX Pocket Teams calls in Notification access. Audio access is separate.")
             if (state.notifications && status == CallStatus.NO_SIGNAL) Text("After an update, Android may keep an older filter. Open Notification access below. If available, check that Teams, Notifications (alerting), Silent and Conversations are allowed. If these choices are missing or Teams does not publish a call notice, use Teams directly.")
             OutlinedButton({ onAction(TeamsSetupAction.NOTIFICATIONS) }) {
                 Text("Notification access: ${if (state.notifications) "on" else "off"}")

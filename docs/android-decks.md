@@ -99,13 +99,15 @@ Previous focus, Select and Next focus use the existing Navigation controls.
 claiming a call is active. My chat and Meeting link are unassigned. Existing
 layouts are preserved: editing or deleting a Teams page isn't undone on upgrade.
 
-Open **Plugins → Teams → Teams setup** on the phone. **Enable Teams call
-status** is off by default. With an authorized wired keypad, unlocked phone and
+**Teams call status** is on by default when you haven't saved a choice.
+Turn it off in **Plugins → Teams → Teams setup**; your choice is kept across
+restarts and updates. This setting does not grant Android permissions.
+With an authorized wired keypad, unlocked phone and
 Android 14+, notification access for **MX Pocket Teams calls** allows read-only
 status. It is a broad Android permission: the adapter first checks the posting
 app and Android user, then checks Teams notification categories and call types.
 It does not read messages, names or notification action labels. Audio and
-Navigation grants do not opt you in. Turning off Teams leaves those features alone.
+Navigation grants do not give Teams access. Turning off Teams leaves those features alone.
 
 **Read key 8 on Call tools, or the explanation at the top of Teams setup:**
 

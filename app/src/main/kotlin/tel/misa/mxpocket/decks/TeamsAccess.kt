@@ -26,7 +26,7 @@ internal fun Context.teamsLauncher(): Intent? {
 internal class TeamsAccess(private val app: Context) {
     private val prefs = app.getSharedPreferences("teams-call", Context.MODE_PRIVATE)
     var enabled: Boolean
-        get() = prefs.getBoolean("observe", false)
+        get() = prefs.getBoolean("observe", true)
         set(value) { prefs.edit().putBoolean("observe", value).apply() }
     val granted get() = app.getSystemService(NotificationManager::class.java)
         .isNotificationListenerAccessGranted(ComponentName(app, TeamsCallListener::class.java))

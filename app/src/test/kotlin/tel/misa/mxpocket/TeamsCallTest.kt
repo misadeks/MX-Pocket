@@ -149,14 +149,15 @@ class TeamsCallTest {
                     }
                 }
             }
-            bitmap(CallStatus.OFF)
-            TeamsAccess(app).enabled = true
-            signal()
             bitmap(CallStatus.NEEDS_ACCESS) // the Audio grant cannot supply Teams evidence
             notices.setNotificationListenerAccessGranted(teams, true)
             signal()
             val noSignal = bitmap(CallStatus.NO_SIGNAL)
+            TeamsAccess(app).enabled = false
             shadowOf(listener).addActiveNotification(call)
+            signal()
+            bitmap(CallStatus.OFF) // both Android grants are held, but the saved opt-out wins
+            TeamsAccess(app).enabled = true
             signal()
             val partial = bitmap(CallStatus.NOTIFICATION)
             assertFalse("A typed ongoing notification with no recognized joined toolbar must change the readout", partial.sameAs(noSignal))
