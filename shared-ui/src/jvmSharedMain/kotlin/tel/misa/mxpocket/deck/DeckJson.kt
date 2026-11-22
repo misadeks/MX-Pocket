@@ -41,14 +41,27 @@ object DeckJson {
             xoProfileRemoved = xoProfileRemoved,
             teamsProfileRemoved = teamsRemoved,
         )
-        if (state.version == 1 || state.version == 2) {
+        if (state.version in 1..3) {
             val validated = state.copy(version = DeckLimits.VERSION)
             validateDeck(validated)
             val audio = if (state.version == 1) upgradeAudioSlots(validated) else validated
-            return audio.upgradeStockNavigationRoot()
+            return (if (state.version < 3) audio.upgradeStockNavigationRoot() else audio).withoutStockTeamsTimer()
         }
+
         validateDeck(state)
         return state
+    }
+
+    private fun DeckState.withoutStockTeamsTimer(): DeckState {
+        val oldTimer = DeckKey(label = "Focus timer",
+            action = ActionCall(DeckActions.PROFILE, mapOf(DeckActions.PROFILE_ID to "focus")))
+        return copy(profiles = profiles.map { profile ->
+            if (profile.id != tel.misa.mxpocket.decks.TEAMS || profile.rootPageId != "root") profile
+            else profile.copy(pages = profile.pages.map { page ->
+                if (page.id != "root" || page.keys[6] != oldTimer) page
+                else page.copy(keys = page.keys.mapIndexed { index, key -> if (index == 6) DeckKey() else key })
+            })
+        })
     }
 
     // v1 plugin.key identified a position, not a command. Upgrade the stock page; freeze the

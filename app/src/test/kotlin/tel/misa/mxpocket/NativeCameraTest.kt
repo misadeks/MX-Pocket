@@ -57,8 +57,13 @@ internal fun cameraNode(description: String? = null, pkg: String = TEST_CAMERA) 
 @Implements(AccessibilityService::class)
 class CameraWindowFixture : ShadowAccessibilityService() {
     var root: Node? = null
+    var rootReads = 0
+        private set
     @Suppress("DEPRECATION")
-    @Implementation fun getRootInActiveWindow(): Node? = root?.let { Node.obtain(it) }
+    @Implementation fun getRootInActiveWindow(): Node? {
+        rootReads++
+        return root?.let { Node.obtain(it) }
+    }
 }
 
 @Suppress("DEPRECATION")

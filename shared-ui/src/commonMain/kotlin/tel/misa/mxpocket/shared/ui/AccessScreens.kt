@@ -12,6 +12,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import tel.misa.mxpocket.decks.CallStatus
 
 enum class DeckAccess(val title: String, val disclosure: String) {
     Media("Media session access",
@@ -21,26 +22,30 @@ enum class DeckAccess(val title: String, val disclosure: String) {
 }
 
 data class TeamsSetupState(val enabled: Boolean, val notifications: Boolean, val toolbar: Boolean,
-    val supported: Boolean, val message: String = "")
+    val supported: Boolean, val singleProfile: Boolean = true, val message: String = "")
 enum class TeamsSetupAction { TOGGLE, NOTIFICATIONS, TOOLBAR, DONE }
 
 @Composable
-fun TeamsSetupScreen(state: TeamsSetupState, onAction: (TeamsSetupAction) -> Unit) {
+fun TeamsSetupScreen(state: TeamsSetupState, status: CallStatus, onAction: (TeamsSetupAction) -> Unit) {
     SubsidiaryPage("Teams call controls", { onAction(TeamsSetupAction.DONE) }) {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Show In call when you join on this phone. Leaving returns to your previous page unless you chose another. Opening a page never operates a call control.")
-            Text("Android grants broad notification and accessibility access. MX Pocket checks the Teams call notification type and visible Mic and Hang up buttons. Only a center key press on the physical keypad can operate the meeting mic. No chat text, names or call details are saved.")
-            if (!state.supported) Text("Automatic switching needs Android 14 or later and a single Android profile. You can still use Work and open Call tools manually.")
+            Text("Call status", style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
+            Text(status.detail, modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+            Text("With a wired keypad, show call notices from Teams in this Android profile. A confirmed call can switch the keypad to In call. Leaving restores your previous page unless you chose another.")
+            Text("Android grants broad notification access. MX Pocket checks the posting app, profile and call notification type, not messages or caller names. No call details are saved.")
+            if (!state.supported) Text("Call observation needs Android 14 or later. You can still use Work and open Call tools manually.")
+            if (!state.singleProfile) Text("With multiple Android profiles, only notification status is available. MX Pocket does not inspect the Teams window, switch pages or operate the mic.")
             OutlinedButton({ onAction(TeamsSetupAction.TOGGLE) }, enabled = state.supported || state.enabled) {
-                Text(if (state.enabled) "Turn off Teams call switching" else "Enable Teams call switching")
+                Text(if (state.enabled) "Turn off Teams call status" else "Enable Teams call status")
             }
-            Text("In Notification access, select MX Pocket Teams calls. Audio access is separate.")
+            Text("Call status is on by default. It cannot read notifications unless you allow MX Pocket Teams calls in Notification access. Audio access is separate.")
+            if (state.notifications && status == CallStatus.NO_SIGNAL) Text("After an update, Android may keep an older filter. Open Notification access below. If available, check that Teams, Notifications (alerting), Silent and Conversations are allowed. If these choices are missing or Teams does not publish a call notice, use Teams directly.")
             OutlinedButton({ onAction(TeamsSetupAction.NOTIFICATIONS) }) {
                 Text("Notification access: ${if (state.notifications) "on" else "off"}")
             }
-            Text("In Accessibility, select MX Pocket Teams call controls. Both grants are optional. Revoke either here or turn off switching above.")
+            Text("For automatic switching on a single-profile phone, MX Pocket also checks for the visible Mic and Hang up buttons in Teams. Only a fresh physical center-key press can operate the mic. To allow this, select MX Pocket Teams call controls in Accessibility.")
             OutlinedButton({ onAction(TeamsSetupAction.TOOLBAR) }) {
-                Text("Accessibility service: ${if (state.toolbar) "connected" else "off"}")
+                Text("Accessibility access: ${if (state.toolbar) "on" else "off"}")
             }
             SubsidiaryStatus(state.message)
         }
