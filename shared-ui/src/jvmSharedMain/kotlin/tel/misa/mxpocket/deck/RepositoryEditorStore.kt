@@ -45,7 +45,6 @@ private class RepositoryEditorStore(private val repo: DeckRepository) : DeckEdit
                 is DeckEdit.Select -> repo.selectProfile(change.id)
                 is DeckEdit.Pin -> repo.setPinned(change.id)
                 is DeckEdit.Default -> repo.setDefault(change.id)
-                is DeckEdit.Automatic -> repo.setAutomatic(change.enabled)
                 is DeckEdit.ProfileAutomatic -> repo.setProfileAutomatic(change.id, change.enabled)
                 is DeckEdit.Open -> navigate(change.activeProfileId) { repo.openPage(change.pageId) }
                 is DeckEdit.Back -> navigate(change.activeProfileId, repo::back)

@@ -110,7 +110,7 @@ class DeckSessionTest {
     @Test fun upgradedWorkflowBindingsStayDormantWithoutDisablingOrdinaryTapOrHold() {
         val repo = DeckRepository(app)
         val flow = WorkflowDefinition("legacy", "Old shortcut",
-            steps = listOf(WorkflowStep(StepKind.ACTION, target = DeckActions.PROFILE, params = mapOf("profileId" to "phone"))))
+            steps = listOf(WorkflowStep(StepKind.ACTION, target = DeckActions.PROFILE, params = mapOf("profileId" to "studio"))))
         val library = WorkflowLibrary(1, listOf(flow, flow.copy(id = "connect", trigger = WorkflowTrigger(TriggerKind.CONNECTED))))
         val store = WorkflowStore(app)
         store.save(library)

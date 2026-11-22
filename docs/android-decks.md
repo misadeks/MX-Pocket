@@ -113,10 +113,12 @@ and revocable in Android settings.
 In **Settings → Phone calls**, turn on **Show calls on the keypad** and grant
 the optional Android Phone permission (`READ_PHONE_STATE`). On Android 12+
 this reads ringing, off-hook or idle for active mobile subscriptions. It does
-not read the call log, contacts, microphone or phone number. With the Phone
-plugin enabled, an authorized USB keypad, the phone unlocked, automatic
-switching on and no manual pin, a call temporarily replaces the current
-layout. “Dialing or active” does **not** mean the other person answered.
+not read the call log, contacts, microphone or phone number. A call temporarily
+replaces the layout on an authorized USB keypad while the phone is unlocked
+and its screen is on. You do not need a Phone layout, the Phone shortcuts plugin,
+a profile rule or notification access. A pinned layout or active
+game stays in place. Settings explains when the view is blocked.
+“Dialing or active” does **not** mean the other person answered.
 
 Either page key leaves immediately, without accepting or declining. You can
 also choose a layout in the app. Updates for that call won't pull you back;
@@ -155,7 +157,7 @@ The bottom-left key is unassigned. **Call tools** opens the call page without
 claiming a call is active. My chat and Meeting link are unassigned. Existing
 layouts are preserved: editing or deleting a Teams page isn't undone on upgrade.
 
-To show **Work** when Teams opens, enable **Teams call status**, **Automatic profile switching** and
+To show **Work** when Teams opens, enable **Teams call status** and
 **Detect foreground apps**, and grant Android **Usage Access** to MX Pocket.
 Teams needs no app mapping. Opening the app never selects **In call** or
 presses a key. Pins, profile opt-outs and explicit app mappings still win;

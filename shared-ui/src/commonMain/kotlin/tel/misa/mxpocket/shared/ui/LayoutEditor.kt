@@ -150,7 +150,7 @@ fun LayoutEditor(
             val library: @Composable () -> Unit = {
                 WorkspaceTitle(LayoutCopy.Layouts.text())
                 EditorNote(LayoutCopy.LibraryHint.text())
-                LibraryGroup(LayoutCopy.Profile.text(), LayoutCopy.ManageProfile.text(), deck.visibleProfiles.map { p ->
+                LibraryGroup(LayoutCopy.Profile.text(), LayoutCopy.ManageProfile.text(), deck.navigationProfiles.map { p ->
                     ProfileChoice(p.id, p.displayName(), live?.profiles?.find { it.id == p.id }?.unavailableReason)
                 },
                     profile.id, !writer.busy, ::selectProfile,
@@ -204,7 +204,7 @@ fun LayoutEditor(
                     if (!wide) TextButton(onClick = { show(Pane.PREVIEW) }) { Text(LayoutCopy.BackToPreview.text()) }
                     ProfileOptions(profile, deck, decision, signals, foreground, writer, writable,
                         edit = { removingRule = false; rule = it }, remove = { removingRule = true; rule = it },
-                        available = live?.profiles?.find { it.id == profile.id }?.unavailableReason == null,
+                        available = live == null || live.profiles.any { it.id == profile.id && it.unavailableReason == null },
                         ruleEngine = live?.simulator == null)
                     LayoutBackups(writer, writable, onExport) { command = it }
                 }
@@ -370,7 +370,6 @@ private fun ProfileSettings(profile: DeckProfile, deck: DeckState, decision: Dec
             enabled = writable && available && profile.id != deck.defaultProfileId)
     }
     if (!ruleEngine) EditorNote(SavedEditorCopy.AndroidRuleEngine.text())
-    EditorSwitch(LayoutCopy.Automatic.text(), deck.automatic, writable && ruleEngine) { edit(DeckEdit.Automatic(it)) }
     EditorSwitch(LayoutCopy.IncludeAutomatic.text(profile.displayName()), profile.automatic, writable && ruleEngine) {
         edit(DeckEdit.ProfileAutomatic(profile.id, it))
     }

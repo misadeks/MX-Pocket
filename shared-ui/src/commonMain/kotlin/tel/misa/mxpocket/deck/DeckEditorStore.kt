@@ -30,7 +30,6 @@ sealed interface DeckEdit {
     data class Select(val id: String) : DeckEdit
     data class Pin(val id: String?) : DeckEdit
     data class Default(val id: String) : DeckEdit
-    data class Automatic(val enabled: Boolean) : DeckEdit
     data class ProfileAutomatic(val id: String, val enabled: Boolean) : DeckEdit
     data class Open(val activeProfileId: String, val pageId: String) : DeckEdit
     data class Back(val activeProfileId: String) : DeckEdit

@@ -58,7 +58,6 @@ class WorkspaceNavigationTest {
         assertEquals(before.copy(rules = listOf(DeckRule(FOREGROUND_APP, pkg, 5))),
             session.deck.state.value.profiles.first { it.id == "studio" })
         assertEquals("launcher", session.deck.state.value.activeProfileId)
-        assertFalse(session.deck.state.value.automatic)
         assertFalse(session.detectForegroundApps.value)
         assertFalse(FOREGROUND_APP in session.signals.value)
     }
@@ -86,7 +85,7 @@ class WorkspaceNavigationTest {
         compose.onNodeWithText("Open page: Meetings").performClick()
         // A live switch while editing must not retarget the open key or discard its draft.
         compose.onNodeWithTag("key-label").performTextReplacement("Return")
-        compose.runOnIdle { session.selectProfile("phone") }
+        compose.runOnIdle { session.selectProfile("focus") }
         compose.onNodeWithText("Save key").performScrollTo().performClick()
         compose.waitUntil(5000) {
             repo.state.value.profiles.single { it.id == work }.pages.single { it.id == meetings }.keys[3] ==
@@ -99,7 +98,7 @@ class WorkspaceNavigationTest {
         compose.onNodeWithText("Pages").assertExists()
         back()
         compose.onNode(hasText("Work") and hasText("2 pages")).assertExists()
-        assertEquals("phone", repo.state.value.activeProfileId)
+        assertEquals("focus", repo.state.value.activeProfileId)
         assertEquals(before.histories, repo.state.value.histories)
         assertFalse(session.ready)
     }

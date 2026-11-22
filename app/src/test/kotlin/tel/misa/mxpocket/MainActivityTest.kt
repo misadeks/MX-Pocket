@@ -16,6 +16,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import tel.misa.mxpocket.deck.importLegacyPhone
 import tel.misa.mxpocket.shared.ui.PocketScreenEvent
 import tel.misa.mxpocket.shared.ui.virtualGrid
 import tel.misa.mxpocket.ui.ThemePreference
@@ -40,6 +41,7 @@ class MainActivityTest {
         }
     }
     @Test fun disconnectedHomeCanBrowseLayoutsButNotRunKeys() {
+        app.session.deck.importLegacyPhone("My shortcuts")
         ActivityScenario.launch(MainActivity::class.java).use {
             ui.onNodeWithText("Connect virtual keypad").assertDoesNotExist()
             ui.onNodeWithText("Settings").performClick()
