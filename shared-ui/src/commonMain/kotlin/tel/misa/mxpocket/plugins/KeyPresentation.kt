@@ -69,7 +69,9 @@ fun DeckCommand.legend(): KeyGlyph? = when (this) {
     DeckCommand.STUDIO, DeckCommand.SHUTTER, DeckCommand.PHOTO -> DeckGlyph.CAMERA
     DeckCommand.VIDEO, DeckCommand.START_VIDEO -> DeckGlyph.VIDEO
     DeckCommand.STOP_VIDEO -> DeckGlyph.STOP
-    DeckCommand.EDIT, DeckCommand.CAMERA_ACCESS, DeckCommand.MEDIA_ACCESS -> DeckGlyph.SETTINGS
+    DeckCommand.EDIT, DeckCommand.CAMERA_ACCESS, DeckCommand.MEDIA_ACCESS, DeckCommand.TALKBACK_SETTINGS,
+    DeckCommand.CAPTION_SETTINGS, DeckCommand.NIGHT_LIGHT_SETTINGS -> DeckGlyph.SETTINGS
+    DeckCommand.ACCESSIBILITY_SHORTCUT -> NavigationGlyph.ACCESS_INFO
     DeckCommand.PLAY -> PlayerGlyph.PLAY_PAUSE
     DeckCommand.QUIETER -> PlayerGlyph.VOLUME_DOWN
     DeckCommand.LOUDER -> PlayerGlyph.VOLUME_UP

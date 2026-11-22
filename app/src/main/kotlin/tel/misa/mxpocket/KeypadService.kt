@@ -150,6 +150,7 @@ class KeypadService : Service() {
                 PhoneApp.ONENOTE -> "OneNote"
             }
             is PocketSession.Target.FavoriteApp -> D.Favorite.text()
+            is PocketSession.Target.SettingsPanel -> target.panel.command.displayLabel
             is PocketSession.Target.Studio -> if (target.mode == tel.misa.mxpocket.decks.CameraMode.PHOTO) D.Camera.text() else D.Video.text()
             is PocketSession.Target.Uri -> target.uri
             is PocketSession.Target.Share -> "OneNote"
@@ -177,7 +178,7 @@ class KeypadService : Service() {
 
     private fun requestDirectLaunch(target: PocketSession.Target): DeckResult? {
         val eligible = when (target) {
-            PocketSession.Target.Teams -> false // Existing direct-launch consent does not include Teams.
+            PocketSession.Target.Teams, is PocketSession.Target.SettingsPanel -> false
             is PocketSession.Target.Phone -> target.app == PhoneApp.CAMERA || session.isPhoneShortcutPage
             is PocketSession.Target.FavoriteApp, is PocketSession.Target.Studio -> true
             is PocketSession.Target.Uri, is PocketSession.Target.Share -> false

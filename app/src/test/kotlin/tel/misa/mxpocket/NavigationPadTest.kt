@@ -29,7 +29,7 @@ import java.time.Duration
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class NavigationPadTest {
     @get:Rule val ui = createAndroidComposeRule<MainActivity>()
-    @Test fun readOnlyPanelMirrorsLcdWritesAndPhysicalAccessKeyOpensOnlyInfo() {
+    @Test fun readOnlyPanelMirrorsLcdWritesAndPhysicalBottomRightOpensAndReturns() {
         val app = RuntimeEnvironment.getApplication() as KeypadSessionTest.FakeApp
         shadowOf(app).grantPermissions("tel.misa.mxpocket.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION")
         val session = app.session
@@ -47,7 +47,9 @@ class NavigationPadTest {
                 for (i in frame.keys.indices) {
                     assertAperturePixels(panel, i, app.lcd.getValue(i))
                     val gridTile = frame.keys[i].toGridTile(true)
-                    ui.onNodeWithContentDescription(requireNotNull(gridTile.accessibleName))
+                    val description = gridTile.accessibleName ?: listOf("Key ${i + 1}", gridTile.label, gridTile.footer)
+                        .filter(String::isNotBlank).joinToString(", ")
+                    ui.onNodeWithContentDescription(description)
                         .assertHasNoClickAction().assertHeightIsAtLeast(84.dp)
                 }
                 return panel
@@ -58,12 +60,27 @@ class NavigationPadTest {
             key("Activate focused item").assertExists()
             key("Recents, Needs access").assertExists()
             assertFalse(session.frame().keys[6].enabled)
+            key("Accessibility").assertExists()
+            fun bottomRight(down: Boolean) {
+                app.emit(tel.misa.mxpocket.driver.KeyEvent(9, down)); main.idle()
+            }
+            val previousLaunch = shadowOf(activity).peekNextStartedActivity()
+            bottomRight(true)
+            assertEquals("accessibility", session.deck.state.value.activePage.id)
+            bottomRight(false)
+            assertEquals("accessibility", session.deck.state.value.activePage.id)
+            assertSame(previousLaunch, shadowOf(activity).peekNextStartedActivity())
+            render()
+            key("TalkBack settings").assertExists()
             key("Access info, System nav off").assertExists()
-            app.press(9)
+            key("Back to Navigation").assertExists()
+            app.press(5)
             val opened = shadowOf(activity).nextStartedActivity
             assertEquals(DeckAccessActivity::class.java.name, opened.component?.className)
             assertEquals("navigation.access", opened.getStringExtra("access"))
             assertNull(NavigationService.connected)
+            app.press(9)
+            assertEquals("root", session.deck.state.value.activePage.id)
             val connected = Robolectric.buildService(NavigationService::class.java).create()
             val service = connected.get()
             try {
@@ -77,7 +94,7 @@ class NavigationPadTest {
                     }
                 }
                 assertFalse(off.sameAs(on))
-                key("Access info, System nav on").assertExists()
+                key("Accessibility").assertExists()
                 assertTrue(session.frame().keys[6].enabled)
                 app.press(7)
                 assertEquals(listOf(AccessibilityService.GLOBAL_ACTION_RECENTS), shadowOf(service).globalActionsPerformed)

@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.testTag
 import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.*
+import tel.misa.mxpocket.decks.DeckCommand
 import tel.misa.mxpocket.i18n.*
 
 fun parseTileColor(text: String): Int? {
@@ -61,6 +62,8 @@ internal class KeyDraft(val original: DeckKey) {
         label.length > DeckLimits.LABEL -> LayoutCopy.LabelLength.text(DeckLimits.LABEL)
         icon.length > DeckLimits.ICON -> LayoutCopy.IconLength.text(DeckLimits.ICON)
         parseTileColor(color) == null -> LayoutCopy.InvalidHex.text()
+        holdCall != null && listOfNotNull(call, holdCall).any { DeckCommand.fromId(it.id)?.accessibilityKey == true } ->
+            AccessCopy.TapWithoutHold.text()
         else -> null
     }
 
@@ -131,6 +134,10 @@ internal fun KeyFields(index: Int, draft: KeyDraft, options: List<BindingOption>
         }
         options.find { it.call == binding(target) }?.unavailableReason?.let { EditorNote(it) }
     }
+    when (call?.id) {
+        DeckCommand.TALKBACK_SETTINGS.id -> EditorNote(AccessCopy.TalkBackHint.text())
+        DeckCommand.ACCESSIBILITY_SHORTCUT.id -> EditorNote(AccessCopy.ShortcutHint.text())
+    }
     EditorSwitch(LayoutCopy.EnabledOnDeck.text(), enabled, writable) { enabled = it }
     if (attempted) error?.let { EditorError(it) }
     EditorActions {
@@ -189,7 +196,11 @@ internal fun BindingChoices(options: List<BindingOption>, draft: KeyDraft, listM
                     for ((category, choices) in results.groupBy { it.category }) {
                         item { EditorHeading(category.title.text()) }
                         items(choices) { option ->
-                            if (option.unavailableReason != null) UnavailableRow(option.label, option.unavailableReason)
+                            val requiresTapOnly = DeckCommand.fromId(option.call.id)?.accessibilityKey == true
+                            val conflicts = if (target == BindingTarget.TAP) requiresTapOnly && draft.holdCall != null
+                                else requiresTapOnly || DeckCommand.fromId(draft.call?.id.orEmpty())?.accessibilityKey == true
+                            val reason = option.unavailableReason ?: AccessCopy.TapWithoutHold.text().takeIf { conflicts }
+                            if (reason != null) UnavailableRow(option.label, reason)
                             else BindingRow(option.label, current == option.call) { choose(option.call) }
                         }
                     }

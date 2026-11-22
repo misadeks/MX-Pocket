@@ -201,7 +201,9 @@ Layout format 2 updated the factory Audio key order; customized pages keep
 the old Audio actions. Format 3 also updates an untouched Navigation root
 from format 1 or 2. Format 4 removes the stock Focus timer shortcut from
 Teams Work without moving other keys. A customized shortcut is preserved.
-Older app versions cannot import format 4 exports.
+Format 5 links an Accessibility page from key 9 on a stock Navigation root. Edited roots,
+copies, and existing pages named by the `accessibility` ID are not replaced. Older app versions
+cannot import format 5 exports.
 
 ## Connect a wired keypad
 
