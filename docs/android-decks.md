@@ -234,7 +234,11 @@ layouts are preserved: editing or deleting a Teams page isn't undone on upgrade.
 
 To show **Work** when Teams opens, enable **Teams call status** and
 **Detect foreground apps**, and grant Android **Usage Access** to MX Pocket.
-Teams needs no app mapping. Opening the app never selects **In call** or
+Teams needs no app mapping. When Android reports Teams as the only resumed app,
+MX Pocket can select Work on the next one-second poll. If the activity just
+changed, it checks again after a short settling period rather than switching
+on a momentary visit. Android event delivery and keypad redraw take additional
+time. Opening the app never selects **In call** or
 presses a key. Pins, profile opt-outs and explicit app mappings still win;
 manually changing pages takes precedence while Teams remains in the foreground.
 
