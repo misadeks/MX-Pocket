@@ -15,14 +15,28 @@ writes it to this profile and page. Unavailable keys retain their status styling
 | App Launcher | Choose **Edit favorites**, check apps, then **Done**. Up to seven alphabetical favorites, an edit key and a page key fit on each keypad page. **Next apps** wraps. Real launcher icons appear on both the phone and LCD keys. | No permission prompt. Only exported, currently available `MAIN`/`LAUNCHER` activities in this Android profile are eligible. Removed/deselected targets do not launch. |
 | Media Deck (`audio`) | Top: volume down, mute/unmute, volume up. Middle: previous, play/pause, next. Bottom: back 10 seconds, Now playing, forward 10 seconds. The title is a readout, not a shortcut. Open **Plugins → Audio → Media access** on the phone for optional session access. | Without access, the center transport shows a combined play/pause symbol and sends a standard media key. Volume and mute follow Android's local music stream, not a cast device. An unavailable 10-second seek key shows only the background or cover art. Other unsupported controls stay visible but dimmed. |
 | Pocket Studio | **Open Camera** requests the default photo viewfinder; **Open Video** requests video mode. Neither captures. For keypad input choose **Plugins > Studio > Camera controls** on the phone, enable keypad camera controls and enable **MX Pocket navigation** in Android Accessibility. | With the unlocked camera visible, press **Shutter**, **Record** or **Stop** on the physical Studio deck. Unsupported modes, labels or layouts do nothing. Use the camera's own controls instead. MX Pocket never confirms a saved photo or a recording state. |
-| Android Navigation | Use the keys beside **Select** to focus the previous or next item; use the keys above and below to scroll. **Back** goes back, not to the previous focus target. **Access info** opens the navigation disclosure on the phone; it does not grant or toggle access. | With **System nav off**, Back, focus, select and scroll operate in the visible MX Pocket screen; Home opens the launcher. **Recents** shows **Needs access** and is disabled. With the optional service connected, supported cross-app actions become available. Screens without a suitable focus or scroll target can still reject a press. Password elements, Android settings and system permission surfaces remain excluded from element actions. |
+| Navigation and Accessibility | Use the keys beside **Select** to focus the previous or next item; use the keys above and below to scroll. **Back** goes back, not to the previous focus target. Key 9 opens the **Accessibility** keypad page. | With **System nav off**, Back, focus, select and scroll operate in the visible MX Pocket screen; Home opens the launcher. **Recents** shows **Needs access** and is disabled. With the optional service connected, supported cross-app actions become available. Screens without a suitable focus or scroll target can still reject a press. Password elements, Android settings and system permission surfaces remain excluded from element actions. |
 | Tic Tac Toe | Select **1 Player** (play X against the computer) or **2 Players** (take turns on the same keypad). The nine LCD keys become board squares; empty squares show their key numbers. After a win or draw, tap any key to choose a mode again. | No phone touchscreen, game-specific permission or network access is needed during play. An active keypad session is required. |
 
 The factory navigation pad reads left to right: **Back / Scroll up / Home**,
-**Prev focus / Select / Next focus**, **Recents / Scroll down / Access info**.
-An untouched version 1 or 2 navigation root adopts this arrangement when upgrading to version 3.
-Edited roots, independent copies and all current-format layouts keep their saved
-key positions and actions, including when imported.
+**Prev focus / Select / Next focus**, **Recents / Scroll down / Accessibility**.
+Press **Accessibility** to open the keypad page below. Press **Back to Navigation** in the
+same bottom-right position to return without sending Android Back. **Access info** (key 5)
+still opens the navigation disclosure from MX Pocket. Edited roots and independent copies
+keep their saved bindings; no permission or direct-launch opt-in changes on upgrade.
+
+### A TalkBack key and other accessibility shortcuts
+
+Keys 1–3 open **TalkBack**, **Captions** and **Night Light** settings; key 4 runs
+the configured **Accessibility shortcut**. To place any of these on a different page, in
+**Profiles**, edit a key, choose **Tap**, search for an action below and **Save key**.
+Leave **Hold** unassigned: these actions require a fresh physical press on an unlocked phone.
+
+- **TalkBack settings** opens Android **Accessibility**. Choose **TalkBack → Use TalkBack** to turn it on or off yourself. MX Pocket never flips the switch or approves a prompt.
+- **Run Android accessibility shortcut** requests the phone’s configured **volume-key** accessibility shortcut. For a dedicated TalkBack key, go to **Accessibility → TalkBack → TalkBack shortcut** and select TalkBack alone for that shortcut. Multiple targets can show a chooser. The keypad action requires Android 12+, **MX Pocket navigation** access and a shortcut advertised by Android. If unavailable, use **TalkBack settings** instead. [Google’s TalkBack guide](https://support.google.com/accessibility/android/answer/6007100) also explains how to use the shortcut without the keypad.
+- **Caption preferences** opens Android’s caption controls for apps that support captions, not Live Caption or Teams meeting captions. **Night Light settings** opens the display tint controls where available. On phones without a dedicated panel these keys open Accessibility or Display, then the main Settings screen if needed.
+
+The three settings keys need no navigation service. From another app, tap the keypad notification within one minute; even with direct shortcuts enabled, Settings never opens in the background without that tap. These keys do not run in workflows or on Windows.
 
 The native camera owns its files, audio, recording lifecycle and permissions.
 MX Pocket needs no camera, microphone or storage permission. Files from the old
@@ -105,10 +119,12 @@ and revocable in Android settings.
 In **Settings → Phone calls**, turn on **Show calls on the keypad** and grant
 the optional Android Phone permission (`READ_PHONE_STATE`). On Android 12+
 this reads ringing, off-hook or idle for active mobile subscriptions. It does
-not read the call log, contacts, microphone or phone number. With the Phone
-plugin enabled, an authorized USB keypad, the phone unlocked, automatic
-switching on and no manual pin, a call temporarily replaces the current
-layout. “Dialing or active” does **not** mean the other person answered.
+not read the call log, contacts, microphone or phone number. A call temporarily
+replaces the layout on an authorized USB keypad while the phone is unlocked
+and its screen is on. You do not need a Phone layout, the Phone shortcuts plugin,
+a profile rule or notification access. A pinned layout or active
+game stays in place. Settings explains when the view is blocked.
+“Dialing or active” does **not** mean the other person answered.
 
 Either page key leaves immediately, without accepting or declining. You can
 also choose a layout in the app. Updates for that call won't pull you back;
@@ -147,7 +163,7 @@ The bottom-left key is unassigned. **Call tools** opens the call page without
 claiming a call is active. My chat and Meeting link are unassigned. Existing
 layouts are preserved: editing or deleting a Teams page isn't undone on upgrade.
 
-To show **Work** when Teams opens, enable **Teams call status**, **Automatic profile switching** and
+To show **Work** when Teams opens, enable **Teams call status** and
 **Detect foreground apps**, and grant Android **Usage Access** to MX Pocket.
 Teams needs no app mapping. Opening the app never selects **In call** or
 presses a key. Pins, profile opt-outs and explicit app mappings still win;

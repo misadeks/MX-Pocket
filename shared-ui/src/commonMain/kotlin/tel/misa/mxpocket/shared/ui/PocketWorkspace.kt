@@ -39,7 +39,6 @@ import tel.misa.mxpocket.deck.DeckState
 import tel.misa.mxpocket.deck.GAME_PROFILE
 import tel.misa.mxpocket.deck.PROFILE_HOME
 import tel.misa.mxpocket.i18n.DesktopCopy as H
-import tel.misa.mxpocket.i18n.LauncherCopy
 import tel.misa.mxpocket.plugins.KeyTile
 import tel.misa.mxpocket.plugins.PluginFrame
 
@@ -68,7 +67,8 @@ fun virtualGrid(generation: Long, deck: DeckState, frame: PluginFrame, holds: Pl
 data class DesktopSimulator(val limitations: String, val grid: VirtualGrid? = null, val supportsUsb: Boolean = false)
 
 data class PhoneCallSettings(val supported: Boolean, val enabled: Boolean, val phoneGranted: Boolean,
-    val supportsDetails: Boolean, val details: Boolean, val listenerGranted: Boolean)
+    val supportsDetails: Boolean, val details: Boolean, val listenerGranted: Boolean,
+    val blocker: tel.misa.mxpocket.i18n.Copy? = null)
 
 data class PocketScreenState(
     val status: String,
@@ -192,10 +192,6 @@ fun HomeScreen(state: PocketScreenState, event: (PocketScreenEvent) -> Unit) {
             val split = maxWidth >= 720.dp
             val summary: @Composable () -> Unit = {
                 NowOnKeypad(state, event)
-                val launcher = ProfileChoice(PROFILE_HOME, LauncherCopy.Launcher.text())
-                ProfilePicker(listOf(launcher) + state.profiles, state.activeId) {
-                    event(PocketScreenEvent.SelectPlugin(it))
-                }
                 if (state.simulator?.supportsUsb == true) DesktopConnectionCard(state, event)
             }
             // With hardware the mirror is display-only: keys are pressed on the device, never twice.
@@ -465,6 +461,7 @@ private fun SettingsScreen(state: PocketScreenState, event: (PocketScreenEvent) 
             if (calls.enabled) {
                 Note(CallCopy.PhonePermissionHint.text())
                 if (!calls.phoneGranted) PocketButton(CallCopy.AllowPhoneState.text(), { event(PocketScreenEvent.AllowPhoneState) })
+                else calls.blocker?.let { Note(it.text()) }
                 PocketDivider()
                 PocketSwitchRow(CallCopy.ShowDetails.text(),
                     if (calls.supportsDetails) CallCopy.DetailsHint.text()

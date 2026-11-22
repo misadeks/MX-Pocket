@@ -30,6 +30,7 @@ import tel.misa.mxpocket.decks.DeckCommand
 import tel.misa.mxpocket.plugins.PhoneApp
 import tel.misa.mxpocket.decks.ok
 import tel.misa.mxpocket.driver.KeyEvent
+import tel.misa.mxpocket.deck.importLegacyPhone
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
@@ -134,6 +135,7 @@ class KeypadPaintTest {
     @Test fun singleVisualChangeRequiresItsOwnAckAndLeavesOtherKeysActionable() {
         val p = Panel(supportsGrid = true)
         try {
+            p.session.deck.importLegacyPhone()
             p.session.selectProfile("phone"); main.idle()
             p.grids.clear(); p.writes.clear()
             fun status(text: String) {
@@ -184,6 +186,7 @@ class KeypadPaintTest {
         val p = Panel(supportsGrid = true)
         try {
             val deck = p.session.deck
+            deck.importLegacyPhone()
             p.session.selectProfile("phone")
             val key = DeckKey(label = "Go", action = ActionCall(DeckActions.ROOT))
             deck.setKey("phone", "root", 4, key).getOrThrow(); main.idle()
@@ -245,7 +248,7 @@ class KeypadPaintTest {
             override fun deckAction(command: DeckCommand, component: String?) = ok("Handled").also { actions += command }
         }
         val expected = listOf(DeckCommand.BACK, DeckCommand.UP, DeckCommand.HOME, DeckCommand.REVERSE,
-            DeckCommand.ACTIVATE, DeckCommand.FORWARD, DeckCommand.RECENTS, DeckCommand.DOWN, DeckCommand.NAV_ACCESS)
+            DeckCommand.ACTIVATE, DeckCommand.FORWARD, DeckCommand.RECENTS, DeckCommand.DOWN)
         try {
             p.session.attach(screen)
             p.session.selectProfile("navigation"); main.idle()
@@ -255,6 +258,13 @@ class KeypadPaintTest {
                 p.press(i + 1)
                 assertEquals("Window ${i + 1}", if (i == 6) emptyList() else listOf(expected[i]), actions)
             }
+            actions.clear()
+            p.press(9)
+            assertEquals("accessibility", p.session.deck.state.value.activePage.id)
+            p.press(1)
+            assertEquals(listOf(DeckCommand.TALKBACK_SETTINGS), actions)
+            p.press(9)
+            assertEquals("root", p.session.deck.state.value.activePage.id)
             actions.clear()
             // Showing a disclosure and sending Back are not exceptions to the lock guard.
             val guard = app.getSystemService(android.app.KeyguardManager::class.java)
@@ -357,6 +367,7 @@ class KeypadPaintTest {
     @Test fun profileRoundTripDoesNotAuthorizeInputDuringMixedPage() {
         val p = Panel()
         try {
+            p.session.deck.importLegacyPhone()
             p.session.selectProfile("phone"); main.idle()
             p.pause = true; p.writes.clear()
             p.session.selectProfile("audio"); main.idle(); p.ack()
@@ -378,6 +389,7 @@ class KeypadPaintTest {
             .setActions(PlaybackState.ACTION_PAUSE).build())
         shadowOf(app.getSystemService(MediaSessionManager::class.java)).addController(media.controller)
         val p = Panel(supportsGrid = true)
+        p.session.deck.importLegacyPhone()
         fun cover(color: Int) {
             val bitmap = Bitmap.createBitmap(32,32,Bitmap.Config.ARGB_8888).apply { eraseColor(color) }
             player.executeOnMetadataChanged(MediaMetadata.Builder().putString(MediaMetadata.METADATA_KEY_MEDIA_ID, "one")

@@ -175,6 +175,17 @@ object AccessCopy {
     val DirectTitle = Copy("Open apps directly from keypad", "Ouvrir les applications directement depuis le pavé", "Otvaranje aplikacija direktno sa tastature")
     val EnableShortcuts = Copy("Enable shortcuts", "Activer les raccourcis", "Uključi prečice")
     val SettingsUnavailable = Copy("These settings are unavailable on this device.", "Ces paramètres ne sont pas disponibles sur cet appareil.", "Ova podešavanja nisu dostupna na ovom uređaju.")
+    val TalkBackHint = Copy(
+        "In Android Accessibility, choose TalkBack, then Use TalkBack to turn it on or off.",
+        "Dans les paramètres d’accessibilité Android, choisissez TalkBack, puis « Utiliser TalkBack » pour l’activer ou le désactiver.",
+        "U Android podešavanjima pristupačnosti izaberite TalkBack, pa „Koristi TalkBack“ da biste ga uključili ili isključili.")
+    val ShortcutHint = Copy(
+        "For a TalkBack key, choose TalkBack alone for the volume-key shortcut in Android Accessibility → TalkBack → TalkBack shortcut. The keypad runs that shortcut on supported Android 12+ phones with MX Pocket navigation enabled.",
+        "Pour une touche TalkBack, choisissez uniquement TalkBack pour le raccourci des touches de volume dans Accessibilité → TalkBack → Raccourci TalkBack. Le pavé lance ce raccourci sur les téléphones compatibles sous Android 12 ou ultérieur si la navigation MX Pocket est activée.",
+        "Za namenski taster izaberite samo TalkBack za prečicu tasterima za jačinu zvuka u meniju Pristupačnost → TalkBack → TalkBack prečica. Tastatura pokreće tu prečicu na podržanim telefonima sa Androidom 12 ili novijim kada je uključena MX Pocket navigacija.")
+    val TapWithoutHold = Copy("Use Tap and leave Hold unassigned for this action.", "Pour cette action, utilisez l’appui bref et laissez l’appui long sans action.", "Za ovu radnju koristite kratak pritisak i ostavite dugi pritisak nedodeljen.")
+    val ShortcutUnavailable = Copy("Android does not offer the accessibility shortcut. Use TalkBack settings instead.", "Android ne propose pas le raccourci d’accessibilité. Utilisez les paramètres de TalkBack.", "Android ne nudi prečicu za pristupačnost. Koristite podešavanja za TalkBack.")
+    val SettingsOpened = Copy("Opened Android settings.", "Paramètres Android ouverts.", "Otvorena su Android podešavanja.")
     val RestrictedSettings = Copy("Android restricted these settings.", "Android limite l’accès à ces paramètres.", "Android je ograničio pristup ovim podešavanjima.")
 
     val EnableCamera = Copy("Enable keypad camera controls", "Activer les commandes photo du pavé", "Uključi upravljanje kamerom sa tastature")
@@ -221,7 +232,6 @@ object AccessCopy {
     val FeatureMicSummary = Copy("Recognize the joined call toolbar and operate a visible mic button from the keypad.", "Reconnaître la barre d’outils de l’appel en cours et actionner le bouton du micro depuis le pavé lorsqu’il est visible.", "Prepoznajte traku sa alatkama tokom poziva i tasterom na tastaturi pritisnite vidljivo dugme mikrofona.")
     val OpenUsage = Copy("Open usage access settings", "Ouvrir l’accès aux données d’utilisation", "Otvori podešavanja pristupa podacima o korišćenju")
     val EnableDetection = Copy("Enable foreground detection", "Activer la détection de l’application au premier plan", "Uključi prepoznavanje aktivne aplikacije")
-    val EnableSwitching = Copy("Enable profile switching", "Activer le changement de profil", "Uključi promenu profila")
     val OpenTeamsToolbar = Copy("Open Teams accessibility settings", "Ouvrir les paramètres d’accessibilité pour Teams", "Otvori podešavanja pristupačnosti za Teams")
     val EnableAudio = Copy("Enable Audio", "Activer Audio", "Uključi Audio")
     val EnableStudio = Copy("Enable Studio", "Activer Studio", "Uključi Studio")
@@ -258,8 +268,6 @@ object AccessCopy {
     val UsageDetail = Copy("Let MX Pocket check for mapped apps while the phone is unlocked. No usage history is saved or sent.", "Autorisez MX Pocket à repérer les applications associées à un profil lorsque le téléphone est déverrouillé. Aucun historique d’utilisation n’est conservé ni transmis.", "Dozvolite aplikaciji MX Pocket da prepozna aplikacije povezane sa profilima dok je telefon otključan. Istorija korišćenja se ne čuva niti šalje.")
     val DetectApps = Copy("Detect foreground apps", "Détecter l’application au premier plan", "Prepoznavanje aktivne aplikacije")
     val DetectAppsDetail = Copy("Use the app on screen to find a matching profile.", "Trouver le profil associé à l’application affichée.", "Pronađite profil koji odgovara aplikaciji na ekranu.")
-    val AutomaticSwitching = Copy("Automatic profile switching", "Changement automatique de profil", "Automatska promena profila")
-    val SwitchingDetail = Copy("Allow matching rules to select a layout. Manage app mappings, pins and individual profiles in Profiles.", "Laissez les règles sélectionner une disposition. Gérez les associations d’applications, les profils épinglés et les profils individuels dans Profils.", "Prepustite izbor rasporeda pravilima. Aplikacije, zakačene profile i pojedinačne profile možete podesiti u odeljku Profili.")
     val TeamsStatus = Copy("Teams call status", "État des appels Teams", "Stanje Teams poziva")
     val TeamsStatusDetail = Copy("Show call notices from Teams in this Android profile while a wired keypad is connected.", "Afficher les notifications d’appel de Teams dans ce profil Android lorsqu’un pavé est connecté par câble.", "Prikažite obaveštenja o Teams pozivima sa ovog Android profila dok je tastatura povezana kablom.")
     val TeamsToolbarAccess = Copy("Teams toolbar access", "Accès à la barre d’outils Teams", "Pristup traci sa alatkama aplikacije Teams")

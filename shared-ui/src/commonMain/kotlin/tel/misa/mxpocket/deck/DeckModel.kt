@@ -1,6 +1,9 @@
 package tel.misa.mxpocket.deck
 
 import tel.misa.mxpocket.actions.ActionCall
+import tel.misa.mxpocket.plugins.PhoneSlot
+import tel.misa.mxpocket.plugins.legacyPhoneSlot
+import tel.misa.mxpocket.decks.DeckCommand
 
 /** Stable IDs for host-dispatched navigation. Page IDs are local to a profile. */
 object DeckActions {
@@ -31,11 +34,7 @@ fun ActionCall.slotOwner(): String? = when {
 fun ActionCall.commandBinding() =
     if (id.startsWith("media.") && slotOwner() == "audio") copy(params = params - DeckActions.LEGACY_SLOT_OWNER) else this
 
-fun phoneShortcutProfile(slot: Int?) = when (slot) {
-    6 -> "focus"
-    7 -> "audio"
-    else -> null
-}
+fun phoneShortcutProfile(slot: Int?) = (slot?.let(::legacyPhoneSlot) as? PhoneSlot.SelectProfile)?.id
 
 fun ActionCall.targetProfileId(): String? = when {
     id == DeckActions.PROFILE -> params[DeckActions.PROFILE_ID]
@@ -87,7 +86,6 @@ data class DeckState(
     val activeProfileId: String,
     val defaultProfileId: String,
     val pinnedProfileId: String?,
-    val automatic: Boolean,
     val histories: Map<String, List<String>>,
     val selectionReason: String = "Default profile",
     val xoProfileRemoved: Boolean = false,
@@ -96,13 +94,15 @@ data class DeckState(
     val disabledPluginIds: Set<String> = emptySet(),
 ) {
     val visibleProfiles get() = profiles.filterNot { it.id in disabledPluginIds || it.id in setOf(GAME_PROFILE, PROFILE_HOME, PHONE_CALL_VIEW) }
-    val availableDefaultId get() = visibleProfiles.firstOrNull { it.id == defaultProfileId }?.id ?: visibleProfiles.first().id
+    // Keep the legacy target available to editors, explicit bindings and workflow validation.
+    val navigationProfiles get() = visibleProfiles.filterNot { it == stockPhoneProfile }
+    val availableDefaultId get() = visibleProfiles.firstOrNull { it.id == defaultProfileId }?.id ?: navigationProfiles.first().id
     val activeProfile: DeckProfile get() = profiles.first { it.id == activeProfileId }
     val activePage: DeckPage get() = activeProfile.pages.first { it.id == histories.getValue(activeProfileId).last() }
 }
 
 object DeckLimits {
-    const val VERSION = 4
+    const val VERSION = 5
     const val MAX_BYTES = 512 * 1024
     const val PROFILES = 16
     const val PAGES = 32
@@ -128,6 +128,25 @@ private fun pluginRoot(id: String, name: String, slots: Iterable<Int> = 0..8) = 
     DeckKey(action = ActionCall("plugin.key", mapOf("pluginId" to id, "index" to index.toString())))
 })
 
+const val ACCESSIBILITY_PAGE = "accessibility"
+private fun navigationPages(): List<DeckPage> {
+    val old = pluginRoot("navigation", "Navigation", navigationFactorySlots)
+    val open = DeckKey(action = ActionCall(DeckActions.PAGE, mapOf(DeckActions.PAGE_ID to ACCESSIBILITY_PAGE)))
+    val tools = listOf(DeckCommand.TALKBACK_SETTINGS, DeckCommand.CAPTION_SETTINGS, DeckCommand.NIGHT_LIGHT_SETTINGS,
+        DeckCommand.ACCESSIBILITY_SHORTCUT, DeckCommand.NAV_ACCESS).map { DeckKey(action = ActionCall(it.id)) }
+    return listOf(old.copy(keys = old.keys.dropLast(1) + open), DeckPage(ACCESSIBILITY_PAGE, "Accessibility",
+        tools + List(3) { DeckKey() } + DeckKey(label = "Back to Navigation", action = ActionCall(DeckActions.ROOT))))
+}
+
+internal fun DeckState.withAccessibilityPage(): DeckState {
+    val oldRoot = pluginRoot("navigation", "Navigation", navigationFactorySlots)
+    val owner = profiles.find { it.id == "navigation" && it.rootPageId == oldRoot.id && oldRoot in it.pages } ?: return this
+    if (owner.pages.size >= DeckLimits.PAGES || owner.pages.any { it.id == ACCESSIBILITY_PAGE }) return this
+    val (root, tools) = navigationPages()
+    val updated = owner.copy(pages = owner.pages.map { if (it == oldRoot) root else it } + tools)
+    return copy(profiles = profiles.map { if (it == owner) updated else it })
+}
+
 internal fun DeckState.upgradeStockNavigationRoot(): DeckState {
     val legacy = pluginRoot("navigation", "Navigation")
     val owner = profiles.find { it.id == "navigation" && it.rootPageId == legacy.id && legacy in it.pages } ?: return this
@@ -137,22 +156,29 @@ internal fun DeckState.upgradeStockNavigationRoot(): DeckState {
     return copy(profiles = profiles.map { if (it.id == owner.id) updated else it })
 }
 
-fun defaultDeck(): DeckState {
+private val stockPhoneProfile = DeckProfile("phone", "Phone", "root", listOf(pluginRoot("phone", "Phone")))
+
+/** Slot templates are also the catalog of built-in plugins, independently of saved layouts. */
+fun factoryProfiles(): List<DeckProfile> {
     fun plugin(id: String, name: String, rules: List<DeckRule> = emptyList(), slots: Iterable<Int> = 0..8) =
         DeckProfile(id, name, "root", listOf(pluginRoot(id, name, slots)), rules = rules)
-    val profiles = listOf(
+    return listOf(
         plugin("focus", "Focus"),
         plugin("audio", "Audio", listOf(DeckRule("mediaActive", "true", 3))),
-        plugin("phone", "Phone"),
+        stockPhoneProfile,
         plugin("launcher", "Launcher"),
         plugin("studio", "Studio").copy(automatic = false),
-        plugin("navigation", "Navigation", slots = navigationFactorySlots),
+        DeckProfile("navigation", "Navigation", "root", navigationPages()),
         plugin("game.xo", tel.misa.mxpocket.plugins.TIC_TAC_TOE_TITLE),
         tel.misa.mxpocket.decks.teamsProfile(),
         plugin("onenote", "OneNote"),
     )
+}
+
+fun defaultDeck(): DeckState {
+    val profiles = factoryProfiles().filterNot { it == stockPhoneProfile }
     return DeckState(
-        DeckLimits.VERSION, profiles, "launcher", "launcher", null, false,
+        DeckLimits.VERSION, profiles, "launcher", "launcher", null,
         profiles.associate { it.id to listOf(it.rootPageId) },
     )
 }

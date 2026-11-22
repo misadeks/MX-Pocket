@@ -29,7 +29,7 @@ class PreviewDeck(val repository: DeckRepository, private val sendMedia: (MediaK
     private var playing = false
     private val tracks = listOf(K.NightTrain, K.FirstLight, K.Homeward)
     private var track = 0
-    private val knownPlugins = defaultDeck().profiles.map { it.id }.toSet()
+    private val knownPlugins = factoryProfiles().map { it.id }.toSet()
     private var lastSnapshot: DeckState? = null
     private var generation = 0L
     fun resetInput() { generation++ }
@@ -44,10 +44,10 @@ class PreviewDeck(val repository: DeckRepository, private val sendMedia: (MediaK
         set(value) { if (simulation != value) { simulation = value; resetInput() } }
 
     val profileName get() = deck.activeProfile.displayName()
-    val profileIndex get() = deck.visibleProfiles.indexOf(deck.activeProfile)
-    val profileCount get() = deck.visibleProfiles.size
+    val profileIndex get() = deck.navigationProfiles.indexOf(deck.activeProfile)
+    val profileCount get() = deck.navigationProfiles.size
     val profileId get() = deck.activeProfileId
-    val profiles get() = deck.visibleProfiles.map { it.id to it.displayName() }
+    val profiles get() = deck.navigationProfiles.map { it.id to it.displayName() }
 
     fun setPluginEnabled(id: String, enabled: Boolean) {
         require(id in knownPlugins)
@@ -64,7 +64,7 @@ class PreviewDeck(val repository: DeckRepository, private val sendMedia: (MediaK
             repository.changePage(delta).getOrThrow()
             return
         }
-        val ids = listOf(PROFILE_HOME) + deck.visibleProfiles.filter { profileReason(it.id) == null }.map { it.id }
+        val ids = listOf(PROFILE_HOME) + deck.navigationProfiles.filter { profileReason(it.id) == null }.map { it.id }
         val current = ids.indexOf(profileId)
         select(ids[Math.floorMod(current.toLong() + delta, ids.size.toLong()).toInt()])
     }
@@ -149,7 +149,7 @@ class PreviewDeck(val repository: DeckRepository, private val sendMedia: (MediaK
                 KeyTile(command?.displayLabel ?: "-", K.AndroidOnly.text(), 0xff49345f.toInt(), enabled = false,
                     glyph = command?.legend(), showLabel = command != null, showFooter = command != null, quietFace = true)
             }
-            "navigation" -> navigationCommands[action.index].navigationFace(systemAccess = null)
+            "navigation" -> (action.command ?: navigationCommands[action.index]).navigationFace(systemAccess = null)
             "teams" -> TeamsState().tile(action.command ?: teamsSlots[action.index]).let { tile ->
                 tile.copy(label = if (tile.readOnly) K.CallStatus.text() else tile.label,
                     enabled = false, footer = K.AndroidOnly.text())
@@ -231,7 +231,9 @@ class PreviewDeck(val repository: DeckRepository, private val sendMedia: (MediaK
             MORE_PROFILES -> repository.moreProfiles()
             else -> null
         }
-        if (navigation != null) return navigation.fold({ K.OnPage.text(profileName, deck.activeProfile.displayPageName(deck.activePage)) },
+        if (navigation != null) return navigation.fold({
+            if (profileId == PROFILE_HOME) profileName else K.OnPage.text(profileName, deck.activeProfile.displayPageName(deck.activePage))
+        },
             { it.message ?: K.CannotChangePage.text() })
         val (plugin, index, command) = binding(call)
             ?: return K.NotInSimulator.text(call.id)

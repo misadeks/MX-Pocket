@@ -27,9 +27,15 @@ object CallCopy {
         "Nécessite un téléphone sous Android 12 ou version ultérieure, compatible avec les appels mobiles.",
         "Potreban je telefon sa Androidom 12 ili novijim koji podržava pozive preko mobilne mreže.")
     val PhonePermissionHint = Copy(
-        "Phone permission reads call state, not contacts or call history. Automatic profile switching must be on and no layout pinned.",
-        "L’autorisation Téléphone permet de lire l’état de l’appel, mais pas les contacts ni l’historique des appels. Le changement automatique de profil doit être activé et aucune disposition ne doit être épinglée.",
-        "Dozvola za telefon služi za čitanje stanja poziva, ne kontakata ili istorije poziva. Automatska promena profila mora biti uključena i nijedan raspored ne sme biti zakačen.")
+        "Phone permission reads call state, not contacts or call history. No notification access is needed to show a call.",
+        "L’autorisation Téléphone permet de lire l’état de l’appel, mais pas les contacts ni l’historique. L’affichage d’un appel ne nécessite pas l’accès aux notifications.",
+        "Dozvola za telefon služi za čitanje stanja poziva, ne kontakata ili istorije poziva. Za prikaz poziva nije potreban pristup obaveštenjima.")
+    val ConnectKeypad = Copy("Connect and authorize the USB keypad to show calls.", "Connectez le pavé USB et autorisez son accès pour afficher les appels.", "Povežite USB tastaturu i odobrite pristup za prikaz poziva.")
+    val UnlockPhone = Copy("Unlock the phone and keep its screen on to show calls.", "Déverrouillez le téléphone et gardez son écran allumé pour afficher les appels.", "Otključajte telefon i ostavite ekran uključen za prikaz poziva.")
+    val LineUnavailable = Copy("Android hasn’t reported call state. Check that a mobile line is active.", "Android n’a pas indiqué l’état des appels. Vérifiez qu’une ligne mobile est active.", "Android nije prijavio stanje poziva. Proverite da li je mobilna linija aktivna.")
+    val Unpin = Copy("Unpin the layout to show the next call.", "Désépinglez la disposition pour afficher le prochain appel.", "Otkačite raspored da bi se prikazao sledeći poziv.")
+    val LeaveGame = Copy("Leave the game to show the next call.", "Quittez le jeu pour afficher le prochain appel.", "Izađite iz igre da bi se prikazao sledeći poziv.")
+    val WaitForIdle = Copy("Waiting for the mobile line to return to idle before showing another call.", "Le prochain appel s’affichera une fois la ligne mobile revenue au repos.", "Sledeći poziv može da se prikaže tek kada se mobilna linija oslobodi.")
     val AllowPhoneState = Copy("Allow phone state", "Autoriser la lecture de l’état des appels", "Dozvoli čitanje stanja poziva")
     val ShowDetails = Copy("Show caller and call controls", "Afficher l’appelant et les commandes d’appel", "Prikaži pozivaoca i komande za poziv")
     val DetailsHint = Copy(

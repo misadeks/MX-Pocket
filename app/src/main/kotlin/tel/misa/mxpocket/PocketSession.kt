@@ -106,6 +106,7 @@ internal class PocketSession(
         data class Phone(val app: PhoneApp) : Target
         data class FavoriteApp(val component: String) : Target
         data class Studio(val mode: CameraMode) : Target
+        data class SettingsPanel(val panel: AccessibilityPanel) : Target
         data class Uri(val uri: String) : Target
         data class Share(val text: String) : Target
         data object Teams : Target
@@ -268,15 +269,29 @@ internal class PocketSession(
     }
 
     private fun hasPlugin(id: String) = plugins.descriptors.any { it.id == id }
-    private fun phoneAuthorized() = phoneAccess.enabled && "phone" !in disabled.value &&
-        output != null && request?.let(app::hasKeypadAccess) == true && app.isUnlockedAndInteractive()
+    private fun phoneConnectionBlocker() = when {
+        output == null || request?.let(app::hasKeypadAccess) != true -> CallCopy.ConnectKeypad
+        !app.isUnlockedAndInteractive() -> CallCopy.UnlockPhone
+        else -> null
+    }
+
+    private fun phoneAuthorized() = phoneAccess.enabled && phoneConnectionBlocker() == null
+
+    private var phoneAccessBlocker: tel.misa.mxpocket.i18n.Copy? = null
+    val phoneCallBlocker get() = phoneAccessBlocker ?: deck.phoneCallBlocker
 
     fun refreshPhoneCall() {
-        val authorized = phoneAuthorized()
+        val enabled = phoneAccess.enabled
+        val blocker = if (enabled) phoneConnectionBlocker() else null
+        val authorized = enabled && blocker == null
         if (authorized && Build.VERSION.SDK_INT >= 34 && phoneAccess.details && phoneAccess.phoneGranted && phoneAccess.notificationGranted)
             PocketNotificationListener.refreshPhone = phoneUpdate
         else if (PocketNotificationListener.refreshPhone === phoneUpdate) PocketNotificationListener.refreshPhone = null
-        callBoard.refresh(authorized)
+        val line = if (authorized) phoneAccess.state() else LineState.UNKNOWN
+        val before = phoneCallBlocker
+        callBoard.refresh(line)
+        phoneAccessBlocker = blocker ?: CallCopy.LineUnavailable.takeIf { authorized && line == LineState.UNKNOWN }
+        if (before != phoneCallBlocker) invalidate()
     }
 
     private fun retireCallPixels() {
@@ -314,7 +329,6 @@ internal class PocketSession(
         deck.setDisabledPlugins(disabled.value)
         switches.edit().putStringSet("disabled", disabled.value).apply()
         if (id == TEAMS) refreshTeams()
-        if (id == "phone") refreshPhoneCall()
         syncLayout()
         invalidate()
     }
@@ -404,7 +418,7 @@ internal class PocketSession(
 
     private fun configuredApps(state: tel.misa.mxpocket.deck.DeckState, enabled: Boolean,
         disabledPlugins: Set<String>, teamsOn: Boolean): Set<String> =
-        if (!enabled || !state.automatic || !state.activeProfile.automatic || state.pinnedProfileId != null) emptySet()
+        if (!enabled || !state.activeProfile.automatic || state.pinnedProfileId != null) emptySet()
         else buildSet {
             for (profile in state.visibleProfiles.filter { it.automatic && it.id !in disabledPlugins }) {
                 profile.rules.filter { it.signal == FOREGROUND_APP }.forEach { add(it.value) }
@@ -530,7 +544,7 @@ internal class PocketSession(
         }
         "workflow.run" -> workflows.definitions.value.find { it.id == call.params["workflowId"] }?.name ?: K.MissingWorkflow.text()
         "sound.play" -> K.PlaySound.text()
-        "phone.open" -> PhoneApp.entries.find { it.name == call.params["app"] }?.displayName() ?: K.Phone.text()
+        "phone.open" -> call.phoneAppTarget()?.displayName() ?: K.Phone.text()
         "keypad.status" -> K.SetKeyStatus.text()
         else -> call.id
     }
@@ -602,7 +616,7 @@ internal class PocketSession(
                 } catch (_: RuntimeException) { ActionResult(false,D.NoTone.text()) }
             }
             "phone.open" -> {
-                val target = PhoneApp.entries.find { it.name == call.params["app"] }
+                val target = call.phoneAppTarget()
                 if (origin == WorkflowOrigin.PHYSICAL && target == PhoneApp.CAMERA) {
                     if (screen == null) {
                         val offered = offerPhysicalShortcut(Target.Phone(target))
@@ -1076,7 +1090,7 @@ internal class PocketSession(
             deckWatch?.cancel(); deckWatch = null
             images.useArtwork(null)
             images.clear()
-            decks.value = decks.value.copy(media = MediaDeckState(), navigationEnabled = false)
+            decks.value = decks.value.copy(media = MediaDeckState(), navigationEnabled = false, shortcutAvailable = false)
             return
         }
         if (deckWatch?.isActive == true) return
@@ -1141,7 +1155,9 @@ internal class PocketSession(
                     while (true) {
                         refreshPhoneCall()
                         refreshTeams()
-                        decks.value = decks.value.copy(navigationEnabled = NavigationService.connected != null,
+                        val navigation = NavigationService.connected
+                        decks.value = decks.value.copy(navigationEnabled = navigation != null,
+                            shortcutAvailable = navigation?.shortcutAvailable == true,
                             cameraControls = cameraAccess.enabled)
                         delay(1000)
                     }
@@ -1162,6 +1178,18 @@ internal class PocketSession(
         if (c.workflowSafe) return media.execute(c)
         if (!freshAuthorizedPress())
             return unavailable(D.UnlockKeypad.text())
+        if (c.accessibilityKey) {
+            // A plugin callback or workflow triggered by another key cannot borrow its press.
+            val index = physicalIndex ?: return unavailable(D.UnlockKeypad.text())
+            val key = layout().page.keys[index]
+            if (key.action?.commandBinding() != ActionCall(c.id) || key.holdAction != null ||
+                !acknowledged(index, receipts[index])) return unavailable(D.UnlockKeypad.text())
+            if (c == DeckCommand.ACCESSIBILITY_SHORTCUT)
+                return NavigationService.connected?.runAccessibilityShortcut()
+                    ?: unavailable(tel.misa.mxpocket.i18n.AccessCopy.ShortcutUnavailable.text())
+            screen?.let { return it.deckAction(c, null) }
+            return offerPhysicalShortcut(Target.SettingsPanel(checkNotNull(AccessibilityPanel.forCommand(c))))
+        }
         if (c.legacyCapture) return unavailable(D.OldCamera.text())
         if (c.deck == TEAMS) {
             if (c == DeckCommand.TEAMS_MIC) {

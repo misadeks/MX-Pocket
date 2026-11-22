@@ -23,11 +23,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.ui.graphics.ImageBitmap
 import tel.misa.mxpocket.plugins.IntegrationApp
-import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.*
-import tel.misa.mxpocket.decks.DeckCommand
-import tel.misa.mxpocket.i18n.LayoutCopy
-import tel.misa.mxpocket.i18n.builtInDeckName
 import tel.misa.mxpocket.shared.ui.*
 
 private val DEVICE_LIMIT get() = H.Separate.text()
@@ -64,13 +60,12 @@ fun main() = application {
             Files.createDirectories(it.toPath())
         }
     }
-    val registry = remember { defaultDeck().profiles }
+    val registry = remember { factoryProfiles() }
     val switches = remember { Preferences.userNodeForPackage(PreviewDeck::class.java) }
     val repo = remember { DeckRepository(File(directory, "deck.json"),
         registry.filter { switches.getBoolean("disabled.${it.id}", false) }.map { it.id }.toSet()) }
     val host = remember { PreviewDeck(repo) }
     val workflows = remember(directory) { DesktopWorkflowStore(directory) }
-    val workflowState by workflows.state.collectAsState()
     val deck by repo.operatingState.collectAsState()
     var tab by remember { mutableStateOf(WorkspaceTab.HOME) }
     var themeMode by remember {
@@ -147,7 +142,7 @@ fun main() = application {
             }
             onDispose { buttons.reset(); keyboard = null }
         }
-        val profiles = deck.visibleProfiles.map { ProfileChoice(it.id, it.displayName(), profileReason(it.id)) }
+        val profiles = deck.navigationProfiles.map { ProfileChoice(it.id, it.displayName(), profileReason(it.id)) }
         val board = remember(deck, time, revision, simulating, usb.ready, tel.misa.mxpocket.i18n.AppLocale.current) { host.board(time, deck) }
         val pixels = board.faces.mapIndexed { i, face -> rememberKeyPixels(i, face) }
         LaunchedEffect(usb.ready, board.grid, pixels, repaint) {
@@ -171,18 +166,7 @@ fun main() = application {
                 else -> W.AndroidOnly.text()
             }, available && profiles.any { profile -> profile.id == it.id }, it.id == deck.defaultProfileId, null, canToggle = available, unavailableReason = reason)
         }
-        val options = buildList {
-            add(BindingOption(LayoutCopy.Back.text(), ActionCall(DeckActions.BACK)))
-            add(BindingOption(LayoutCopy.Root.text(), ActionCall(DeckActions.ROOT)))
-            DeckCommand.entries.filter { it.deck in setOf("audio", "navigation", "teams") && it.deck !in deck.disabledPluginIds }.forEach {
-                add(BindingOption(LayoutCopy.CategoryAction.text(builtInDeckName(it.deck), it.displayLabel), ActionCall(it.id)))
-            }
-            deck.visibleProfiles.forEach { add(BindingOption(LayoutCopy.BindProfile.text(it.displayName()), ActionCall(DeckActions.PROFILE, mapOf("profileId" to it.id)))) }
-            workflowState.definitions.forEach {
-                add(BindingOption(LayoutCopy.AndroidWorkflow.text(it.name), ActionCall("workflow.run", mapOf("workflowId" to it.id))))
-            }
-            addAll(availableFactoryKeyBindings(deck.disabledPluginIds))
-        }.map { it.copy(unavailableReason = bindingReason(it.call, simulating)) }
+        val options = globalBindings(deck.visibleProfiles).map { it.copy(unavailableReason = bindingReason(it.call, simulating)) }
         val backup = { save: Boolean ->
             try { chooseBackup(window, repo, save)?.let(::status) }
             catch (e: Exception) { status(W.BackupFailed.text(e.message)) }

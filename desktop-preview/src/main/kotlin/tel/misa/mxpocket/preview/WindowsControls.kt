@@ -54,12 +54,13 @@ internal fun pluginReason(id: String): String? = when (id) {
 }
 
 /** Profile IDs outside the built-in catalog belong to the user, not to an unknown plugin. */
-private val builtIns = defaultDeck().profiles.map { it.id }.toSet()
+private val builtIns = factoryProfiles().map { it.id }.toSet()
 internal fun profileReason(id: String) = if (id in builtIns) pluginReason(id) else null
 
 internal fun bindingReason(call: ActionCall, simulator: Boolean): String? {
     val command = DeckCommand.fromId(call.id)
     if (command != null && call.commandBinding().params.isNotEmpty()) return H.Invalid.text()
+    if (command?.accessibilityKey == true) return tel.misa.mxpocket.i18n.WorkspaceCopy.AndroidOnly.text()
     val plugin = if (call.id == "plugin.key") call.params["pluginId"] else command?.deck
     if (plugin != null) {
         pluginReason(plugin)?.let { return it }
@@ -78,6 +79,7 @@ internal fun bindingReason(call: ActionCall, simulator: Boolean): String? {
     return when (call.id) {
         DeckActions.BACK, DeckActions.ROOT, DeckActions.PAGE, MORE_PROFILES -> null
         DeckActions.PROFILE -> profileReason(call.params[DeckActions.PROFILE_ID].orEmpty())
+        "phone.open" -> H.Phone.text()
         "workflow.run" -> H.Workflow.text()
         else -> H.NotImplemented.text()
     }

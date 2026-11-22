@@ -47,7 +47,7 @@ internal val DarkPalette = PocketPalette(dark = true,
     inner = Color(0xff141518), innerStroke = Color(0xff26282d), chip = Color(0xff1d1f23), control = Color(0xff222429),
     buttonStroke = Color(0xff33363c), nav = Color(0xff141518), navIndicator = Color(0xff3a2414),
     title = Color(0xffffffff), text = Color(0xffe5e7eb), muted = Color(0xff9ca3af), faint = Color(0xff6b7280),
-    accent = Color(0xfff97316), onAccent = Color(0xff1a0c02), accentContainer = Color(0xff7c2d12),
+    accent = Color(0xfffa5c3c), onAccent = Color(0xff1a0c02), accentContainer = Color(0xff7c2d12),
     accentSoft = Color(0xff2a1a10), accentStroke = Color(0xff6b3416), mono = Color(0xfffdba74),
     success = Color(0xff4ade80), successContainer = Color(0xff13301f), successStroke = Color(0xff1f5d36),
     warning = Color(0xfffbbf24), danger = Color(0xfffca5a5), dangerContainer = Color(0xff35191c), dangerStroke = Color(0xff522428))

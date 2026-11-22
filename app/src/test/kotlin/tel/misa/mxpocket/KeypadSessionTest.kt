@@ -53,6 +53,7 @@ import tel.misa.mxpocket.decks.NavigationService
 import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.DeckJson
 import tel.misa.mxpocket.deck.DeckKey
+import tel.misa.mxpocket.deck.importLegacyPhone
 import tel.misa.mxpocket.decks.Favorite
 import tel.misa.mxpocket.workflow.StepKind
 import tel.misa.mxpocket.workflow.WorkflowDefinition
@@ -401,7 +402,7 @@ class KeypadSessionTest {
         assertEquals("Focus", session.frame().keys.first().label)
         press(1); expectProfile("focus")
         session.setPluginEnabled("audio", false)
-        val ids = listOf("phone", "launcher", "studio", "navigation", "teams", "onenote", "@home", "focus")
+        val ids = listOf("launcher", "studio", "navigation", "teams", "onenote", "@home", "focus")
         ids.forEach { press(0x01a2); expectProfile(it) }
         val hold = ViewConfiguration.getLongPressTimeout().toLong()
         for ((first, second) in listOf(0x01a1 to 0x01a2, 0x01a2 to 0x01a1)) {
@@ -513,6 +514,7 @@ class KeypadSessionTest {
         }
         session.attach(screen)
         val ticket = session.reserve(real)!!
+        session.deck.importLegacyPhone("My shortcuts")
         session.selectProfile("focus")
         session.connect(ticket, usb, real, { stops++ }, {
             handoff = (it.target as PocketSession.Target.Phone).app
@@ -556,6 +558,7 @@ class KeypadSessionTest {
     }
 
     @Test fun backgroundPhoneKeyOffersExactSingleTapTargetAndRejectsStaleTaps() {
+        app.session.deck.importLegacyPhone("My shortcuts")
         val real = device("test-keypad")
         shadowOf(usb).addOrUpdateUsbDevice(real, true)
         val ticket = app.session.reserve(real)!!
@@ -573,7 +576,7 @@ class KeypadSessionTest {
                 Robolectric.buildActivity(PhoneActionActivity::class.java, intent).setup().use {
                     shadowOf(it.get()).nextStartedActivity
                 }
-            press(3) // Open Phone from the startup launcher.
+            press(3) // Open the user's saved shortcuts from the startup launcher.
             press(1)
             assertEquals("android.media.action.STILL_IMAGE_CAMERA", shadowOf(controller.get()).nextStartedActivity?.action)
             controller.pause().stop()
@@ -589,6 +592,11 @@ class KeypadSessionTest {
             assertEquals(Intent.ACTION_DIAL, target?.action)
             assertEquals("tel:", target?.dataString)
             assertNull(tap(dialer))
+            press(4)
+            assertEquals("Open logitech.com", manager.getNotification(PHONE_NOTICE).extras.getString(Notification.EXTRA_TITLE))
+            val website = tap(shortcut())
+            assertEquals(Intent.ACTION_VIEW, website?.action)
+            assertEquals("https://www.logitech.com/", website?.dataString)
             press(1)
             val missing = shortcut()
             shadowOf(app).checkActivities(true)
@@ -677,7 +685,7 @@ class KeypadSessionTest {
             press(1)
             assertEquals(0, clicks)
             CameraControlsAccess(app).enabled = true
-            session.selectProfile("phone")
+            session.selectProfile("audio")
             session.selectProfile("studio")
             press(1) // Arrived with an invalidated receipt.
             assertEquals(0, clicks)
@@ -756,6 +764,27 @@ class KeypadSessionTest {
         }
         app.session.disconnect()
         service.destroy()
+    }
+
+    @Test fun savedPhoneOpenWebStillRequestsOnlyTheLogitechSiteInTheForeground() {
+        val session = app.session
+        val web = ActionCall("phone.open", mapOf("app" to "WEB", "url" to "https://example.com"))
+        val profile = session.deck.createProfile("Shortcuts").getOrThrow()
+        session.deck.setKey(profile, "root", 0, DeckKey(action = web)).getOrThrow()
+        session.selectProfile(profile)
+        app.connectKeypad()
+        try {
+            Robolectric.buildActivity(MainActivity::class.java).setup().use {
+                app.press(1)
+                val target = shadowOf(app).nextStartedActivity
+                assertEquals(Intent.ACTION_VIEW, target?.action)
+                assertEquals("https://www.logitech.com/", target?.dataString)
+            }
+            app.press(1)
+            assertNull(shadowOf(app).nextStartedActivity)
+        } finally {
+            session.disconnect()
+        }
     }
 
     @Test fun customCameraBindingRequestsTheViewfinderButCannotCarryPhysicalAuthorityIntoAWorkflow() {
@@ -869,6 +898,95 @@ class KeypadSessionTest {
         }
         session.disconnect()
         service.destroy()
+    }
+
+    @Suppress("DEPRECATION")
+    @Test fun accessibilityPanelsUseSystemSettingsAndAlwaysRequireATapFromAnotherApp() {
+        val session = app.session
+        val profile = session.deck.createProfile("Reading").getOrThrow()
+        val controls = listOf(DeckCommand.TALKBACK_SETTINGS, DeckCommand.CAPTION_SETTINGS, DeckCommand.NIGHT_LIGHT_SETTINGS)
+        controls.forEachIndexed { i, c -> session.deck.setKey(profile, "root", i, DeckKey(action = ActionCall(c.id))).getOrThrow() }
+        session.selectProfile(profile)
+        val settings = android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS
+        val pm = shadowOf(app.packageManager)
+        fun register(route: String, name: String, system: Boolean) {
+            pm.addResolveInfoForIntent(Intent(route), handler(ComponentName(name, "$name.Panel")).apply {
+                if (system) activityInfo.applicationInfo.flags = ApplicationInfo.FLAG_SYSTEM
+            })
+        }
+        register(settings, "example.settings", true)
+        register(android.provider.Settings.ACTION_CAPTIONING_SETTINGS, "example.thirdparty", false)
+        register(android.provider.Settings.ACTION_NIGHT_DISPLAY_SETTINGS, "example.display", true)
+
+        val keypad = device("test-keypad")
+        shadowOf(usb).addOrUpdateUsbDevice(keypad, true)
+        val service = Robolectric.buildService(KeypadService::class.java).create()
+        service.get().onStartCommand(KeypadService.command(app, session.reserve(keypad)!!), 0, 1)
+        ShadowSettings.setCanDrawOverlays(true)
+        DirectShortcuts(app).enabled = true
+        val manager = shadowOf(app.getSystemService(NotificationManager::class.java))
+        try {
+            Robolectric.buildActivity(MainActivity::class.java).setup().use { host ->
+                main.idle()
+                val options = tel.misa.mxpocket.shared.ui.globalBindings(session.deck.state.value.visibleProfiles)
+                assertTrue(controls.all { command -> options.any { it.call == ActionCall(command.id) } })
+                assertTrue(controls.none { c -> session.platformWorkflowActions().any { it.id == c.id } })
+                app.press(2) // No system captioning activity: use Accessibility, never the third-party handler.
+                val fallback = shadowOf(host.get()).nextStartedActivity
+                assertEquals(settings, fallback?.action)
+                assertEquals("example.settings", fallback.component?.packageName)
+                app.press(3)
+                assertEquals(android.provider.Settings.ACTION_NIGHT_DISPLAY_SETTINGS, shadowOf(host.get()).nextStartedActivity?.action)
+                host.pause().stop()
+                app.press(1)
+                assertNull(shadowOf(app).nextStartedActivity)
+                val note = manager.getNotification(PHONE_NOTICE)
+                assertTrue(note.extras.getString(Notification.EXTRA_TITLE).orEmpty().contains("TalkBack"))
+                val tap = shadowOf(note.contentIntent).savedIntent
+                fun open() = Robolectric.buildActivity(PhoneActionActivity::class.java, tap).setup().use {
+                    shadowOf(it.get()).nextStartedActivity
+                }
+                assertEquals(settings, open()?.action)
+                assertNull(open()) // One-shot request, including after a successful first tap.
+            }
+        } finally { session.disconnect(); service.destroy() }
+    }
+
+    @Test fun configuredShortcutNeedsAnAdvertisedSystemActionAndItsOwnFreshKey() {
+        val session = app.session
+        val profile = session.deck.createProfile("Reading").getOrThrow()
+        val command = DeckCommand.ACCESSIBILITY_SHORTCUT
+        session.deck.setKey(profile, "root", 0, DeckKey(action = ActionCall(command.id))).getOrThrow()
+        session.selectProfile(profile)
+        val service = Robolectric.buildService(NavigationService::class.java).create()
+        val nav = service.get()
+        try {
+            ReflectionHelpers.callInstanceMethod<Unit>(nav, "onServiceConnected")
+            app.connectKeypad()
+            assertFalse(session.frame().keys[0].enabled)
+            app.press(1)
+            val actions = shadowOf(nav)
+            assertTrue(actions.globalActionsPerformed.isEmpty())
+            if (Build.VERSION.SDK_INT >= 31) {
+                val id = android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_ACCESSIBILITY_SHORTCUT
+                actions.setSystemActions(listOf(android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction(id, "Shortcut")))
+                nav.onSystemActionsChanged()
+                main.idleFor(java.time.Duration.ofSeconds(1))
+                assertTrue(session.frame().keys[0].enabled)
+                assertFalse(session.runDeckAction(command.id, fromPhysicalKey = true).success)
+                app.emit(KeyEvent(1, true, synthetic = true)); app.emit(KeyEvent(1, false, synthetic = true)); main.idle()
+                assertTrue(actions.globalActionsPerformed.isEmpty())
+                app.press(1)
+                assertEquals(listOf(id), actions.globalActionsPerformed)
+                shadowOf(app.getSystemService(KeyguardManager::class.java)).setKeyguardLocked(true)
+                app.press(1)
+                assertEquals(listOf(id), actions.globalActionsPerformed)
+                shadowOf(app.getSystemService(KeyguardManager::class.java)).setKeyguardLocked(false)
+                actions.setSystemActions(emptyList()) // Stale rendered availability must not dispatch.
+                app.press(1)
+                assertEquals(listOf(id), actions.globalActionsPerformed)
+            }
+        } finally { session.disconnect(); service.destroy() }
     }
 
     private fun handler(name: ComponentName) = ResolveInfo().apply {

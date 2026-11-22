@@ -454,7 +454,7 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             status = session.status,
             pluginTitle = if (carrierCall) CallCopy.ViewTitle.text() else if (page == profile) profile else "$profile / $page",
             tiles = session.homeTiles(),
-            profiles = deck.visibleProfiles.map { ProfileChoice(it.id, it.displayName()) },
+            profiles = deck.navigationProfiles.map { ProfileChoice(it.id, it.displayName()) },
             activeId = deck.activeProfileId, reason = if (carrierCall) CallCopy.ViewReason.text() else displaySelectionReason(deck.selectionReason),
             connectionLabel = session.connectionLabel,
             connectionActive = target != null || session.request != null,
@@ -463,7 +463,8 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             themeMode = ThemePreference.current(this),
             language = LanguagePreference.choice(this),
             phoneCalls = session.phoneAccess.let {
-                PhoneCallSettings(it.supported, it.enabled, it.phoneGranted, Build.VERSION.SDK_INT >= 34, it.details, it.notificationGranted)
+                PhoneCallSettings(it.supported, it.enabled, it.phoneGranted, Build.VERSION.SDK_INT >= 34, it.details,
+                    it.notificationGranted, session.phoneCallBlocker)
             },
         )
         presentation = state
@@ -489,6 +490,10 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
 
     override fun deckAction(command: DeckCommand, component: String?): DeckResult {
         if (!resumed || !isUnlockedAndInteractive()) return unavailable(D.OpenUnlocked.text())
+        AccessibilityPanel.forCommand(command)?.let { panel ->
+            return launchShortcut(PocketSession.Target.SettingsPanel(panel))?.let(::unavailable)
+                ?: ok(tel.misa.mxpocket.i18n.AccessCopy.SettingsOpened.text())
+        }
         val intent = when (command) {
             DeckCommand.TEAMS_OPEN -> teamsLauncher() ?: return unavailable(D.NoTeams.text())
             DeckCommand.TEAMS_ACCESS -> Intent(this, TeamsAccessActivity::class.java)

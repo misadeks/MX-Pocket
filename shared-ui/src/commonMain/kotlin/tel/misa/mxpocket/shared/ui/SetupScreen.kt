@@ -42,7 +42,7 @@ enum class SetupAction(private val copy: Copy) {
     MUSIC(AccessCopy.EnableMusic),
     CAMERA(AccessCopy.EnableCamera), OVERLAY(AccessCopy.OpenSpecialAccess),
     DIRECT(AccessCopy.EnableDirect), NAVIGATION(AccessCopy.OpenAccessibility),
-    USAGE(AccessCopy.OpenUsage), DETECTION(AccessCopy.EnableDetection), SWITCHING(AccessCopy.EnableSwitching),
+    USAGE(AccessCopy.OpenUsage), DETECTION(AccessCopy.EnableDetection),
     TEAMS(AccessCopy.EnableTeams), TOOLBAR(AccessCopy.OpenTeamsToolbar),
     AUDIO_PLUGIN(AccessCopy.EnableAudio), STUDIO_PLUGIN(AccessCopy.EnableStudio), NAV_PLUGIN(AccessCopy.EnableNavigation), TEAMS_PLUGIN(AccessCopy.EnableTeamsPlugin),
     ONENOTE_PLUGIN(OneNoteCopy.EnablePlugin), ONENOTE_ACCESS(OneNoteCopy.AccessSettings);

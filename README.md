@@ -5,7 +5,7 @@ and put actions where your fingers expect them. In supported apps, use physical
 keys to move between items, scroll and select without tapping a small button or
 making a precise swipe. Assign a workflow to one of the nine LCD keys, open a
 favorite app, start a focus timer or change tracks. Previous and Next switch
-layouts. Press them together and release for the keypad’s profile launcher,
+layouts. Press them together and release to return to Home and choose a profile,
 or hold both to play Tic Tac Toe. To try MX Pocket without hardware, use the
 Windows simulator.
 
@@ -16,8 +16,9 @@ actions. When the call ends, the keypad returns to your previous layout unless
 you've selected another.
 
 On the **Music** layout, press the center key to pause the track.
-Switch to **Navigation**: that same key now says **Select**, and the key below
-it says **Scroll down**. With [Android navigation access](docs/android-decks.md)
+Switch to **Navigation and Accessibility**: that same key now says **Select**, and the key below
+it says **Scroll down**. The bottom-right key opens **Accessibility**; press it again
+to return to navigation. With [Android navigation access](docs/android-decks.md)
 enabled, you can keep reading in a supported app without swiping the screen.
 
 ![Two illustrated nine-key keypads. On Music, the center key shows Pause and the key below reads “Druga Strana”. On Navigation, those keys become Select and Scroll down.](docs/images/audio-and-navigation.png)
@@ -75,9 +76,11 @@ highlighters a broad translucent band, and palette keys show a named swatch.
 Black-and-white stripes mean the ink color is unknown. A corner check marks an
 observed selection, not a successful key press.
 
-For ordinary mobile calls, **Settings → Phone calls** can temporarily show the
-caller on the **physical keypad**. Either page key leaves without affecting the
-call. See [carrier call setup and supported controls](docs/android-decks.md#carrier-calls-on-the-keypad).
+For ordinary mobile calls, turn on **Settings → Phone calls → Show calls on the keypad**.
+The authorized **physical keypad** then shows call state while the phone is
+unlocked and its screen is on. Caller details are a separate opt-in. Either
+page key leaves without affecting the call. Camera, Dialer and other shortcuts
+remain available as key bindings. See [carrier call setup and supported controls](docs/android-decks.md#carrier-calls-on-the-keypad).
 
 <a name="hardware-evidence-and-credits"></a>
 

@@ -24,11 +24,45 @@ class DeckRepositoryTest {
     private val file: File get() = File(folder.root, "deck.json")
     private val repo by lazy { DeckRepository(file) }
 
+    @Test fun stockPhoneIsNotAChoiceButOldTargetsAndCustomizationsSurvive() {
+        fun choices(repo: DeckRepository) = repo.state.value.navigationProfiles.map { it.id }
+        assertFalse(repo.state.value.profiles.any { it.id == "phone" })
+        repo.importLegacyPhone()
+        val target = DeckKey(holdAction = ActionCall(DeckActions.PROFILE, mapOf("profileId" to "phone")))
+        repo.setKey("focus", "root", 0, target).getOrThrow()
+        val backup = repo.exportJson()
+        val cold = DeckRepository(file)
+        assertFalse("phone" in choices(cold))
+        assertFalse(cold.operatingState.value.activePage.keys.any { it.action?.targetProfileId() == "phone" })
+        assertEquals(backup, cold.exportJson())
+        assertEquals(target, cold.state.value.profiles.single { it.id == "focus" }.pages.first().keys.first())
+        cold.selectProfile("audio").getOrThrow()
+        cold.changePage(1).getOrThrow()
+        assertEquals("launcher", cold.operatingState.value.activeProfileId)
+        cold.selectProfile("phone").getOrThrow()
+        cold.changePage(-1).getOrThrow()
+        assertEquals(PROFILE_HOME, cold.operatingState.value.activeProfileId)
+        val beforeDisabling = cold.exportJson()
+        cold.setDisabledPlugins(choices(cold).toSet())
+        assertTrue(cold.operatingState.value.activePage.keys.any { it.action != null })
+        assertFalse("phone" in choices(cold))
+        assertEquals(beforeDisabling, cold.exportJson())
+        cold.setDisabledPlugins(emptySet())
+        val copy = cold.duplicateProfile("phone", "Phone").getOrThrow()
+        assertTrue(copy in choices(cold))
+        val child = cold.createPage("phone", "Tools").getOrThrow()
+        assertTrue("phone" in choices(cold))
+        cold.deletePage("phone", child).getOrThrow()
+        cold.setKey("phone", "root", 4, target).getOrThrow()
+        assertTrue("phone" in choices(DeckRepository(file)))
+        cold.restoreDefaults().getOrThrow()
+        assertFalse(cold.state.value.profiles.any { it.id == "phone" })
+    }
+
     @Test fun factoryDefaultsStartOnLauncherAndKeepStudioSelected() {
         assertEquals("launcher", repo.state.value.activeProfileId)
         assertEquals("launcher", repo.state.value.defaultProfileId)
         assertFalse(repo.state.value.profiles.single { it.id == "studio" }.automatic)
-        repo.setAutomatic(true).getOrThrow()
         repo.selectProfile("studio").getOrThrow()
         repo.observe(emptyMap(), 0).getOrThrow()
         repo.observe(emptyMap(), 3000).getOrThrow()
@@ -62,13 +96,12 @@ class DeckRepositoryTest {
     @Test fun workEntryYieldsToConfirmedCallAndExplicitMappings() {
         val foreground = mapOf("foregroundApp" to "com.microsoft.teams")
         fun observe(time: Long) = repo.observe(foreground, time, allowTeamsWork = true).getOrThrow()
-        repo.setAutomatic(true).getOrThrow()
         repo.showTeamsCall(true)
         observe(0); observe(2000)
         assertEquals("in-call", repo.state.value.activePage.id)
-        repo.selectProfile("phone").getOrThrow()
+        repo.selectProfile("audio").getOrThrow()
         repo.showTeamsCall(false); observe(4000); observe(6000)
-        assertEquals("phone", repo.state.value.activeProfileId)
+        assertEquals("audio", repo.state.value.activeProfileId)
         repo.observe(emptyMap(), 7000).getOrThrow()
         repo.setProfileAutomatic("studio", true).getOrThrow()
         repo.setRules("studio", listOf(DeckRule("foregroundApp", "com.microsoft.teams", 5))).getOrThrow()
@@ -80,7 +113,6 @@ class DeckRepositoryTest {
         val fg = mapOf("foregroundApp" to "com.microsoft.teams")
         fun sample(t: Long) = repo.observe(fg, t, allowTeamsWork = true).getOrThrow()
         fun surface() = repo.operatingState.value.activeProfileId
-        repo.setAutomatic(true).getOrThrow()
         assertEquals(PROFILE_HOME, surface())
         repo.setDisabledPlugins(setOf("teams"))
         assertFalse(repo.operatingState.value.visibleProfiles.any { it.id == "teams" })
@@ -121,14 +153,15 @@ class DeckRepositoryTest {
     }
 
     @Test fun callProjectionRestoresExactPageAndNeverOverwritesAnExplicitChoice() {
-        val child = repo.createPage("phone", "Tools").getOrThrow()
-        repo.selectProfile("phone").getOrThrow()
+        repo.setProfileAutomatic("studio", true).getOrThrow()
+        val child = repo.createPage("studio", "Tools").getOrThrow()
+        repo.selectProfile("studio").getOrThrow()
         repo.openPage(child).getOrThrow()
         val before = repo.exportJson()
         repo.showTeamsCall(true)
         assertEquals("in-call", repo.state.value.activePage.id)
         assertEquals(before, repo.exportJson())
-        repo.renamePage("phone", child, "My tools").getOrThrow()
+        repo.renamePage("studio", child, "My tools").getOrThrow()
         repo.showTeamsCall(false)
         assertEquals(child, repo.state.value.activePage.id)
         assertEquals("My tools", repo.state.value.activePage.name)
@@ -166,7 +199,8 @@ class DeckRepositoryTest {
     }
 
     @Test fun addsXoProfileToAnExistingLayoutWithoutChangingSelectionOrKeys() {
-        val factory = defaultDeck()
+        repo.importLegacyPhone()
+        val factory = repo.state.value
         val oldLayout = factory.copy(
             profiles = factory.profiles.filterNot { it.id == "game.xo" },
             activeProfileId = "phone",
@@ -186,6 +220,25 @@ class DeckRepositoryTest {
 
     private fun pluginKey(id: String, index: Int) =
         DeckKey(action = ActionCall("plugin.key", mapOf("pluginId" to id, "index" to index.toString())))
+
+    @Test fun historicalPhoneSlotsAndExplicitAppCallsRoundTripWithoutRebinding() {
+        val custom = repo.createProfile("My shortcuts").getOrThrow()
+        val stock = (0..8).map { pluginKey("phone", it) }
+        val apps = listOf("WEB", "ONENOTE", "ALARMS", "DIALER", "SETTINGS", "CAMERA")
+        val keys = stock.reversed().mapIndexed { i, slot ->
+            val params = if (i == 0) mapOf("app" to "WEB", "url" to "https://example.com")
+                else mapOf("app" to apps[i % apps.size])
+            val app = ActionCall("phone.open", params)
+            if (i % 2 == 0) DeckKey(label = "My key", action = app, holdAction = slot.action)
+            else slot.copy(holdAction = app)
+        }
+        keys.forEachIndexed { i, key -> repo.setKey(custom, "root", i, key).getOrThrow() }
+        val backup = JSONObject(repo.exportJson()).put("version", 1).toString()
+        repo.importJson(backup).getOrThrow()
+        fun phoneKeys(state: DeckState) = state.profiles.single { it.id == custom }.pages.single().keys
+        assertEquals(keys, phoneKeys(DeckRepository(file).state.value))
+        assertEquals(keys, phoneKeys(DeckJson.decode(repo.exportJson())))
+    }
 
     @Test fun selectedSlotOwnerPrefersRegisteredTapAcrossTheWholePageBeforeHold() {
         fun slot(id: String) = pluginKey(id, 0).action
@@ -234,14 +287,38 @@ class DeckRepositoryTest {
                     assertEquals(pluginKey("teams", 4), profile.pages.last().keys[4])
                     continue
                 }
-                val slots = if (profile.id == "navigation") listOf(0, 3, 1, 6, 4, 8, 2, 5, 7) else (0..8).toList()
-                assertEquals(profile.id, slots.map { pluginKey(profile.id, it) }, profile.pages.single().keys)
+                if (profile.id == "navigation") {
+                    assertEquals(expectedNavigationRoot(), profile.pages.first().keys)
+                    assertEquals(ActionCall(DeckActions.ROOT), profile.pages.single { it.id == ACCESSIBILITY_PAGE }.keys[8].action)
+                } else assertEquals(profile.id, (0..8).map { pluginKey(profile.id, it) }, profile.pages.single().keys)
             }
+
         }
         checkDefaults()
         repo.setKey("navigation", "root", 1, DeckKey()).getOrThrow()
         repo.restoreDefaults().getOrThrow()
         checkDefaults()
+    }
+
+    private fun expectedNavigationRoot() = listOf(0, 3, 1, 6, 4, 8, 2, 5).map { pluginKey("navigation", it) } +
+        DeckKey(action = ActionCall(DeckActions.PAGE, mapOf(DeckActions.PAGE_ID to "accessibility")))
+
+    @Test fun v4UpgradesOnlyStockNavigationWithoutOverwritingUserPagesOrBindings() {
+        val state = repo.state.value
+        val nav = state.profiles.single { it.id == "navigation" }
+        val old = DeckPage("root", "Navigation", listOf(0,3,1,6,4,8,2,5,7).map { pluginKey("navigation", it) })
+        fun migrate(vararg pages: DeckPage): DeckProfile {
+            val document = state.copy(version = 4, profiles = state.profiles.map {
+                if (it.id == "navigation") nav.copy(name = "My pad", pages = pages.toList()) else it
+            })
+            repo.importJson(DeckJson.encode(document)).getOrThrow()
+            return repo.state.value.profiles.single { it.id == "navigation" }.also { assertEquals("My pad", it.name) }
+        }
+        assertEquals(expectedNavigationRoot(), migrate(old).pages.first().keys)
+        val edited = old.copy(keys = old.keys.mapIndexed { i, k -> if (i == 8) k.copy(holdAction = ActionCall(DeckActions.ROOT)) else k })
+        assertEquals(listOf(edited), migrate(edited).pages)
+        val existing = old.copy(id = "accessibility", name = "My tools")
+        assertEquals(listOf(old, existing), migrate(old, existing).pages)
     }
 
     // The v1 on-disk format, independent of the current default generator and writer.
@@ -279,7 +356,7 @@ class DeckRepositoryTest {
         val loaded = DeckRepository(file)
         val state = loaded.state.value
         val originalKeys = (0..8).map { pluginKey("navigation", it) }
-        assertEquals(listOf(0, 3, 1, 6, 4, 8, 2, 5, 7).map(originalKeys::get), state.activePage.keys)
+        assertEquals(expectedNavigationRoot(), state.activePage.keys)
         assertEquals(originalKeys, state.activeProfile.pages.single { it.id == "copy" }.keys)
         assertEquals(originalKeys, state.profiles.single { it.id == "copy" }.pages.single().keys)
         assertEquals(state, DeckRepository(file).state.value) // retry before a save
@@ -321,8 +398,7 @@ class DeckRepositoryTest {
         nav.put("pages", historicalNavigation().getJSONArray("profiles").getJSONObject(0).getJSONArray("pages"))
         repo.importJson(exported.toString()).getOrThrow()
         val result = repo.state.value.profiles.associateBy { it.id }
-        assertEquals(listOf(0, 3, 1, 6, 4, 8, 2, 5, 7).map { pluginKey("navigation", it) },
-            result.getValue("navigation").pages.single().keys)
+        assertEquals(expectedNavigationRoot(), result.getValue("navigation").pages.first().keys)
         assertEquals((0..8).map { pluginKey("audio", it) }, result.getValue(copy).pages.single().keys)
     }
 
@@ -374,12 +450,10 @@ class DeckRepositoryTest {
         val rule = DeckRule("foregroundApp", pkg, 5)
         repo.setProfileAutomatic("studio", true).getOrThrow()
         repo.setRules("studio", listOf(rule)).getOrThrow()
-        repo.setAutomatic(true).getOrThrow()
         for (time in listOf(0L, 2000L)) repo.observe(mapOf(rule.signal to pkg), time).getOrThrow()
         assertEquals("studio", repo.state.value.activeProfileId)
         assertEquals(listOf(rule), repo.decision.value.matches["studio"])
         assertFalse(repo.reason.value.contains(pkg))
-        repo.setAutomatic(false).getOrThrow()
         repo.setRules("studio", emptyList()).getOrThrow()
         assertFalse(repo.exportJson().contains(pkg))
         assertFalse(file.readText().contains(pkg))
@@ -396,7 +470,7 @@ class DeckRepositoryTest {
     }
 
     @Test fun deletedXoStaysDeletedAcrossColdLoadAndBackupRestore() {
-        repo.selectProfile("phone").getOrThrow()
+        repo.selectProfile("studio").getOrThrow()
         // A backup from before the built-in game became read-only.
         val old = repo.state.value
         repo.importJson(DeckJson.encode(old.copy(profiles = old.profiles.filterNot { it.id == GAME_PROFILE },
@@ -461,7 +535,6 @@ class DeckRepositoryTest {
         repo.setPinned(id).getOrThrow()
         repo.setDefault(id).getOrThrow()
         repo.setProfileAutomatic(id, false).getOrThrow()
-        repo.setAutomatic(true).getOrThrow()
         repo.setRules(id, listOf(DeckRule("hour", "22-5", 5))).getOrThrow()
         repo.openPage(page).getOrThrow()
         val reloaded = DeckRepository(file)
@@ -603,7 +676,7 @@ class DeckRepositoryTest {
         repo.setKey("audio", "root", 8, link(child)).getOrThrow()
         repo.openPage(child).getOrThrow()
         repo.openPage(leaf).getOrThrow()
-        repo.selectProfile("phone").getOrThrow()
+        repo.selectProfile("studio").getOrThrow()
         repo.selectProfile("audio").getOrThrow()
         assertEquals(leaf, repo.state.value.activePage.id)
         repo.back().getOrThrow()
@@ -665,7 +738,6 @@ class DeckRepositoryTest {
         repo.setDefault("focus").getOrThrow()
         repo.selectProfile("focus").getOrThrow()
         repo.setProfileAutomatic("studio", true).getOrThrow()
-        repo.setAutomatic(true).getOrThrow()
         repo.setRules("audio", listOf(music)).getOrThrow()
         repo.setRules("studio", listOf(overnight, dock)).getOrThrow()
         val media = mapOf("mediaActive" to "true")
@@ -705,11 +777,10 @@ class DeckRepositoryTest {
     @Test fun explicitSelectionPinAndOptOutCannotBeOverriddenByAnOldCandidate() {
         val media = mapOf("mediaActive" to "true")
         repo.setDefault("focus").getOrThrow()
-        repo.setAutomatic(true).getOrThrow()
         repo.observe(media, 1).getOrThrow()
-        repo.setPinned("phone").getOrThrow()
+        repo.setPinned("studio").getOrThrow()
         repo.observe(media, 5000).getOrThrow()
-        assertEquals("phone", repo.state.value.activeProfileId)
+        assertEquals("studio", repo.state.value.activeProfileId)
         assertTrue(repo.selectProfile("audio", SelectionSource.AUTOMATIC).isFailure)
         repo.selectProfile("focus").getOrThrow()
         assertEquals("focus", repo.state.value.pinnedProfileId)
@@ -726,9 +797,25 @@ class DeckRepositoryTest {
         repo.clearObservation()
         repo.observe(media, 18000L).getOrThrow()
         assertEquals("focus", repo.state.value.activeProfileId)
-        repo.setAutomatic(false).getOrThrow()
         repo.observe(media, 20000L).getOrThrow()
-        assertEquals("focus", repo.state.value.activeProfileId)
+        assertEquals("audio", repo.state.value.activeProfileId)
+    }
+
+    @Test fun oldMasterSwitchDoesNotGateRulesOrDisplaceManualLayoutsWithoutAMatch() {
+        repo.setProfileAutomatic("studio", true).getOrThrow()
+        repo.setDefault("focus").getOrThrow()
+        repo.selectProfile("studio").getOrThrow()
+        file.writeText(JSONObject(repo.exportJson()).put("automatic", false).toString())
+        val upgraded = DeckRepository(file)
+        upgraded.selectProfile("studio").getOrThrow()
+        fun sample(signals: Map<String, String>, start: Long) {
+            upgraded.observe(signals, start).getOrThrow()
+            upgraded.observe(signals, start + DeckRepository.DEBOUNCE_MS).getOrThrow()
+        }
+        sample(emptyMap(), 0); assertEquals("studio", upgraded.state.value.activeProfileId)
+        sample(mapOf("mediaActive" to "true"), 2000); assertEquals("audio", upgraded.state.value.activeProfileId)
+        sample(emptyMap(), 4000); assertEquals("focus", upgraded.state.value.activeProfileId)
+        assertTrue(JSONObject(upgraded.exportJson()).getBoolean("automatic"))
     }
 
     private fun JSONObject.keyAt(index: Int): JSONObject = getJSONArray("profiles").getJSONObject(0)

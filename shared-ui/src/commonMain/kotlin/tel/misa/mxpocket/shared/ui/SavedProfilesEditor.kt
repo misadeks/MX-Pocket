@@ -29,7 +29,9 @@ fun SavedProfilesEditor(
     val writable = !writer.busy && repo.loadError == null
     var profileId by rememberSaveable { mutableStateOf<String?>(null) }
     val disabled = deck.disabledPluginIds + disabledProfiles
-    val profiles = deck.visibleProfiles.filterNot { it.id in disabledProfiles }
+    // A legacy pin must still be manageable even when its factory layout is no longer a choice.
+    val choices = deck.navigationProfiles
+    val profiles = deck.visibleProfiles.filter { it.id !in disabledProfiles && (it.id == deck.pinnedProfileId || it in choices) }
     val profile = profiles.find { it.id == profileId }
     val libraryScroll = rememberScrollState()
 
@@ -59,7 +61,7 @@ fun SavedProfilesEditor(
                     command != null -> command = null
                     rule != null -> rule = null
                     draft?.pendingColor != null -> draft.pendingColor = null
-                    draft?.picking != null -> draft.picking = null
+                    draft?.picking != null -> draft.pickerBack()
                     index != null -> index = null
                     page != null -> pageId = null
                     settings -> settings = false
@@ -115,7 +117,7 @@ fun SavedProfilesEditor(
                 picking != null && draft != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                     Column(Modifier.widthIn(max = 620.dp).fillMaxWidth().imePadding().padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        UpLink(LayoutCopy.BackToKey.text(), !writer.busy, ::back)
+                        UpLink(LayoutCopy.BackToKey.text(), !writer.busy) { draft.picking = null }
                         WorkspaceTitle(picking.picker.text())
                         BindingChoices(bindings, draft)
                     }
@@ -173,7 +175,7 @@ private fun UpLink(label: String, enabled: Boolean, back: () -> Unit) {
 }
 
 @Composable
-private fun LibraryRow(name: String, detail: String?, enabled: Boolean, leading: (@Composable () -> Unit)? = null,
+internal fun LibraryRow(name: String, detail: String?, enabled: Boolean, leading: (@Composable () -> Unit)? = null,
                        open: () -> Unit) {
     Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(enabled = enabled, role = Role.Button, onClick = open)
         .padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically,

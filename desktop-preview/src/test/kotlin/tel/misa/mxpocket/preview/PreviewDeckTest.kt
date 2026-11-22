@@ -17,7 +17,7 @@ import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.DeckActions
 import tel.misa.mxpocket.deck.DeckKey
 import tel.misa.mxpocket.decks.DeckCommand
-import tel.misa.mxpocket.shared.ui.factoryKeyBindings
+import tel.misa.mxpocket.decks.navigationCommands
 import tel.misa.mxpocket.shared.ui.PocketScreenEvent
 import tel.misa.mxpocket.i18n.AppLanguage
 import tel.misa.mxpocket.i18n.AppLocale
@@ -96,6 +96,25 @@ class PreviewDeckTest {
         assertEquals("@home", deck.profileId)
     }
 
+    @Test fun androidAccessibilityBindingsRemainNamedButInertOnWindows() {
+        val repo = DeckRepository(File(folder.root, "deck.json"))
+        val host = PreviewDeck(repo)
+        host.select("focus")
+        val commands = DeckCommand.entries.filter { it.accessibilityKey }
+        commands.forEachIndexed { i, c ->
+            repo.setKey("focus", "root", i, DeckKey(action = ActionCall(c.id))).getOrThrow()
+        }
+        for (virtual in listOf(false, true)) {
+            host.simulator = virtual
+            val board = host.board(0)
+            commands.forEachIndexed { i, c ->
+                assertEquals(c.id, board.faces[i].inputToken)
+                check(!board.grid.taps[i].actionable)
+                check(board.faces[i].footer.contains("Windows"))
+            }
+        }
+    }
+
     @Test fun holdUsesItsOwnActionAndAvailabilityWithoutFallingBackToTap() {
         val repo = DeckRepository(File(folder.root, "deck.json"))
         val deck = PreviewDeck(repo).apply { simulator = true }
@@ -171,14 +190,14 @@ class PreviewDeckTest {
         check(deck.press(2, 0).startsWith("Invalid action parameters"))
         check(deck.tiles(0)[3].label == "5 / 15")
     }
-    @Test fun launcherPaginatesAndBrowseAlwaysOpensProfileRoots() {
+    @Test fun homePaginatesAndBrowseAlwaysOpensProfileRoots() {
         val repo = DeckRepository(File(folder.root, "deck.json"))
         val deck = PreviewDeck(repo).apply { simulator = true }
         val page = repo.createPage("focus", "Projects").getOrThrow()
         val extras = List(4) { repo.createProfile("Custom $it").getOrThrow() }
         check(deck.profileName == "Home")
         check(deck.tiles(0)[8].label == "More profiles")
-        deck.press(8, 0)
+        assertEquals("Home", deck.press(8, 0))
         val lastChoice = deck.tiles(0).indexOfFirst { it.label == "Custom 3" }
         check(lastChoice in 0..7)
         deck.press(lastChoice, 0)
@@ -209,14 +228,17 @@ class PreviewDeckTest {
     @Test fun navigationUsesFactoryBindingsAndNeverClaimsAndroidAccess() {
         val deck = PreviewDeck(DeckRepository(File(folder.root, "deck.json"))).apply { simulator = true }
         deck.repository.selectProfile("navigation").getOrThrow()
-        val up = factoryKeyBindings.single { it.label == "Navigation key 2: Scroll up" }
-        assertEquals(deck.repository.state.value.activePage.keys[1].action, up.call)
+        val up = deck.repository.state.value.activePage.keys[1].action!!
+        assertEquals(DeckCommand.UP, navigationCommands[up.params.getValue("index").toInt()])
         val tiles = deck.tiles(0)
         check(tiles.map { it.label } == listOf("Back", "Scroll up", "Home", "Prev focus", "Select",
-            "Next focus", "Recents", "Scroll down", "Access info"))
+            "Next focus", "Recents", "Scroll down", "Accessibility"))
         check(tiles.none { it.enabled && !it.readOnly })
         check(tiles[6].let { !it.enabled && it.label == "Recents" && it.footer.contains("Android") })
-        tiles.forEachIndexed { index, tile -> check(deck.press(index, 0).startsWith(tile.label)) }
+        tiles.take(8).forEachIndexed { index, tile -> check(deck.press(index, 0).startsWith(tile.label)) }
+        check(deck.repository.state.value.activePage.id == "root")
+        deck.press(8, 0)
+        check(deck.repository.state.value.activePage.id == "root")
     }
 
     @Test fun factoryNavigationTimerAndSimulatedAudio() {
@@ -338,7 +360,6 @@ class PreviewDeckTest {
         check(cold.state.value.visibleProfiles.none { it.id == "audio" })
         host.select(copy)
         repo.setDefault(copy).getOrThrow()
-        repo.setAutomatic(true).getOrThrow()
         for (time in listOf(0L, 2000L)) repo.observe(mapOf("foregroundApp" to "sample.app"), time).getOrThrow()
         assertEquals(copy, host.profileId)
         check("audio" !in repo.decision.value.scores)

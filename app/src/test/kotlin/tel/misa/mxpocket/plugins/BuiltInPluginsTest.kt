@@ -102,10 +102,11 @@ class BuiltInPluginsTest {
             actions.filterIsInstance<PluginAction.Deck>().map { it.command })
         actions.clear()
         engine.next(1)
-        for (index in listOf(0, 1, 2, 3, 5, 8)) tap(index)
-        assertEquals(listOf(PhoneApp.CAMERA, PhoneApp.SETTINGS, PhoneApp.DIALER, PhoneApp.WEB, PhoneApp.ALARMS),
-            actions.filterIsInstance<PluginAction.OpenApp>().map { it.app })
-        assertEquals(PluginAction.Repaint, actions.last())
+        assertTrue(engine.render().keys[4].readOnly)
+        for (index in listOf(0, 1, 2, 3, 4, 5, 8)) tap(index)
+        assertEquals(listOf(PluginAction.OpenApp(PhoneApp.CAMERA), PluginAction.OpenApp(PhoneApp.SETTINGS),
+            PluginAction.OpenApp(PhoneApp.DIALER), PluginAction.OpenApp(PhoneApp.WEB),
+            PluginAction.OpenApp(PhoneApp.ALARMS), PluginAction.Repaint), actions)
         tap(6)
         assertEquals("focus", engine.selectedId)
         engine.next(2)

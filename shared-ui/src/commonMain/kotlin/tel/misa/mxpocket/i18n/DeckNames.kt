@@ -6,6 +6,7 @@ import tel.misa.mxpocket.deck.DeckProfile
 import tel.misa.mxpocket.deck.PROFILE_HOME
 import tel.misa.mxpocket.deck.MORE_PROFILES
 import tel.misa.mxpocket.deck.DeckActions
+import tel.misa.mxpocket.deck.ACCESSIBILITY_PAGE
 import tel.misa.mxpocket.decks.IN_CALL
 import tel.misa.mxpocket.decks.TEAMS
 import tel.misa.mxpocket.decks.teamsProfile
@@ -15,10 +16,11 @@ private val deckNames = mapOf("focus" to K.Focus, "audio" to K.Audio, "phone" to
     "launcher" to K.Launcher, "studio" to K.Studio, "navigation" to K.Navigation,
     "game.xo" to K.TicTacToe, PROFILE_HOME to WorkspaceCopy.Home, TEAMS to K.Teams)
 
-fun builtInDeckName(id: String): String = deckNames[id]?.text() ?: id
+fun builtInDeckName(id: String): String = if (id == "navigation") K.NavigationAndAccessibility.text() else deckNames[id]?.text() ?: id
 
 /** Native descriptors can contain a resource resolved before an in-app language switch. */
 fun builtInPluginTitle(id: String, title: String): String {
+    if (id == "navigation" && title in listOf(K.Navigation.en, K.AndroidNavigation.en)) return K.NavigationAndAccessibility.text()
     val name = when (id) {
         "audio" -> K.MediaDeck
         "launcher" -> K.AppLauncher
@@ -31,13 +33,16 @@ fun builtInPluginTitle(id: String, title: String): String {
 
 private fun Copy?.ifFactoryValue(raw: String) = if (this != null && raw == en) text() else raw
 
-fun DeckProfile.displayName(): String = deckNames[id].ifFactoryValue(name)
+private fun profileTitle(id: String?, name: String) = if (id == "navigation" && name == K.Navigation.en)
+    K.NavigationAndAccessibility.text() else deckNames[id].ifFactoryValue(name)
+
+fun DeckProfile.displayName(): String = profileTitle(id, name)
 
 fun DeckProfile.displayPageName(page: DeckPage): String = when {
-    id == PROFILE_HOME -> LauncherCopy.Launcher
     id == TEAMS && page.id == "root" -> K.Work
     id == TEAMS && page.id == IN_CALL -> K.InCall
-    page.id == "root" -> deckNames[id]
+    id == "navigation" && page.id == ACCESSIBILITY_PAGE -> K.Accessibility
+    id == PROFILE_HOME || page.id == "root" -> deckNames[id]
     else -> null
 }.ifFactoryValue(page.name)
 
@@ -47,9 +52,11 @@ private val teamsCaptions = listOf(K.MyChat, K.MeetingLink, K.FocusTimer, K.Call
 fun DeckProfile.displayKeyLabel(page: DeckPage, key: DeckKey): String {
     if (id == PROFILE_HOME) return when (key.action?.id) {
         MORE_PROFILES -> LauncherCopy.More.text()
-        DeckActions.PROFILE -> deckNames[key.action.params[DeckActions.PROFILE_ID]].ifFactoryValue(key.label)
+        DeckActions.PROFILE -> profileTitle(key.action.params[DeckActions.PROFILE_ID], key.label)
         else -> key.label
     }
+    if (id == "navigation" && page.id == ACCESSIBILITY_PAGE && page.keys[8] === key &&
+        key.action?.id == DeckActions.ROOT && key.holdAction == null) return K.BackToNavigation.ifFactoryValue(key.label)
     if (id != TEAMS || key.label.isEmpty()) return key.label
     // Match the factory slot AND binding, not arbitrary user text with a familiar spelling.
     val slot = page.keys.indexOfFirst { it === key }.takeIf { it >= 0 }

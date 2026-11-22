@@ -38,13 +38,14 @@ object DeckJson {
         val xoProfileRemoved = if (obj.has("xoProfileRemoved")) obj.remove("xoProfileRemoved") as Boolean else false
         val teamsRemoved = if (obj.has("teamsProfileRemoved")) obj.remove("teamsProfileRemoved") as Boolean else false
         obj.fields("version", "profiles", "activeProfileId", "defaultProfileId", "pinnedProfileId", "automatic", "histories", "selectionReason")
+        // v1–4 backups include the old master toggle. It is no longer a runtime preference.
+        require(obj.get("automatic") is Boolean) { LayoutCopy.InvalidDeckJson.text() }
         val state = DeckState(
             version = obj.get("version") as Int,
             profiles = obj.array("profiles", ::profile),
             activeProfileId = obj.string("activeProfileId"),
             defaultProfileId = obj.string("defaultProfileId"),
             pinnedProfileId = if (obj.isNull("pinnedProfileId")) null else obj.string("pinnedProfileId"),
-            automatic = obj.get("automatic") as Boolean,
             histories = (obj.get("histories") as JSONObject).let { histories ->
                 histories.keys().asSequence().associateWith { id ->
                     val pages = histories.get(id) as JSONArray
@@ -55,11 +56,16 @@ object DeckJson {
             xoProfileRemoved = xoProfileRemoved,
             teamsProfileRemoved = teamsRemoved,
         )
-        if (state.version in 1..3) {
+        if (state.version in 1..4) {
             val validated = state.copy(version = DeckLimits.VERSION)
             validateDeck(validated)
             val audio = if (state.version == 1) upgradeAudioSlots(validated) else validated
-            return (if (state.version < 3) audio.upgradeStockNavigationRoot() else audio).withoutStockTeamsTimer()
+            val nav = if (state.version < 3) audio.upgradeStockNavigationRoot() else audio
+            val prior = if (state.version < 4) nav.withoutStockTeamsTimer() else nav
+            // A reordered v1/v2 root was a user edit, not the v3 stock root.
+            if (state.version < 3 && nav === audio) return prior
+            val upgraded = prior.withAccessibilityPage()
+            return if (upgraded === prior || fits(upgraded)) upgraded else prior
         }
 
         validateDeck(state)
@@ -163,7 +169,7 @@ object DeckJson {
         deck.histories.forEach { (id, pages) -> histories.put(id, JSONArray(pages)) }
         return JSONObject().put("version", deck.version).put("profiles", JSONArray(profiles))
             .put("activeProfileId", deck.activeProfileId).put("defaultProfileId", deck.defaultProfileId)
-            .put("pinnedProfileId", deck.pinnedProfileId ?: JSONObject.NULL).put("automatic", deck.automatic)
+            .put("pinnedProfileId", deck.pinnedProfileId ?: JSONObject.NULL).put("automatic", true)
             .put("histories", histories).put("selectionReason", deck.selectionReason)
             .apply {
                 if (deck.xoProfileRemoved) put("xoProfileRemoved", true)
