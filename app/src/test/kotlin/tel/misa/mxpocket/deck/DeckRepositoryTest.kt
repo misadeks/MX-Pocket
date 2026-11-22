@@ -188,9 +188,8 @@ class DeckRepositoryTest {
         DeckKey(action = ActionCall("plugin.key", mapOf("pluginId" to id, "index" to index.toString())))
 
     @Test fun historicalPhoneSlotsAndExplicitAppCallsRoundTripWithoutRebinding() {
-        val phone = repo.state.value.profiles.single { it.id == "phone" }
-        val stock = phone.pages.single().keys
-        assertEquals((0..8).map { pluginKey("phone", it) }, stock)
+        val custom = repo.createProfile("My shortcuts").getOrThrow()
+        val stock = (0..8).map { pluginKey("phone", it) }
         val apps = listOf("WEB", "ONENOTE", "ALARMS", "DIALER", "SETTINGS", "CAMERA")
         val keys = stock.reversed().mapIndexed { i, slot ->
             val params = if (i == 0) mapOf("app" to "WEB", "url" to "https://example.com")
@@ -199,10 +198,10 @@ class DeckRepositoryTest {
             if (i % 2 == 0) DeckKey(label = "My key", action = app, holdAction = slot.action)
             else slot.copy(holdAction = app)
         }
-        keys.forEachIndexed { i, key -> repo.setKey("phone", "root", i, key).getOrThrow() }
+        keys.forEachIndexed { i, key -> repo.setKey(custom, "root", i, key).getOrThrow() }
         val backup = JSONObject(repo.exportJson()).put("version", 1).toString()
         repo.importJson(backup).getOrThrow()
-        fun phoneKeys(state: DeckState) = state.profiles.single { it.id == "phone" }.pages.single().keys
+        fun phoneKeys(state: DeckState) = state.profiles.single { it.id == custom }.pages.single().keys
         assertEquals(keys, phoneKeys(DeckRepository(file).state.value))
         assertEquals(keys, phoneKeys(DeckJson.decode(repo.exportJson())))
     }

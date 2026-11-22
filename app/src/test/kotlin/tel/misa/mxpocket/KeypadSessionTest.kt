@@ -925,7 +925,8 @@ class KeypadSessionTest {
         try {
             Robolectric.buildActivity(MainActivity::class.java).setup().use { host ->
                 main.idle()
-                assertTrue(controls.all { (session.platformBindings().map { it.second }).contains(ActionCall(it.id)) })
+                val options = tel.misa.mxpocket.shared.ui.globalBindings(session.deck.state.value.visibleProfiles)
+                assertTrue(controls.all { command -> options.any { it.call == ActionCall(command.id) } })
                 assertTrue(controls.none { c -> session.platformWorkflowActions().any { it.id == c.id } })
                 app.press(2) // No system captioning activity: use Accessibility, never the third-party handler.
                 val fallback = shadowOf(host.get()).nextStartedActivity

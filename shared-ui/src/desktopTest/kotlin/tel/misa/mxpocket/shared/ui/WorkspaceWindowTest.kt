@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -103,7 +104,8 @@ class WorkspaceWindowTest {
         val draft = KeyDraft(defaultDeck().activePage.keys.first().copy(action = camera.call, holdAction = back.call))
         draft.picking = BindingTarget.TAP
         ui.setContent { PocketTheme { BindingDialog(listOf(camera, back), draft) } }
-        ui.onNodeWithText("Camera").performClick()
+        ui.onNodeWithText("Camera").performSemanticsAction(SemanticsActions.RequestFocus)
+            .performKeyInput { pressKey(Key.Enter) }
         ui.onNodeWithText("Open Camera").assertTextContains(camera.unavailableReason!!)
             .assertHasNoClickAction().assert(SemanticsMatcher.keyNotDefined(SemanticsActions.RequestFocus))
         ui.runOnIdle { assertEquals(camera.call, draft.call) }
