@@ -55,6 +55,23 @@ labels, multiple controls and permission screens are not. A button request is
 not proof of capture. To revoke just camera controls, turn off the Studio
 option; navigation can remain enabled.
 
+On Galaxy phones, Android may identify Samsung Camera for Photo but offer a
+chooser for Video. In that case Studio uses Samsung's video entry only if
+Samsung Camera is the verified Photo default, its video viewfinder and capture
+actions each have one usable handler, and no different capture default is set.
+This identifies the camera for **Open Video**, **Record** and **Stop**; it does
+not press a control or indicate that recording started.
+
+If **Shutter** does nothing, first check whether the physical keypad still
+shows the Studio root page while the unlocked phone shows Samsung Camera in
+Photo mode. A saved binding alone does not show that Studio received a press.
+Note MX Pocket's status from the failed press, if available: “Choose a default
+phone camera” points to resolution; “No matching Shutter control” points to
+the control check. To diagnose the latter without taking a picture, check
+only the visible shutter's accessibility description, class and click action
+in that camera version and UI language. No screenshot or full window dump is
+needed.
+
 If background
 launches are restricted, a fresh authorized physical press for a favorite or
 Studio offers a one-shot notification; tapping rechecks binding, connection,
