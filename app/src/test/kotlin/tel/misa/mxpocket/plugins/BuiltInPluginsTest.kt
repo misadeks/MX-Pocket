@@ -119,6 +119,19 @@ class BuiltInPluginsTest {
         assertEquals(0xffa56eff.toInt(), tiles[2].background) // active tool keeps its slot, highlighted
         assertEquals(0xff7719aa.toInt(), tiles[1].background)
         assertEquals("", tiles[3].label)
+        // Nine toolbar tools must not overflow the grid past the blank top-left slot.
+        val full = (toolbar + List(6) { "Pen ${it + 5} color, thickness 1$it.00 percent, pen options"
+            .let { "$it x" to "$it x" } })
+        val engine2 = PluginEngine(BuiltInPlugins.create("Focus", "Audio", "Phone", "OneNote"), this,
+            { testScheduler.currentTime }, { AudioSnapshot(0, 15) },
+            { _, _ -> }, {}, { _, error -> throw AssertionError(error) },
+            MutableStateFlow(DeckState()), readActiveTool = { null }, readToolBar = { full })
+        engine2.setEnabled(true)
+        engine2.select("onenote")
+        runCurrent()
+        assertEquals(9, engine2.render().keys.size)
+        assertEquals("", engine2.render().keys[0].label)
+        engine2.close()
         tap(1)
         assertEquals(listOf(PluginAction.AccessibilityClick(toolbar[1].first)), actions)
         actions.clear()

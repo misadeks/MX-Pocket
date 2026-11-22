@@ -99,7 +99,7 @@ class OneNotePlugin(title: String) : PocketPlugin {
 
     override fun render(nowMillis: Long): PluginFrame {
         val labels = MutableList(9) { "" }
-        selectable().take(9).forEachIndexed { i, tool -> labels[i + 1] = shortLabel(tool.second) }
+        selectable().take(8).forEachIndexed { i, tool -> labels[i + 1] = shortLabel(tool.second) }
         return PluginFrame(labels.mapIndexed { index, label ->
             val isActive = selectable().getOrNull(index - 1)?.second == active
             KeyTile(label, "ONENOTE", if (isActive) 0xffa56eff.toInt() else 0xff7719aa.toInt(),
