@@ -21,7 +21,6 @@ import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.DeckKey
 import tel.misa.mxpocket.decks.DeckAccessActivity
 import tel.misa.mxpocket.decks.NavigationService
-import tel.misa.mxpocket.driver.KeypadProtocol
 import tel.misa.mxpocket.shared.ui.toGridTile
 import java.time.Duration
 
@@ -45,9 +44,7 @@ class NavigationPadTest {
                 val bitmaps = frame.keys.mapIndexed(session::keyImage)
                 val preview = board.render(frame.keys, bitmaps)
                 bitmaps.forEachIndexed { i, tile ->
-                    val region = KeypadProtocol.keyRegion(i)
-                    assertTrue("Mirror differed from LCD window ${i + 1}",
-                        sameThroughKeyWindow(tile, preview, region.x, region.y))
+                    assertAperturePixels(preview, i, tile)
                     val gridTile = frame.keys[i].toGridTile(true)
                     ui.onNodeWithContentDescription(requireNotNull(gridTile.accessibleName)).assertHeightIsAtLeast(84.dp)
                 }

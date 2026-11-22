@@ -78,6 +78,13 @@ insets, 48dp control/84dp key minimum heights, selectable diagnostics and live
 status announcements. The [Windows host](desktop-preview) can run the Focus
 timer and Tic Tac Toe, but does not call Android services.
 
+The shared grid uses `shared-ui/src/commonMain/artwork/mx-keypad-housing.svg`,
+exported from the project's `draw_keypad_hero.py` illustration without its LCD
+content. Gradle rasterizes that SVG for both Compose targets; do not maintain
+a separate Android drawable or desktop casing. Each of its nine openings shows
+the complete corresponding 118 × 118 key image, including any artwork already
+composited by the LCD renderer. Editor and focus outlines belong on the bezel.
+
 `MainActivity` remains the live state/event adapter: it owns visible consent and
 hands hardware sessions to `KeypadService`/`PocketSession`. Styling the phone
 must not require changing USB reports, the plugin API or keypad LCD composition.

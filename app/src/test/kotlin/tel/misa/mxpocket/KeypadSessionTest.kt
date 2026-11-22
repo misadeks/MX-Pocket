@@ -62,7 +62,7 @@ import tel.misa.mxpocket.workflow.WorkflowStep
 @Config(sdk = [28, 35], application = KeypadSessionTest.FakeApp::class, shadows = [KeypadSessionTest.ConsentUsb::class])
 @LooperMode(LooperMode.Mode.PAUSED)
 class KeypadSessionTest {
-    class FakeApp : PocketApplication() {
+    class FakeApp : TestPocketApplication() {
         var claims = 0
         var closes = 0
         lateinit var emit: (KeyEvent) -> Unit

@@ -22,7 +22,6 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.semantics.*
@@ -69,7 +68,6 @@ data class PocketScreenState(
     val automatic: Boolean = false,
     val directShortcuts: Boolean = false,
     val simulating: Boolean = false,
-    val panelArt: ImageBitmap? = null,
     /** Null for the physical Android host; otherwise displayed in place of unsupported device controls. */
     val deviceLimit: String? = null,
     val usbReady: Boolean = false,
@@ -180,7 +178,7 @@ fun HomeScreen(state: PocketScreenState, event: (PocketScreenEvent) -> Unit) {
             val keypad: @Composable () -> Unit = {
                 PocketCard {
                     PocketLabel(if (operable) "Keypad" else "Keypad · live")
-                    if (!operable) KeypadGrid(tiles, { _, _ -> }, Modifier.widthIn(max = 480.dp).align(Alignment.CenterHorizontally), state.panelArt)
+                    if (!operable) KeypadGrid(tiles, { _, _ -> }, Modifier.widthIn(max = 480.dp).align(Alignment.CenterHorizontally))
                     else key(state.activeId, state.activePageId, state.simulating, state.virtualGrid) {
                         // Replacing the clickable nodes cancels a pointer/key still down on the old board.
                         val grid = state.virtualGrid
@@ -195,7 +193,8 @@ fun HomeScreen(state: PocketScreenState, event: (PocketScreenEvent) -> Unit) {
                         KeypadGrid(tiles, { index, pressed ->
                             if (!pressed && (grid == null || grid.page.keys[index].action != null))
                                 event(PocketScreenEvent.VirtualKey(index, grid))
-                        }, Modifier.widthIn(max = 480.dp).align(Alignment.CenterHorizontally), state.panelArt, holds)
+                        }, Modifier.widthIn(max = 480.dp).align(Alignment.CenterHorizontally), holds,
+                            onPage = if (state.simulating) { delta -> event(PocketScreenEvent.ChangePage(delta)) } else null)
                     }
                 }
             }

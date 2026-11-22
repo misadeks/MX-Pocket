@@ -1,6 +1,8 @@
 package tel.misa.mxpocket.ui
 
 import android.content.Context
+import androidx.compose.ui.graphics.asImageBitmap
+import tel.misa.mxpocket.KeyImages
 import tel.misa.mxpocket.R
 import tel.misa.mxpocket.deck.navigationFactorySlots
 import tel.misa.mxpocket.deck.GAME_PROFILE
@@ -16,9 +18,12 @@ class UiPreviewScenes(context: Context) {
     val ids = listOf("disconnected") + descriptors.map { it.id }.filterNot { it == GAME_PROFILE }
     private val note = "UI-only preview. No USB access, phone actions or running plugins."
     private val disconnectedNote = context.getString(R.string.not_connected)
+    private val fixtures = ids.associateWith { lazy { buildState(it) } }
 
-    fun state(id: String): PocketScreenState {
-        require(id in ids) { "Unknown UI preview scene: $id. Use ${ids.joinToString()}." }
+    fun state(id: String): PocketScreenState =
+        requireNotNull(fixtures[id]) { "Unknown UI preview scene: $id. Use ${ids.joinToString()}." }.value
+
+    private fun buildState(id: String): PocketScreenState {
         val plugin = if (id == "disconnected") plugins.first() else plugins.single { it.descriptor.id == id }
         val frame = plugin.render(0)
         val displayFrame = if (id == "audio") PluginFrame(frame.keys.mapIndexed { index, tile ->
@@ -29,10 +34,12 @@ class UiPreviewScenes(context: Context) {
                 else -> tile
             }
         }) else frame
+        val keys = if (id == "navigation") navigationFactorySlots.map(frame.keys::get) else displayFrame.keys
+        val images = KeyImages { null }
         return PocketScreenState(
             status = if (id == "disconnected") "$note\n$disconnectedNote" else "$note\n${plugin.descriptor.title} fixture",
             pluginTitle = plugin.descriptor.title,
-            tiles = (if (id == "navigation") navigationFactorySlots.map(frame.keys::get) else displayFrame.keys).map { it.toGridTile(true) },
+            tiles = keys.mapIndexed { index, key -> key.toGridTile(true, images.image(index, key).asImageBitmap()) },
             profiles = descriptors.filterNot { it.id == GAME_PROFILE }.map { ProfileChoice(it.id, it.title) },
             activeId = plugin.descriptor.id,
             diagnostics = "UI fixture: no USB enumeration has been performed.",

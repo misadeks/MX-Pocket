@@ -17,6 +17,7 @@ import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.*
 import tel.misa.mxpocket.shared.ui.LayoutEditor
@@ -24,6 +25,7 @@ import tel.misa.mxpocket.shared.ui.PocketTheme
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w1000dp-h900dp")
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 class AdaptiveLayoutEditorTest {
     @get:Rule val ui = createComposeRule()
     @get:Rule val folder = TemporaryFolder()

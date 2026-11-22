@@ -50,7 +50,9 @@ class WorkspaceRenderTest {
                 deviceLimit = if (desktop) "Windows simulator: no USB connection, phone apps, camera, media sessions or Android access grants." else null)
             setContent {
                 CompositionLocalProvider(LocalDensity provides Density(1f)) {
-                    PocketTheme { PocketWorkspace(WorkspaceTab.HOME, {}, state, emptyList(), {}, {}, {}) }
+                    PocketTheme(if (desktop) ThemeMode.DARK else ThemeMode.LIGHT) {
+                        PocketWorkspace(WorkspaceTab.HOME, {}, state, emptyList(), {}, {}, {})
+                    }
                 }
             }
             if (desktop) {
