@@ -10,6 +10,7 @@ import android.provider.Settings
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.telecom.TelecomManager
+import androidx.annotation.RequiresApi
 import kotlinx.coroutines.flow.update
 import tel.misa.mxpocket.calls.DialerNotice
 import tel.misa.mxpocket.calls.LineState
@@ -100,6 +101,7 @@ class PocketNotificationListener : NotificationListenerService() {
         catch (_: BadParcelableException) { null }
     }
 
+    @RequiresApi(34)
     private fun visibleOnLockScreen(sbn: StatusBarNotification): Boolean {
         val rank = Ranking()
         if (currentRanking?.getRanking(sbn.key, rank) != true || rank.isSuspended ||

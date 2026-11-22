@@ -52,7 +52,7 @@ internal class PhoneCallAccess(private val context: Context) {
         return when (inCall) {
             true -> LineState.CALL
             false -> LineState.IDLE
-            null -> carrier
+            null -> LineState.UNKNOWN // A failed Telecom read is not proof the whole phone is idle.
         }
     }
 

@@ -292,7 +292,7 @@ class PhoneCallViewTest {
     }
 
     @Test fun screenOffRejectsPriorFaceAndOnlyAllowsCurrentLockscreenSafeDetailsAndActions() {
-        shadowOf(app).grantPermissions(Manifest.permission.READ_PHONE_STATE)
+        shadowOf(app).grantPermissions(Manifest.permission.READ_PHONE_STATE, "${app.packageName}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION")
         val sub = SubscriptionInfoBuilder.newBuilder().setId(10).setSimSlotIndex(0).buildSubscriptionInfo()
         shadowOf(app.getSystemService(SubscriptionManager::class.java)).setActiveSubscriptionInfos(sub)
         shadowOf(telecom).setTelephonyManagerForSubscriptionId(10, telecom)
@@ -313,9 +313,11 @@ class PhoneCallViewTest {
         app.connectKeypad()
         try {
             listener.onListenerConnected()
-            SystemClock.sleep(5)
             shadowOf(telecom).setCallState(TelephonyManager.CALL_STATE_RINGING)
-            val n = note(person = caller)
+            session.refreshPhoneCall(); main.idle()
+            assertEquals(PHONE_CALL_VIEW, session.deck.operatingState.value.activeProfileId)
+            // postTime is wall time, not Robolectric's simulated monotonic clock. Order it after idle.
+            val n = note(person = caller, posted = System.currentTimeMillis() + 1)
             shadowOf(listener).addActiveNotification(n)
             listener.onNotificationPosted(n); main.idle()
             assertEquals(color, app.lcd.getValue(CALL_PHOTO).getPixel(59,59))
