@@ -142,9 +142,7 @@ class WorkspaceWindowTest {
         var tab by mutableStateOf(WorkspaceTab.HOME)
         val events = mutableListOf<PocketScreenEvent>()
         ui.setContent { PocketTheme { PocketWorkspace(tab, { tab = it }, state, emptyList(), events::add, {}, {}) } }
-        ui.onNodeWithText("Switch layout").performScrollTo().performClick()
-        ui.onNodeWithText("Studio").assertIsNotEnabled().assertHasNoClickAction()
-        ui.onNode(hasText("Focus") and isSelected()).performClick()
+        ui.onNodeWithText("Switch layout").assertDoesNotExist()
         ui.onNodeWithText("Connect USB keypad").performScrollTo().performClick()
         ui.onNodeWithText("Settings").performClick()
         ui.onNodeWithText("Feature setup").assertDoesNotExist()

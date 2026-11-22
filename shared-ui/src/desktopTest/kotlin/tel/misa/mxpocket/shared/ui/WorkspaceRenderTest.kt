@@ -11,51 +11,23 @@ import org.junit.Test
 import org.junit.Assert.assertEquals
 import java.io.File
 import tel.misa.mxpocket.FocusTimer
-import tel.misa.mxpocket.deck.PROFILE_HOME
 import tel.misa.mxpocket.deck.defaultDeck
 import tel.misa.mxpocket.plugins.present
 
 @OptIn(ExperimentalTestApi::class)
 class WorkspaceRenderTest {
-    @Test fun offlinePickerListsOnlyProfilesAndDoesNotMoveTheKeypad() {
-        for (desktop in listOf(false, true)) runDesktopComposeUiTest(if (desktop) 1120 else 390, 940) {
-            val home = PocketScreenState("Disconnected", "Home",
-                FocusTimer().present(0).keys.map { it.toGridTile(false) }, emptyList(), PROFILE_HOME,
-                reason = "Choose a profile", simulator = if (desktop) DesktopSimulator("Windows") else null)
-            val profile = ProfileChoice("custom", "Desk")
-            val launcher = ProfileChoice("launcher", "Launcher")
-            val state = mutableStateOf(home)
-            val selections = mutableListOf<String>()
-            setContent {
-                PocketTheme { HomeScreen(state.value) { event ->
-                    check(event is PocketScreenEvent.SelectPlugin)
-                    selections += event.id
-                    val selected = state.value.profiles.single { it.id == event.id }
-                    state.value = state.value.copy(activeId = selected.id, pluginTitle = selected.name, reason = "Manually selected")
-                } }
-            }
-            val picker = onNodeWithText("Switch layout")
-            picker.assertIsNotEnabled()
-            onNodeWithText("Choose a profile").assertDoesNotExist()
-            runOnIdle { state.value = home.copy(profiles = listOf(profile, launcher)) }
-            onNodeWithText("Desk").assertDoesNotExist()
-            val pickerBounds = picker.fetchSemanticsNode().boundsInRoot
-            val key = onNodeWithContentDescription("Key 1, Start, Focus")
-            val keyBounds = key.assertHasNoClickAction().fetchSemanticsNode().boundsInRoot
-            picker.performClick()
-            onNodeWithText("Home").assertHasNoClickAction()
-            onNodeWithText("Profile launcher").assertDoesNotExist()
-            onNodeWithText("Desk").performClick()
-            onNodeWithText("Manually selected").assertExists()
-            assertEquals(pickerBounds, picker.fetchSemanticsNode().boundsInRoot)
-            assertEquals(keyBounds, key.assertHasNoClickAction().fetchSemanticsNode().boundsInRoot)
-            picker.performClick()
-            onNode(hasText("Desk") and isSelected()).assertExists()
-            onNodeWithText("Home").assertDoesNotExist()
-            onNodeWithText("Profile launcher").assertDoesNotExist()
-            onNodeWithText("Launcher").performClick()
-            assertEquals(listOf(profile.id, launcher.id), selections)
-        }
+    @Test fun compactDesktopProfilesStillOffersTheLayoutPicker() = runDesktopComposeUiTest(390, 940) {
+        val state = PocketScreenState("Disconnected", "Focus", emptyList(), listOf(
+            ProfileChoice("focus", "Focus"), ProfileChoice("custom", "Desk"),
+            ProfileChoice("launcher", "Launcher", "Needs installed Android apps.")), "focus",
+            simulator = DesktopSimulator("Windows"))
+        val selections = mutableListOf<String>()
+        setContent { PocketTheme { SimulatorProfiles(state, selections::add) {} } }
+        onNodeWithText("Switch layout").performClick()
+        onNode(hasText("Focus") and isSelected()).assertExists()
+        onNodeWithText("Launcher").assertIsNotEnabled().assertHasNoClickAction()
+        onNodeWithText("Desk").performClick()
+        assertEquals(listOf("custom"), selections)
     }
 
     @Test fun switchingLayoutsKeepsNavigationAndKeypadInPlace() {
@@ -132,6 +104,8 @@ class WorkspaceRenderTest {
                     }
                 }
             }
+            onNodeWithText("Switch layout").assertDoesNotExist()
+            onNodeWithText("Profile launcher").assertDoesNotExist()
             if (desktop) {
                 onNodeWithContentDescription("Connect to device").assertDoesNotExist()
                 onNodeWithContentDescription("Key 1, Start, Focus").assertHasClickAction()

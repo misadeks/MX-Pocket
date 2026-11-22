@@ -191,9 +191,6 @@ fun HomeScreen(state: PocketScreenState, event: (PocketScreenEvent) -> Unit) {
             val split = maxWidth >= 720.dp
             val summary: @Composable () -> Unit = {
                 NowOnKeypad(state, event)
-                ProfilePicker(state.profiles, state.activeId) {
-                    event(PocketScreenEvent.SelectPlugin(it))
-                }
                 if (state.simulator?.supportsUsb == true) DesktopConnectionCard(state, event)
             }
             // With hardware the mirror is display-only: keys are pressed on the device, never twice.

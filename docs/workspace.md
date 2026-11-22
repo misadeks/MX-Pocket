@@ -17,12 +17,12 @@ and **Settings** contains USB preferences. Open **Settings → Diagnostics** to
 see device details and the session log. On Android, Back returns to Settings.
 On Windows, Diagnostics opens in a separate window you can close independently.
 
-On Android and Windows, open **Home → Switch layout** and select a profile to
-open its first page, even when disconnected. Use the page arrows to cycle back
-to the **Home** grid. The **Home** tab shows the current keypad; switching
-tabs does not change its layout. Android system Back dismisses the open menu,
-returns from other top-level tabs to Home, or
-leaves the Activity from Home. It does not select a keypad profile.
+On Android and Windows, the **Home** tab shows the current keypad. Use the
+page arrows to cycle through Home and the available layouts, even when
+disconnected. To choose a saved profile directly, open **Profiles**.
+Switching tabs does not change the keypad layout. Android system Back
+returns from other top-level tabs to Home or leaves the Activity from Home.
+It does not select a keypad profile.
 
 On the keypad’s **Home** grid, press a profile key to open it. **More profiles**
 shows the next group if there are more than nine. **Previous** and **Next**
