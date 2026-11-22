@@ -90,13 +90,19 @@ class BuiltInPluginsTest {
         engine.close()
     }
 
-    @Test fun oneNotePageExposesOpenDeepLinkWebShareAndNavigation() = runTest {
+    @Test fun oneNotePageMapsToolbarToolsAndShowsActiveToolSettingsOnKeypad() = runTest {
         val actions = mutableListOf<PluginAction>()
+        val toolbar = listOf(
+            "Red color, thickness 10.00 percent, pen options" to "Red color, thickness 10.00 percent, pen options",
+            "Yellow color, thickness 20.00 percent, highlighter options" to "Yellow color, thickness 20.00 percent, highlighter options",
+            "Stroke Eraser" to "Stroke Eraser",
+            "More options" to "More options",
+        )
         val engine = PluginEngine(BuiltInPlugins.create("Focus", "Audio", "Phone", oneNoteTitle = "OneNote"), this,
             { testScheduler.currentTime }, { AudioSnapshot(0, 15) },
             { action, _ -> actions += action }, {}, { _, error -> throw AssertionError(error) },
             MutableStateFlow(DeckState()),
-            readActiveTool = { "Red color, thickness 10.00 percent, pen options" })
+            readActiveTool = { toolbar[0].second }, readToolBar = { toolbar })
         fun tap(index: Int) {
             engine.key(PluginKeyEvent(index, true))
             engine.key(PluginKeyEvent(index, false))
@@ -106,20 +112,24 @@ class BuiltInPluginsTest {
         runCurrent()
         assertEquals(9, engine.render().keys.size)
         val tiles = engine.render().keys
-        assertEquals(0xffa56eff.toInt(), tiles[1].background) // active tool is highlighted
-        assertEquals(0xff7719aa.toInt(), tiles[2].background)
-        for (index in listOf(0, 1, 2, 3, 4, 5, 6, 7, 8)) tap(index)
-        assertEquals(listOf(
-            PluginAction.OpenApp(PhoneApp.ONENOTE),
-            PluginAction.AccessibilityClick("pen options"),
-            PluginAction.AccessibilityClick("eraser"),
-            PluginAction.AccessibilityClick("highlighter options"),
-            PluginAction.AccessibilityClick("lasso"),
-            PluginAction.AccessibilityClick("more options"),
-            PluginAction.AccessibilityClick("draw"),
-            PluginAction.ShareText("MX Pocket quick note ${testScheduler.currentTime}"),
-            PluginAction.Repaint,
-        ), actions)
+        assertEquals("Red pen", tiles[0].label)
+        assertEquals(0xffa56eff.toInt(), tiles[0].background) // active tool is highlighted
+        assertEquals(0xff7719aa.toInt(), tiles[1].background)
+        assertEquals("Repaint", tiles[8].label) // fewer than nine tools: last key repaints
+        tap(1)
+        assertEquals(listOf(PluginAction.AccessibilityClick(toolbar[1].first)), actions)
+        actions.clear()
+        tap(0) // re-press the active tool: settings on the keypad, no app click
+        assertTrue(actions.isEmpty())
+        val settings = engine.render().keys
+        assertEquals("Back", settings[0].label)
+        assertEquals("Red", settings[3].label)
+        assertEquals("10.0%", settings[5].label)
+        assertEquals("In app", settings[8].label)
+        tap(0) // back to the toolbar
+        assertEquals("Red pen", engine.render().keys[0].label)
+        tap(8)
+        assertEquals(listOf(PluginAction.Repaint), actions)
         engine.close()
     }
 }

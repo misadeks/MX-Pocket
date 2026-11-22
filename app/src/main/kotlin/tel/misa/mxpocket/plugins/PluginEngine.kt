@@ -22,6 +22,7 @@ class PluginEngine(
     private val reportError: (String, Throwable) -> Unit,
     private val observeDecks: StateFlow<DeckState> = MutableStateFlow(DeckState()),
     private val readActiveTool: () -> String? = { null },
+    private val readToolBar: () -> List<Pair<String, String>> = { emptyList() },
 ) : Closeable {
     private val entries = plugins.toList()
     val descriptors: List<PluginDescriptor> = entries.map { it.descriptor }
@@ -171,6 +172,13 @@ class PluginEngine(
                 "Plugin did not declare ACCESSIBILITY capability"
             }
             return readActiveTool()
+        }
+        override val toolBar: List<Pair<String, String>> get() {
+            check(current()) { "Plugin activation expired" }
+            require(PluginCapability.ACCESSIBILITY in descriptor.capabilities) {
+                "Plugin did not declare ACCESSIBILITY capability"
+            }
+            return readToolBar()
         }
         override fun invalidate() { if (current()) invalidateUi() }
         override fun audioSnapshot(): AudioSnapshot {

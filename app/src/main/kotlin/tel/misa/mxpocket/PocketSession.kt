@@ -129,6 +129,7 @@ internal class PocketSession(
         perform = ::perform, invalidateUi = ::invalidate, reportError = { id, error -> fail("Plugin $id failed", error) },
         observeDecks = deckState,
         readActiveTool = { OneNoteAccessService.connected?.activeTool() },
+        readToolBar = { OneNoteAccessService.connected?.toolBar() ?: emptyList() },
     )
     var request: Request? = null
         private set
@@ -901,7 +902,7 @@ internal class PocketSession(
                 val service = OneNoteAccessService.connected
                 message(when {
                     service == null -> "Enable MX Pocket OneNote tools in Android Accessibility settings."
-                    service.selectTool(action.text) -> "Requested ${action.text} in OneNote."
+                    service.selectToolById(action.text) -> "Requested ${action.text} in OneNote."
                     else -> "Open OneNote and show the ${action.text} control first."
                 })
             }

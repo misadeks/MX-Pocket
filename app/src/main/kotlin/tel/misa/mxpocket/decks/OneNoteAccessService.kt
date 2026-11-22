@@ -6,10 +6,10 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo as Node
 
 /**
- * Optional, user-enabled service scoped to the OneNote package. OneNote's draw toolbar exposes
- * tools via content descriptions ("pen options", "Stroke Eraser", ...), not text, and marks the
- * active tool with selected=true. No event subscriptions, no note content extraction, no
- * persistent node references.
+ * Optional, user-enabled service scoped to the OneNote package. The ink toolbar exposes one node
+ * per tool, identified by its content description ("Red color, thickness 10.00 percent, pen
+ * options", "Stroke Eraser", ...); the active tool is the selected one. No event subscriptions,
+ * no note content extraction, no persistent node references.
  */
 class OneNoteAccessService : AccessibilityService() {
     companion object {
@@ -31,18 +31,25 @@ class OneNoteAccessService : AccessibilityService() {
     }
 
     /**
-     * Select a draw tool by content-description keyword. If the tool is already active, long-press
-     * it instead: that is how OneNote opens the tool's settings. In home view the draw toolbar is
-     * hidden, so open the Draw tab first when the tool is not visible.
+     * Click the toolbar tool with this resource-id suffix. If it is already active, long-press it
+     * instead: that is how OneNote opens the tool's settings in the app. In home view the ink
+     * toolbar is hidden, so open the Draw tab first when the tool is not found.
      */
-    internal fun selectTool(keyword: String): Boolean = withRoot { root ->
-        val selected = findNode(root, ::isActiveTool)
-        if (selected != null && label(selected).contains(keyword, ignoreCase = true)) {
-            longClick(selected)
-        } else {
-            clickDesc(root, keyword) || (clickTab(root, "draw") && clickDesc(root, keyword))
+    internal fun selectToolById(id: String): Boolean = withRoot { root ->
+        var target = findNode(root) { it.contentDescription?.toString() == id }
+        if (target == null && clickTab(root, "draw")) {
+            target = findNode(root) { it.contentDescription?.toString() == id }
         }
+        if (target == null) return@withRoot false
+        val isActive = findNode(root, ::isActiveTool)?.contentDescription?.toString() == id
+        clickNode(target, if (isActive) Node.ACTION_LONG_CLICK else Node.ACTION_CLICK)
     } ?: false
+
+    /** The ink toolbar's tools as (description, description); the description is the stable identity. */
+    internal fun toolBar(): List<Pair<String, String>> = withRoot { root ->
+        findNodes(root) { isToolDesc(it.contentDescription?.toString()) }
+            .map { it.contentDescription.toString() to it.contentDescription.toString() }
+    } ?: emptyList()
 
     /** Content description of the currently selected draw tool, for the keypad display. */
     internal fun activeTool(): String? = withRoot { root ->
@@ -50,10 +57,11 @@ class OneNoteAccessService : AccessibilityService() {
     }
 
     /** The active ribbon tab is also selected=true; only tool previews carry a tool description. */
-    private fun isActiveTool(node: Node): Boolean {
-        if (!node.isSelected) return false
-        val d = node.contentDescription?.toString()?.lowercase().orEmpty()
-        return "options" in d || "eraser" in d || "lasso" in d || "shape" in d
+    private fun isActiveTool(node: Node): Boolean = node.isSelected && isToolDesc(node.contentDescription?.toString())
+
+    private fun isToolDesc(desc: String?): Boolean {
+        val d = desc?.lowercase().orEmpty()
+        return "options" in d || "eraser" in d || "lasso" in d || "shape select" in d
     }
 
     @Suppress("DEPRECATION")
@@ -67,43 +75,45 @@ class OneNoteAccessService : AccessibilityService() {
         }
     }
 
-    private fun label(node: Node): String =
-        (node.contentDescription?.toString() ?: "") + " " + (node.text?.toString() ?: "")
-
-    private fun clickDesc(root: Node, keyword: String): Boolean {
-        val found = findNode(root) { label(it).contains(keyword, ignoreCase = true) } ?: return false
-        val target = clickableAncestor(found) ?: return false
-        val clicked = target.performAction(Node.ACTION_CLICK)
-        target.recycle()
-        return clicked
-    }
-
     /** Exact tab match: a keyword like "draw" would also hit "Stop Drawing Button". */
     private fun clickTab(root: Node, name: String): Boolean {
         val found = findNode(root) {
             (it.contentDescription?.toString() ?: it.text?.toString())?.equals(name, ignoreCase = true) == true
         } ?: return false
-        val target = clickableAncestor(found) ?: return false
-        val clicked = target.performAction(Node.ACTION_CLICK)
-        target.recycle()
-        return clicked
+        return clickNode(found, Node.ACTION_CLICK)
     }
 
-    private fun longClick(node: Node): Boolean {
-        val target = clickableAncestor(node) ?: return false
-        val clicked = target.performAction(Node.ACTION_LONG_CLICK)
-        target.recycle()
-        return clicked
-    }
-
-    private fun clickableAncestor(node: Node): Node? {
+    private fun clickNode(node: Node, action: Int): Boolean {
         var current: Node? = node
         while (current != null && !current.isClickable) {
             val parent = current.parent
             current.recycle()
             current = parent
         }
-        return current
+        val clicked = current?.performAction(action) == true
+        current?.recycle()
+        return clicked
+    }
+
+    @Suppress("DEPRECATION")
+    private fun findNodes(root: Node, predicate: (Node) -> Boolean): List<Node> {
+        val found = mutableListOf<Node>()
+        var remaining = 128
+        fun visit(node: Node, depth: Int) {
+            if (--remaining < 0 || depth > 12 || !node.isVisibleToUser) return
+            if (predicate(node)) {
+                found += Node.obtain(node)
+                return
+            }
+            val count = node.childCount
+            for (i in 0 until minOf(count, remaining.coerceAtLeast(0))) {
+                val child = node.getChild(i) ?: continue
+                try { visit(child, depth + 1) } finally { child.recycle() }
+                if (remaining <= 0) break
+            }
+        }
+        visit(root, 0)
+        return found
     }
 
     @Suppress("DEPRECATION")

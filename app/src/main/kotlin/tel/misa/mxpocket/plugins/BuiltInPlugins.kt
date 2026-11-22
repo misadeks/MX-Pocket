@@ -78,16 +78,15 @@ class OneNotePlugin(title: String) : PocketPlugin {
     override val descriptor = PluginDescriptor("onenote", title,
         setOf(PluginCapability.OPEN_APPS, PluginCapability.NAVIGATION, PluginCapability.ACCESSIBILITY))
 
-    // OneNote exposes draw tools via content descriptions, not text.
-    private val tools = listOf(
-        "Pen" to "pen options", "Eraser" to "eraser", "Highlighter" to "highlighter options",
-        "Lasso" to "lasso", "Tools" to "more options",
-    )
+    // The ink toolbar's tools as (description, description); empty outside the draw view.
+    private var tools: List<Pair<String, String>> = emptyList()
     private var active: String? = null
+    private var settingsFor: Pair<String, String>? = null
 
     override fun onActivate(host: PluginHost) {
         host.scope.launch {
             while (true) {
+                tools = host.toolBar
                 active = host.activeTool
                 host.invalidate()
                 delay(250)
@@ -96,31 +95,55 @@ class OneNotePlugin(title: String) : PocketPlugin {
     }
 
     override fun render(nowMillis: Long): PluginFrame {
-        val labels = listOf("Open") + tools.map { it.first } + listOf("Draw", "Quick note", "Repaint")
+        val settings = settingsFor
+        if (settings != null) return settingsFrame(settings.second)
+        val labels = MutableList(9) { "" }
+        tools.take(8).forEachIndexed { i, tool -> labels[i] = shortLabel(tool.second) }
+        labels[8] = if (tools.size > 8) shortLabel(tools[8].second) else "Repaint"
         return PluginFrame(labels.mapIndexed { index, label ->
-            val keyword = tools.getOrNull(index - 1)?.second
-            val isActive = keyword != null && active?.contains(keyword, ignoreCase = true) == true
-            KeyTile(label, "ONENOTE", if (isActive) 0xffa56eff.toInt() else 0xff7719aa.toInt())
+            val isActive = tools.getOrNull(index)?.second == active
+            KeyTile(label, "ONENOTE", if (isActive) 0xffa56eff.toInt() else 0xff7719aa.toInt(),
+                enabled = label.isNotBlank())
         })
     }
 
     override fun onKey(event: PluginKeyEvent, host: PluginHost) {
         if (!event.pressed || event.synthetic) return
-        val action = when (event.index) {
-            0 -> PluginAction.OpenApp(PhoneApp.ONENOTE)
-            // Re-pressing the active tool long-presses it in the service, opening its settings;
-            // the service also opens the Draw tab first when the toolbar is hidden in home view.
-            1, 2, 3, 4, 5 -> PluginAction.AccessibilityClick(tools[event.index - 1].second)
-            6 -> PluginAction.AccessibilityClick("draw")
-            7 -> PluginAction.ShareText("MX Pocket quick note ${host.nowMillis()}")
-            8 -> PluginAction.Repaint
-            else -> null
+        val settings = settingsFor
+        if (settings != null) {
+            when (event.index) {
+                0 -> settingsFor = null // back to the toolbar
+                8 -> host.dispatch(PluginAction.AccessibilityClick(settings.first)) // settings in the app
+            }
+            return
         }
-        action?.let(host::dispatch)
-        if (action is PluginAction.AccessibilityClick) host.scope.launch {
-            delay(300) // OneNote updates its accessibility tree shortly after the click.
-            active = host.activeTool
-            host.invalidate()
+        val tool = tools.getOrNull(event.index)
+        if (tool != null) {
+            if (tool.second == active) settingsFor = tool // re-press: show settings on the keypad
+            else host.dispatch(PluginAction.AccessibilityClick(tool.first))
+            host.scope.launch {
+                delay(300) // OneNote updates its accessibility tree shortly after the click.
+                active = host.activeTool
+                host.invalidate()
+            }
+        } else if (event.index == 8 && tools.size <= 8) {
+            host.dispatch(PluginAction.Repaint)
         }
+    }
+
+    private fun settingsFrame(desc: String): PluginFrame {
+        val match = Regex("^(.*?) color, thickness ([0-9.]+) percent").find(desc)
+        val color = match?.groupValues?.get(1) ?: desc
+        val thickness = match?.groupValues?.get(2)?.toFloatOrNull()?.let { "$it%" } ?: "-"
+        val labels = mutableListOf("Back", shortLabel(desc), "Color", color, "Thickness", thickness, "", "", "In app")
+        return PluginFrame(labels.mapIndexed { index, label ->
+            KeyTile(label, "ONENOTE", 0xff7719aa.toInt(), enabled = label.isNotBlank() && index != 6 && index != 7)
+        })
+    }
+
+    private fun shortLabel(desc: String): String = when {
+        "pen options" in desc -> "${desc.substringBefore(" color")} pen"
+        "highlighter options" in desc -> "${desc.substringBefore(" color")} highl"
+        else -> desc
     }
 }

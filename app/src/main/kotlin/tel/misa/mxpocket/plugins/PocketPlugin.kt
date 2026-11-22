@@ -59,8 +59,11 @@ interface PluginHost {
     fun audioSnapshot(): AudioSnapshot
     val deckState: StateFlow<DeckState>
         get() = error("No Android deck state installed")
-    /** Text of the checked control in the foreground app, via the opt-in accessibility service. */
+    /** Description of the selected tool in the foreground app, via the opt-in accessibility service. */
     val activeTool: String?
+        get() = error("No accessibility state installed")
+    /** Toolbar tools of the foreground app as (stable id, description). */
+    val toolBar: List<Pair<String, String>>
         get() = error("No accessibility state installed")
     fun dispatch(action: PluginAction)
 }
