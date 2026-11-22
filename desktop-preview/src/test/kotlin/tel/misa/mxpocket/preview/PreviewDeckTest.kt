@@ -388,4 +388,24 @@ class PreviewDeckTest {
         edge(true, 1700); deck.resetInput(); edge(false, 1750)
         assertEquals(listOf(MediaKey.LOUDER, MediaKey.QUIETER), sent)
     }
+
+    @Test fun bothPhysicalPageButtonsEnterTheGameWithoutCyclingOrSendingMedia() {
+        val repo = DeckRepository(File(folder.root, "deck.json"))
+        val deck = PreviewDeck(repo) { error("Game buttons must not send Windows media") }
+        deck.select("audio")
+        val input = PhysicalKeys(deck)
+        fun page(id: Int, pressed: Boolean) {
+            input.accept(tel.misa.mxpocket.driver.KeyEvent(id, pressed), deck.board(0).grid, 0)
+        }
+        page(0x01a1, true)
+        assertEquals("audio", deck.profileId)
+        page(0x01a2, true)
+        page(0x01a2, false)
+        page(0x01a1, false)
+        assertEquals("game.xo", deck.profileId)
+        assertEquals(listOf("Tic", "Tac", "Toe"), deck.tiles(0).take(3).map { it.label })
+        page(0x01a1, true)
+        page(0x01a1, false)
+        assertEquals("audio", deck.profileId)
+    }
 }
