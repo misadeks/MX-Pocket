@@ -117,6 +117,7 @@ internal class PocketSession(
     internal val favoriteApps = FavoriteApps(app)
     private val media = MediaDeck(app, ::canShowTrack)
     private val teams = TeamsCall(app)
+    private val teamsEnabled = MutableStateFlow(teams.access.enabled)
     private var teamsInstalled = false
     private val teamsUpdate: () -> Unit = { refreshTeams() }
     private val decks = MutableStateFlow(tel.misa.mxpocket.decks.DeckState())
@@ -227,6 +228,7 @@ internal class PocketSession(
 
     private fun hasPlugin(id: String) = plugins.descriptors.any { it.id == id }
     private fun refreshTeams() {
+        teamsEnabled.value = teams.access.enabled
         val physical = !preview && output != null && request?.let(app::hasKeypadAccess) == true
         val previous = decks.value.teams
         val state = teams.refresh(physical, screen != null, teamsInstalled, TEAMS !in disabled.value)
@@ -325,10 +327,16 @@ internal class PocketSession(
     private fun workflowContext() = WorkflowContext(request != null && output != null,
         signals.value["activity"].orEmpty(), signals.value - FOREGROUND_APP)
 
-    private fun configuredApps(state: tel.misa.mxpocket.deck.DeckState, enabled: Boolean): Set<String> =
+    private fun configuredApps(state: tel.misa.mxpocket.deck.DeckState, enabled: Boolean,
+        disabledPlugins: Set<String>, teamsOn: Boolean): Set<String> =
         if (!enabled || !state.automatic || !state.activeProfile.automatic || state.pinnedProfileId != null) emptySet()
-        else state.profiles.asSequence().filter { it.automatic }.flatMap { it.rules }
-            .filter { it.signal == FOREGROUND_APP }.map { it.value }.toSet()
+        else buildSet {
+            for (profile in state.profiles.filter { it.automatic }) {
+                if (profile.id == TEAMS && TEAMS in disabledPlugins) continue
+                profile.rules.filter { it.signal == FOREGROUND_APP }.forEach { add(it.value) }
+                if (profile.id == TEAMS && teamsOn && hasPlugin(TEAMS)) add(TEAMS_PACKAGE)
+            }
+        }
 
     private fun updateObservation() {
         if (screen == null && (request == null || output == null)) {
@@ -343,7 +351,7 @@ internal class PocketSession(
             return
         }
         signalClock = sessionScope.launch {
-            combine(deck.state, detectApps, ::configuredApps).distinctUntilChanged().collectLatest { configured ->
+            combine(deck.state, detectApps, disabled, teamsEnabled, ::configuredApps).distinctUntilChanged().collectLatest { configured ->
                 sampleWhileEligible(configured)
             }
         }
@@ -401,11 +409,13 @@ internal class PocketSession(
             "plugin" to (selectedPlugin(state.activePage) ?: "custom"),
             "workflow" to (workflows.status.value?.phase?.name ?: "IDLE")) +
             attachedUsb.associate { "usb.$it" to "true" } + platformSignals() +
-            if (foregroundApp != null && foregroundApp in configuredApps(state, detectApps.value) &&
+            if (foregroundApp != null && foregroundApp in configuredApps(state, detectApps.value, disabled.value, teamsEnabled.value) &&
                 app.isUnlockedAndInteractive() && app.hasUsageAccess())
                 mapOf(FOREGROUND_APP to foregroundApp) else emptyMap()
         _signals.value = snapshot
-        deck.observe(snapshot, SystemClock.elapsedRealtime()).onFailure { fail("Cannot select layout", it) }
+        deck.observe(snapshot, SystemClock.elapsedRealtime(),
+            allowTeamsWork = teamsEnabled.value && TEAMS !in disabled.value && hasPlugin(TEAMS))
+            .onFailure { fail("Cannot select layout", it) }
         workflows.onContextChanged(workflowContext())
     }
 

@@ -13,8 +13,6 @@ import android.service.notification.StatusBarNotification
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.view.accessibility.AccessibilityManager
 
-internal const val TEAMS_PACKAGE = "com.microsoft.teams"
-
 @Suppress("DEPRECATION")
 internal fun Context.teamsLauncher(): Intent? {
     val query = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setPackage(TEAMS_PACKAGE)

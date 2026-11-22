@@ -95,9 +95,15 @@ Select **Teams / Work**. **Open Teams** opens the launchable Teams app in this
 Android profile; it does not follow a meeting link or join a call. In the
 background, press the physical key, then tap the shortcut notification.
 Previous focus, Select and Next focus use the existing Navigation controls.
-**Focus timer** changes profiles; **Call tools** opens the call page without
+The bottom-left key is unassigned. **Call tools** opens the call page without
 claiming a call is active. My chat and Meeting link are unassigned. Existing
 layouts are preserved: editing or deleting a Teams page isn't undone on upgrade.
+
+To show **Work** when Teams opens, enable **Automatic profile switching** and
+**Detect foreground apps**, and grant Android **Usage Access** to MX Pocket.
+Teams needs no app mapping. Opening the app never selects **In call** or
+presses a key. Pins, profile opt-outs and explicit app mappings still win;
+manually changing pages takes precedence while Teams remains in the foreground.
 
 **Teams call status** is on by default when you haven't saved a choice.
 Turn it off in **Plugins → Teams → Teams setup**; your choice is kept across

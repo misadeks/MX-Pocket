@@ -7,6 +7,7 @@ import tel.misa.mxpocket.plugins.KeyTile
 import tel.misa.mxpocket.decks.DeckCommand as C
 
 const val TEAMS = "teams"
+const val TEAMS_PACKAGE = "com.microsoft.teams"
 const val IN_CALL = "in-call"
 val teamsSlots = listOf(C.TEAMS_CAPTIONS, C.TEAMS_HAND, C.TEAMS_CHAT, C.TEAMS_QUIETER,
     C.TEAMS_MIC, C.TEAMS_LOUDER, C.TEAMS_OPEN, C.TEAMS_STATUS, C.TEAMS_ACCESS)
@@ -61,15 +62,14 @@ data class TeamsState(val installed: Boolean = false, val status: CallStatus = C
     }
 }
 
-fun teamsProfile(includeFocus: Boolean = true): DeckProfile {
+fun teamsProfile(): DeckProfile {
     fun command(c: C) = DeckKey(action = ActionCall(c.id))
     fun page(label: String, id: String) = DeckKey(label = label, action = ActionCall(DeckActions.PAGE, mapOf(DeckActions.PAGE_ID to id)))
     fun slot(i: Int) = DeckKey(action = ActionCall("plugin.key", mapOf("pluginId" to TEAMS, "index" to "$i")))
     val work = DeckPage("root", "Work", listOf(command(C.TEAMS_OPEN),
         DeckKey(label = "My chat", enabled = false), DeckKey(label = "Meeting link", enabled = false),
         command(C.REVERSE), command(C.ACTIVATE), command(C.FORWARD),
-        if (includeFocus) DeckKey(label = "Focus timer", action = ActionCall(DeckActions.PROFILE, mapOf(DeckActions.PROFILE_ID to "focus")))
-        else DeckKey(), page("Call tools", IN_CALL), slot(8)))
+        DeckKey(), page("Call tools", IN_CALL), slot(8)))
     val call = DeckPage(IN_CALL, "In call", (0..7).map(::slot) + page("Back to Work", "root"))
     return DeckProfile(TEAMS, "Teams", work.id, listOf(work, call))
 }
