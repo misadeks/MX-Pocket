@@ -247,8 +247,8 @@ class KeypadPaintTest {
             override fun openApp(app: PhoneApp) = false
             override fun deckAction(command: DeckCommand, component: String?) = ok("Handled").also { actions += command }
         }
-        val expected = listOf(DeckCommand.BACK, DeckCommand.UP, DeckCommand.HOME, DeckCommand.REVERSE,
-            DeckCommand.ACTIVATE, DeckCommand.FORWARD, DeckCommand.RECENTS, DeckCommand.DOWN)
+        val expected = listOf(DeckCommand.BACK, DeckCommand.HOME, DeckCommand.RECENTS, DeckCommand.REVERSE,
+            DeckCommand.ACTIVATE, DeckCommand.FORWARD, DeckCommand.UP, DeckCommand.DOWN)
         try {
             p.session.attach(screen)
             p.session.selectProfile("navigation"); main.idle()
@@ -256,12 +256,12 @@ class KeypadPaintTest {
             for (i in expected.indices) {
                 actions.clear()
                 p.press(i + 1)
-                assertEquals("Window ${i + 1}", if (i == 6) emptyList() else listOf(expected[i]), actions)
+                assertEquals("Window ${i + 1}", if (i == 2) emptyList() else listOf(expected[i]), actions)
             }
             actions.clear()
             p.press(9)
             assertEquals("accessibility", p.session.deck.state.value.activePage.id)
-            p.press(1)
+            p.press(7)
             assertEquals(listOf(DeckCommand.TALKBACK_SETTINGS), actions)
             p.press(9)
             assertEquals("root", p.session.deck.state.value.activePage.id)

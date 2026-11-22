@@ -81,7 +81,7 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
             unreadable = true
             defaultDeck()
         }
-        saved = loaded.withBuiltIns().withAvailability(disabledPluginIds).snapshot()
+        saved = loaded.upgradeNavigationControls().withBuiltIns().withAvailability(disabledPluginIds).snapshot()
         val initial = saved.availableSelection()
         mutable = MutableStateFlow(initial)
         state = mutable.asStateFlow()

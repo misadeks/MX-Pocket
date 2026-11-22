@@ -1223,7 +1223,8 @@ internal class PocketSession(
             return service.cameraPress(c, ::authorized)
         }
         if (c.deck == "navigation" && c != DeckCommand.NAV_ACCESS &&
-            (screen == null || c in setOf(DeckCommand.HOME, DeckCommand.BACK, DeckCommand.RECENTS)))
+            (screen == null || c in setOf(DeckCommand.HOME, DeckCommand.BACK, DeckCommand.RECENTS,
+                DeckCommand.NOTIFICATIONS, DeckCommand.ALL_APPS, DeckCommand.LONG_PRESS)))
             NavigationService.connected?.let { return it.press(c) }
         screen?.let { return it.deckAction(c, component) }
         val target = when (c) {

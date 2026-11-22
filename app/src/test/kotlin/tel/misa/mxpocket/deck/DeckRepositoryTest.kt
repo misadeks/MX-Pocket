@@ -300,8 +300,25 @@ class DeckRepositoryTest {
         checkDefaults()
     }
 
-    private fun expectedNavigationRoot() = listOf(0, 3, 1, 6, 4, 8, 2, 5).map { pluginKey("navigation", it) } +
-        DeckKey(action = ActionCall(DeckActions.PAGE, mapOf(DeckActions.PAGE_ID to "accessibility")))
+    private fun expectedNavigationRoot() = (0..7).map { pluginKey("navigation", it) } +
+        DeckKey(label = "More", action = ActionCall(DeckActions.PAGE, mapOf(DeckActions.PAGE_ID to "accessibility")))
+
+    @Test fun previousStockNavigationUpgradesButEditedRootIsPreserved() {
+        val state = defaultDeck()
+        val nav = state.profiles.single { it.id == "navigation" }
+        val open = DeckKey(action = ActionCall(DeckActions.PAGE, mapOf(DeckActions.PAGE_ID to "accessibility")))
+        val root = nav.pages.first().copy(keys = listOf(0, 3, 1, 6, 4, 8, 2, 5).map { pluginKey("navigation", it) } + open)
+        val oldActions = listOf("navigation.talkback-settings", "navigation.caption-settings", "navigation.night-light-settings",
+            "navigation.accessibility-shortcut", "navigation.access")
+        val oldPage = DeckPage("accessibility", "Accessibility", oldActions.map { DeckKey(action = ActionCall(it)) } +
+            List(3) { DeckKey() } + DeckKey(label = "Back to Navigation", action = ActionCall(DeckActions.ROOT)))
+        fun load(page: DeckPage): DeckState = DeckJson.decode(DeckJson.encode(state.copy(profiles = state.profiles.map {
+            if (it.id == "navigation") it.copy(pages = listOf(page, oldPage)) else it
+        })))
+        assertEquals(expectedNavigationRoot(), load(root).profiles.single { it.id == "navigation" }.pages.first().keys)
+        val edited = root.copy(keys = root.keys.mapIndexed { i, key -> if (i == 0) key.copy(label = "Custom") else key })
+        assertEquals(edited, load(edited).profiles.single { it.id == "navigation" }.pages.first())
+    }
 
     @Test fun v4UpgradesOnlyStockNavigationWithoutOverwritingUserPagesOrBindings() {
         val state = repo.state.value
