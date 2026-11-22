@@ -32,7 +32,7 @@ internal fun DeckState.homeProjection(batch: Int): DeckState {
         keys += DeckKey(label = "More profiles", action = ActionCall(MORE_PROFILES))
     }
     while (keys.size < 9) keys += DeckKey()
-    val page = DeckPage("batch-$index", "Profiles", keys)
+    val page = DeckPage("batch-$index", "Profile launcher", keys)
     return operatingProjection(DeckProfile(PROFILE_HOME, "Home", page.id, listOf(page)), "Choose a profile")
 }
 

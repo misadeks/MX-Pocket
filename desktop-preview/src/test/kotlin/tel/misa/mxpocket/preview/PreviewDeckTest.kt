@@ -240,6 +240,21 @@ class PreviewDeckTest {
         check(fresh.state.value.visibleProfiles.size == 1)
     }
 
+    @Test fun gameKeepsItsBoardAcrossCallRefreshAndReturnsHomeIfItsPreviousViewIsDisabled() {
+        val repo = DeckRepository(File(folder.root, "deck.json"))
+        repo.openProfileRoot("audio").getOrThrow()
+        repo.enterGame().getOrThrow()
+        repo.showTeamsCall(true)
+        repo.setDisabledPlugins(setOf("audio"))
+        assertEquals("game.xo", repo.operatingState.value.activeProfileId)
+        check(repo.swapKeys("game.xo", "root", 0, 1).isFailure)
+        repo.changePage(-1).getOrThrow()
+        assertEquals("@home", repo.operatingState.value.activeProfileId)
+        repo.showTeamsCall(true)
+        assertEquals("@home", repo.operatingState.value.activeProfileId)
+        repo.showTeamsCall(false); repo.showTeamsCall(true)
+        assertEquals("in-call", repo.operatingState.value.activePage.id)
+    }
     @Test fun disablingHidesOnlyOwnedProfilesAndLeavesCustomBindingsIntact() {
         val file = File(folder.root, "deck.json")
         val repo = DeckRepository(file)

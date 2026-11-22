@@ -51,14 +51,15 @@ internal fun RuleSection(profile: DeckProfile, profiles: List<DeckProfile>, sign
                 results.isEmpty() -> EditorNote("No matching launchable apps in this Android profile.")
                 else -> LazyColumn(Modifier.heightIn(max = 320.dp)) { items(results, key = { it.packageId }) { app ->
                     val mapped = profiles.filter { p -> p.rules.any { it.signal == FOREGROUND_APP && it.value == app.packageId } }
+                    val visible = mapped.filterNot { it.id in disabledIds || it.id == GAME_PROFILE }
                     TextButton(onClick = { addApp(app.packageId) { choosing = false } },
                         enabled = writable && mapped.isEmpty() && app.packageId.length <= DeckLimits.RULE_VALUE) {
                         Column {
                             Text(app.label)
                             Text(when {
                                 mapped.isEmpty() -> app.packageId
-                                mapped.all { it.id in disabledIds } -> "Mapped to a disabled plugin"
-                                else -> "Mapped to ${mapped.filterNot { it.id in disabledIds }.joinToString { it.name }}"
+                                visible.isEmpty() -> "Mapped to an unavailable profile"
+                                else -> "Mapped to ${visible.joinToString { it.name }}"
                             })
                         }
                     }

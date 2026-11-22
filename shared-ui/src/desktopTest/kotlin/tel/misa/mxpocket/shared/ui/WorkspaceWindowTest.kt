@@ -36,6 +36,7 @@ class WorkspaceWindowTest {
                 } }
             }
         }
+        ui.onNodeWithText("Swap keys").performScrollTo().performClick()
         ui.onNodeWithContentDescription("Key 1,", substring = true).performClick()
         ui.onNodeWithTag("key-label").assertExists()
         ui.runOnIdle { repo.setDisabledPlugins(setOf("audio")) }
@@ -43,7 +44,8 @@ class WorkspaceWindowTest {
         ui.onNodeWithText("My player", substring = true).assertDoesNotExist()
         ui.onNodeWithText("Tic Tac Toe", substring = true).assertDoesNotExist()
         ui.onNodeWithText("Audio").performClick()
-        assertTrue(repo.state.value.visibleProfiles.any { it.id == custom })
+        ui.waitUntil(5_000) { repo.state.value.activeProfileId == custom }
+        ui.onNodeWithText("Swap keys").performScrollTo().performClick()
         ui.onNodeWithContentDescription("Key 1,", substring = true).performClick()
         ui.onNodeWithTag("choose-binding").performClick()
         ui.onNodeWithText("Audio key 1").assertDoesNotExist()
@@ -81,7 +83,8 @@ class WorkspaceWindowTest {
         ui.onNodeWithContentDescription("Key 1, Start, Focus").performClick()
         assertEquals(listOf(PocketScreenEvent.VirtualKey(0)), events)
         events.clear()
-        ui.onNodeWithText("Keypad").performClick()
+        ui.onNodeWithText("Profiles").performClick()
+        ui.onNodeWithText("Swap keys").performScrollTo().performClick()
         ui.onNodeWithContentDescription("Key 1,", substring = true).performClick()
         ui.onNodeWithTag("key-label").performTextReplacement("New label")
         ui.runOnIdle { width = 900.dp }

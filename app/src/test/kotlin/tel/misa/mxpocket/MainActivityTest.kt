@@ -37,14 +37,18 @@ class MainActivityTest {
     }
     @Test fun previewRunsTimerAndChangesPageWithoutClaimingUsbSuccess() {
         ActivityScenario.launch(MainActivity::class.java).use {
+            // The virtual keypad is started from Settings; Home only shows and operates the keypad.
+            ui.onNodeWithText("Connect virtual keypad").assertDoesNotExist()
+            ui.onNodeWithText("Settings").performClick()
+            ui.onNodeWithText("Connect virtual keypad").performScrollTo().performClick()
+            ui.onNodeWithText("Home").performClick()
             ui.onNodeWithText("Focus").performClick()
-            ui.onNodeWithText("Connect virtual keypad").performClick()
             ui.onNodeWithContentDescription("Key 1, Start", substring = true).performClick()
             ui.onNodeWithContentDescription("Key 1, Pause", substring = true).assertExists()
-            ui.onNodeWithText("Next page").performScrollTo().performClick()
+            ui.onNodeWithContentDescription("Next page").performScrollTo().performClick()
             assertEquals("audio", app.session.deck.state.value.activeProfileId)
             ui.onNodeWithContentDescription("Play/Pause").assertExists()
-            ui.onNodeWithText("Next page").performScrollTo().performClick()
+            ui.onNodeWithContentDescription("Next page").performScrollTo().performClick()
             ui.onNodeWithContentDescription("Key 1, Camera", substring = true).assertExists()
             ui.onNodeWithText("No USB messages are sent", substring = true).assertExists()
             ui.onNodeWithText("Nine LCD image uploads acknowledged", substring = true).assertDoesNotExist()
@@ -66,8 +70,10 @@ class MainActivityTest {
             val key = deck.state.value.activePage.keys.first().copy(label = "Open Audio", action = null,
                 holdAction = ActionCall(DeckActions.PROFILE, mapOf(DeckActions.PROFILE_ID to "audio")))
             scene.onActivity { deck.setKey("focus", "root", 0, key).getOrThrow() }
+            ui.onNodeWithText("Settings").performClick()
+            ui.onNodeWithText("Connect virtual keypad").performScrollTo().performClick()
+            ui.onNodeWithText("Home").performClick()
             ui.onNodeWithText("Focus").performClick()
-            ui.onNodeWithText("Connect virtual keypad").performClick()
             val slot = ui.onNodeWithContentDescription("Key 1, Open Audio", substring = true)
             slot.performClick()
             assertEquals("focus", deck.state.value.activeProfileId)

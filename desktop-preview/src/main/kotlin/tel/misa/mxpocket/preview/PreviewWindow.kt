@@ -2,6 +2,7 @@ package tel.misa.mxpocket.preview
 
 import androidx.compose.runtime.*
 import androidx.compose.ui.input.key.*
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.*
 import java.awt.FileDialog
@@ -49,6 +50,10 @@ fun main() = application {
     val workflowState by workflows.state.collectAsState()
     val deck by repo.operatingState.collectAsState()
     var tab by remember { mutableStateOf(WorkspaceTab.HOME) }
+    val appearance = remember { java.util.prefs.Preferences.userRoot().node("tel/misa/mxpocket") }
+    var themeMode by remember {
+        mutableStateOf(ThemeMode.entries.find { it.name == appearance.get("theme", null) } ?: ThemeMode.SYSTEM)
+    }
     var simulating by remember { mutableStateOf(true) }
     var message by remember { mutableStateOf("Virtual keypad connected. No USB messages are sent.") }
     var time by remember { mutableLongStateOf(now()) }
@@ -95,6 +100,8 @@ fun main() = application {
                 }
             } else false
         }) {
+        val acceptsPageKeys = LocalWindowInfo.current.isWindowFocused && !setup && simulating && tab == WorkspaceTab.HOME
+        DisposableEffect(acceptsPageKeys) { onDispose { host.pageButtons.reset() } }
         val profiles = deck.visibleProfiles.map { ProfileChoice(it.id, it.name) }
         val board = remember(deck, time, revision, simulating) { host.board(time, deck) }
         val tiles = board.faces.map { it.toGridTile(simulating) }
@@ -104,7 +111,7 @@ fun main() = application {
             connectionLabel = if (simulating) "Virtual keypad" else "Disconnected", diagnostics = "No USB diagnostics: Windows has no HID adapter.",
             log = history.joinToString("\n"), simulating = simulating, deviceLimit = DEVICE_LIMIT,
             activePageId = deck.activePage.id, hardwareSummary = !simulating,
-            virtualGrid = board.grid.takeIf { simulating })
+            virtualGrid = board.grid.takeIf { simulating }, themeMode = themeMode)
         val plugins = registry.map {
             PluginItem(it.id, it.name, it.id !in deck.disabledPluginIds, "Local simulation", when (it.id) {
                 "focus" -> "Timer and presets run locally. No completion sound."
@@ -130,7 +137,7 @@ fun main() = application {
             catch (e: Exception) { status("Layout backup failed: ${e.message}") }
             Unit
         }
-        PocketTheme {
+        PocketTheme(themeMode) {
             if (setup) {
                 SetupScreen(SetupScreenState(emptySet(), setupReview, emptyList(), "", false,
                     options = SetupFeature.entries.map { SetupOption(it, unavailableReason = "Requires the Android host.") },
@@ -156,6 +163,7 @@ fun main() = application {
                             host.setPluginEnabled(event.id, event.enabled)
                         }
                         PocketScreenEvent.FeatureSetup -> { setupReview = false; setup = true }
+                        is PocketScreenEvent.SetTheme -> { themeMode = event.mode; appearance.put("theme", event.mode.name) }
                         else -> status(DEVICE_LIMIT)
                     }
                 } catch (e: Exception) { status(e.message ?: "Workspace operation failed.") }

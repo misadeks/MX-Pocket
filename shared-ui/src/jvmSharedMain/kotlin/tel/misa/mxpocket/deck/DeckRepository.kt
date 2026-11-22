@@ -23,6 +23,7 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
     private var home = true
     private var homeBatch = 0
     private var game = false
+    private var gameReturnId: String? = null
     private val gameProfile = defaultDeck().profiles.single { it.id == GAME_PROFILE }
     private val mutableReason: MutableStateFlow<String>
     val reason: StateFlow<String>
@@ -129,6 +130,7 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
 
     @Synchronized fun enterGame(): Result<Unit> = runCatching {
         check(GAME_PROFILE !in saved.disabledPluginIds) { "Enable Tic Tac Toe first." }
+        if (!game) gameReturnId = operating.value.activeProfileId
         game = true
         clearObservation()
         publish()
@@ -183,7 +185,7 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
 
     @Synchronized fun changePage(delta: Int): Result<Unit> {
         if (game) {
-            game = false
+            leaveGame()
             publish()
             return Result.success(Unit)
         }
@@ -336,18 +338,28 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
     /** null means uncertain (lock, access loss). Release our page but do not steal it again after a manual override. */
     @Synchronized fun showTeamsCall(joined: Boolean?) {
         confirmedCall = joined == true
+        val wasShowing = showingCall
         if (joined == true && !callEpisode) {
             callEpisode = true
-            showingCall = saved.availableSelection().callProjection() != null
+            showingCall = !game && saved.availableSelection().callProjection() != null
         } else if (joined == true && resumeCall) {
-            showingCall = saved.availableSelection().callProjection() != null
+            showingCall = !game && saved.availableSelection().callProjection() != null
             resumeCall = false
         } else if (joined != true) {
             resumeCall = joined == null && (showingCall || resumeCall)
             showingCall = false
             if (joined == false) callEpisode = false
         }
-        publish()
+        if (showingCall != wasShowing) {
+            if (showingCall) home = false
+            publish()
+        }
+    }
+
+    private fun leaveGame() {
+        game = false
+        if (gameReturnId != PROFILE_HOME && gameReturnId != state.value.activeProfileId) home = true
+        gameReturnId = null
     }
 
     private fun DeckState.callProjection(): DeckState? {
@@ -366,7 +378,7 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
         mutableReason.value = next.selectionReason
         if (mutable.value != next) clearObservation()
         mutable.value = next
-        if (GAME_PROFILE in saved.disabledPluginIds) game = false
+        if (game && GAME_PROFILE in saved.disabledPluginIds) leaveGame()
         val surface = when {
             game -> next.operatingProjection(gameProfile, "Previous or Next exits the game").snapshot()
             showingCall -> next

@@ -1,12 +1,20 @@
 package tel.misa.mxpocket.shared.ui
 
 import androidx.compose.foundation.*
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.zIndex
+import kotlin.math.roundToInt
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.*
 import androidx.compose.ui.text.font.FontWeight
@@ -60,13 +68,25 @@ private fun KeyFaceWindow(index: Int, tile: KeypadTile, modifier: Modifier) {
     }
 }
 
-/** Images occupy the nine real LCD windows. Hit areas can extend into the gutters. */
+/** Corner radius of a key window, in 480-unit panel coordinates (118 is the key width). */
+const val KEY_CORNER = 12
+
+/**
+ * Images occupy the nine real LCD windows. Hit areas can extend into the gutters.
+ * With [onSwap], a key can be dragged onto another one; the pair is reported once on release.
+ */
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
 fun KeypadGrid(tiles: List<KeypadTile>, onKey: (Int, Boolean) -> Unit,
-    modifier: Modifier = Modifier, panelArt: ImageBitmap? = null, onHold: Map<Int, () -> Unit> = emptyMap()) {
+    modifier: Modifier = Modifier, panelArt: ImageBitmap? = null, onHold: Map<Int, () -> Unit> = emptyMap(),
+    onSwap: ((Int, Int) -> Unit)? = null) {
     require(tiles.size == 9) { "A keypad frame must have nine tiles" }
     val direction = LocalLayoutDirection.current
+    val currentSwap by rememberUpdatedState(onSwap)
+    var dragFrom by remember { mutableStateOf<Int?>(null) }
+    var dragAt by remember { mutableStateOf(Offset.Zero) }
+    var dragDelta by remember { mutableStateOf(Offset.Zero) }
+    val outlineColor = androidx.compose.material3.MaterialTheme.colorScheme.primary
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
         BoxWithConstraints(modifier.fillMaxWidth()) {
             val side = maxWidth
@@ -74,7 +94,30 @@ fun KeypadGrid(tiles: List<KeypadTile>, onKey: (Int, Boolean) -> Unit,
             val top = (height - side) / 2
             val unit = side / 480
             val keySize = unit * 118
-            Box(Modifier.fillMaxWidth().height(height)) {
+            val keyShape = RoundedCornerShape(unit * KEY_CORNER)
+            val density = LocalDensity.current
+            val unitPx = with(density) { unit.toPx() }
+            val topPx = with(density) { top.toPx() }
+            // The nearest key centre; centres are 158 units apart starting at (82, 65).
+            fun keyAt(p: Offset): Int {
+                val col = ((p.x / unitPx - 82f) / 158f).roundToInt().coerceIn(0, 2)
+                val row = (((p.y - topPx) / unitPx - 65f) / 158f).roundToInt().coerceIn(0, 2)
+                return row * 3 + col
+            }
+            val target = dragFrom?.let { keyAt(dragAt + dragDelta) }
+            val drag = if (onSwap == null) Modifier else Modifier.pointerInput(unitPx, topPx) {
+                detectDragGestures(
+                    onDragStart = { p -> dragFrom = keyAt(p); dragAt = p; dragDelta = Offset.Zero },
+                    onDrag = { change, amount -> if (dragFrom != null) { change.consume(); dragDelta += amount } },
+                    onDragEnd = {
+                        val from = dragFrom
+                        val to = keyAt(dragAt + dragDelta)
+                        dragFrom = null; dragDelta = Offset.Zero
+                        if (from != null && to != from) currentSwap?.invoke(from, to)
+                    },
+                    onDragCancel = { dragFrom = null; dragDelta = Offset.Zero })
+            }
+            Box(Modifier.fillMaxWidth().height(height).then(drag)) {
                 Box(Modifier.offset(y = top).size(side).background(Color.Black)) {
                     if (panelArt != null) Image(panelArt, null, Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds)
                 }
@@ -85,14 +128,24 @@ fun KeypadGrid(tiles: List<KeypadTile>, onKey: (Int, Boolean) -> Unit,
                     val targetHeight = maxOf(keySize, 84.dp)
                     val targetTop = (y + (keySize - targetHeight) / 2)
                         .coerceIn(84.dp * row, height - 84.dp * (2 - row) - targetHeight)
-                    val outline = if (tile.selected) Modifier.border(2.dp, androidx.compose.material3.MaterialTheme.colorScheme.primary) else Modifier
+                    val dragging = dragFrom == i
+                    // Selection and drop outlines sit just outside the LCD window, never over its pixels.
+                    if (tile.selected || (target == i && !dragging)) Box(Modifier.absoluteOffset(x - 3.dp, y - 3.dp)
+                        .size(keySize + 6.dp).border(2.dp, outlineColor, RoundedCornerShape(unit * KEY_CORNER + 3.dp)))
+                    val lift = if (dragging) Modifier.zIndex(1f).graphicsLayer {
+                        translationX = dragDelta.x; translationY = dragDelta.y
+                        scaleX = 1.06f; scaleY = 1.06f; shadowElevation = 12f; shape = keyShape; clip = true
+                    } else Modifier
                     CompositionLocalProvider(LocalLayoutDirection provides direction) {
-                        KeyFaceWindow(i, tile, Modifier.absoluteOffset(x,y).size(keySize).then(outline))
+                        KeyFaceWindow(i, tile, Modifier.absoluteOffset(x,y).size(keySize).then(lift).clip(keyShape))
                     }
                     if (!tile.enabled && !tile.readOnly && tile.face?.enabled == true)
-                        Box(Modifier.offset(x,y).size(keySize).background(Color.Black.copy(alpha = .35f)))
+                        Box(Modifier.offset(x,y).size(keySize).then(lift).clip(keyShape).background(Color.Black.copy(alpha = .35f)))
                     val description = tile.accessibleName ?: listOfNotNull("Key ${i + 1}".takeIf { tile.showNumber }, tile.label, tile.footer)
                         .filter(String::isNotBlank).joinToString(", ")
+                    val swaps = if (onSwap == null) emptyList() else (0 until 9).filter { it != i }.map { other ->
+                        CustomAccessibilityAction("Swap with key ${other + 1}") { currentSwap?.invoke(i, other); true }
+                    }
                     val tap = { onKey(i, true); onKey(i, false) }
                     val hold = onHold[i]
                     val click = when {
@@ -104,6 +157,7 @@ fun KeypadGrid(tiles: List<KeypadTile>, onKey: (Int, Boolean) -> Unit,
                     Box(Modifier.offset(x, targetTop).size(keySize, targetHeight).then(click).semantics {
                         contentDescription = description
                         if (tile.selected) selected = true
+                        if (swaps.isNotEmpty()) customActions = swaps
                     })
                 }
             }

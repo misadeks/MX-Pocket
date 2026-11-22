@@ -1,35 +1,40 @@
 # Workspace walkthrough
 
 After [installing the Android app](#install-the-android-app), open
-**Home** to connect a keypad and choose a profile. With a wired keypad,
-**Keypad shows:** lists the nine labels; press the keys on the device.
-With the virtual keypad connected, tap the nine-key board on Home instead.
+**Home** to connect a keypad. Home shows what is on the keypad now (profile,
+page and page buttons) and mirrors the nine LCD keys live. With a wired keypad
+the mirror is display-only; press the keys on the device. With the virtual
+keypad connected (**Settings > Connect virtual keypad**), tap the keys on Home
+instead. The round button in Home's header, or **Settings > Appearance**
+(System, Light or Dark), switches the theme; the choice is remembered.
 **Plugins** turns features on or off, **Flows** lets you build and run workflows,
-and **Settings** contains USB preferences, background images and diagnostics.
+and **Settings** contains USB preferences, background images, repaint and diagnostics.
 
-Turning off a plugin hides its own profile and pages from Home, Keypad, and
-the action pickers on that host. If it was on the keypad, the keypad shows an
-available profile instead. Turn it back on in **Plugins** to use its saved
-layout again. Custom profiles stay visible, even if they contain keys for a
-disabled plugin; those bindings are kept for when the plugin is enabled again.
-
-**Keypad** edits the board. Its active-page preview uses the same key faces as
-the LCDs, including Audio transport symbols, the volume indicator and cover
-art when available. Selecting a key there edits its label, icon, color or
-action; it never runs the action. Other pages can be edited without activating
-their plugins. In a narrow window, Back returns from the key editor; a wider
-window keeps the board and key details side by side.
 Home starts on a nine-key profile launcher. Pick a profile to open its first
-page; **More profiles** shows the next group when needed. **Previous page**
-and **Next page** browse Home and the available profile roots. They skip
-submenus such as Teams Call tools; open those with their assigned keys.
+page; **More profiles** shows the next group if there are more than nine.
+**Previous** and **Next** browse Home and the available profile roots. To
+open a submenu such as Teams Call tools, use its assigned key instead.
+Press both page controls together to play Tic Tac Toe (**Page Up** and
+**Page Down** in the Windows simulator). Release both, then press either
+one to exit. The game is not in the regular launcher or editor.
 
-For Tic Tac Toe, press **Previous** and **Next** together on the keypad
-(**Page Up** and **Page Down** in the Windows simulator). Release both, then
-press either one to return. The game has no regular menu entry or layout
-editor. Its switch remains in **Plugins**.
+Turning off a plugin hides its own profile and pages from Home, Profiles and
+the action pickers. Its saved layout returns when you re-enable it in
+**Plugins**. Custom profiles remain visible, including any keys that will
+work again when their plugin is enabled.
 
-To give a key a second action, select it in **Keypad**, choose **Hold** under
+**Profiles** switches and edits profiles. Swipe the endless profile carousel
+(or tap a card) to put that profile on the keypad; the cards beside the
+centered one are slightly blurred. The profile picker below it always shows
+the same profile: choosing one there also puts it on the keypad. Choosing a
+page only opens it for editing. **Swap keys** opens the keypad with the same
+key faces as the LCDs (live for the page on the keypad): drag a key onto
+another to exchange them, or tap a key to edit its label, icon, color or
+action. Nothing there runs an action; screen readers offer **Swap with key N**
+actions instead of dragging. In a narrow window, Back returns from the key
+editor; a wider window keeps the key details beside the picker.
+
+To give a key a second action, open it from **Profiles > Swap keys**, choose **Hold** under
 **Key actions**, pick an action, and save the key. **Tap** and **Hold** are
 independent; choose **Unassigned** for Hold and save to remove it. Existing
 layouts and factory keys have no Hold. Layout backups include assigned Holds.
@@ -80,23 +85,23 @@ option off; see [deck behavior without special access](android-decks.md).
 
 ## Run without hardware
 
-1. On Home choose **Connect virtual keypad** if it isn't already connected
-   (first-run **Skip and try virtual keypad** connects it). Press **Start** on Focus.
+1. In Settings choose **Connect virtual keypad** if it isn't already connected
+   (first-run **Skip and try virtual keypad** connects it). On Home press **Start** on Focus.
    The first tile changes to **Pause** and the countdown advances. No USB
    permission or foreground service is needed. Disconnecting the virtual
    keypad disables input; reconnecting restores the selected page.
-2. In Keypad use **Manage profile > New profile** and create *Desk*. Under
+2. In Profiles use **Manage profile > New profile** and create *Desk*. Under
    **Manage page** create *Tools*. On Desk's root page edit a key, choose
    *Open page: Tools*, and set its label, icon and color. Put *Back* or *Return
-   to root* on Tools. Choose **Use this profile**, then navigate on Home.
+   to root* on Tools. Choose *Desk* in the carousel, then navigate on Home.
 3. In Flows duplicate **Keypad check**. Give the copy a name, change a delay
    or add a step, then **Test run** and **Save workflow**. A test executes real
-   steps. In Keypad assign the saved workflow to a Tools key. Press that key
+   steps. In Profiles assign the saved workflow to a Tools key. Press that key
    on Home to see the steps run. **Run history** shows origin,
    result and progress. For confirmation steps open Flows and approve or
    decline on the phone. Cancelling does not undo completed actions.
 4. In Plugins enable Audio; optional media access is explained before opening
-   Android settings. Start playback in a player. In Keypad enable automatic
+   Android settings. Start playback in a player. In Profiles enable automatic
    switching and inspect the Audio rule `mediaActive = true`. While the app
    is visible or hosting a real session, a stable match selects Audio after
    a short delay. Supported players expose Play/Pause and title with consent;
@@ -105,7 +110,7 @@ option off; see [deck behavior without special access](android-decks.md).
    virtual board shows one cover across the nine keys; a wired keypad shows
    it on the LCDs. The cover stays on Audio, even during playback;
    a pinned non-music profile keeps its own background.
-5. Inspect the selection reason, matched rules and observed values in Keypad.
+5. Inspect the selection reason, matched rules and observed values in Profiles.
    Create or change weighted rules for an observed app-owned activity, device,
    local hour/range, media, plugin or workflow state. Pin Desk, change playback
    and verify it stays on Desk. Unpin to resume automatic selection. Disabling
@@ -150,7 +155,7 @@ No root, firmware update or kernel change is part of setup.
 
 ## Show a profile when an app opens
 
-1. In **Keypad**, pick **Studio** in the **Profile** picker. Under **Context rules > Choose app**, tap **Camera** (Samsung Camera on a Galaxy). Pick **Audio** and repeat for **YouTube Music**. You can choose a custom profile the same way. Saving a mapping does not enable detection, change key bindings or launch anything.
+1. In **Profiles**, pick **Studio** in the **Profile** picker. Under **Context rules > Choose app**, tap **Camera** (Samsung Camera on a Galaxy). Pick **Audio** and repeat for **YouTube Music**. You can choose a custom profile the same way. Saving a mapping does not enable detection, change key bindings or launch anything.
 2. Enable **Automatic profile switching** and **Detect foreground apps**. Tap **Open usage access settings**, select **MX Pocket**, and allow Usage Access. No notification, accessibility or overlay access is needed for detection. Turn detection off here or revoke the Android grant at any time.
 3. With the physical keypad connected and the phone unlocked, open one app, then the other. After a stable match the keypad shows that profile’s last page. Opening Camera does **not** take a picture, and opening YouTube Music does **not** start playback. Studio’s optional physical shutter and recording controls require separate setup for the default camera; mapping Camera does not enable them.
 

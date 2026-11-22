@@ -14,7 +14,7 @@ import tel.misa.mxpocket.plugins.present
 
 @OptIn(ExperimentalTestApi::class)
 class WorkspaceRenderTest {
-    @Test fun connectedUsbFixtureSummarizesKeysWithoutMountingAnOperatingGrid() = runDesktopComposeUiTest(390, 844) {
+    @Test fun connectedUsbHomeMirrorsTheKeypadWithoutMaintenanceControls() = runDesktopComposeUiTest(390, 844) {
         val state = PocketScreenState("Keypad session ready.", "Focus", FocusTimer().present(0).keys.map { it.toGridTile(true) },
             defaultDeck().profiles.map { ProfileChoice(it.id, it.name) }, "focus", usbReady = true, connectionActive = true,
             hardwareSummary = true)
@@ -24,8 +24,13 @@ class WorkspaceRenderTest {
             }
         }
         onNodeWithText("Connected: USB session active").assertExists()
-        onNodeWithText("KEYPAD SHOWS:").assertExists()
-        onNodeWithContentDescription("Key 1, Start, Focus").assertDoesNotExist()
+        // Home is the live keypad; the old summary, maintenance buttons, panel note and virtual switch are gone.
+        onNodeWithContentDescription("Key 1, Start, Focus").assertHasNoClickAction()
+        onNodeWithText("KEYPAD SHOWS:").assertDoesNotExist()
+        onNodeWithText("Repaint all nine LCDs").assertDoesNotExist()
+        onNodeWithText("Choose custom image for all nine keys").assertDoesNotExist()
+        onNodeWithText("480 × 480", substring = true).assertDoesNotExist()
+        onNodeWithText("Connect virtual keypad").assertDoesNotExist()
         val file = File("build/reports/workspace-preview/home-usb-state-fixture.png")
         file.parentFile.mkdirs()
         Image.makeFromBitmap(onRoot().captureToImage().asSkiaBitmap()).use { image ->
