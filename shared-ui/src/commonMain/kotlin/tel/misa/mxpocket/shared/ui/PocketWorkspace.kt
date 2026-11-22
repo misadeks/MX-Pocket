@@ -426,11 +426,6 @@ private fun SettingsScreen(state: PocketScreenState, event: (PocketScreenEvent) 
                 Note(state.simulator.limitations)
             }
         }
-        if (state.simulator == null) PocketCard("Display", ShellIcon.MONITOR, caps = true) {
-            PocketDivider()
-            PocketListRow(ShellIcon.IMAGE, "Choose keypad background", "Image behind all nine keys for this session") { event(PocketScreenEvent.ChooseImage) }
-            PocketListRow(ShellIcon.REFRESH, "Repaint all keys", "Redraw all nine 118 × 118 LCD regions") { event(PocketScreenEvent.Repaint) }
-        }
         PocketCard("Diagnostics", ShellIcon.DOCUMENT, caps = true) {
             PocketDivider()
             PocketInner {

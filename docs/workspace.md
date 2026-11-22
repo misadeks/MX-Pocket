@@ -8,7 +8,7 @@ LCD keys live when connected. Press keys on the device, not on the phone.
 Choose **System**, **Light** or **Dark** in **Settings > Appearance**. The
 choice is remembered; System follows your device's current theme.
 **Plugins** turns features on or off, **Flows** lets you build and run workflows,
-and **Settings** contains USB preferences, background images, repaint and diagnostics.
+and **Settings** contains USB preferences and diagnostics.
 
 **Profiles** switches and edits profiles. Swipe the endless profile carousel
 (or tap a card) to put that profile on the keypad; the cards beside the
