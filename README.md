@@ -13,11 +13,12 @@ captions, raising your hand and opening meeting chat where Teams supports those
 actions. When the call ends, the keypad returns to your previous layout unless
 you've selected another.
 
-MX Pocket supports the **wired Logitech MX Creative Keypad** (`046D:C354`),
-not the wireless **Dialpad** sold with it. Its Kotlin driver uses Android USB
-Host to read key presses and update the keypad display directly from the phone,
-without root, a companion PC or Logi Options+. You can use the driver without
-the app. The Windows simulator does not drive hardware.
+The **wired Logitech MX Creative Keypad** (`046D:C354`) connects directly to
+your Android phone over USB-C. MX Pocket's Kotlin driver uses Android's USB
+Host API to read key presses and update the labels behind the keys as layouts
+change. You can use the driver without the app. No root access or companion PC
+is needed. The wireless **Dialpad** sold with the keypad is not supported, and
+the Windows simulator does not drive hardware.
 
 ## Quick start
 
