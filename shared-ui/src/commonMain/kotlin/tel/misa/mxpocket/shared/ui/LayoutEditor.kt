@@ -228,11 +228,11 @@ fun LayoutEditor(
         if (swapping) AlertDialog(onDismissRequest = { if (!writer.busy) finishSwap() },
             title = { Text("Swap keys") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     EditorNote("Drag a key onto another to swap them. Tap a key to edit it. Nothing here runs an action.")
                     // Taps and drags only edit the layout; key execution stays on Home and the keypad.
                     KeypadGrid(gridTiles(), { i, down -> if (!down && !writer.busy) pickKey(i) },
-                        Modifier.widthIn(max = 360.dp).testTag("swap-grid"), active?.panelArt,
+                        Modifier.widthIn(max = 360.dp).testTag("swap-grid"),
                         onSwap = { from, to -> if (writable) writer.edit(DeckEdit.Swap(profile.id, page.id, from, to)) })
                 }
             },

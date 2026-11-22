@@ -22,7 +22,7 @@ import android.net.Uri
 import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.testTag
@@ -88,7 +88,7 @@ class MediaPanelRenderingTest {
         val tiles = colors.indices.map { i -> renderer.image(i,tile).also { runBlocking { sim.setKeyImage(i,it) } } }
         ui.setContent {
             KeypadGrid(tiles.map { KeypadTile("Play", color = androidx.compose.ui.graphics.Color.Black,
-                image = it.asImageBitmap()) }, { _, _ -> }, Modifier.size(320.dp).testTag("panel"), art.asImageBitmap())
+                image = it.asImageBitmap()) }, { _, _ -> }, Modifier.width(320.dp).testTag("panel"))
         }
         val bounds = ui.onNodeWithTag("panel").fetchSemanticsNode().boundsInWindow
         // Robolectric does not complete PixelCopy's next-frame callback. Draw the actual window instead.
@@ -102,8 +102,9 @@ class MediaPanelRenderingTest {
             val pixel = tiles[i].getPixel(59,45)
             assertEquals(colors[i],pixel)
             assertEquals(pixel,sim.renderedImage(i)!!.getPixel(59,45))
-            assertEquals(pixel,mirrored.getPixel((bounds.left + (r.x+59)*bounds.width/480).toInt(),
-                (bounds.top + (r.y+45)*bounds.height/480).toInt()))
+            val scale = bounds.width / 480
+            assertEquals(pixel, mirrored.getPixel((bounds.left + (115 + i % 3 * 125) * scale).toInt(),
+                (bounds.top + (63 + i / 3 * 125 + 45 * 106f / 118) * scale).toInt()))
             pixel
         }
         assertEquals(9,samples.distinct().size)

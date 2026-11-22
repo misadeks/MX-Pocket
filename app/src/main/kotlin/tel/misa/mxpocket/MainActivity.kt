@@ -423,7 +423,7 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             tiles = frame.keys.mapIndexed { i, key -> key.toGridTile(session.ready, session.keyImage(i, key).asImageBitmap()) },
             profiles = deck.profiles.map { ProfileChoice(it.id, it.name) },
             activeId = deck.activeProfileId, reason = session.deck.reason.value,
-            simulating = session.preview, panelArt = session.panelArt?.asImageBitmap(),
+            simulating = session.preview,
             connectionLabel = session.connectionLabel,
             connectionActive = target != null || session.request != null,
             usbReady = session.ready && !session.preview, activePageId = deck.activePage.id, hardwareSummary = !session.preview,
