@@ -192,20 +192,11 @@ fun HomeScreen(state: PocketScreenState, event: (PocketScreenEvent) -> Unit) {
             val split = maxWidth >= 720.dp
             val summary: @Composable () -> Unit = {
                 NowOnKeypad(state, event)
-                if (state.simulator != null && state.profiles.size > 1) ProfilePicker(state, event)
+                val launcher = ProfileChoice(PROFILE_HOME, LauncherCopy.Launcher.text())
+                ProfilePicker(listOf(launcher) + state.profiles, state.activeId) {
+                    event(PocketScreenEvent.SelectPlugin(it))
+                }
                 if (state.simulator?.supportsUsb == true) DesktopConnectionCard(state, event)
-                if (state.activeId == PROFILE_HOME) PocketCard(LauncherCopy.Choose.text()) {
-                    state.profiles.chunked(2).forEach { row ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            row.forEach { profile ->
-                                PocketButton(profile.name, { event(PocketScreenEvent.SelectPlugin(profile.id)) },
-                                    Modifier.weight(1f), identity = PocketStyle.accent(profile.id), enabled = profile.unavailableReason == null)
-                            }
-                            if (row.size == 1) Spacer(Modifier.weight(1f))
-                        }
-                    }
-                } else PocketButton(LauncherCopy.Launcher.text(), { event(PocketScreenEvent.SelectPlugin(PROFILE_HOME)) },
-                    Modifier.fillMaxWidth(), ShellIcon.HOME)
             }
             // With hardware the mirror is display-only: keys are pressed on the device, never twice.
             val grid = state.virtualInput?.takeIf { state.profiles.find { it.id == state.activeId }?.unavailableReason == null }
@@ -301,7 +292,7 @@ private fun NowOnKeypad(state: PocketScreenState, event: (PocketScreenEvent) -> 
                 }
                 if (!pageName.isNullOrBlank()) Text(pageName, color = accent.ink, style = type.titleMedium,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (state.reason.isNotBlank()) Text(state.reason, style = type.bodyMedium, color = PocketColors.muted,
+                if (state.activeId != PROFILE_HOME && state.reason.isNotBlank()) Text(state.reason, style = type.bodyMedium, color = PocketColors.muted,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             RoundPageButton(ShellIcon.CHEVRON_RIGHT, W.NextPage.text()) { event(PocketScreenEvent.ChangePage(1)) }
@@ -310,18 +301,19 @@ private fun NowOnKeypad(state: PocketScreenState, event: (PocketScreenEvent) -> 
 }
 
 @Composable
-private fun ProfilePicker(state: PocketScreenState, event: (PocketScreenEvent) -> Unit) {
+private fun ProfilePicker(choices: List<ProfileChoice>, activeId: String, select: (String) -> Unit) {
     Box {
-        var open by remember { mutableStateOf(false) }
-        PocketButton(H.Switch.text(), { open = true }, icon = ShellIcon.LAYERS)
+        val enabled = choices.any { it.id != activeId }
+        var open by remember(enabled) { mutableStateOf(false) }
+        PocketButton(H.Switch.text(), { open = true }, icon = ShellIcon.LAYERS, enabled = enabled)
         DropdownMenu(open, { open = false }, modifier = Modifier.widthIn(min = 224.dp, max = 360.dp)) {
-            state.profiles.forEach { profile ->
+            choices.forEach { profile ->
                 if (profile.unavailableReason != null) UnavailableRow(profile.name, profile.unavailableReason)
                 else DropdownMenuItem(text = { Text(profile.name) },
-                    trailingIcon = if (profile.id == state.activeId) ({ PocketIcon(ShellIcon.CHECK, PocketColors.accent) }) else null,
-                    modifier = Modifier.semantics { selected = profile.id == state.activeId }, onClick = {
+                    trailingIcon = if (profile.id == activeId) ({ PocketIcon(ShellIcon.CHECK, PocketColors.accent) }) else null,
+                    modifier = Modifier.semantics { selected = profile.id == activeId }, onClick = {
                         open = false
-                        if (profile.id != state.activeId) event(PocketScreenEvent.SelectPlugin(profile.id))
+                        if (profile.id != activeId) select(profile.id)
                     })
             }
         }
@@ -344,9 +336,7 @@ fun SimulatorProfiles(state: PocketScreenState, select: (String) -> Unit, editor
         Column(Modifier.widthIn(max = 1440.dp).fillMaxSize()) {
             WorkspaceTitle(W.Profiles.text())
             if (state.simulator == null) ProfileCarousel(state.profiles, state.activeId, select)
-            else if (!wide || state.activeId == GAME_PROFILE) ProfilePicker(state) { event ->
-                if (event is PocketScreenEvent.SelectPlugin) select(event.id)
-            }
+            else if (!wide || state.activeId == GAME_PROFILE) ProfilePicker(state.profiles, state.activeId, select)
             if (state.activeId != GAME_PROFILE) Box(Modifier.weight(1f).fillMaxWidth()) { editor() }
         }
     }
