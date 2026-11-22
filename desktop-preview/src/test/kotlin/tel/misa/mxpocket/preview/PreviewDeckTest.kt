@@ -117,7 +117,9 @@ class PreviewDeckTest {
         check(deck.profileName == "Home")
         check(deck.tiles(0)[8].label == "More profiles")
         deck.press(8, 0)
-        deck.press(2, 0)
+        val lastChoice = deck.tiles(0).indexOfFirst { it.label == "Custom 3" }
+        check(lastChoice in 0..7)
+        deck.press(lastChoice, 0)
         assertEquals(extras.last(), deck.profileId)
         deck.select("focus")
         repo.openPage(page).getOrThrow()
