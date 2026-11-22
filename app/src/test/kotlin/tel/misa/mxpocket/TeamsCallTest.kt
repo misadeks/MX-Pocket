@@ -132,11 +132,11 @@ class TeamsCallTest {
             service.onAccessibilityEvent(null); main.idle()
             assertEquals("Unmute mic", session.frame().keys[4].label)
             val keyguard = shadowOf(app.getSystemService(android.app.KeyguardManager::class.java))
-            keyguard.setIsKeyguardLocked(true)
+            keyguard.setKeyguardLocked(true)
             signal()
             assertFalse(session.deckState.value.teams.joined)
             assertEquals("focus", session.deck.state.value.activeProfileId)
-            keyguard.setIsKeyguardLocked(false)
+            keyguard.setKeyguardLocked(false)
             signal()
             assertEquals("in-call", session.deck.state.value.activePage.id)
             window.root = null
