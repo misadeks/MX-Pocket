@@ -233,7 +233,9 @@ class PreviewDeck(val repository: DeckRepository, private val sendMedia: (MediaK
             MORE_PROFILES -> repository.moreProfiles()
             else -> null
         }
-        if (navigation != null) return navigation.fold({ K.OnPage.text(profileName, deck.activeProfile.displayPageName(deck.activePage)) },
+        if (navigation != null) return navigation.fold({
+            if (profileId == PROFILE_HOME) profileName else K.OnPage.text(profileName, deck.activeProfile.displayPageName(deck.activePage))
+        },
             { it.message ?: K.CannotChangePage.text() })
         val (plugin, index, command) = binding(call)
             ?: return K.NotInSimulator.text(call.id)

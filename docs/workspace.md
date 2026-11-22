@@ -17,24 +17,24 @@ layouts, workflows or key labels, or change exported files.
 see device details and the session log. On Android, Back returns to Settings.
 On Windows, Diagnostics opens in a separate window you can close independently.
 
-On Android and Windows, open **Home → Switch layout** and select a profile to
-open its first page, even when disconnected. To get back to the nine-key
-launcher, choose **Switch layout → Profile launcher**. The **Home** tab shows
-the current keypad; switching tabs does not change its layout. Android system
-Back dismisses the open menu, returns from other top-level tabs to Home, or
-leaves the Activity from Home. It does not select a keypad profile.
+On Android and Windows, the **Home** tab shows the current keypad. Use the
+page arrows to cycle through Home and the available layouts, even when
+disconnected. To choose a saved profile directly, open **Profiles**.
+Switching tabs does not change the keypad layout. Android system Back
+returns from other top-level tabs to Home or leaves the Activity from Home.
+It does not select a keypad profile.
 
-On the physical launcher, press a profile key to open it. **More profiles**
+On the keypad’s **Home** grid, press a profile key to open it. **More profiles**
 shows the next group if there are more than nine. **Previous** and **Next**
-cycle through the launcher and available profile roots. A submenu opens with
+cycle through Home and available profile roots. A submenu opens with
 its assigned key; a **Back** binding retraces pages within the current profile,
-and **Return to root** opens that profile's first page, not the launcher.
+and **Return to root** opens that profile's first page, not Home.
 
-Press **Previous** and **Next** together and release to return to the keypad’s
-profile launcher. Keep both held instead to open Tic Tac Toe, if enabled.
+Press **Previous** and **Next** together and release to return to Home.
+Keep both held instead to open Tic Tac Toe, if enabled.
 The hold starts when the second button goes down and uses Android’s **Touch &
 hold delay** on Android. Release both, then press either one alone to exit the
-game. The game is not in the regular launcher or editor. In the Windows
+game. The game is not on the Home grid or in the editor. In the Windows
 simulator, use **Page Up** and **Page Down** on the Home tab for the same gestures.
 
 Turning off a plugin hides its own profile and pages from Home, Profiles and
@@ -56,10 +56,19 @@ swipe strip. **Plugins** lists controls supported by the current host first;
 unavailable plugins remain visible with the reason they cannot run. The key
 action picker also explains unavailable bindings without changing saved keys.
 
-To give a key a second action, open the key on its page, choose **Hold** under
-**Key actions**, pick an action, and save the key. **Tap** and **Hold** are
-independent; choose **Unassigned** for Hold and save to remove it. Existing
-layouts and factory keys have no Hold. Layout backups include assigned Holds.
+Under **Key actions**, choose **Tap** or **Hold**, then browse by task or search
+across categories. **Pages and profiles** navigates the keypad; **Android
+navigation** controls the phone. Opening a saved profile never imports keys
+from other profiles into its picker. For example, **Focus timer** is available
+when editing Focus, and **Toggle mute** is a live Audio control. App launches,
+media commands and explicit profile switches use named actions rather than
+factory key numbers.
+
+Choosing an action changes only that gesture. **Save key** applies the edit;
+**Unassigned** clears the chosen gesture. A legacy binding stays as saved until
+you replace it, including in imported layouts. In particular, **Open logitech.com**
+still opens that site; it is not a configurable browser shortcut. Readouts and
+controls tied to a physical camera or call key are not new assignments.
 
 On an operational key with Hold assigned, releasing early runs Tap. Keeping
 the key down until Android's **Touch & hold delay** runs Hold once instead;

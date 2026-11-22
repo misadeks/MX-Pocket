@@ -110,7 +110,6 @@ internal object DeviceCopy {
     val Video = Copy("Video camera", "la caméra vidéo", "video-kameru")
     val Settings = Copy("Settings", "les réglages", "podešavanja")
     val Dialer = Copy("Dialer", "le composeur", "brojčanik")
-    val Web = Copy("Web", "le navigateur", "pregledač")
     val Alarms = Copy("Alarms", "les alarmes", "alarme")
     val TapNotification = Copy("Tap the “{0}” notification within one minute.", "Touchez la notification « {0} » dans la minute qui suit.", "U roku od jednog minuta dodirnite obaveštenje „{0}“.")
     val DirectRequested = Copy("Direct launch requested: {0}. Tap the notification only if it did not open.", "Ouverture directe demandée : {0}. Touchez la notification uniquement si l’application ne s’est pas ouverte.", "Zatraženo je direktno otvaranje: {0}. Dodirnite obaveštenje samo ako se aplikacija nije otvorila.")

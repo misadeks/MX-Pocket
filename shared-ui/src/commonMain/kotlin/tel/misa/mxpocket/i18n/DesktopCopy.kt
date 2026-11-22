@@ -18,7 +18,7 @@ object DesktopCopy {
     val NoPlugins = Copy("No plugins installed.", "Aucun module installé.", "Nema instaliranih dodataka.")
     val Enable = Copy("Enable the controls you use.", "Activez les commandes que vous utilisez.", "Uključi komande koje koristiš.")
     val PreviousOrNext = Copy(
-        "In the Home tab, press Page Up and Page Down together. Release for the profile launcher, or keep holding to play Tic Tac Toe. Press either key alone to exit the game.",
-        "Dans l’onglet Accueil, appuyez sur Page précédente et Page suivante ensemble. Relâchez pour afficher les profils ou maintenez les deux touches pour jouer au morpion. Pour quitter le jeu, appuyez sur une seule touche de page.",
-        "Na kartici Početna pritisni Page Up i Page Down zajedno. Otpusti ih za izbor profila ili ih zadrži za igru iks-oks. Za izlaz iz igre pritisni samo jedan od ta dva tastera.")
+        "In the Home tab, press Page Up and Page Down together. Release to return the keypad to Home, or keep holding to play Tic Tac Toe. Press either key alone to exit the game.",
+        "Dans l’onglet Accueil, appuyez sur Page précédente et Page suivante ensemble. Relâchez pour revenir à l’écran Accueil du pavé ou maintenez les deux touches pour jouer au morpion. Pour quitter le jeu, appuyez sur une seule touche de page.",
+        "Na kartici Početna pritisni Page Up i Page Down zajedno. Otpusti ih za povratak na ekran Početna na tastaturi ili ih zadrži za igru iks-oks. Za izlaz iz igre pritisni samo jedan od ta dva tastera.")
 }

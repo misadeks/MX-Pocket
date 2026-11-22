@@ -548,7 +548,7 @@ internal class PocketSession(
         "workflow.run" -> if (workflows == null) WorkflowCopy.Workflow.text() else
             workflows.definitions.value.find { it.id == call.params["workflowId"] }?.name ?: K.MissingWorkflow.text()
         "sound.play" -> K.PlaySound.text()
-        "phone.open" -> PhoneApp.entries.find { it.name == call.params["app"] }?.displayName() ?: K.Phone.text()
+        "phone.open" -> call.phoneAppTarget()?.displayName() ?: K.Phone.text()
         "keypad.status" -> K.SetKeyStatus.text()
         else -> call.id
     }
@@ -620,7 +620,7 @@ internal class PocketSession(
                 } catch (_: RuntimeException) { ActionResult(false,D.NoTone.text()) }
             }
             "phone.open" -> {
-                val target = PhoneApp.entries.find { it.name == call.params["app"] }
+                val target = call.phoneAppTarget()
                 if (origin == WorkflowOrigin.PHYSICAL && target == PhoneApp.CAMERA) {
                     if (screen == null) {
                         val offered = offerPhysicalShortcut(Target.Phone(target))

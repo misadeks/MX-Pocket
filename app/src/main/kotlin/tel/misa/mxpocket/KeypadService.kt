@@ -30,6 +30,7 @@ import tel.misa.mxpocket.decks.DeckResult
 import tel.misa.mxpocket.decks.ok
 import tel.misa.mxpocket.decks.unavailable
 import tel.misa.mxpocket.plugins.PhoneApp
+import tel.misa.mxpocket.plugins.displayName
 
 class KeypadService : Service() {
     private val strings get() = LanguagePreference.resourcesFor(this)
@@ -144,7 +145,7 @@ class KeypadService : Service() {
                 PhoneApp.CAMERA -> D.Camera.text()
                 PhoneApp.SETTINGS -> D.Settings.text()
                 PhoneApp.DIALER -> D.Dialer.text()
-                PhoneApp.WEB -> D.Web.text()
+                PhoneApp.WEB -> target.app.displayName()
                 PhoneApp.ALARMS -> D.Alarms.text()
                 PhoneApp.ONENOTE -> "OneNote"
             }

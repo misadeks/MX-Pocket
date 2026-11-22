@@ -5,7 +5,7 @@ and put actions where your fingers expect them. In supported apps, use physical
 keys to move between items, scroll and select without tapping a small button or
 making a precise swipe. Use the nine LCD keys to open a favorite app, start a
 focus timer or change tracks. Previous and Next switch
-layouts. Press them together and release for the keypad’s profile launcher,
+layouts. Press them together and release to return to Home and choose a profile,
 or hold both to play Tic Tac Toe. To try MX Pocket without hardware, use the
 Windows simulator.
 

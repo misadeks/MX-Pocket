@@ -39,7 +39,6 @@ import tel.misa.mxpocket.deck.DeckState
 import tel.misa.mxpocket.deck.GAME_PROFILE
 import tel.misa.mxpocket.deck.PROFILE_HOME
 import tel.misa.mxpocket.i18n.DesktopCopy as H
-import tel.misa.mxpocket.i18n.LauncherCopy
 import tel.misa.mxpocket.plugins.KeyTile
 import tel.misa.mxpocket.plugins.PluginFrame
 import tel.misa.mxpocket.workflow.WORKFLOWS_ENABLED
@@ -199,10 +198,6 @@ fun HomeScreen(state: PocketScreenState, event: (PocketScreenEvent) -> Unit) {
             val split = maxWidth >= 720.dp
             val summary: @Composable () -> Unit = {
                 NowOnKeypad(state, event)
-                val launcher = ProfileChoice(PROFILE_HOME, LauncherCopy.Launcher.text())
-                ProfilePicker(listOf(launcher) + state.profiles, state.activeId) {
-                    event(PocketScreenEvent.SelectPlugin(it))
-                }
                 if (state.simulator?.supportsUsb == true) DesktopConnectionCard(state, event)
             }
             // With hardware the mirror is display-only: keys are pressed on the device, never twice.
