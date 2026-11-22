@@ -107,7 +107,7 @@ fun main() = application {
         val options = buildList {
             add(BindingOption("Back", ActionCall(DeckActions.BACK)))
             add(BindingOption("Return to root", ActionCall(DeckActions.ROOT)))
-            DeckCommand.entries.filter { it.deck == "audio" || it.deck == "navigation" }.forEach {
+            DeckCommand.entries.filter { it.deck in setOf("audio", "navigation", "teams") }.forEach {
                 add(BindingOption("${it.deck}: ${it.label}", ActionCall(it.id)))
             }
             profiles.forEach { add(BindingOption("Profile: ${it.name}", ActionCall(DeckActions.PROFILE, mapOf("profileId" to it.id)))) }

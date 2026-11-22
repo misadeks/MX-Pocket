@@ -20,6 +20,7 @@ import tel.misa.mxpocket.shared.ui.PocketTheme
 import tel.misa.mxpocket.decks.FavoriteApps
 import tel.misa.mxpocket.plugins.PhoneApp
 import tel.misa.mxpocket.decks.viewfinder
+import tel.misa.mxpocket.decks.teamsLauncher
 
 /** Only opened by tapping the system notification. The intent identifies a request, not a target. */
 class PhoneActionActivity : ComponentActivity() {
@@ -82,6 +83,7 @@ internal fun Context.hasKeypadAccess(ticket: PocketSession.Request): Boolean {
 
 internal fun Context.launchShortcut(target: PocketSession.Target): String? {
     val intent = when (target) {
+        PocketSession.Target.Teams -> teamsLauncher() ?: return "Teams is not installed in this profile."
         is PocketSession.Target.Phone -> return launchPhoneApp(target.app)
         is PocketSession.Target.FavoriteApp -> intentForFavoriteShortcut(target.component,
             (applicationContext as PocketApplication).session.favoriteApps) ?: return "Favorite shortcut is no longer available."

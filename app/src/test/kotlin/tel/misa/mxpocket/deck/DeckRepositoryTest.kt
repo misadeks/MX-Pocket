@@ -21,6 +21,36 @@ class DeckRepositoryTest {
     private val file: File get() = File(folder.root, "deck.json")
     private val repo by lazy { DeckRepository(file) }
 
+    @Test fun callProjectionRestoresExactPageAndNeverOverwritesAnExplicitChoice() {
+        val child = repo.createPage("phone", "Tools").getOrThrow()
+        repo.selectProfile("phone").getOrThrow()
+        repo.openPage(child).getOrThrow()
+        val before = repo.exportJson()
+        repo.showTeamsCall(true)
+        assertEquals("in-call", repo.state.value.activePage.id)
+        assertEquals(before, repo.exportJson())
+        repo.renamePage("phone", child, "My tools").getOrThrow()
+        repo.showTeamsCall(false)
+        assertEquals(child, repo.state.value.activePage.id)
+        assertEquals("My tools", repo.state.value.activePage.name)
+        repo.showTeamsCall(true)
+        repo.openPage("root").getOrThrow()
+        repo.showTeamsCall(true)
+        repo.showTeamsCall(false)
+        assertEquals("Work", repo.state.value.activePage.name)
+        repo.setPinned("audio").getOrThrow()
+        repo.showTeamsCall(true)
+        assertEquals("audio", repo.state.value.activeProfileId)
+        repo.showTeamsCall(false)
+        repo.setPinned(null).getOrThrow()
+        repo.deletePage("teams", "in-call").getOrThrow()
+        repo.showTeamsCall(true)
+        assertEquals("audio", repo.state.value.activeProfileId)
+        assertEquals(1, DeckRepository(file).state.value.profiles.single { it.id == "teams" }.pages.size)
+        repo.deleteProfile("teams").getOrThrow()
+        assertFalse(DeckRepository(file).state.value.profiles.any { it.id == "teams" })
+    }
+
     @Test fun editorCannotSaveOverAChangedKeyRulesOrActiveHistory() = runBlocking {
         val editor = repo.asEditorStore()
         val original = repo.state.value.activePage.keys[0]

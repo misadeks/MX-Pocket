@@ -364,10 +364,18 @@ class KeypadSessionTest {
         expectProfile("focus")
         val remaining = listOf("audio", "phone", "launcher", "studio", "navigation", "game.xo")
         for (id in remaining + "focus") {
+            if (id == "focus") {
+                press(0x01a2); expectProfile("teams")
+                press(0x01a2); assertEquals("in-call", session.deck.state.value.activePage.id)
+            }
             press(0x01a2)
             expectProfile(id)
         }
         for (id in remaining.asReversed() + "focus") {
+            if (id == "game.xo") {
+                press(0x01a1); expectProfile("teams")
+                press(0x01a1); assertEquals("root", session.deck.state.value.activePage.id)
+            }
             press(0x01a1)
             expectProfile(id)
         }

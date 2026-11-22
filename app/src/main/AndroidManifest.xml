@@ -28,6 +28,7 @@
         <activity android:name=".decks.FavoritesActivity" android:exported="false" />
         <activity android:name=".decks.CameraControlsActivity" android:exported="false" />
         <activity android:name=".decks.DeckAccessActivity" android:exported="false" />
+        <activity android:name=".decks.TeamsAccessActivity" android:exported="false" />
         <provider android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.captures" android:exported="false" android:grantUriPermissions="true">
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/capture_paths" />
@@ -43,6 +44,16 @@
             android:label="@string/navigation_access" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter><action android:name="android.accessibilityservice.AccessibilityService" /></intent-filter>
             <meta-data android:name="android.accessibilityservice" android:resource="@xml/navigation_service" />
+        </service>
+        <service android:name=".decks.TeamsCallListener" android:exported="false"
+            android:label="@string/teams_call_access" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter><action android:name="android.service.notification.NotificationListenerService" /></intent-filter>
+            <meta-data android:name="android.service.notification.default_filter_types" android:value="ongoing" />
+        </service>
+        <service android:name=".decks.TeamsToolbarService" android:exported="true"
+            android:label="@string/teams_toolbar_access" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter><action android:name="android.accessibilityservice.AccessibilityService" /></intent-filter>
+            <meta-data android:name="android.accessibilityservice" android:resource="@xml/teams_toolbar" />
         </service>
         <service android:name=".KeypadService" android:exported="false" android:foregroundServiceType="connectedDevice" />
         <activity android:name=".PhoneActionActivity" android:exported="false" android:excludeFromRecents="true"

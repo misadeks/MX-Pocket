@@ -63,6 +63,7 @@ data class DeckState(
     val histories: Map<String, List<String>>,
     val selectionReason: String = "Default profile",
     val xoProfileRemoved: Boolean = false,
+    val teamsProfileRemoved: Boolean = false,
 ) {
     val activeProfile: DeckProfile get() = profiles.first { it.id == activeProfileId }
     val activePage: DeckPage get() = activeProfile.pages.first { it.id == histories.getValue(activeProfileId).last() }
@@ -115,6 +116,7 @@ fun defaultDeck(): DeckState {
         plugin("studio", "Studio"),
         plugin("navigation", "Navigation", slots = navigationFactorySlots),
         plugin("game.xo", tel.misa.mxpocket.plugins.TIC_TAC_TOE_TITLE),
+        tel.misa.mxpocket.decks.teamsProfile(),
     )
     return DeckState(
         DeckLimits.VERSION, profiles, "focus", "focus", null, false,

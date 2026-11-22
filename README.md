@@ -62,6 +62,11 @@ app-based profile switching, accessibility for cross-app navigation or supported
 camera buttons, and **Display over other apps** for one-press background app
 shortcuts. Leave these off unless you want the corresponding feature.
 
+The **Teams** profile opens the Android client on this phone. Choose **Call
+tools** for its manual meeting page, or **Teams setup** for optional local call
+switching. Teams uses separate grants; enabling Audio does not enable Teams.
+See [Teams call controls and client limits](docs/android-decks.md#teams-on-this-phone).
+
 ## Guides
 
 | I want to… | Start here |

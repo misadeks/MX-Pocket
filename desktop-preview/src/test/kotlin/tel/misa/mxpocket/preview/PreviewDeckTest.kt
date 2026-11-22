@@ -16,6 +16,20 @@ import tel.misa.mxpocket.shared.ui.factoryKeyBindings
 
 class PreviewDeckTest {
     @get:Rule val folder = TemporaryFolder()
+    @Test fun manualTeamsPageNeverSimulatesALiveMeetingOrMicToggle() {
+        val repo = DeckRepository(File(folder.root, "deck.json"))
+        val deck = PreviewDeck(repo)
+        deck.select("teams")
+        deck.press(7, 0)
+        assertEquals("In call", repo.state.value.activePage.name)
+        val mic = deck.tiles(0)[4]
+        assertEquals("Mic unavailable", mic.label)
+        check(!mic.enabled)
+        deck.press(4, 0)
+        assertEquals(mic, deck.tiles(0)[4])
+        deck.press(8, 0)
+        assertEquals("Work", repo.state.value.activePage.name)
+    }
     @Test fun legacyOwnerAndExplicitMediaCommandsKeepTheirMeaningsOnEditedPages() {
         val repo = DeckRepository(File(folder.root, "deck.json"))
         val deck = PreviewDeck(repo)

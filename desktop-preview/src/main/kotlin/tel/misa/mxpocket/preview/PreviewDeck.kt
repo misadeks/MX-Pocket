@@ -4,6 +4,8 @@ import tel.misa.mxpocket.FocusTimer
 import tel.misa.mxpocket.deck.*
 import tel.misa.mxpocket.decks.DeckCommand
 import tel.misa.mxpocket.decks.navigationCommands
+import tel.misa.mxpocket.decks.teamsSlots
+import tel.misa.mxpocket.decks.TeamsState
 import tel.misa.mxpocket.plugins.*
 
 /** Uses the same saved deck and folder histories as the editor. Device effects never leave this host. */
@@ -63,6 +65,7 @@ class PreviewDeck(val repository: DeckRepository) {
                 else -> audioSlots.indexOf(command)
             }
             "navigation" -> navigationCommands.indexOf(command)
+            "teams" -> teamsSlots.indexOf(command)
             else -> return null
         }
         return Binding(command.deck, index, command)
@@ -115,6 +118,8 @@ class PreviewDeck(val repository: DeckRepository) {
                 glyph = listOf(DeckGlyph.CAMERA, DeckGlyph.VIDEO, DeckGlyph.STOP, null, null, null, DeckGlyph.VIDEO,
                     DeckGlyph.CAMERA, DeckGlyph.SETTINGS)[action.index], showLabel = dynamic != "-", showFooter = dynamic != "-", quietFace = true)
             "navigation" -> navigationCommands[action.index].navigationFace(systemAccess = null)
+            "teams" -> TeamsState().tile(action.command ?: teamsSlots[action.index]).copy(
+                enabled = false, footer = "Android only")
             "launcher" -> KeyTile(dynamic.orEmpty(), "Android only", 0xff384674.toInt(), enabled = false,
                 showLabel = dynamic != "-", showFooter = dynamic != "-", quietFace = true)
             else -> null
