@@ -118,8 +118,9 @@ the page with Teams in the background; hidden controls cannot be pressed.
 No presence, media activity, chat content or caller identity is used. No
 call data or automatic page selection is written to a backup.
 
-The center key shows **Mute mic** or **Unmute mic** only when the visible Mic
-button explicitly reports an unmuted or muted state. A fresh physical press
+Keep the factory center mic key as a Tap with no Hold binding. It shows
+**Mute mic** or **Unmute mic** only when the visible Mic button explicitly
+reports an unmuted or muted state. A fresh physical press
 requests one click and waits for Teams to report the result. Otherwise it
 says **Mic unavailable**. Use Teams directly for captions, hand, chat and
 call volume; MX Pocket does not substitute media volume or system mute.

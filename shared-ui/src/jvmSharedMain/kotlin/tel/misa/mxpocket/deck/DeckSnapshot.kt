@@ -11,7 +11,7 @@ internal fun DeckState.snapshot() = copy(
             rules = profile.rules.locked(),
             pages = profile.pages.map { page ->
                 page.copy(keys = page.keys.map { key ->
-                    key.copy(action = key.action?.let { it.copy(params = it.params.locked()) })
+                    key.mapActions { it.copy(params = it.params.locked()) }
                 }.locked())
             }.locked(),
         )

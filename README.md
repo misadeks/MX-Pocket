@@ -11,9 +11,7 @@ enabled, you can keep reading in a supported app without swiping the screen.
 
 ![Two illustrated nine-key keypads. On Music, the center key shows Pause and the key below reads “Druga Strana”. On Navigation, those keys become Select and Scroll down.](docs/images/audio-and-navigation.png)
 
-*LCD layouts on an illustrated keypad. Now playing:
-[“Druga Strana” by Luzeri & Lava](https://music.apple.com/us/song/druga-strana/1834721562)
-from DEPRESIJA. The key artwork is original to this demo, not the album cover.*
+*LCD layouts on an illustrated keypad.*
 
 The trick is under the keys: **one 480 × 480 LCD**, visible through nine
 windows. A native Kotlin driver runs in Android userspace, reads key presses

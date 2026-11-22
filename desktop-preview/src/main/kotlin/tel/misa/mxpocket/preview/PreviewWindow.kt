@@ -87,15 +87,15 @@ fun main() = application {
             } else false
         }) {
         val profiles = deck.profiles.map { ProfileChoice(it.id, it.name) }
-        val tiles = remember(deck, time, revision, simulating) {
-            host.tiles(time).map { it.toGridTile(simulating) }
-        }
+        val board = remember(deck, time, revision, simulating) { host.board(time, deck) }
+        val tiles = board.faces.map { it.toGridTile(simulating) }
         val state = PocketScreenState(status = message, pluginTitle = if (deck.activeProfile.name == deck.activePage.name)
             deck.activeProfile.name else "${deck.activeProfile.name} / ${deck.activePage.name}",
             tiles = tiles, profiles = profiles, activeId = deck.activeProfileId, reason = deck.selectionReason,
             connectionLabel = if (simulating) "Virtual keypad" else "Disconnected", diagnostics = "No USB diagnostics: Windows has no HID adapter.",
             log = history.joinToString("\n"), simulating = simulating, deviceLimit = DEVICE_LIMIT,
-            activePageId = deck.activePage.id, hardwareSummary = !simulating)
+            activePageId = deck.activePage.id, hardwareSummary = !simulating,
+            virtualGrid = board.grid.takeIf { simulating })
         val plugins = defaultDeck().profiles.map {
             PluginItem(it.id, it.name, true, "Local simulation", when (it.id) {
                 "focus" -> "Timer and presets run locally. No completion sound."
@@ -135,11 +135,12 @@ fun main() = application {
             } else PocketWorkspace(tab, { tab = it }, state, plugins, event = { event ->
                 try {
                     when (event) {
-                        PocketScreenEvent.EnterPreview -> { simulating = true; status("Virtual keypad connected.") }
-                        PocketScreenEvent.StopPreview -> { simulating = false; status("Virtual keypad disconnected.") }
+                        PocketScreenEvent.EnterPreview -> { host.resetInput(); simulating = true; status("Virtual keypad connected.") }
+                        PocketScreenEvent.StopPreview -> { host.resetInput(); simulating = false; status("Virtual keypad disconnected.") }
                         is PocketScreenEvent.SelectPlugin -> { host.select(event.id); status("Selected ${host.profileName}.") }
                         is PocketScreenEvent.ChangePage -> { host.cycle(event.delta); status("Selected ${host.profileName}.") }
-                        is PocketScreenEvent.TapKey -> if (simulating) status(host.press(event.index, now()))
+                        is PocketScreenEvent.VirtualKey -> if (simulating && tab == WorkspaceTab.HOME && !setup)
+                            host.press(event, now())?.let(::status)
                         is PocketScreenEvent.DefaultProfile -> repo.setDefault(event.id).getOrThrow()
                         PocketScreenEvent.FeatureSetup -> { setupReview = false; setup = true }
                         else -> status(DEVICE_LIMIT)

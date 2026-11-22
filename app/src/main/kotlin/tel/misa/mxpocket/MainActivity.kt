@@ -40,6 +40,8 @@ import tel.misa.mxpocket.decks.*
 import tel.misa.mxpocket.shared.ui.*
 import tel.misa.mxpocket.ui.AndroidWorkspace
 import tel.misa.mxpocket.deck.DeckLimits
+import tel.misa.mxpocket.deck.DeckState
+import tel.misa.mxpocket.plugins.PluginFrame
 import java.io.ByteArrayOutputStream
 
 class MainActivity : AppCompatActivity(), PocketSession.Screen {
@@ -391,8 +393,11 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             }
             PocketScreenEvent.StopPreview -> session.disconnect("Virtual keypad disconnected. Reconnect to resume this layout.")
             is PocketScreenEvent.SelectPlugin -> session.selectProfile(event.id)
-            is PocketScreenEvent.TapKey -> if (!navigating && !session.phoneKey(event.index))
-                session.message("Connect a keypad or select virtual keypad first.")
+            is PocketScreenEvent.VirtualKey -> if (resumed && !navigating && tab == WorkspaceTab.HOME &&
+                event.grid != null && event.grid == presentation?.virtualGrid) synchronized(session.deck) {
+                if (event.grid == homeGrid(session.deck.state.value, session.frame()))
+                    session.phoneKey(event.index, hold = event.hold)
+            }
             is PocketScreenEvent.ChangePage -> session.changePage(event.delta)
             PocketScreenEvent.Repaint -> session.repaint()
             PocketScreenEvent.ChooseImage -> imagePicker.launch(arrayOf("image/*"))
@@ -420,9 +425,16 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             connectionLabel = session.connectionLabel,
             connectionActive = target != null || session.request != null,
             usbReady = session.ready && !session.preview, activePageId = deck.activePage.id, hardwareSummary = !session.preview,
+            virtualGrid = homeGrid(deck, frame),
             diagnostics = diagnostics, log = session.logText(60), automatic = access.automatic, directShortcuts = direct.enabled,
         )
         presentation = state
+    }
+
+    private fun homeGrid(deck: DeckState, frame: PluginFrame): VirtualGrid? {
+        if (!session.preview || !session.ready || session.request != null || target != null) return null
+        val holds = if (deck.activePage.keys.any { it.holdAction != null }) session.frame(hold = true) else null
+        return virtualGrid(session.inputGeneration, deck, frame, holds)
     }
 
     override fun openApp(app: PhoneApp): Boolean {

@@ -202,7 +202,8 @@ class DeckRepository(private val file: File) {
     }
     fun setKey(profileId: String, pageId: String, index: Int, key: DeckKey) = updateProfile(profileId) { profile ->
         require(index in 0..8) { "Key index must be 0 through 8" }
-        require((key.action?.params?.size ?: 0) <= DeckLimits.PARAMS) { "Too many action parameters" }
+        require((key.action?.params?.size ?: 0) <= DeckLimits.PARAMS &&
+            (key.holdAction?.params?.size ?: 0) <= DeckLimits.PARAMS) { "Too many action parameters" }
         profile.withPage(pageId) { page ->
             page.copy(keys = page.keys.mapIndexed { i, previous -> if (i == index) key else previous })
         }
@@ -386,4 +387,4 @@ private fun DeckProfile.withPage(id: String, update: (DeckPage) -> DeckPage): De
     return copy(pages = pages.map { if (it.id == id) next else it })
 }
 private fun DeckPage.mapActions(transform: (ActionCall) -> ActionCall?) =
-    copy(keys = keys.map { key -> key.copy(action = key.action?.let(transform)) })
+    copy(keys = keys.map { it.mapActions(transform) })

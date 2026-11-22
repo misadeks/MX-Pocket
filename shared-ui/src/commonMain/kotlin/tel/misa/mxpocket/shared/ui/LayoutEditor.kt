@@ -111,14 +111,14 @@ fun LayoutEditor(
             val wide = maxWidth >= 720.dp
             val libraryWidth = (maxWidth * .22f).coerceIn(150.dp, 256.dp)
             val bounded = constraints.hasBoundedHeight
-            val canBack = writer.error != null || command != null || rule != null || draft?.picking == true ||
+            val canBack = writer.error != null || command != null || rule != null || draft?.picking != null ||
                 swapping || index != null || (!wide && pane != Pane.PREVIEW)
             backHandler(canBack) {
                 if (!writer.busy) when {
                     writer.error != null -> writer.error = null
                     command != null -> command = null
                     rule != null -> rule = null
-                    draft?.picking == true -> draft.picking = false
+                    draft?.picking != null -> draft.picking = null
                     swapping -> finishSwap()
                     else -> show(Pane.PREVIEW)
                 }
@@ -248,7 +248,7 @@ fun LayoutEditor(
                 })
             }
         }
-        if (draft?.picking == true) BindingDialog(bindings, draft)
+        if (draft?.picking != null) BindingDialog(bindings, draft)
         rule?.let { i ->
             // Keep the baseline captured on opening. Never apply an old array index to a new ruleset.
             val baseline = rememberSaveable(saver = rulesSaver) { profile.rules }

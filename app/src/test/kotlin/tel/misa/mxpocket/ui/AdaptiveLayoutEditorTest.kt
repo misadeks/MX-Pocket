@@ -17,6 +17,7 @@ import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.*
 import tel.misa.mxpocket.shared.ui.LayoutEditor
 import tel.misa.mxpocket.shared.ui.PocketTheme
@@ -78,6 +79,43 @@ class AdaptiveLayoutEditorTest {
         assertFalse(key.enabled)
         assertEquals(DeckActions.PAGE, key.action?.id)
         assertEquals(pageId, key.action?.params?.get(DeckActions.PAGE_ID))
+    }
+
+    @Test fun holdPickerSetsChangesAndClearsOnlyHoldAndPreviewOnlySelectsTheKey() {
+        fun page(name: String) = ActionCall(DeckActions.PAGE,
+            mapOf(DeckActions.PAGE_ID to repo.createPage("focus", name).getOrThrow()))
+        val tap = page("Mixer")
+        val hold = page("Levels")
+        val original = DeckKey(label = "Controls", action = tap)
+        repo.setKey("focus", "root", 0, original).getOrThrow()
+        fun previewKey() = ui.onNodeWithContentDescription("Key 1, Controls", substring = true)
+        fun choose(target: String, option: String) {
+            ui.onNodeWithTag(target).performScrollTo().performClick()
+            ui.onNodeWithText(option).performClick()
+        }
+        fun save(expected: DeckKey) {
+            ui.onNodeWithText("Save key").performScrollTo().performClick()
+            ui.waitUntil(5000) { repo.state.value.activePage.keys[0] == expected }
+            assertEquals("root", DeckRepository(file).state.value.activePage.id)
+        }
+        open()
+        previewKey().performClick()
+        choose("choose-hold-binding", "Open page: Mixer")
+        choose("choose-hold-binding", "Open page: Levels")
+        val both = original.copy(holdAction = hold)
+        assertEquals(original, repo.state.value.activePage.keys[0])
+        save(both)
+
+        // A long preview press on a key with two real navigation bindings still just selects it.
+        previewKey().performTouchInput { longClick() }
+        ui.onNodeWithTag("choose-binding").assertTextContains("Tap: Open page: Mixer")
+        ui.onNodeWithTag("choose-hold-binding").assertTextContains("Hold: Open page: Levels")
+        choose("choose-binding", "Unassigned")
+        save(both.copy(action = null))
+        previewKey().performClick()
+        choose("choose-hold-binding", "Unassigned")
+        save(original.copy(action = null))
+        assertEquals(listOf("root"), repo.state.value.histories["focus"])
     }
 
     @Test fun ruleDraftSurvivesResizeAndBackUnwindsOnlyTheCurrentEditorLayer() {
