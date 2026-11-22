@@ -36,10 +36,10 @@ class SavedKeyColorTest {
         fun openKey() = ui.onNodeWithContentDescription("Key 1,", substring = true).performScrollTo().performClick()
         fun channel(name: String, value: Int) = ui.onNodeWithContentDescription(name)
             .performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) { it(value.toFloat()) }
-        click("Phone")
+        click("Focus")
         click("Root page")
         openKey()
-        ui.onNodeWithTag("key-label").performTextReplacement("Dial")
+        ui.onNodeWithTag("key-label").performTextReplacement("Timer")
         click("Key color")
         click("Teal")
         ui.onNode(hasText("Teal") and hasClickAction()).assertIsSelected()
@@ -50,7 +50,7 @@ class SavedKeyColorTest {
         ui.onNodeWithText("Apply color").assertIsNotEnabled()
         ui.onNode(hasText("Cancel") and hasAnyAncestor(isDialog())).performClick()
         ui.onNodeWithText("Teal · #176A63").assertExists()
-        ui.onNodeWithTag("key-label").assertTextContains("Dial")
+        ui.onNodeWithTag("key-label").assertTextContains("Timer")
         assertEquals(before, repo.state.value)
 
         click("Key color")
@@ -63,9 +63,9 @@ class SavedKeyColorTest {
         click("Save key")
         ui.waitUntil(5000) { repo.state.value != before }
         val after = DeckRepository(file).state.value
-        val profile = before.profiles.single { it.id == "phone" }
+        val profile = before.profiles.single { it.id == "focus" }
         val page = profile.pages.single { it.id == profile.rootPageId }
-        val expected = page.keys[0].copy(label = "Dial", color = 0xff123456.toInt())
+        val expected = page.keys[0].copy(label = "Timer", color = 0xff123456.toInt())
         assertEquals(before.copy(profiles = before.profiles.map {
             if (it != profile) it else it.copy(pages = it.pages.map { p ->
                 if (p != page) p else p.copy(keys = listOf(expected) + p.keys.drop(1))
