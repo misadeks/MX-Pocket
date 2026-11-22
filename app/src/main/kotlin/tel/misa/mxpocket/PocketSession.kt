@@ -145,7 +145,7 @@ internal class PocketSession(
     private val disabled = MutableStateFlow(switches.getStringSet("disabled", emptySet()).orEmpty()
         .intersect(registeredPlugins.map { it.descriptor.id }.toSet()))
     val disabledPlugins = disabled.asStateFlow()
-    val deck = DeckRepository(app, disabled.value)
+    val deck = DeckRepository(app, disabled.value, usageTimeMillis)
     @Volatile private var pageInputEpoch = 0L
     private val pageButtons = PageButtons(sessionScope, SystemClock::elapsedRealtime,
         { ViewConfiguration.getLongPressTimeout().toLong() }, ::changePage, deck::showHome,
@@ -253,6 +253,7 @@ internal class PocketSession(
     private fun syncLayout() {
         val state = deck.operatingState.value
         if (state.activeProfileId != PHONE_CALL_VIEW) callBoard.forget()
+        if (!incomingTeamsVisible && teams.refreshCaller(false)) retireCallPixels()
         if (lastLayout?.let { it.profile != state.activeProfileId || it.page != state.activePage } == true)
             plugins.setEnabled(false) // Release held keys before rebinding even if the plugin ID is unchanged.
         val id = selectedPlugin(state.activePage)
@@ -290,12 +291,13 @@ internal class PocketSession(
         val enabled = phoneAccess.enabled
         val blocker = if (enabled) phoneConnectionBlocker() else null
         val authorized = enabled && blocker == null
-        if (authorized && Build.VERSION.SDK_INT >= 34 && phoneAccess.details && phoneAccess.phoneGranted && phoneAccess.notificationGranted)
-            PocketNotificationListener.refreshPhone = phoneUpdate
+        val observeDetails = authorized && Build.VERSION.SDK_INT >= 34 && phoneAccess.details && phoneAccess.phoneGranted && phoneAccess.notificationGranted
+        if (observeDetails) PocketNotificationListener.refreshPhone = phoneUpdate
         else if (PocketNotificationListener.refreshPhone === phoneUpdate) PocketNotificationListener.refreshPhone = null
         val line = if (authorized) phoneAccess.state() else LineState.UNKNOWN
         val before = phoneCallBlocker
         callBoard.refresh(line)
+        if (!observeDetails) callBoard.clearDiagnostic()
         phoneAccessBlocker = blocker ?: CallCopy.LineUnavailable.takeIf { authorized && line == LineState.UNKNOWN }
         if (before != phoneCallBlocker) invalidate()
     }
@@ -319,13 +321,12 @@ internal class PocketSession(
         if ((previous.joined || state.joined) && previous.generation != state.generation)
             cancelPhysicalGesture()
         decks.value = decks.value.copy(teams = state)
-        deck.showTeamsCall(when (state.status) {
-            CallStatus.JOINED -> true
-            CallStatus.NO_KEYPAD, CallStatus.DISABLED, CallStatus.OFF, CallStatus.NO_SIGNAL,
-            CallStatus.INCOMING, CallStatus.SCREENING -> false
-            else -> null // Inconclusive evidence withdraws the page without undoing a manual override.
-        })
+        deck.showTeamsCall(state.status)
+        if (teams.refreshCaller(incomingTeamsVisible)) retireCallPixels()
     }
+
+    private val incomingTeamsVisible get() = deck.operatingState.value.activeProfileId == TEAMS_INCOMING_VIEW
+
     private fun selectedPlugin(page: DeckPage) = page.selectedSlotOwner(::hasPlugin)
     private fun layout() = deck.operatingState.value.let { Layout(it.activeProfileId, it.activePage, plugins.generation, disabled.value) }
 
@@ -367,6 +368,7 @@ internal class PocketSession(
         if ((mediaState.title.isNotEmpty() || mediaState.artwork != null) && !canShowTrack()) media.refreshDisplay()
         images.useArtwork(visibleArtwork(deckState.value.media))
         if (callBoard.visible) return callBoard.frame()
+        if (incomingTeamsVisible) return incomingTeamsFrame(teams.callerName)
         val native = plugins.render()
         val page = deck.operatingState.value.activePage
         val keys = page.keys.mapIndexed { index, key ->
@@ -411,13 +413,21 @@ internal class PocketSession(
         return key.copy(label = caption).present(tile, actionLabel(call), footer, available, onHome = state.activeProfileId == PROFILE_HOME)
     }
 
-    fun homeTiles() = (if (callBoard.visible) callBoard.homeFrame() else frame()).keys.mapIndexed { i, tile ->
+    fun homeTiles() = when {
+        callBoard.visible -> callBoard.homeFrame()
+        incomingTeamsVisible -> incomingTeamsFrame()
+        else -> frame()
+    }.keys.mapIndexed { i, tile ->
         tile.toGridTile(ready, images.image(i, tile).asImageBitmap())
     }
 
-    fun keyImage(index: Int, tile: KeyTile): Bitmap =
-        if (index == CALL_PHOTO && callBoard.visible) callBoard.photo ?: images.image(index, tile)
-        else images.image(index, tile)
+    fun keyImage(index: Int, tile: KeyTile): Bitmap {
+        if (index == CALL_PHOTO) {
+            if (callBoard.visible) callBoard.photo?.let { return it }
+            if (incomingTeamsVisible) teams.callerPhoto?.let { return it }
+        }
+        return images.image(index, tile)
+    }
     val panelArt get() = images.artwork
 
     private fun workflowContext() = WorkflowContext(request != null && output != null,
@@ -468,8 +478,9 @@ internal class PocketSession(
             sampleContext(null)
         }
         try {
+            var followUp = false
             while (true) {
-                var match: String? = null
+                var match: ForegroundMatch? = null
                 val granted = configured.isNotEmpty() && app.hasUsageAccess()
                 if (granted && app.isUnlockedAndInteractive()) {
                     val source = reader ?: ForegroundApps(app.getSystemService(UsageStatsManager::class.java),
@@ -485,13 +496,20 @@ internal class PocketSession(
                     unlockedSince = null
                     lastLockedPoll = if (granted) usageTimeMillis() else null
                 }
-                sampleContext(match)
-                delay(1000)
+                val recheck = sampleContext(match?.packageName, match)
+                // At most one extra usage read per regular poll, even during rapid activity changes.
+                if (!followUp && recheck != null) {
+                    followUp = true
+                    delay(recheck)
+                } else {
+                    followUp = false
+                    delay(1000)
+                }
             }
         } finally { watcher?.close() }
     }
 
-    private fun sampleContext(foregroundApp: String? = _signals.value[FOREGROUND_APP]) {
+    private fun sampleContext(foregroundApp: String? = _signals.value[FOREGROUND_APP], match: ForegroundMatch? = null): Long? {
         val time = LocalDateTime.now()
         val connected = output != null && request != null
         val state = deck.operatingState.value
@@ -508,10 +526,11 @@ internal class PocketSession(
                 app.isUnlockedAndInteractive() && app.hasUsageAccess())
                 mapOf(FOREGROUND_APP to foregroundApp) else emptyMap()
         _signals.value = snapshot
-        deck.observe(snapshot, SystemClock.elapsedRealtime(),
-            allowTeamsWork = teamsEnabled.value && TEAMS !in disabled.value && hasPlugin(TEAMS))
+        val decision = deck.observe(snapshot, SystemClock.elapsedRealtime(),
+            allowTeamsWork = teamsEnabled.value && TEAMS !in disabled.value && hasPlugin(TEAMS), foregroundMatch = match)
             .onFailure { fail(D.SelectLayout.text(), it) }
         workflows?.onContextChanged(workflowContext())
+        return decision.getOrNull()
     }
 
     fun observeUsb(devices: Set<String>) { attachedUsb = devices; sampleContext() }
@@ -897,7 +916,7 @@ internal class PocketSession(
         val scope = hardwareScope ?: return
         pendingAction?.let { if (!isCurrentShortcut(it)) clearPhoneAction() }
         if (painting?.isActive == true) return
-        if (callBoard.visible) refreshPhoneCall()
+        refreshCallFace(layout().profile)
         val frame = frame()
         val layout = layout()
         if (scanLayout != layout) { scanLayout = layout; nextKey = 0 }
@@ -915,7 +934,7 @@ internal class PocketSession(
             painting = scope.launch {
                 try {
                     val result = connected.writeGrid(art, keys.map { it.image }, gridHasArt) {
-                        if (layout.profile == PHONE_CALL_VIEW) refreshPhoneCall()
+                        refreshCallFace(layout.profile)
                         val latest = frame()
                         output === connected && this@PocketSession.layout() == layout &&
                             target(latest) == target && keys.indices.all { keys[it].matches(desiredKey(layout, latest, it)) }
@@ -926,7 +945,7 @@ internal class PocketSession(
                         GridWrite.ACKNOWLEDGED -> {
                             paintedTarget = target
                             gridHasArt = art != null
-                            if (layout.profile != PHONE_CALL_VIEW || target.screen == screenGeneration)
+                            if (retainCallPixels(layout, target))
                                 for (i in keys.indices) lcd[i] = keys[i]
                         }
                         GridWrite.CLEARED -> { gridHasArt = false; lcd.fill(null); splitTarget = target }
@@ -954,14 +973,14 @@ internal class PocketSession(
                 try {
                     val sent = if (connected is RenderedKeypad) {
                         connected.setKeyImage(index, key.image, coverArt = art != null) {
-                            if (layout.profile == PHONE_CALL_VIEW) refreshPhoneCall()
-                            layout.profile != PHONE_CALL_VIEW || (callBoard.visible && target.screen == screenGeneration)
+                            refreshCallFace(layout.profile)
+                            retainCallPixels(layout, target)
                         }
                     } else {
                         connected.setKeyImage(index, key.image)
                         true
                     }
-                    if (sent && output === connected && (layout.profile != PHONE_CALL_VIEW || target.screen == screenGeneration))
+                    if (sent && output === connected && retainCallPixels(layout, target))
                         lcd[index] = key
                 } catch (e: CancellationException) {
                     throw e
@@ -987,6 +1006,17 @@ internal class PocketSession(
     }
 
     private var receiptSequence = 0L
+
+    private fun refreshCallFace(profile: String) {
+        when (profile) {
+            PHONE_CALL_VIEW -> refreshPhoneCall()
+            TEAMS_INCOMING_VIEW -> refreshTeams()
+        }
+    }
+
+    private fun retainCallPixels(layout: Layout, target: GridTarget) =
+        (layout.profile != PHONE_CALL_VIEW && layout.profile != TEAMS_INCOMING_VIEW) ||
+            (deck.operatingState.value.activeProfileId == layout.profile && target.screen == screenGeneration)
 
     private fun retireReceipts() {
         retirePaintReceipts()
@@ -1329,7 +1359,10 @@ internal class PocketSession(
         pendingAction == action && action.ticket == request && output != null && pendingBinding != null &&
             pendingBinding == shortcutBinding(action.index, frame())
 
-    fun logText(limit: Int = 250) = logs.takeLast(limit).joinToString("\n")
+    fun logText(limit: Int = 250) = buildList {
+        callBoard.lastRingReason?.let { add(CallCopy.LastRingCheck.text(it.name)) }
+        addAll(logs.takeLast(limit))
+    }.joinToString("\n")
     fun takePhoneAction(id: String?): PhoneAction? {
         val pending = pendingAction ?: return null
         if (id != pending.id) return null // An older tap must not consume the replacement.

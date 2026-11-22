@@ -25,7 +25,14 @@ internal class NotificationAccess(context: Context) {
         }
     var teams: Boolean
         get() = prefs.getBoolean("teams", false)
-        set(value) { prefs.edit().putBoolean("teams", value).apply() }
+        set(value) {
+            prefs.edit().putBoolean("teams", value).apply {
+                if (!value) remove("teams-caller")
+            }.apply()
+        }
+    var teamsCaller: Boolean
+        get() = teams && prefs.getBoolean("teams-caller", false)
+        set(value) { prefs.edit().putBoolean("teams-caller", teams && value).apply() }
     var dialer: Boolean
         get() = prefs.getBoolean("dialer", false)
         set(value) { prefs.edit().putBoolean("dialer", value).apply() }

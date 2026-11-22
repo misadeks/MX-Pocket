@@ -1,100 +1,90 @@
 # MX Pocket
 
-MX Pocket lets you control Android by feel. Link a keypad layout to an app
-and put actions where your fingers expect them. In supported apps, use physical
-keys to move between items, scroll and select without tapping a small button or
-making a precise swipe. Use the nine LCD keys to open a favorite app, start a
-focus timer or change tracks. Previous and Next switch
-layouts. Press them together and release to return to Home and choose a profile,
-or hold both to play Tic Tac Toe. To try MX Pocket without hardware, use the
-Windows simulator.
+MX Pocket gives your Android phone nine physical keys with their own labels.
+Plug in the **wired Logitech MX Creative Keypad** (`046D:C354`) and put on a
+song. The middle key on **Audio** is play/pause. Switch to **Navigate**, and
+that same key is **Select**. The wireless **Dialpad** is not supported.
 
-On the **Music** layout, press the center key to pause the track.
-Switch to **Navigate**: that same key becomes **Select**. The bottom-right key
-opens **More**; press it again to return. With
-[Android navigation access](docs/android-decks.md) enabled, you can move focus
-between controls in supported apps without swiping the phone.
-
-![Six keypad layouts. Top: the Home profile picker and Navigate. Middle: Music playback and OneNote Draw tools. Bottom: an incoming call with the caller’s picture above their name and Accept and Decline in the bottom corners, beside a game of Tic Tac Toe.](docs/images/audio-and-navigation.png)
-
-*Home lists the available profiles. Navigate groups scrolling and More on its bottom row. Incoming Call shows a fictional caller and both actions from a supported dialer.*
-
-The **wired Logitech MX Creative Keypad** (`046D:C354`) connects directly to
-your Android phone over USB-C. MX Pocket's Kotlin driver uses Android's USB
-Host API to read key presses and update the labels behind the keys as layouts
-change. No root access or companion PC is needed. The Windows companion uses
-the standard Windows HID driver for the same wired keypad. The wireless
-**Dialpad** sold with it is not supported.
+![Six keypad layouts, in reading order: Home profile picker; Navigate with Select between the focus keys; Music with Pause over album art; OneNote Draw with the eraser selected; Incoming Call with a fictional caller, Accept and Decline; and Tic Tac Toe with X across the top row.](docs/images/audio-and-navigation.png)
 
 ## Quick start
 
-<a name="try-it-on-windows-without-hardware"></a>
-
-**Use MX Pocket on Windows.** From the repository root with `JAVA_HOME` set
-to JDK 17 or 21 (x64 on Windows ARM64), run:
-
-```powershell
-.\gradlew.bat :desktop-preview:run
-```
-
-Choose **Connect USB keypad** to use the physical keys for Focus, Windows
-volume and media transport, or Tic Tac Toe. Without a keypad, choose
-**Settings → Connect virtual keypad** and click the keys on Home. Virtual
-audio never changes Windows media. See [Windows controls and limitations](docs/workspace.md#windows-companion).
-
 <a name="run-it-on-android"></a>
 
-**[Try it on Android](docs/workspace.md#install-the-android-app)** with a
-wired keypad. Home mirrors the keys; it never executes their actions. You can
-edit profiles before connecting hardware.
+### Android
+
+1. [Install MX Pocket](docs/workspace.md#install-the-android-app) on an Android 9 or newer phone with USB Host support. Disconnect the computer and plug the keypad into the phone with a data cable or OTG adapter. No root access is needed.
+2. Open **Home → Connect to device** and approve USB access. Allow the session notification on Android 13 or newer. It gives you a **Disconnect** button while another app is open; it does not let MX Pocket read notifications.
+3. On the keypad, choose **Focus** and press **Start**. Use the two page buttons to switch layouts. Tap them together to get back to Home; hold them together to start Tic Tac Toe. Pick one or two players, then play on the nine keys. The grid on the phone mirrors the keypad.
+
+Prefer a layout to follow its app? [Link a profile to that app and enable
+foreground detection](docs/workspace.md#show-a-profile-when-an-app-opens). Automatic
+switching by app needs Android's Usage Access; the page buttons don't.
+
+### Navigation and accessibility on Android
+
+**Navigate** moves focus, selects the focused control, and scrolls within
+MX Pocket. To use those keys in another app, unlock the phone and enable
+**MX Pocket navigation** in Android Accessibility. **Select** presses the
+focused control if the app marks it clickable. **Scroll down** works where
+the app exposes a scrollable area. With touch exploration on, **Previous** and
+**Next** request swipes for TalkBack, which supplies the speech. The bottom-right
+key opens **More**; press it again to return.
+
+**TalkBack settings** opens Android's Accessibility settings; it does not turn
+on the screen reader. On an unlocked Android 12+ phone with navigation access,
+you can assign a key to run [Android's volume-key accessibility shortcut](docs/android-decks.md#a-talkback-key-and-other-accessibility-shortcuts)
+if the phone offers it. Choose TalkBack as the only target for a dedicated
+TalkBack key; with multiple targets, Android can show a chooser.
+
+**OneNote Draw** uses a separate, optional accessibility service. With OneNote
+in the foreground, the keys select pens, highlighters and other tools from its
+toolbar. A check mark shows which tool OneNote reports as selected.
+
+<a name="try-it-on-windows-without-hardware"></a>
+
+### Windows companion
+
+From the repository root, set `JAVA_HOME` to JDK 17 or 21 (x64 on Windows
+ARM64) and run `.\gradlew.bat :desktop-preview:run`. Choose **Connect USB
+keypad** for a wired keypad or **Settings → Connect virtual keypad** to try the
+layouts with a mouse. Virtual audio keys do not control Windows playback.
+See [Windows controls and limitations](docs/workspace.md#windows-companion).
 
 <a name="guides"></a>
 
-[Key layouts and permissions](docs/android-decks.md) · [Workflows (paused)](docs/workflows.md) · [Extend MX Pocket](#extending-mx-pocket) · [Contribute](CONTRIBUTING.md)
-
-The **OneNote** profile uses a separate, optional accessibility service to
-select drawing tools and change formatting while OneNote is on screen.
-Its keypad legends follow the visible toolbar: pens draw a narrow ink sample,
-highlighters a broad translucent band, and palette keys show a named swatch.
-Black-and-white stripes mean the ink color is unknown. A corner check marks an
-observed selection, not a successful key press.
-
-For ordinary mobile calls, turn on **Settings → Phone calls → Show calls on the keypad**.
-The authorized **physical keypad** switches when the carrier line rings, even
-with the phone locked or its screen off, if USB stays powered. When the default
-Phone app supplies both actions, key 7 accepts and key 9 declines. Either
-physical page button leaves the layout without affecting the call. Caller
-details and controls respect lock-screen restrictions. For caller details or
-music session access, choose **MX Pocket** once in Android’s **Notification
-access**, then opt in to each feature you want inside the app.
-See [carrier call setup and supported controls](docs/android-decks.md#carrier-calls-on-the-keypad).
+[Android layouts and permissions](docs/android-decks.md) · [Incoming call controls](docs/android-decks.md#carrier-calls-on-the-keypad) · [Workflows (paused)](docs/workflows.md) · [Extend MX Pocket](#extending-mx-pocket) · [Contribute](CONTRIBUTING.md)
 
 ## Extending MX Pocket
 
-**Build a layout without code.** In **Profiles**, create a page and assign
-existing actions to its keys. For example, put an Android settings shortcut
-on one key and a link to another page on the next. Choose **Tap** or **Hold**
-for each binding, then **Save key**. See the [layout walkthrough](docs/workspace.md#edit-layouts-without-hardware).
+**Build a layout without code.** In **Profiles**, choose a page and a key.
+Assign an action to **Tap** or **Hold**, then choose **Save key**. You can
+[edit layouts without a keypad](docs/workspace.md#edit-layouts-without-hardware).
 
-**Add a built-in integration.** Implement `PocketPlugin` in Kotlin and register
-it in `BuiltInPlugins.create()`. The [OneNote plugin and its registration](app/src/main/kotlin/tel/misa/mxpocket/plugins/BuiltInPlugins.kt)
-show how a key press requests a drawing tool through `PluginHost`, without
-handling USB. Plugins compile into the Android app; it does not load
-third-party plugins at runtime. The [plugin guide](docs/plugins.md) shows how
-to bind a plugin to a layout and test it.
+**Add an Android integration.** Implement `PocketPlugin` in Kotlin and register
+it in [`BuiltInPlugins.create()`](app/src/main/kotlin/tel/misa/mxpocket/plugins/BuiltInPlugins.kt).
+Plugins compile into the app. The [plugin guide](docs/plugins.md) walks through
+binding a counter to a physical key and testing it.
 
-**Use the keypad in your own Android app.** Build `:mx-driver` as an Android
-library (AAR) to receive key presses and releases and upload key images without
-the MX Pocket app or its plugins. The [driver guide](docs/driver.md) shows how
-to add the library, obtain USB permission and connect to the wired keypad.
+**Use the keypad in your own Android app.** The [driver guide](docs/driver.md)
+shows how to build the `:mx-driver` AAR, get USB permission, receive key events
+and upload key images without the MX Pocket app.
 
 ## Architecture
 
 The driver reports which physical key changed; the active layout determines
-what it does. On Music, for example, the center key asks Android to play or
-pause. The key press does not prove playback changed. When player state is
-available, the app uses it to render the key face and sends the image to the
-driver. The driver handles images and key events, not tracks or layouts.
+what it does. For example, the Audio layout asks Android to play or pause.
+When the player reports its state, the app uses that state for the key image
+rather than assuming the press changed playback.
+
+On Android, a saved layout's `plugin.key` binding names a plugin by its stable
+ID and selects one of its nine slots (0–8). `PluginEngine` delivers presses
+and releases to the active plugin using that slot, not the key's physical
+position. On a plugin switch or disconnect, the engine cancels the activation's
+tasks and sends a release for each held key. A plugin can request an
+Android action through `PluginHost`. For the display, it returns nine logical
+`KeyTile` values; the app renders the bound tiles as images and the driver
+sends them over USB.
 
 - [`:mx-driver`](mx-driver) is a standalone Android library (AAR). It opens
   the wired keypad through Android USB Host with the user's permission. The
@@ -103,12 +93,9 @@ driver. The driver handles images and key events, not tracks or layouts.
 - [`:app`](app) owns Android actions and permissions. `MainActivity` handles
   visible USB consent; `KeypadService` keeps the connection alive across
   Activity recreation. `PocketSession` routes physical input and LCD updates.
-  [Compiled-in plugins](docs/plugins.md) request actions through `PluginHost`,
-  not USB. Connecting the keypad does not grant notification or accessibility access.
 - [`:shared-ui`](shared-ui/src/commonMain) renders the same Compose screens
   on Android and Windows. Screens receive state and send typed events back to
-  the host; the host performs platform actions. On Android Home, the nine key
-  tiles mirror the keypad but do not execute its actions.
+  the host; the host performs platform actions.
 - [`:desktop-preview`](desktop-preview) is the Windows host. For a wired keypad
   it uses the same protocol sources over native Windows HID, not the Android
   AAR. Its clickable simulator needs no USB and cannot verify physical LCD output.

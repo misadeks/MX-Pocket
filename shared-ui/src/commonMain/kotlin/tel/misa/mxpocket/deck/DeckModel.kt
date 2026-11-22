@@ -21,6 +21,7 @@ object DeckActions {
 // Not a legal saved profile ID. The launcher is an operating view, not part of a layout backup.
 const val PROFILE_HOME = "@home"
 const val PHONE_CALL_VIEW = "@phone-call"
+const val TEAMS_INCOMING_VIEW = "@teams-incoming"
 const val GAME_PROFILE = "game.xo"
 const val MORE_PROFILES = "home.more"
 
@@ -101,7 +102,7 @@ data class DeckState(
     /** Local host preference, never part of a layout backup. Factory profiles use their plugin ID. */
     val disabledPluginIds: Set<String> = emptySet(),
 ) {
-    val visibleProfiles get() = profiles.filterNot { it.id in disabledPluginIds || it.id in setOf(GAME_PROFILE, PROFILE_HOME, PHONE_CALL_VIEW) }
+    val visibleProfiles get() = profiles.filterNot { it.id in disabledPluginIds || it.id in setOf(GAME_PROFILE, PROFILE_HOME, PHONE_CALL_VIEW, TEAMS_INCOMING_VIEW) }
     // Keep the legacy target available to editors, explicit bindings and workflow validation.
     val navigationProfiles get() = visibleProfiles.filterNot { it == stockPhoneProfile }
     val availableDefaultId get() = visibleProfiles.firstOrNull { it.id == defaultProfileId }?.id ?: navigationProfiles.first().id
@@ -148,6 +149,15 @@ private fun navigationPages(): List<DeckPage> {
 }
 
 internal fun DeckState.upgradeNavigationControls(): DeckState {
+    val owner = profiles.find { it.id == "navigation" && it.rootPageId == "root" } ?: return this
+    val (root, tools) = navigationPages()
+    // The first TalkBack build saved sequential slot IDs for this exact factory pair.
+    // Match both pages: other v5 decks use the same IDs for different user bindings.
+    val prRoot = root.copy(keys = pluginRoot("navigation", "Navigation").keys.take(8) + root.keys.last())
+    if (prRoot in owner.pages && tools in owner.pages) {
+        return copy(profiles = profiles.map { if (it != owner) it else
+            it.copy(pages = it.pages.map { page -> if (page == prRoot) root else page }) })
+    }
     val previous = pluginRoot("navigation", "Navigation", previousNavigationSlots)
     val open = DeckKey(action = ActionCall(DeckActions.PAGE, mapOf(DeckActions.PAGE_ID to ACCESSIBILITY_PAGE)))
     val oldRoot = previous.copy(keys = previous.keys.dropLast(1) + open)
@@ -155,9 +165,7 @@ internal fun DeckState.upgradeNavigationControls(): DeckState {
         DeckCommand.ACCESSIBILITY_SHORTCUT, DeckCommand.NAV_ACCESS).map { DeckKey(action = ActionCall(it.id)) }
     val oldPage = DeckPage(ACCESSIBILITY_PAGE, "Accessibility",
         oldTools + List(3) { DeckKey() } + DeckKey(label = "Back to Navigation", action = ActionCall(DeckActions.ROOT)))
-    val owner = profiles.find { it.id == "navigation" && it.rootPageId == oldRoot.id &&
-        oldRoot in it.pages && oldPage in it.pages } ?: return this
-    val (root, tools) = navigationPages()
+    if (oldRoot !in owner.pages || oldPage !in owner.pages) return this
     return copy(profiles = profiles.map { profile -> if (profile != owner) profile else
         profile.copy(pages = profile.pages.map { when (it) { oldRoot -> root; oldPage -> tools; else -> it } }) })
 }

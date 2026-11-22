@@ -24,6 +24,8 @@ Press **More** to open the keypad page below. Press **Back to Navigation** in th
 same bottom-right position to return without sending Android Back. **Access info** (key 8)
 still opens the navigation disclosure from MX Pocket. Edited roots and independent copies
 keep their saved bindings; no permission or direct-launch opt-in changes on upgrade.
+An untouched layout saved by the original TalkBack build also keeps this physical order
+when reopened or imported; you do not have to restore defaults.
 
 ### A TalkBack key and other accessibility shortcuts
 
@@ -54,6 +56,23 @@ mode-specific accessibility description. English labels are supported; unknown
 labels, multiple controls and permission screens are not. A button request is
 not proof of capture. To revoke just camera controls, turn off the Studio
 option; navigation can remain enabled.
+
+On Galaxy phones, Android may identify Samsung Camera for Photo but offer a
+chooser for Video. In that case Studio uses Samsung's video entry only if
+Samsung Camera is the verified Photo default, its video viewfinder and capture
+actions each have one usable handler, and no different capture default is set.
+This identifies the camera for **Open Video**, **Record** and **Stop**; it does
+not press a control or indicate that recording started.
+
+If **Shutter** does nothing, first check whether the physical keypad still
+shows the Studio root page while the unlocked phone shows Samsung Camera in
+Photo mode. A saved binding alone does not show that Studio received a press.
+Note MX Pocket's status from the failed press, if available: “Choose a default
+phone camera” points to resolution; “No matching Shutter control” points to
+the control check. To diagnose the latter without taking a picture, check
+only the visible shutter's accessibility description, class and click action
+in that camera version and UI language. No screenshot or full window dump is
+needed.
 
 If background
 launches are restricted, a fresh authorized physical press for a favorite or
@@ -166,6 +185,21 @@ MX Pocket doesn’t resolve caller URIs, download photos, inspect notification
 titles/text, look up contacts or store caller data. Home and the desktop
 simulator do not display caller identity or photos.
 
+Phone can publish the notification just before Android reports ringing. If a
+fresh, matching notification arrived during that transition, the keypad may
+show its caller label and picture without enabling Accept or Decline. An old
+notification left over from the previous call is not used.
+
+If a regular mobile call still has no label, check **Settings → Diagnostics**
+before disconnecting the keypad. With caller details enabled, **Last ringing
+caller check** shows a single code, not a name, number, timestamp or notification
+identifier. `HIDDEN` means the lock-screen policy blocked the read;
+`NO_TRUSTED_CALL` / `AMBIGUOUS_CALL` mean zero / multiple matching notifications;
+`STALE_NOTICE` means the notice failed the timing check. `NO_CALL_STYLE` means
+the dialer did not use the standard call format; `NO_CALL_STYLE_WITH_CALL_PERSON`
+means it included a typed call-person field but lacked that format. `NO_CALLER_LABEL`
+means the standard call had no usable label. Share just the code, not the USB log.
+
 **Key 7 Accept** and **key 9 Decline** appear only while ringing, for a single
 matching Phone notification with two distinct actions owned by the posting
 package and UID. A press
@@ -205,7 +239,11 @@ layouts are preserved: editing or deleting a Teams page isn't undone on upgrade.
 
 To show **Work** when Teams opens, enable **Teams call status** and
 **Detect foreground apps**, and grant Android **Usage Access** to MX Pocket.
-Teams needs no app mapping. Opening the app never selects **In call** or
+Teams needs no app mapping. When Android reports Teams as the only resumed app,
+MX Pocket can select Work on the next one-second poll. If the activity just
+changed, it checks again after a short settling period rather than switching
+on a momentary visit. Android event delivery and keypad redraw take additional
+time. Opening the app never selects **In call** or
 presses a key. Pins, profile opt-outs and explicit app mappings still win;
 manually changing pages takes precedence while Teams remains in the foreground.
 
@@ -215,7 +253,7 @@ With an authorized wired keypad, unlocked phone and
 Android 14+, notification access for **MX Pocket** allows read-only
 status. It is a broad Android permission: the adapter first checks the posting
 app and Android user, then checks Teams notification categories and call types.
-It does not read messages, names or notification action labels. Turning off
+Status alone does not read messages, names, photos or notification actions. Turning off
 Teams in the app leaves Music and caller details alone; revoking the shared
 Android grant stops all three uses.
 
@@ -223,6 +261,7 @@ Android grant stops all three uses.
 
 | Readout | What it means |
 | --- | --- |
+| **Incoming / Use Teams** | One Teams call notice explicitly says incoming. The keypad shows a read-only Teams call face. Either page key dismisses it without answering or declining; updates to the same call do not reopen it. A carrier call takes priority. |
 | **No signal / Check filters** | No eligible Teams notice is visible. This is not a “No call” result. See the filter check below. |
 | **Call notice / Type unknown** | Teams posted a call notice without a supported type. If you have joined, bring Teams to the foreground and show the **Mic** and **Hang up** buttons. The keypad can confirm the meeting only while those controls remain visible. |
 | **Call notice / Show controls** | Teams reported an ongoing call. Open the meeting on this phone and show its controls; the notice alone does not prove you joined. |
@@ -237,14 +276,20 @@ the Teams call type. MX Pocket does not reset your choices. Some phones hide the
 update or re-enabling access is not a guaranteed reset. If no supported notice
 arrives, use Teams directly.
 
-For automatic entry, use the personal Android profile and allow accessibility
+To see who is calling on the physical keypad, choose **Show Teams caller details**
+in Teams setup. This is separate from carrier caller details and off by default.
+The keypad shows the name and embedded photo independently, only when Teams supplies
+them in an incoming CallStyle notification on the unlocked phone. Missing details
+fall back to the Teams label or icon. The phone preview never shows the caller.
+
+For automatic entry to the **joined call controls**, use the personal Android profile and allow accessibility
 access to **MX Pocket Teams call controls**. A paused work profile may stay
 listed on the phone. It doesn't block controls if Android confirms that every
 other listed profile is paused. Resuming work drops the meeting and mic
 confirmation. After pausing work again, show the joined toolbar to confirm
 the meeting again. MX Pocket never changes a profile's state.
 
-Entry requires **both** exactly one eligible call notification from Teams in the
+Entry to those controls requires **both** exactly one eligible call notification from Teams in the
 same Android user and the visible joined meeting controls. Explicit incoming
 and screening notices never qualify, even with the toolbar visible.
 The foreground check looks for the English **Mic** and **Hang up** buttons

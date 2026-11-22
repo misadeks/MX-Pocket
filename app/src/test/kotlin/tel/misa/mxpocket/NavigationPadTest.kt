@@ -88,7 +88,10 @@ class NavigationPadTest {
             assertEquals("accessibility", session.deck.state.value.activePage.id)
             assertSame(previousLaunch, shadowOf(activity).peekNextStartedActivity())
             render()
-            assertTrue(session.frame().keys.take(6).none { it.enabled })
+            val more = session.frame().keys
+            assertEquals(listOf("Notifications", "Apps list", "Long press"), more.take(3).map { it.label })
+            assertTrue(more.take(3).all { it.enabled && !it.showFooter })
+            assertTrue(more.slice(3..5).none { it.enabled })
             key("TalkBack settings").assertExists()
             key("Access info, System nav off").assertExists()
             key("Back to Navigation").assertExists()

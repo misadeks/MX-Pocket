@@ -103,7 +103,7 @@ class PhoneCallViewTest {
         val person = Person.Builder().setName("Fixture").build()
         val call = samsungCall(person)
         fun read(vararg notes: StatusBarNotification, dialer: String = samsungPhone) =
-            dialerNotice(arrayOf(*notes), dialer, app.packageManager, LineState.RINGING, 0)
+            dialerNotice(arrayOf(*notes), dialer, app.packageManager, LineState.RINGING, 0).notice
         installPhonePackage(samsungPhone, 10130, ApplicationInfo.FLAG_SYSTEM)
         assertNull(read(call)) // Missing or not visible to PackageManager.
         installPhonePackage(inCallUi, inCallUid, ApplicationInfo.FLAG_SYSTEM, "other-signer")
@@ -130,7 +130,7 @@ class PhoneCallViewTest {
     }
 
     @Test fun onlyOneCurrentLocalDialerNoticeSuppliesDistinctControlsAndDisplayLabel() {
-        fun read(vararg notes: StatusBarNotification) = dialerNotice(arrayOf(*notes), pkg, app.packageManager, LineState.RINGING, 0)
+        fun read(vararg notes: StatusBarNotification) = dialerNotice(arrayOf(*notes), pkg, app.packageManager, LineState.RINGING, 0).notice
         assertNull(read(note(poster = "other")))
         assertNull(read(note(user = UserHandle.getUserHandleForUid(1_010_000))))
         assertNull(read(note(), note()))
@@ -141,17 +141,17 @@ class PhoneCallViewTest {
         val private = read(note(person = withheld))!!
         assertNull(private.name)
         assertNull(private.icon)
-        assertNull(dialerNotice(arrayOf(note()), pkg, app.packageManager, LineState.OFF_HOOK, 0))
+        assertEquals(RingReason.CALL_TYPE_MISMATCH, dialerNotice(arrayOf(note()), pkg, app.packageManager, LineState.OFF_HOOK, 0).reason)
         val secured = note().also { n ->
             n.notification.actions[0] = Notification.Action.Builder(n.notification.actions[0])
                 .setAuthenticationRequired(true).build()
             n.notification.extras.putString(Notification.EXTRA_TITLE, "Not an identity source")
         }
-        val locked = dialerNotice(arrayOf(secured), pkg, app.packageManager, LineState.RINGING, 0, restricted = true) { true }!!
+        val locked = dialerNotice(arrayOf(secured), pkg, app.packageManager, LineState.RINGING, 0, restricted = true) { true }.notice!!
         assertNull(locked.name)
         assertNull(locked.stamp.accept)
         assertNull(locked.stamp.decline)
-        assertNull(dialerNotice(arrayOf(secured), pkg, app.packageManager, LineState.RINGING, 0, restricted = true) { false })
+        assertEquals(NoticeRead(RingReason.HIDDEN), dialerNotice(arrayOf(secured), pkg, app.packageManager, LineState.RINGING, 0, restricted = true) { false })
     }
 
     @Test fun pinsDismissalAndUncertaintyNeverRearmAnEpisode() {
@@ -188,6 +188,40 @@ class PhoneCallViewTest {
         assertEquals(CallCopy.LeaveGame, deck.phoneCallBlocker)
         deck.changePage(1).getOrThrow(); deck.showPhoneCall(true)
         assertEquals("studio", current())
+    }
+
+    @Test fun noticeBeforeRingingCanDisplayButCannotAuthorizeAPressOrCarryOverFromAnEarlierCall() {
+        var time = 1000L
+        var state = LineState.IDLE
+        var posted = 0L
+        val board = CallBoard(app, session.deck, { state }, { _, _ ->
+            NoticeRead(RingReason.LABEL_AVAILABLE, DialerNotice(CallStamp("stable-key", posted, 1, action(1), action(2), pkg), "Fixture", null))
+        }, {}, { time })
+        fun sample(line: LineState, at: Long) { time = at; state = line; board.refresh(line) }
+        sample(LineState.IDLE, 1000)
+        posted = 2000 // Notification callback; Telephony still says idle.
+        sample(LineState.IDLE, 2001)
+        sample(LineState.RINGING, 2100)
+        assertEquals("Fixture", board.frame().keys[CALL_IDENTITY].label)
+        assertEquals(RingReason.EARLY_LABEL_ONLY, board.lastRingReason)
+        assertTrue(board.frame().keys[CALL_ACCEPT].readOnly)
+        assertFalse(board.press(CALL_ACCEPT) { true })
+        sample(LineState.RINGING, 10_000)
+        assertEquals("Fixture", board.frame().keys[CALL_IDENTITY].label)
+        posted = 10_001 // A fresh update during ringing can supply controls normally.
+        sample(LineState.RINGING, 10_002)
+        assertFalse(board.frame().keys[CALL_ACCEPT].readOnly)
+        assertEquals(RingReason.LABEL_AVAILABLE, board.lastRingReason)
+        sample(LineState.IDLE, 10_003)
+        sample(LineState.RINGING, 10_004)
+        assertEquals(CallCopy.NoCallerDetails.text(), board.frame().keys[CALL_IDENTITY].label)
+        assertFalse(board.press(CALL_ACCEPT) { true })
+        assertEquals(RingReason.STALE_NOTICE, board.lastRingReason)
+        sample(LineState.IDLE, 11_000)
+        posted = 12_000
+        sample(LineState.IDLE, 12_001)
+        sample(LineState.RINGING, 25_000) // An old orphan notice is not evidence about this ring.
+        assertEquals(CallCopy.NoCallerDetails.text(), board.frame().keys[CALL_IDENTITY].label)
     }
 
     @Test fun enabledWorkflowsCanStillTargetTheRetiredLayout() {
@@ -378,7 +412,16 @@ class PhoneCallViewTest {
             assertEquals(PHONE_CALL_VIEW, session.deck.operatingState.value.activeProfileId)
             // postTime is wall time, not Robolectric's simulated monotonic clock. Order it after idle.
             val n = samsungCall(caller)
+            n.notification.category = Notification.CATEGORY_CALL
+            n.notification.extras.remove(Notification.EXTRA_TEMPLATE)
             shadowOf(listener).addActiveNotification(n)
+            listener.onNotificationPosted(n); main.idle()
+            assertTrue(session.frame().keys.all { it.readOnly })
+            assertEquals(CallCopy.NoCallerDetails.text(), session.frame().keys[CALL_IDENTITY].label)
+            assertTrue(session.logText().contains("NO_CALL_STYLE_WITH_CALL_PERSON"))
+            assertFalse(session.logText().contains(n.key))
+            assertFalse(session.logText().contains("Fixture"))
+            n.notification.extras.putString(Notification.EXTRA_TEMPLATE, Notification.CallStyle::class.java.name)
             listener.onNotificationPosted(n); main.idle()
             assertEquals("Fixture", session.frame().keys[CALL_IDENTITY].label)
             assertEquals(color, app.lcd.getValue(CALL_PHOTO).getPixel(59,59))
@@ -428,6 +471,7 @@ class PhoneCallViewTest {
             assertTrue(lock.isKeyguardLocked)
             assertFalse(power.isInteractive)
             access.enabled = false; session.refreshPhoneCall(); main.idle()
+            assertFalse(session.logText().contains("Last ringing caller check"))
             assertFalse(session.frame().keys.any { it.label == "Fixture" })
             assertNotEquals(PHONE_CALL_VIEW, session.deck.operatingState.value.activeProfileId)
         } finally { session.disconnect(); controller.destroy() }

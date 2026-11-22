@@ -2,6 +2,8 @@ package tel.misa.mxpocket.plugins
 
 import tel.misa.mxpocket.i18n.CallCopy
 import tel.misa.mxpocket.i18n.Copy
+import tel.misa.mxpocket.i18n.KeypadCopy
+import tel.misa.mxpocket.i18n.TeamsCallCopy
 import tel.misa.mxpocket.i18n.WorkspaceCopy
 
 enum class PhoneLine(private val caption: Copy) {
@@ -19,8 +21,17 @@ const val CALL_DECLINE = 8
 fun phoneCallHomeFrame(line: PhoneLine, controls: Boolean, generation: Long): PluginFrame =
     phoneCallFrame(line, WorkspaceCopy.OnKeypad.text(), controls, generation)
 
+private val empty = KeyTile("", "", 0xff15191c.toInt(), enabled = false, readOnly = true)
+
+fun incomingTeamsFrame(caller: String? = null): PluginFrame {
+    val keys = MutableList(9) { empty }
+    keys[CALL_PHOTO] = empty.copy(glyph = IntegrationApp.TEAMS)
+    keys[CALL_IDENTITY] = empty.copy(label = caller ?: KeypadCopy.Teams.text(),
+        footer = (if (caller == null) CallCopy.Incoming else TeamsCallCopy.IncomingCall).text(), callIdentity = true)
+    return PluginFrame(keys)
+}
+
 fun phoneCallFrame(line: PhoneLine, caller: String?, controls: Boolean, generation: Long): PluginFrame {
-    val empty = KeyTile("", "", 0xff15191c.toInt(), enabled = false, readOnly = true)
     val keys = MutableList(9) { empty }
     keys[CALL_PHOTO] = empty.copy(glyph = DeckGlyph.CALLER)
     keys[CALL_IDENTITY] = if (line == PhoneLine.CALL || line == PhoneLine.MULTIPLE) empty.copy(label = line.label)

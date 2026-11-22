@@ -61,7 +61,7 @@ internal class ForegroundApps(private val usage: UsageStatsManager, since: Long,
     private val freshInterval = lastLockedPoll == null
 
     @Suppress("DEPRECATION") // MOVE_TO_FOREGROUND/BACKGROUND are the API 28 names for RESUMED/PAUSED.
-    fun match(configured: Set<String>, now: Long): String? {
+    fun match(configured: Set<String>, now: Long): ForegroundMatch? {
         if (now < lastPoll || now - lastPoll > FRESH_MS) {
             resumed.clear()
             earliest = now
@@ -77,6 +77,7 @@ internal class ForegroundApps(private val usage: UsageStatsManager, since: Long,
         }
         val event = Event()
         var pastUnlock = false
+        var lastTransition = from
         while (events.getNextEvent(event)) {
             // Before the first unlocked sample, require Android's unlock boundary. An activity
             // can resume over the lock screen, so a resume (or screen-on) alone is not enough.
@@ -96,11 +97,13 @@ internal class ForegroundApps(private val usage: UsageStatsManager, since: Long,
                         return null
                     }
                     resumed[pkg to event.className] = event.timeStamp
+                    lastTransition = event.timeStamp
                 }
                 Event.MOVE_TO_BACKGROUND, Event.ACTIVITY_STOPPED -> {
                     val pkg = event.packageName
                     if (event.className == null) resumed.keys.removeAll { it.first == pkg }
                     else resumed.remove(pkg to event.className)
+                    lastTransition = event.timeStamp
                 }
                 Event.KEYGUARD_SHOWN, Event.KEYGUARD_HIDDEN, Event.SCREEN_NON_INTERACTIVE,
                 Event.SCREEN_INTERACTIVE, Event.DEVICE_SHUTDOWN, Event.DEVICE_STARTUP -> resumed.clear()
@@ -111,9 +114,10 @@ internal class ForegroundApps(private val usage: UsageStatsManager, since: Long,
         if (pkg !in configured || resumed.keys.any { it.first != pkg }) return null
         // Keep same-millisecond resumes for split-screen ambiguity, but not as proof of a
         // post-consent resume: Android timestamps cannot order them against the grant.
-        return pkg.takeIf { resumed.values.any { stamp ->
-            (!freshInterval || stamp > firstUnlockedPoll) && now - stamp in 0..FRESH_MS
-        } }
+        val resume = resumed.values.maxOrNull() ?: return null
+        if ((freshInterval && resume <= firstUnlockedPoll) || now - resume !in 0..FRESH_MS) return null
+        // Don't credit time spent in split screen before the other activity paused.
+        return ForegroundMatch(pkg, resume, now - maxOf(resume, lastTransition))
     }
 
     companion object { const val FRESH_MS = 10 * 60_000L }

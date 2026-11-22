@@ -12,6 +12,7 @@ import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import tel.misa.mxpocket.decks.CallStatus
 import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.i18n.AppLanguage
 import tel.misa.mxpocket.i18n.AppLocale
@@ -96,11 +97,11 @@ class DeckRepositoryTest {
     @Test fun workEntryYieldsToConfirmedCallAndExplicitMappings() {
         val foreground = mapOf("foregroundApp" to "com.microsoft.teams")
         fun observe(time: Long) = repo.observe(foreground, time, allowTeamsWork = true).getOrThrow()
-        repo.showTeamsCall(true)
+        repo.showTeamsCall(CallStatus.JOINED)
         observe(0); observe(2000)
         assertEquals("in-call", repo.state.value.activePage.id)
         repo.selectProfile("audio").getOrThrow()
-        repo.showTeamsCall(false); observe(4000); observe(6000)
+        repo.showTeamsCall(CallStatus.NO_SIGNAL); observe(4000); observe(6000)
         assertEquals("audio", repo.state.value.activeProfileId)
         repo.observe(emptyMap(), 7000).getOrThrow()
         repo.setProfileAutomatic("studio", true).getOrThrow()
@@ -127,12 +128,12 @@ class DeckRepositoryTest {
         repo.observe(emptyMap(), 9000).getOrThrow()
         sample(10000); sample(12000); assertEquals("teams", surface())
         repo.enterGame().getOrThrow()
-        repo.showTeamsCall(true)
-        sample(14000); repo.showTeamsCall(true); assertEquals(GAME_PROFILE, surface())
+        repo.showTeamsCall(CallStatus.JOINED)
+        sample(14000); repo.showTeamsCall(CallStatus.JOINED); assertEquals(GAME_PROFILE, surface())
         assertTrue(repo.operatingState.value.activePage.keys.all { it.action?.params?.get("pluginId") == GAME_PROFILE })
         repo.changePage(1).getOrThrow()
         assertEquals("root", repo.operatingState.value.activePage.id)
-        repo.showTeamsCall(false)
+        repo.showTeamsCall(CallStatus.NO_SIGNAL)
     }
 
     @Test fun oldTeamsWorkLosesOnlyItsExactTimerBindingAndNewEditsSurviveReload() {
@@ -158,25 +159,25 @@ class DeckRepositoryTest {
         repo.selectProfile("studio").getOrThrow()
         repo.openPage(child).getOrThrow()
         val before = repo.exportJson()
-        repo.showTeamsCall(true)
+        repo.showTeamsCall(CallStatus.JOINED)
         assertEquals("in-call", repo.state.value.activePage.id)
         assertEquals(before, repo.exportJson())
         repo.renamePage("studio", child, "My tools").getOrThrow()
-        repo.showTeamsCall(false)
+        repo.showTeamsCall(CallStatus.NO_SIGNAL)
         assertEquals(child, repo.state.value.activePage.id)
         assertEquals("My tools", repo.state.value.activePage.name)
-        repo.showTeamsCall(true)
+        repo.showTeamsCall(CallStatus.JOINED)
         repo.openPage("root").getOrThrow()
-        repo.showTeamsCall(true)
-        repo.showTeamsCall(false)
+        repo.showTeamsCall(CallStatus.JOINED)
+        repo.showTeamsCall(CallStatus.NO_SIGNAL)
         assertEquals("Work", repo.state.value.activePage.name)
         repo.setPinned("audio").getOrThrow()
-        repo.showTeamsCall(true)
+        repo.showTeamsCall(CallStatus.JOINED)
         assertEquals("audio", repo.state.value.activeProfileId)
-        repo.showTeamsCall(false)
+        repo.showTeamsCall(CallStatus.NO_SIGNAL)
         repo.setPinned(null).getOrThrow()
         repo.deletePage("teams", "in-call").getOrThrow()
-        repo.showTeamsCall(true)
+        repo.showTeamsCall(CallStatus.JOINED)
         assertEquals("audio", repo.state.value.activeProfileId)
         assertEquals(1, DeckRepository(file).state.value.profiles.single { it.id == "teams" }.pages.size)
         repo.deleteProfile("teams").getOrThrow()
@@ -302,6 +303,34 @@ class DeckRepositoryTest {
 
     private fun expectedNavigationRoot() = listOf(0, 1, 2, 6, 4, 8, 3, 5).map { pluginKey("navigation", it) } +
         DeckKey(label = "More", action = ActionCall(DeckActions.PAGE, mapOf(DeckActions.PAGE_ID to "accessibility")))
+
+    @Test fun savedTalkBackFactoryKeepsItsActionsAcrossColdLoadAndBackupImport() {
+        val original = requireNotNull(javaClass.getResource("/navigation-pr77.json")).readText()
+        file.writeText(original)
+        val loaded = DeckRepository(file)
+        assertNull(loaded.loadError)
+        fun root(repository: DeckRepository) = repository.state.value.profiles.single { it.id == "navigation" }.pages.first()
+        fun actions(page: DeckPage) = page.keys.map { key ->
+            val call = requireNotNull(key.action)
+            if (call.id != "plugin.key") call.id else
+                tel.misa.mxpocket.decks.navigationCommands[call.params.getValue("index").toInt()].id
+        }
+        assertEquals(listOf("navigation.back", "navigation.home", "navigation.recents",
+            "navigation.focus-previous", "navigation.activate", "navigation.focus-next",
+            "navigation.scroll-up", "navigation.scroll-down", DeckActions.PAGE), actions(root(loaded)))
+        loaded.importJson(original).getOrThrow()
+        val saved = loaded.exportJson()
+        assertEquals(saved, DeckRepository(file).exportJson())
+        // The same v5 index can also be a deliberate binding. A change to either page vetoes the migration.
+        for (pageIndex in 0..1) {
+            val edited = JSONObject(original)
+            val pages = edited.getJSONArray("profiles").getJSONObject(0).getJSONArray("pages")
+            pages.getJSONObject(pageIndex).getJSONArray("keys").getJSONObject(0).put("label", "Mine")
+            loaded.importJson(edited.toString()).getOrThrow()
+            assertEquals("navigation.scroll-up", actions(root(loaded))[3])
+            assertEquals("Mine", loaded.state.value.activeProfile.pages[pageIndex].keys.first().label)
+        }
+    }
 
     @Test fun previousStockNavigationUpgradesButEditedRootIsPreserved() {
         val state = defaultDeck()
