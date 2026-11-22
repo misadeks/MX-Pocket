@@ -9,28 +9,21 @@ layouts. Press them together and release to return to Home and choose a profile,
 or hold both to play Tic Tac Toe. To try MX Pocket without hardware, use the
 Windows simulator.
 
-When you join a Microsoft Teams call on the connected Android phone, the keypad
-switches to a meeting layout. Mute stays in the same spot, with keys for
-captions, raising your hand and opening meeting chat where Teams supports those
-actions. When the call ends, the keypad returns to your previous layout unless
-you've selected another.
-
 On the **Music** layout, press the center key to pause the track.
-Switch to **Navigate**: that same key now says **Select**, and the key below
-it says **Scroll down**. The bottom-right key opens **Accessibility**; press it again
-to return to navigation. With [Android navigation access](docs/android-decks.md)
-enabled, you can keep reading in a supported app without swiping the screen.
+Switch to **Navigate**: that same key becomes **Select**. With
+[Android navigation access](docs/android-decks.md) enabled, you can move focus
+between controls in supported apps without swiping the phone.
 
-![Two illustrated nine-key keypads. On Music, the center key shows Pause and the key below reads “Druga Strana”. On Navigation, those keys become Select and Scroll down.](docs/images/audio-and-navigation.png)
+![Six keypad layouts. Top: the Home profile picker and Navigate. Middle: Music playback and OneNote Draw tools. Bottom: an incoming call with the caller’s picture above their name and Accept and Decline in the bottom corners, beside a game of Tic Tac Toe.](docs/images/audio-and-navigation.png)
 
-*LCD layouts on an illustrated keypad.*
+*Home lists the available profiles. Navigate groups scrolling and More on its bottom row. Incoming Call shows a fictional caller and both actions from a supported dialer.*
 
 The **wired Logitech MX Creative Keypad** (`046D:C354`) connects directly to
 your Android phone over USB-C. MX Pocket's Kotlin driver uses Android's USB
 Host API to read key presses and update the labels behind the keys as layouts
-change. You can use the driver without the app. No root access or companion PC
-is needed. The Windows companion uses the standard Windows HID driver for the
-same wired keypad. The wireless **Dialpad** sold with it is not supported.
+change. No root access or companion PC is needed. The Windows companion uses
+the standard Windows HID driver for the same wired keypad. The wireless
+**Dialpad** sold with it is not supported.
 
 ## Quick start
 
@@ -53,21 +46,10 @@ audio never changes Windows media. See [Windows controls and limitations](docs/w
 **[Try it on Android](docs/workspace.md#install-the-android-app)** with a
 wired keypad. Home mirrors the keys; it never executes their actions. You can
 edit profiles before connecting hardware.
-**[Reuse the Kotlin driver](docs/driver.md)** in your own Android app.
 
 <a name="guides"></a>
 
-[Key layouts and permissions](docs/android-decks.md) · [Workflows (paused)](docs/workflows.md) · [Write a plugin](docs/plugins.md) · [Contribute](CONTRIBUTING.md)
-
-The **Teams** profile opens the Android client on this phone. Choose **Call
-tools** for its manual meeting page, or **Teams setup** for optional local call
-status and switching. A Teams call notice is not proof you joined. Key 8 and
-Teams setup distinguish a notice from a confirmed call. In Android’s
-**Notification access**, choose **MX Pocket** once. Music sessions, Teams
-call notices and optional Phone caller details each need their own in-app
-opt-in, including after upgrading from separate listeners. The Teams mic
-key still needs its separate accessibility grant.
-See [Teams call controls and client limits](docs/android-decks.md#teams-on-this-phone).
+[Key layouts and permissions](docs/android-decks.md) · [Workflows (paused)](docs/workflows.md) · [Extend MX Pocket](#extending-mx-pocket) · [Contribute](CONTRIBUTING.md)
 
 The **OneNote** profile uses a separate, optional accessibility service to
 select drawing tools and change formatting while OneNote is on screen.
@@ -78,10 +60,32 @@ observed selection, not a successful key press.
 
 For ordinary mobile calls, turn on **Settings → Phone calls → Show calls on the keypad**.
 The authorized **physical keypad** switches when the carrier line rings, even
-with the phone locked or its screen off, if USB stays powered. Caller details and
-controls use the default Phone app and respect lock-screen restrictions. Either
-page key leaves without affecting the call. Camera, Dialer and other shortcuts
-remain available as key bindings. See [carrier call setup and supported controls](docs/android-decks.md#carrier-calls-on-the-keypad).
+with the phone locked or its screen off, if USB stays powered. When the default
+Phone app supplies both actions, key 7 accepts and key 9 declines. Either
+physical page button leaves the layout without affecting the call. Caller
+details and controls respect lock-screen restrictions. For caller details or
+music session access, choose **MX Pocket** once in Android’s **Notification
+access**, then opt in to each feature you want inside the app.
+See [carrier call setup and supported controls](docs/android-decks.md#carrier-calls-on-the-keypad).
+
+## Extending MX Pocket
+
+**Build a layout without code.** In **Profiles**, create a page and assign
+existing actions to its keys. For example, put an Android settings shortcut
+on one key and a link to another page on the next. Choose **Tap** or **Hold**
+for each binding, then **Save key**. See the [layout walkthrough](docs/workspace.md#edit-layouts-without-hardware).
+
+**Add a built-in integration.** Implement `PocketPlugin` in Kotlin and register
+it in `BuiltInPlugins.create()`. The [OneNote plugin and its registration](app/src/main/kotlin/tel/misa/mxpocket/plugins/BuiltInPlugins.kt)
+show how a key press requests a drawing tool through `PluginHost`, without
+handling USB. Plugins compile into the Android app; it does not load
+third-party plugins at runtime. The [plugin guide](docs/plugins.md) shows how
+to bind a plugin to a layout and test it.
+
+**Use the keypad in your own Android app.** Build `:mx-driver` as an Android
+library (AAR) to receive key presses and releases and upload key images without
+the MX Pocket app or its plugins. The [driver guide](docs/driver.md) shows how
+to add the library, obtain USB permission and connect to the wired keypad.
 
 <a name="hardware-evidence-and-credits"></a>
 
