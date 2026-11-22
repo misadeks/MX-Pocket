@@ -1,5 +1,6 @@
 package tel.misa.mxpocket.plugins
 
+import android.content.res.Resources
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import tel.misa.mxpocket.FocusTimer
@@ -32,13 +33,13 @@ fun PhoneApp.displayName() = when (this) {
 
 /** Registration order is the page-button order. Add your compiled-in plugin here. */
 object BuiltInPlugins {
-    fun create(focusTitle: String, audioTitle: String, phoneTitle: String, xoTitle: String = TIC_TAC_TOE_TITLE, oneNoteTitle: String = "OneNote"): List<PocketPlugin> =
+    fun create(focusTitle: String, audioTitle: String, phoneTitle: String, xoTitle: String = TIC_TAC_TOE_TITLE, oneNoteTitle: String = "OneNote", resources: Resources? = null): List<PocketPlugin> =
         listOf(FocusPlugin(focusTitle), DeckPlugin("audio", audioTitle, PluginCapability.AUDIO), PhonePlugin(phoneTitle),
             DeckPlugin("launcher", "App Launcher", PluginCapability.OPEN_APPS),
             DeckPlugin("studio", "Pocket Studio", PluginCapability.STUDIO),
             DeckPlugin("navigation", "Android Navigation", PluginCapability.SYSTEM_NAVIGATION),
             TicTacToePlugin(xoTitle), DeckPlugin("teams", "Teams", PluginCapability.TEAMS),
-            OneNotePlugin(oneNoteTitle))
+            OneNotePlugin(oneNoteTitle, resources))
 }
 
 class FocusPlugin(title: String) : PocketPlugin {
@@ -86,8 +87,7 @@ class PhonePlugin(title: String) : PocketPlugin {
             2 -> PluginAction.OpenApp(PhoneApp.DIALER)
             3 -> PluginAction.OpenApp(PhoneApp.WEB)
             5 -> PluginAction.OpenApp(PhoneApp.ALARMS)
-            6 -> PluginAction.SelectPlugin("focus")
-            7 -> PluginAction.SelectPlugin("audio")
+            6, 7 -> tel.misa.mxpocket.deck.phoneShortcutProfile(event.index)?.let(PluginAction::SelectPlugin)
             8 -> PluginAction.Repaint
             else -> null
         }
@@ -101,7 +101,8 @@ class PhonePlugin(title: String) : PocketPlugin {
  * service; the rest uses the actions Android exposes for OneNote: launch intent, deep link,
  * OneNote on the web and Send-to-OneNote (ACTION_SEND), which creates a quick note.
  */
-class OneNotePlugin(title: String) : PocketPlugin {
+class OneNotePlugin(title: String, resources: Resources? = null) : PocketPlugin {
+    private val faces = OneNoteFaces(resources)
     override val descriptor = PluginDescriptor("onenote", title,
         setOf(PluginCapability.OPEN_APPS, PluginCapability.NAVIGATION, PluginCapability.ACCESSIBILITY))
 
@@ -137,55 +138,20 @@ class OneNotePlugin(title: String) : PocketPlugin {
     override fun render(nowMillis: Long): PluginFrame {
         val current = settings
         if (current != null) {
-            val purple = 0xff7719aa.toInt()
-            if (colorsOpen || current.textColor) {
-                val pages = ((current.colors.size + 5) / 6).coerceAtLeast(1)
-                val visiblePage = page.coerceIn(0, pages - 1)
-                return PluginFrame(List(9) { i ->
-                    val color = current.colors.getOrNull(visiblePage * 6 + i)
-                    when {
-                        i < 6 -> KeyTile(color.orEmpty(), "", current.colorValues.getOrNull(visiblePage * 6 + i) ?: colorValue(color), enabled = color != null)
-                        i == 6 -> KeyTile(K.Previous.text(), "", purple, enabled = visiblePage > 0)
-                        i == 7 -> KeyTile("${visiblePage + 1} / $pages", AccessCopy.Cancel.text(), (current.colorValues.getOrNull(current.selectedIndex) ?: colorValue(current.selectedColor)))
-                        else -> KeyTile(K.Next.text(), "", purple, enabled = visiblePage + 1 < pages)
-                    }
-                })
-            }
-            val fraction = (current.thickness - current.min) / (current.max - current.min)
-            val thickness = N.Thickness.text()
-            val labels = listOf("$thickness −", thickness, "$thickness +", "", N.Color.text(), "", "", K.Back.text(), "")
-            return PluginFrame(labels.mapIndexed { i, label ->
-                KeyTile(label, if (i == 4) current.selectedColor.orEmpty() else "",
-                    if (i == 4) colorValue(current.selectedColor) else purple,
-                    enabled = i in listOf(0, 1, 2, 4, 7), readOnly = i == 1,
-                    levelFraction = fraction.takeIf { i == 1 })
-            })
+            return if (colorsOpen || current.textColor) faces.palette(current, palettePage(current)) else faces.settings(current)
         }
         if (tools.any { it.first.startsWith("style:") || it.first.startsWith("size:") }) {
-            return PluginFrame(List(9) { index ->
-                val item = tools.getOrNull(index)
-                KeyTile(item?.second.orEmpty(), if (tools.any { it.first.startsWith("size:") }) N.FontSize.text() else N.Styles.text(), 0xff7719aa.toInt(), enabled = !item?.first.isNullOrEmpty())
-            })
+            val size = tools.any { it.first.startsWith("size:") }
+            return PluginFrame(List(9) { faces.option(tools.getOrNull(it), size) })
         }
         if (tools.any { it.first.startsWith("text:") }) {
             val displayed = if (textPage == 0) tools.take(8) else tools.drop(8).take(7) + ("text:draw" to N.Draw.text())
             return PluginFrame(List(9) { index ->
-                if (index == 8) KeyTile(if (textPage == 0) K.Next.text() else K.Previous.text(), "${textPage + 1} / 2", 0xff7719aa.toInt())
-                else {
-                    val item = displayed.getOrNull(index)
-                    val selected = item?.first?.startsWith("text:selected:") == true
-                    KeyTile(item?.second.orEmpty(), "ONENOTE", if (selected) 0xffa56eff.toInt() else 0xff7719aa.toInt(),
-                        enabled = !item?.first.isNullOrEmpty())
-                }
+                if (index == 8) faces.pageKey(textPage == 0, footer = "${textPage + 1} / 2")
+                else faces.ribbon(displayed.getOrNull(index))
             })
         }
-        val labels = MutableList(9) { "" }
-        selectable().take(9).forEachIndexed { i, tool -> labels[i] = shortLabel(tool.second) }
-        return PluginFrame(labels.mapIndexed { index, label ->
-            val isActive = selectable().getOrNull(index)?.second == active
-            KeyTile(label, "ONENOTE", if (isActive) 0xffa56eff.toInt() else 0xff7719aa.toInt(),
-                enabled = label.isNotBlank())
-        })
+        return faces.draw(selectable(), active)
     }
 
     override fun onKey(event: PluginKeyEvent, host: PluginHost) {
@@ -193,6 +159,7 @@ class OneNotePlugin(title: String) : PocketPlugin {
         val current = settings
         if (current != null) {
             if (colorsOpen || current.textColor) {
+                page = palettePage(current)
                 when (event.index) {
                     in 0..5 -> current.colors.getOrNull(page * 6 + event.index)?.let {
                         host.dispatch(PluginAction.OneNoteSetting(color = current.colorIds.getOrNull(page * 6 + event.index) ?: it))
@@ -236,22 +203,9 @@ class OneNotePlugin(title: String) : PocketPlugin {
         }
     }
 
-    override fun onDeactivate() { settings = null; colorsOpen = false; opening = false; textPage = 0 }
+    private fun palettePage(current: OneNoteSettings) = page.coerceIn(0, (current.colors.size - 1).coerceAtLeast(0) / 6)
 
-    private fun colorValue(name: String?): Int = when (name?.lowercase()) {
-        "dark red" -> 0xff8b0000; "gold" -> 0xffffc000; "lime" -> 0xff92d050
-        "dark green" -> 0xff008000; "turquoise" -> 0xff00b0b0; "navy blue" -> 0xff002060
-        "dark purple" -> 0xff7030a0; "yellow" -> 0xff705201; "orange" -> 0xffb94909; "pink" -> 0xffff0066
-        "red" -> 0xffe71225; "indigo" -> 0xffd0b9e9; "purple" -> 0xffff66e3
-        "plum" -> 0xffff52a8; "dark blue" -> 0xff75bfff; "sky blue" -> 0xff007399
-        "light blue" -> 0xff00526b; "green" -> 0xff008c3a; "light green" -> 0xff306100
-        "black" -> 0xffedebe9; "dark gray" -> 0xffcbc8c8; "gray" -> 0xff849398
-        "off white" -> 0xff201f1e; else -> 0xff7719aa
-    }.toInt()
-
-    private fun shortLabel(desc: String): String = when {
-        "pen options" in desc -> N.Pen.text(desc.substringBefore(" color"))
-        "highlighter options" in desc -> N.Highlighter.text(desc.substringBefore(" color"))
-        else -> desc
+    override fun onDeactivate() {
+        tools = emptyList(); active = null; settings = null; colorsOpen = false; opening = false; textPage = 0; page = 0
     }
 }

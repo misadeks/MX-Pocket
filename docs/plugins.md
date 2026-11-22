@@ -5,6 +5,20 @@ It is not an external APK/plugin marketplace, downloaded code loader, WebHID
 runtime or permission/security sandbox. Contributors add normal reviewed Kotlin
 source and register it in `BuiltInPlugins.create()` through a PR.
 
+Workspace identity is keyed by the stable ID in `PocketStyle`, never by the
+translated or editable title. Focus is blue, Audio green, Phone violet,
+Launcher amber, Studio pink, Navigation teal, Tic-tac-toe (`game.xo`) orange,
+Teams indigo and OneNote orchid. **Work** is the root page of `teams`, not a
+second plugin. Unknown IDs, including copied/custom profiles, use neutral slate.
+These colors identify profiles and launcher keys; they do not replace status
+colors, drawing-tool swatches, user-selected key colors or LCD backgrounds.
+
+Teams and OneNote use icons from the current Android profile's installed
+packages or Windows' registered Start apps. Lookup is local and does not
+launch either app or enable its integration. If lookup returns no icon, the
+shared renderer uses this project's original conversation or spiral-notebook
+outline. No Microsoft logo is bundled or downloaded.
+
 ## Small contract
 
 The API lives in `app/src/main/kotlin/tel/misa/mxpocket/plugins/PocketPlugin.kt`.
@@ -23,8 +37,9 @@ A `KeyTile` contains a label, footer and ARGB background color. Ordinary keys
 keep their key number unless an icon is supplied. The built-in Audio page uses
 monochrome player symbols instead. Labels remain available to accessibility
 even on icon-only controls. Read-only tiles display state without dispatching input.
-Home and the **Swap keys** editor use the same key faces
-as the LCDs, including user backgrounds. With a physical keypad, Home mirrors
+Home mirrors the LCDs, including user backgrounds, without dispatching input.
+The Android Profiles editor shows saved bindings rather than transient plugin state;
+selecting a key edits it without dispatching input. With a physical keypad, Home mirrors
 the live LCD images as a display only, rather than a second set of tappable
 keys. The independent
 driver scales, JPEG-encodes and uploads images. Plugins must not

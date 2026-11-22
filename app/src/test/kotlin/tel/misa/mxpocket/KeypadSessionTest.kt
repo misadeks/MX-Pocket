@@ -368,53 +368,56 @@ class KeypadSessionTest {
 
     private fun press(control: Int) = app.press(control)
 
-    @Test fun physicalPageButtonsCycleEveryFactoryProfileInBothDirections() {
+    @Test fun physicalPageButtonsBrowseRootsAndConsumeTheGameChordInEitherOrder() {
         app.connectKeypad()
         val session = app.session
+        val repo = session.deck
         fun expectProfile(id: String) {
-            assertEquals(id, session.deck.state.value.activeProfileId)
-            assertEquals(id, session.plugins.selectedId)
+            assertEquals(id, repo.operatingState.value.activeProfileId)
         }
+        expectProfile("@home")
+        assertEquals("Focus", session.frame().keys.first().label)
+        press(1); expectProfile("focus")
+        session.setPluginEnabled("audio", false)
+        val ids = listOf("phone", "launcher", "studio", "navigation", "teams", "onenote", "@home", "focus")
+        ids.forEach { press(0x01a2); expectProfile(it) }
+        for ((first, second) in listOf(0x01a1 to 0x01a2, 0x01a2 to 0x01a1)) {
+            val backup = repo.exportJson()
+            app.emit(KeyEvent(first, true)); main.idle(); expectProfile("focus")
+            app.emit(KeyEvent(second, true)); main.idle(); expectProfile("game.xo")
+            app.emit(KeyEvent(first, false)); app.emit(KeyEvent(second, false)); main.idle()
+            expectProfile("game.xo")
+            press(first); expectProfile("focus")
+            assertEquals(backup, repo.exportJson())
+        }
+        session.setPluginEnabled("game.xo", false)
+        app.emit(KeyEvent(0x01a1, true)); app.emit(KeyEvent(0x01a2, true))
+        app.emit(KeyEvent(0x01a2, false)); app.emit(KeyEvent(0x01a1, false)); main.idle()
         expectProfile("focus")
-        val remaining = listOf("audio", "phone", "launcher", "studio", "navigation", "game.xo", "onenote")
-        for (id in remaining + "focus") {
-            if (id == "onenote") {
-                press(0x01a2); expectProfile("teams")
-                press(0x01a2); assertEquals("in-call", session.deck.state.value.activePage.id)
-            }
-            press(0x01a2)
-            expectProfile(id)
-        }
-        for (id in remaining.asReversed() + "focus") {
-            if (id == "game.xo") {
-                press(0x01a1); expectProfile("teams")
-                press(0x01a1); assertEquals("root", session.deck.state.value.activePage.id)
-            }
-            press(0x01a1)
-            expectProfile(id)
-        }
+        app.emit(KeyEvent(0x01a2, true)); app.emit(KeyEvent(0x01a2, false, synthetic = true)); main.idle()
+        expectProfile("focus")
         session.disconnect()
     }
 
-    @Test fun physicalPageButtonsRespectImportedOrderPinAndNestedBackHistory() {
+    @Test fun physicalPageButtonsRespectImportedOrderAndNeverScrollIntoFolders() {
         val repo = app.session.deck
         val desk = repo.createProfile("Desk").getOrThrow()
-        val tools = repo.createPage(desk, "Tools").getOrThrow()
         val leaf = repo.createPage(desk, "Details").getOrThrow()
         repo.setKey(desk, "root", 0, DeckKey(action = ActionCall("page.open", mapOf("pageId" to leaf)))).getOrThrow()
         val state = repo.state.value
         repo.importJson(DeckJson.encode(state.copy(profiles = state.profiles.reversed()))).getOrThrow()
         repo.setPinned("focus").getOrThrow()
         app.connectKeypad()
-        press(0x01a2) // In the imported order Focus wraps forward to Desk.
+        press(0x01a2) // From Focus wrap to Home, then the first imported profile.
+        press(0x01a2)
         assertEquals(desk, repo.state.value.activeProfileId)
         assertEquals(desk, repo.state.value.pinnedProfileId)
         press(1)
         assertEquals(leaf, repo.state.value.activePage.id)
-        press(0x01a1) // Back to root, not the preceding Tools page.
-        assertEquals("root", repo.state.value.activePage.id)
+        press(0x01a1)
+        assertEquals("@home", repo.operatingState.value.activeProfileId)
         press(0x01a2)
-        assertEquals(tools, repo.state.value.activePage.id)
+        assertEquals("root", repo.state.value.activePage.id)
         assertEquals(desk, repo.state.value.activeProfileId)
         app.session.disconnect()
     }
@@ -448,6 +451,7 @@ class KeypadSessionTest {
         }
         session.attach(screen)
         val ticket = session.reserve(real)!!
+        session.selectProfile("focus")
         session.connect(ticket, usb, real, { stops++ }, {
             handoff = (it.target as PocketSession.Target.Phone).app
             tel.misa.mxpocket.decks.ok("Shortcut offered")
@@ -507,8 +511,7 @@ class KeypadSessionTest {
                 Robolectric.buildActivity(PhoneActionActivity::class.java, intent).setup().use {
                     shadowOf(it.get()).nextStartedActivity
                 }
-            press(0x01a2)
-            press(0x01a2)
+            press(3) // Open Phone from the startup launcher.
             press(1)
             assertEquals("android.media.action.STILL_IMAGE_CAMERA", shadowOf(controller.get()).nextStartedActivity?.action)
             controller.pause().stop()

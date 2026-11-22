@@ -38,6 +38,7 @@ data class KeypadTile(
 
 fun KeyTile.toGridTile(inputEnabled: Boolean, image: ImageBitmap? = null): KeypadTile {
     val name = when {
+        detail.isNotBlank() -> listOf(label, detail, footer)
         glyph == PlayerGlyph.TRACK && readOnly -> listOf(K.NowPlaying.text(), label, footer)
         volumeLevel != null -> listOf(label, (if (volumeLevel.muted) K.Muted else K.SoundOn).text(), volumeLevel.description, footer)
         glyph is NavigationGlyph || glyph is PlayerGlyph && !showLabel -> listOf(label, footer)
@@ -51,17 +52,22 @@ fun KeyTile.toGridTile(inputEnabled: Boolean, image: ImageBitmap? = null): Keypa
 @Composable
 private fun KeyFaceWindow(index: Int, tile: KeypadTile, modifier: Modifier) {
     tile.image?.let { Image(it, null, modifier, contentScale = ContentScale.FillBounds); return }
-    val measurer = rememberTextMeasurer()
-    val direction = LocalLayoutDirection.current
     val face = tile.face ?: KeyTile(tile.label, tile.footer, tile.color.toArgb(), icon = tile.icon,
         enabled = tile.enabled, readOnly = tile.readOnly)
-    // Virtual/editor faces use the LCD painter at panel resolution, not at the
-    // current zoom. Android's live adapter supplies the already composited image.
-    val pixels = remember(index, face, direction, measurer) {
+    Image(rememberKeyPixels(index, face), null, modifier, contentScale = ContentScale.FillBounds)
+}
+
+/** The mirror and the Windows JPEG encoder consume the same panel-resolution pixels. */
+@Composable
+fun rememberKeyPixels(index: Int, face: KeyTile): ImageBitmap {
+    val measurer = rememberTextMeasurer()
+    val direction = LocalLayoutDirection.current
+    val appImage = (face.glyph as? IntegrationApp)?.let { LocalIntegrationIcons.current[it] }
+    return remember(index, face, direction, measurer, appImage) {
         val bitmap = ImageBitmap(118, 118)
         val canvas = Canvas(bitmap)
         canvas.drawRect(0f, 0f, 118f, 118f, Paint().apply { color = Color(face.background) })
-        canvas.paintKeyFace(index, face) { text, ink ->
+        canvas.paintKeyFace(index, face, appImage) { text, ink ->
             val layout = measurer.measure(AnnotatedString(text.text), TextStyle(color = ink, fontSize = text.size.sp,
                 fontWeight = if (text.bold) FontWeight.Bold else FontWeight.Normal, textAlign = TextAlign.Center),
                 maxLines = text.lines, overflow = TextOverflow.Ellipsis, density = Density(1f), layoutDirection = direction,
@@ -72,7 +78,6 @@ private fun KeyFaceWindow(index: Int, tile: KeypadTile, modifier: Modifier) {
         }
         bitmap
     }
-    Image(pixels, null, modifier, contentScale = ContentScale.FillBounds)
 }
 
 /** Positions in the approved SVG's 480 x 561 viewBox, not in LCD panel coordinates. */
@@ -86,7 +91,8 @@ private fun top(index: Int) = 63 + index / 3 * PITCH
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
 fun KeypadGrid(tiles: List<KeypadTile>, onKey: (Int, Boolean) -> Unit,
-    modifier: Modifier = Modifier, onHold: Map<Int, () -> Unit> = emptyMap(), onSwap: ((Int, Int) -> Unit)? = null) {
+    modifier: Modifier = Modifier, onHold: Map<Int, () -> Unit> = emptyMap(), onSwap: ((Int, Int) -> Unit)? = null,
+    onPage: ((Int) -> Unit)? = null) {
     require(tiles.size == 9) { "A keypad frame must have nine tiles" }
     val direction = LocalLayoutDirection.current
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
@@ -127,6 +133,13 @@ fun KeypadGrid(tiles: List<KeypadTile>, onKey: (Int, Boolean) -> Unit,
                 }
                 Image(painterResource(Res.drawable.mx_keypad_housing), null, Modifier.matchParentSize(),
                     contentScale = ContentScale.FillBounds)
+                if (onPage != null) for (i in 0..1) {
+                    // The two page caps are below the LCD windows in the same 480 x 561 viewBox.
+                    val delta = if (i == 0) -1 else 1
+                    Box(Modifier.offset(unit * (58 + PITCH * i), unit * 436).size(unit * 114, unit * 74)
+                        .clickable(role = Role.Button) { onPage(delta) }
+                        .semantics { contentDescription = if (i == 0) "Keypad previous page" else "Keypad next page" })
+                }
                 tiles.forEachIndexed { i, tile ->
                     val x = unit * left(i)
                     val y = unit * top(i)

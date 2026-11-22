@@ -58,15 +58,17 @@ and the [hardware checklist](docs/workspace.md#hardware-acceptance-manual-not-es
 The Android debug APK is `app/build/outputs/apk/debug/app-debug.apk`, signed
 with the local debug key. For a reusable Android library, see the
 [AAR guide](docs/driver.md). To test and package the standalone Windows
-simulator, run:
+companion, run with an x64 JDK:
 
 ```powershell
-.\gradlew.bat :desktop-preview:test :desktop-preview:packageUberJarForCurrentOS
+.\gradlew.bat :shared-ui:desktopTest :desktop-preview:test :desktop-preview:packageUberJarForCurrentOS
 ```
 
 Run `java -jar` with the path to the generated JAR in
 `desktop-preview/build/compose/jars/`. Use a matching x64 JDK on Windows
-ARM64. Running the packaged JAR does not require the Android SDK.
+ARM64. Running the packaged JAR does not require the Android SDK. It includes
+Skiko and JNA native runtime support; native ARM64 Java is not a supported
+Windows distribution. See [the Windows guide](docs/workspace.md#windows-companion).
 
 ## Phone UI layout and safe preview
 
@@ -76,7 +78,7 @@ values. Use `PocketTheme` for appearance and Compose semantics for UI tests.
 Rendering does not activate plugins or execute actions. Keep the safe-area
 insets, 48dp control/84dp key minimum heights, selectable diagnostics and live
 status announcements. The [Windows host](desktop-preview) can run the Focus
-timer and Tic Tac Toe, but does not call Android services.
+timer, Tic Tac Toe and wired media controls, but does not call Android services.
 
 The shared grid uses `shared-ui/src/commonMain/artwork/mx-keypad-housing.svg`,
 exported from the project's `draw_keypad_hero.py` illustration without its LCD

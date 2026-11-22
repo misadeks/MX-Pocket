@@ -2,8 +2,9 @@ package tel.misa.mxpocket
 
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onLast
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.semantics.SemanticsActions
@@ -23,6 +24,8 @@ import org.robolectric.annotation.Config
 import tel.misa.mxpocket.setup.SetupActivity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import tel.misa.mxpocket.actions.ActionCall
+import tel.misa.mxpocket.deck.DeckKey
 import tel.misa.mxpocket.deck.DeckRule
 
 @RunWith(RobolectricTestRunner::class)
@@ -45,11 +48,7 @@ class WorkspaceNavigationTest {
             })
         val before = session.deck.state.value.profiles.first { it.id == "studio" }
         compose.onNodeWithText("Profiles").performClick()
-        compose.onNodeWithText("Focus / Focus ▾").performClick()
-        // The carousel also shows a Studio card; the picker's entry comes after it.
-        compose.onAllNodesWithText("Studio").onLast().performClick()
-        // The picker and the carousel agree: the chosen profile goes on the keypad.
-        compose.waitUntil(10_000) { session.deck.state.value.activeProfileId == "studio" }
+        compose.onNodeWithText("Studio").performScrollTo().performClick()
         compose.onNodeWithText("Profile settings and rules").performScrollTo().performClick()
         compose.onNodeWithText("Choose app").performScrollTo().performClick()
         compose.onNodeWithText("When this app is open, show Studio").performScrollTo()
@@ -58,10 +57,50 @@ class WorkspaceNavigationTest {
         compose.waitUntil(10_000) { session.deck.state.value.profiles.first { it.id == "studio" }.rules.isNotEmpty() }
         assertEquals(before.copy(rules = listOf(DeckRule(FOREGROUND_APP, pkg, 5))),
             session.deck.state.value.profiles.first { it.id == "studio" })
-        assertEquals("studio", session.deck.state.value.activeProfileId)
+        assertEquals("focus", session.deck.state.value.activeProfileId)
         assertFalse(session.deck.state.value.automatic)
         assertFalse(session.detectForegroundApps.value)
         assertFalse(FOREGROUND_APP in session.signals.value)
+    }
+
+    @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
+    @Test fun offlineEditStaysOnTheSavedPageAndBackRetracesTheLibrary() {
+        val session = (compose.activity.application as PocketApplication).session
+        val repo = session.deck
+        val work = repo.createProfile("Work").getOrThrow()
+        val meetings = repo.createPage(work, "Meetings").getOrThrow()
+        val original = DeckKey(label = "Previous", action = ActionCall("page.back"),
+            holdAction = ActionCall("workflow.run", mapOf("workflowId" to "custom")))
+        repo.setKey(work, meetings, 3, original).getOrThrow()
+        compose.runOnIdle { session.setPluginEnabled("studio", false); session.selectProfile("audio") }
+        val before = repo.state.value
+        fun back() = compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }
+        compose.onNodeWithText("Profiles").performClick()
+        compose.onNodeWithText("Studio").assertDoesNotExist()
+        compose.onNode(hasText("Work") and hasText("2 pages")).performScrollTo().performClick()
+        compose.onNodeWithText("Meetings").performClick()
+        compose.onNodeWithContentDescription("Key 4, Previous").performScrollTo().performClick()
+        assertEquals(before, repo.state.value)
+        compose.onNodeWithTag("choose-binding").performScrollTo().performClick()
+        compose.onNodeWithText("Open page: Meetings").performClick()
+        // A live switch while editing must not retarget the open key or discard its draft.
+        compose.onNodeWithTag("key-label").performTextReplacement("Return")
+        compose.runOnIdle { session.selectProfile("phone") }
+        compose.onNodeWithText("Save key").performScrollTo().performClick()
+        compose.waitUntil(5000) {
+            repo.state.value.profiles.single { it.id == work }.pages.single { it.id == meetings }.keys[3] ==
+                original.copy(label = "Return", action = ActionCall("page.open", mapOf("pageId" to meetings)))
+        }
+        compose.onNodeWithContentDescription("Key 4, Return").performClick()
+        back()
+        compose.onNodeWithContentDescription("Key 4, Return").assertExists()
+        back()
+        compose.onNodeWithText("Pages").assertExists()
+        back()
+        compose.onNode(hasText("Work") and hasText("2 pages")).assertExists()
+        assertEquals("phone", repo.state.value.activeProfileId)
+        assertEquals(before.histories, repo.state.value.histories)
+        assertFalse(session.ready)
     }
 
     @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
@@ -77,8 +116,8 @@ class WorkspaceNavigationTest {
         }
         capture("home")
         compose.onNodeWithText("Profiles").performClick()
-        compose.onNodeWithText("Swap keys").assertExists()
-        compose.onNodeWithText("Key positions").assertDoesNotExist()
+        compose.onNodeWithText("New profile").assertExists()
+        compose.onNodeWithText("Swipe to switch").assertDoesNotExist()
         capture("profiles")
         compose.onNodeWithText("Flows").performClick()
         compose.onNodeWithText("Keypad check").assertExists()

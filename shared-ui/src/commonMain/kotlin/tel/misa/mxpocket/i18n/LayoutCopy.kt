@@ -134,6 +134,7 @@ object LayoutCopy {
     val RestrictedApps = Copy("Android restricted the list of launchable apps.", "Android a restreint l’accès à la liste des applications pouvant être lancées.", "Android je ograničio pristup spisku aplikacija koje se mogu pokrenuti.")
     val NoApps = Copy("No matching launchable apps in this Android profile.", "Aucune application de ce profil Android ne correspond à la recherche.", "U ovom Android profilu nema odgovarajućih aplikacija koje se mogu pokrenuti.")
     val MappedTo = Copy("Mapped to {0}", "Associée à : {0}", "Povezano sa: {0}")
+    val MappedUnavailable = Copy("Mapped to an unavailable profile", "Associée à un profil indisponible", "Povezano sa nedostupnim profilom")
     val UsageHint = Copy("Usage Access lets MX Pocket check for mapped apps while switching is available and the phone is unlocked. No usage history is saved or sent.", "L’accès aux données d’utilisation permet à MX Pocket de détecter les applications associées lorsque le changement de profil est disponible et le téléphone déverrouillé. Aucun historique d’utilisation n’est enregistré ni envoyé.", "Pristup podacima o korišćenju omogućava aplikaciji MX Pocket da prepozna povezane aplikacije dok je promena profila dostupna i telefon otključan. Istorija korišćenja se ne čuva niti šalje.")
     val DetectApps = Copy("Detect foreground apps", "Détecter l’application au premier plan", "Prepoznaj aktivnu aplikaciju")
     val UsageGranted = Copy("Android Usage Access: granted.", "Accès aux données d’utilisation Android : autorisé.", "Pristup podacima o korišćenju Androida: odobren.")
@@ -268,6 +269,9 @@ private val scoreReason = Regex("""Automatic: score ([0-9]+) — ([a-zA-Z0-9][a-
 
 /** Deck JSON stores canonical reasons. Render only known forms, leaving rule values and imported text alone. */
 fun displaySelectionReason(reason: String): String = when (reason) {
+    "Choose a profile" -> LauncherCopy.Choose.text()
+    "Selected an available profile" -> LauncherCopy.Available.text()
+    "Previous or Next exits the game" -> LauncherCopy.ExitGame.text()
     "Default profile" -> LayoutCopy.DefaultReason.text()
     "Manually selected" -> LayoutCopy.ManualSelection.text()
     "Manually selected and pinned" -> LayoutCopy.ManualSelectionPinned.text()

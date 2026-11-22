@@ -13,12 +13,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.testTag
 import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.*
+import tel.misa.mxpocket.decks.DeckCommand
 import tel.misa.mxpocket.decks.navigationCommands
 import tel.misa.mxpocket.i18n.*
 
-data class BindingOption(val label: String, val call: ActionCall)
+data class BindingOption(val label: String, val call: ActionCall, val unavailableReason: String? = null)
 
-private val factoryProfiles = defaultDeck().profiles
+private val factoryProfiles = defaultDeck().visibleProfiles
 val factoryKeyBindings: List<BindingOption> by derivedStateOf {
     factoryProfiles.flatMap { profile ->
         profile.pages.single { it.id == profile.rootPageId }.keys.mapIndexedNotNull { physical, key ->
@@ -32,25 +33,43 @@ val factoryKeyBindings: List<BindingOption> by derivedStateOf {
     }
 }
 
+private fun ActionCall.blockedInEditor(disabled: Set<String>): Boolean {
+    val owner = slotOwner() ?: DeckCommand.fromId(id)?.deck ?: id.substringBefore('.')
+    val target = targetProfileId()
+    return owner == GAME_PROFILE || owner in disabled || target == GAME_PROFILE || target in disabled
+}
+
+fun availableFactoryKeyBindings(disabled: Set<String>) = factoryKeyBindings.filterNot { it.call.blockedInEditor(disabled) }
+
+@Composable
+internal fun editorBindings(profile: DeckProfile, options: List<BindingOption>, disabled: Set<String>) =
+    remember(profile, options, disabled, AppLocale.current) {
+        localBindings(options.filterNot { it.call.blockedInEditor(disabled) }, profile.pages, profile::displayPageName)
+    }
+
 /** Page IDs are profile-local; a duplicated profile can have the same page IDs with different names. */
 fun localBindings(options: List<BindingOption>, pages: List<DeckPage>, pageName: (DeckPage) -> String = { it.name }): List<BindingOption> {
-    val pageOptions = options.filter { it.call.id == DeckActions.PAGE }.associateBy { it.call.params[DeckActions.PAGE_ID] }
+    val pageOptions = options.filter { it.call.id == DeckActions.PAGE }.associateBy { it.call }
     // The host knows the active deck; the editor can also prepare an inactive profile.
     return (pages.map { page ->
-        val call = pageOptions[page.id]?.call ?: ActionCall(DeckActions.PAGE, mapOf(DeckActions.PAGE_ID to page.id))
-        BindingOption(LayoutCopy.OpenPage.text(pageName(page)), call)
+        val call = ActionCall(DeckActions.PAGE, mapOf(DeckActions.PAGE_ID to page.id))
+        BindingOption(LayoutCopy.OpenPage.text(pageName(page)), call, pageOptions[call]?.unavailableReason)
     } + options.filterNot { it.call.id == DeckActions.PAGE }).distinctBy { it.call }
 }
 
 internal fun bindingName(call: ActionCall?, options: List<BindingOption>): String {
     if (call == null) return LayoutCopy.Unassigned.text()
-    return options.firstOrNull { it.call == call.commandBinding() }?.label ?: when (call.id) {
+    val binding = call.commandBinding()
+    return options.firstOrNull { it.call.commandBinding() == binding }?.let { option ->
+        if (option.unavailableReason == null) option.label else LayoutCopy.Unavailable.text(option.label)
+    } ?: when (call.id) {
         "plugin.key" -> {
-            val number = call.params["index"]?.toIntOrNull()?.plus(1)
-            factoryKeyBindings.firstOrNull { it.call == call }?.label ?: LayoutCopy.PluginSlot.text(
+            val number = call.params["index"]?.toIntOrNull()?.takeIf { it in 0..8 }?.plus(1)
+            val slot = factoryKeyBindings.firstOrNull { it.call == call }?.label ?: LayoutCopy.PluginSlot.text(
                 call.params["pluginId"]?.let(::builtInDeckName) ?: LayoutCopy.Plugin.text(), number ?: "?")
+            LayoutCopy.Unavailable.text(slot)
         }
-        else -> LayoutCopy.Unavailable.text(call.id)
+        else -> LayoutCopy.Unavailable.text(DeckCommand.fromId(call.id)?.displayLabel ?: call.id)
     }
 }
 
@@ -156,6 +175,7 @@ internal fun KeyFields(index: Int, draft: KeyDraft, options: List<BindingOption>
             modifier = Modifier.fillMaxWidth().testTag(if (target == BindingTarget.TAP) "choose-binding" else "choose-hold-binding")) {
             Text(target.summary.text(bindingName(binding(target), options)))
         }
+        options.find { it.call == binding(target)?.commandBinding() }?.unavailableReason?.let { EditorNote(it) }
     }
     EditorSwitch(LayoutCopy.EnabledOnDeck.text(), enabled, writable) { enabled = it }
     if (attempted) error?.let { EditorError(it) }
@@ -172,6 +192,14 @@ private val palette = listOf(
 
 @Composable
 internal fun BindingDialog(options: List<BindingOption>, draft: KeyDraft) {
+    val target = draft.picking ?: return
+    AlertDialog(onDismissRequest = { draft.picking = null }, title = { Text(target.picker.text()) },
+        text = { BindingChoices(options, draft, Modifier.heightIn(max = 380.dp)) },
+        confirmButton = { TextButton(onClick = { draft.picking = null }) { Text(LayoutCopy.BackToKey.text()) } })
+}
+
+@Composable
+internal fun BindingChoices(options: List<BindingOption>, draft: KeyDraft, listModifier: Modifier = Modifier) {
     val query = draft.query
     val target = draft.picking ?: return
     val selected = draft.binding(target)?.commandBinding()
@@ -186,19 +214,21 @@ internal fun BindingDialog(options: List<BindingOption>, draft: KeyDraft) {
     val filtered = remember(options, query) {
         options.filter { it.label.contains(query.trim(), ignoreCase = true) || it.call.id.contains(query.trim(), ignoreCase = true) }
     }
-    AlertDialog(onDismissRequest = ::close, title = { Text(target.picker.text()) }, text = {
-        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            OutlinedTextField(query, { draft.query = it }, Modifier.fillMaxWidth(), label = { Text(LayoutCopy.SearchActions.text()) }, singleLine = true)
-            LazyColumn(Modifier.fillMaxWidth().heightIn(max = 380.dp)) {
-                item {
-                    DropdownMenuItem(text = { Text((if (selected == null) "✓ " else "") + LayoutCopy.Unassigned.text()) }, onClick = { choose(null) })
-                }
-                if (filtered.isEmpty()) item { EditorNote(LayoutCopy.NoMatchingActions.text()) }
-                items(filtered) { option ->
-                    DropdownMenuItem(text = { Text(if (selected == option.call) "✓ ${option.label}" else option.label) },
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        OutlinedTextField(query, { draft.query = it }, Modifier.fillMaxWidth(), label = { Text(LayoutCopy.SearchActions.text()) }, singleLine = true)
+        LazyColumn(listModifier.fillMaxWidth()) {
+            item {
+                DropdownMenuItem(text = { Text((if (selected == null) "✓ " else "") + LayoutCopy.Unassigned.text()) }, onClick = { choose(null) })
+            }
+            if (filtered.isEmpty()) item { EditorNote(LayoutCopy.NoMatchingActions.text()) }
+            items(filtered) { option ->
+                if (option.unavailableReason != null) {
+                    UnavailableRow(option.label, option.unavailableReason)
+                } else {
+                    DropdownMenuItem(text = { Text(if (selected == option.call.commandBinding()) "✓ ${option.label}" else option.label) },
                         onClick = { choose(option.call) })
                 }
             }
         }
-    }, confirmButton = { TextButton(onClick = ::close) { Text(LayoutCopy.BackToKey.text()) } })
+    }
 }

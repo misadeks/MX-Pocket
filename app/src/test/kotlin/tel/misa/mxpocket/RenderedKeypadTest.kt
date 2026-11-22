@@ -11,10 +11,35 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import tel.misa.mxpocket.driver.KeypadProtocol
 import tel.misa.mxpocket.plugins.KeyTile
+import tel.misa.mxpocket.plugins.IntegrationApp
+import tel.misa.mxpocket.decks.FavoriteApps
+import tel.misa.mxpocket.decks.TEAMS_PACKAGE
+import tel.misa.mxpocket.decks.OneNoteAccessService
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [28], manifest = Config.NONE)
 class RenderedKeypadTest {
+    @Test @GraphicsMode(GraphicsMode.Mode.NATIVE)
+    fun integrationFacesUseTheInstalledPackageUnlessTheKeyHasItsOwnIcon() {
+        val context = org.robolectric.RuntimeEnvironment.getApplication()
+        val pm = org.robolectric.Shadows.shadowOf(context.packageManager)
+        val apps = FavoriteApps(context)
+        val colors = mapOf(IntegrationApp.TEAMS to Color.CYAN, IntegrationApp.ONENOTE to Color.MAGENTA)
+        for ((id, color) in colors) {
+            val pkg = if (id == IntegrationApp.TEAMS) TEAMS_PACKAGE else OneNoteAccessService.ONENOTE_PACKAGE
+            pm.installPackage(android.content.pm.PackageInfo().apply { packageName = pkg })
+            pm.setApplicationIcon(pkg, android.graphics.drawable.ColorDrawable(color))
+        }
+        val icons = apps.integrationIcons()
+        val renderer = KeyImages(icons::get) { null }
+        for ((id, color) in colors) {
+            val face = KeyTile("My label", "", Color.BLACK, glyph = id)
+            assertEquals(color, renderer.image(0, face).getPixel(59, 21))
+            val custom = face.copy(icon = "*")
+            assertTrue(renderer.image(0, custom).sameAs(KeyImages { null }.image(0, custom)))
+        }
+    }
+
     @Test @GraphicsMode(GraphicsMode.Mode.NATIVE)
     fun gridCarriesTheSameLabeledTilesAndCoverGapsAsTheMirror() = runBlocking {
         val art = Bitmap.createBitmap(480,480,Bitmap.Config.ARGB_8888).apply { eraseColor(Color.BLUE) }

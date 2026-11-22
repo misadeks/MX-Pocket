@@ -61,6 +61,33 @@ class DeckRepositoryTest {
         assertEquals("studio", repo.state.value.activeProfileId)
     }
 
+    @Test fun homeAndGameYieldOnlyToFreshAuthorizedTeamsEntries() {
+        val fg = mapOf("foregroundApp" to "com.microsoft.teams")
+        fun sample(t: Long) = repo.observe(fg, t, allowTeamsWork = true).getOrThrow()
+        fun surface() = repo.operatingState.value.activeProfileId
+        repo.setAutomatic(true).getOrThrow()
+        assertEquals(PROFILE_HOME, surface())
+        repo.setDisabledPlugins(setOf("teams"))
+        assertFalse(repo.operatingState.value.visibleProfiles.any { it.id == "teams" })
+        sample(0); sample(2000); assertEquals(PROFILE_HOME, surface())
+        repo.observe(emptyMap(), 2500).getOrThrow()
+        repo.setDisabledPlugins(emptySet())
+        sample(3000); assertEquals(PROFILE_HOME, surface())
+        sample(5000); assertEquals("teams", surface())
+        assertEquals("Work", repo.operatingState.value.activePage.name)
+        repo.showHome()
+        sample(6000); sample(8000); assertEquals(PROFILE_HOME, surface())
+        repo.observe(emptyMap(), 9000).getOrThrow()
+        sample(10000); sample(12000); assertEquals("teams", surface())
+        repo.enterGame().getOrThrow()
+        repo.showTeamsCall(true)
+        sample(14000); repo.showTeamsCall(true); assertEquals(GAME_PROFILE, surface())
+        assertTrue(repo.operatingState.value.activePage.keys.all { it.action?.params?.get("pluginId") == GAME_PROFILE })
+        repo.changePage(1).getOrThrow()
+        assertEquals("root", repo.operatingState.value.activePage.id)
+        repo.showTeamsCall(false)
+    }
+
     @Test fun oldTeamsWorkLosesOnlyItsExactTimerBindingAndNewEditsSurviveReload() {
         val old = DeckKey(label = "Focus timer", action = ActionCall(DeckActions.PROFILE, mapOf(DeckActions.PROFILE_ID to "focus")))
         fun keys(repo: DeckRepository) = repo.state.value.profiles.single { it.id == "teams" }.pages.first().keys
@@ -170,10 +197,15 @@ class DeckRepositoryTest {
             histories = factory.histories + ("custom" to listOf("root")))
         file.writeText(DeckJson.encode(state))
         val loaded = DeckRepository(file)
-        assertEquals(game.copy(name = "Tic Tac Toe", pages = listOf(root.copy(name = "Tic Tac Toe"), extra)), loaded.state.value.activeProfile)
+        assertEquals(game.copy(name = "Tic Tac Toe", pages = listOf(root.copy(name = "Tic Tac Toe"), extra)),
+            loaded.state.value.profiles.single { it.id == game.id })
+        assertFalse(loaded.state.value.visibleProfiles.any { it.id == game.id })
         assertEquals(other, loaded.state.value.profiles.single { it.id == "custom" })
-        loaded.renameProfile(game.id, "Game night").getOrThrow()
-        loaded.renamePage(game.id, "root", "Board").getOrThrow()
+        assertTrue(loaded.renameProfile(game.id, "Game night").isFailure)
+        assertTrue(loaded.renamePage(game.id, "root", "Board").isFailure)
+        loaded.selectProfile(other.id).getOrThrow()
+        loaded.renameProfile(other.id, "Game night").getOrThrow()
+        loaded.renamePage(other.id, "root", "Board").getOrThrow()
         val restored = DeckRepository(file).state.value
         assertEquals("Game night", restored.activeProfile.name)
         assertEquals("Board", restored.activePage.name)
@@ -349,7 +381,10 @@ class DeckRepositoryTest {
 
     @Test fun deletedXoStaysDeletedAcrossColdLoadAndBackupRestore() {
         repo.selectProfile("phone").getOrThrow()
-        repo.deleteProfile("game.xo").getOrThrow()
+        // A backup from before the built-in game became read-only.
+        val old = repo.state.value
+        repo.importJson(DeckJson.encode(old.copy(profiles = old.profiles.filterNot { it.id == GAME_PROFILE },
+            histories = old.histories - GAME_PROFILE, xoProfileRemoved = true))).getOrThrow()
         val expected = repo.state.value
         assertFalse(expected.profiles.any { it.id == "game.xo" })
         val reloaded = DeckRepository(file)

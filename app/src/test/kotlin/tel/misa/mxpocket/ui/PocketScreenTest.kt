@@ -39,7 +39,7 @@ class PocketScreenTest {
         ui.setContent {
             back = checkNotNull(LocalOnBackPressedDispatcherOwner.current).onBackPressedDispatcher::onBackPressed
             PocketTheme { PocketWorkspace(tab.value, { tab.value = it }, state.value,
-                emptyList(), events::add, editor = {}, workflows = {}, backHandler = { enabled, action -> BackHandler(enabled, action) }) }
+                emptyList(), events::add, profiles = {}, workflows = {}, backHandler = { enabled, action -> BackHandler(enabled, action) }) }
         }
         ui.onNodeWithText(state.value.status).assert(SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite))
         ui.onNodeWithText("Settings").performClick()

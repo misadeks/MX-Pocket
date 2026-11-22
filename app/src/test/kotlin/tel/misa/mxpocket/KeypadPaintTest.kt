@@ -111,6 +111,9 @@ class KeypadPaintTest {
         val p = Panel(supportsGrid = true)
         val deck = p.session.deck
         try {
+            // Editing the library while Home is showing legitimately repaints the profile launcher.
+            p.session.selectProfile("focus"); main.idle()
+            p.grids.clear()
             val profile = deck.createProfile("Desk").getOrThrow()
             val child = deck.createPage(profile, "Tools").getOrThrow()
             // Even the Open key has identical pixels and binding in both pages.
@@ -121,11 +124,12 @@ class KeypadPaintTest {
                 assertTrue(p.writes.isEmpty())
                 p.expectAll()
             }
-            expectGrids(1)
-            p.session.selectProfile(profile); main.idle(); expectGrids(2)
-            p.press(1); assertEquals(child, deck.state.value.activePage.id); expectGrids(3)
-            p.press(0x01a1); assertEquals("root", deck.state.value.activePage.id); expectGrids(4)
-            p.press(0x01a2); assertEquals(child, deck.state.value.activePage.id); expectGrids(5)
+            expectGrids(0)
+            p.session.selectProfile(profile); main.idle(); expectGrids(1)
+            p.press(1); assertEquals(child, deck.state.value.activePage.id); expectGrids(2)
+            p.press(0x01a1); assertEquals("onenote", deck.state.value.activeProfileId); expectGrids(3)
+            p.press(0x01a2); assertEquals("root", deck.state.value.activePage.id); expectGrids(4)
+            p.press(1); assertEquals(child, deck.state.value.activePage.id); expectGrids(5)
             p.press(1); expectGrids(5) // Already on Tools.
         } finally { p.session.disconnect() }
     }
@@ -163,7 +167,7 @@ class KeypadPaintTest {
             val deck = p.session.deck
             val custom = deck.createProfile("One game key").getOrThrow()
             deck.setKey(custom, "root", 0, DeckKey(action = ActionCall("plugin.key",
-                mapOf("pluginId" to "game.xo", "index" to "0")))).getOrThrow()
+                mapOf("pluginId" to "game.xo", "index" to "6")))).getOrThrow()
             p.session.selectProfile(custom); main.idle()
             p.expectAll()
             assertEquals("1 Player", p.session.frame().keys[0].label)
@@ -172,7 +176,7 @@ class KeypadPaintTest {
             assertEquals(listOf<Int?>(null), p.grids)
             assertTrue(p.writes.isEmpty())
             p.press(1)
-            assertEquals("1", p.session.frame().keys[0].label)
+            assertEquals("7", p.session.frame().keys[0].label)
             p.settle(); p.press(1)
             assertEquals("X", p.session.frame().keys[0].label)
             p.expectAll()

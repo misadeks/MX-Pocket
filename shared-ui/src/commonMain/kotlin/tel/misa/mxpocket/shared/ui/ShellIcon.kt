@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.*
 import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.unit.Dp
+import tel.misa.mxpocket.plugins.IntegrationApp
 
 /** The workspace artwork is separate from the physical key legends. */
 internal enum class ShellIcon(data: String) {
@@ -26,6 +27,9 @@ internal enum class ShellIcon(data: String) {
     EDIT("M4,20H8L19,9L15,5L4,16Z M13,7L17,11"),
     EYE("M2,12C5,6 19,6 22,12C19,18 5,18 2,12Z M9,12a3,3 0 1,0 6,0a3,3 0 1,0 -6,0"),
     FLOWS("M4,6a2,2 0 1,0 4,0a2,2 0 1,0 -4,0 M4,18a2,2 0 1,0 4,0a2,2 0 1,0 -4,0 M16,12a2,2 0 1,0 4,0a2,2 0 1,0 -4,0 M8,6H10A4,4 0 0 1 14,10V12 M8,18H10A4,4 0 0 0 14,14V12 M14,12H16"),
+    GAME("M3,5L10,12 M10,5L3,12 M13,16a4,4 0 1,0 8,0a4,4 0 1,0 -8,0"),
+    CHAT(IntegrationApp.TEAMS.outline),
+    NOTEBOOK(IntegrationApp.ONENOTE.outline),
     HISTORY("M3,12A9,9 0 1 0 6,5.3 M3,4V9H8 M12,7V12L15,14"),
     HOME("M4,11L12,4L20,11 M6,9.5V20H18V9.5 M10,20V14H14V20"),
     IMAGE("M4,4H20V20H4Z M4,16L9,11L14,16 M13,15L16,12L20,16 M15,8.5a1.5,1.5 0 1,0 3,0a1.5,1.5 0 1,0 -3,0"),

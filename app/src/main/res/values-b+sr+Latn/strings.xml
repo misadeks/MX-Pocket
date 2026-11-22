@@ -29,6 +29,7 @@
     <string name="audio">Multimedijalne kontrole</string>
     <string name="media_access">MX Pocket: multimedijalne sesije</string>
     <string name="teams_call_access">MX Pocket: Teams pozivi</string>
+    <string name="phone_call_access">MX Pocket: telefonski pozivi</string>
     <string name="teams_toolbar_access">MX Pocket: kontrole za Teams pozive</string>
     <string name="teams_toolbar_description">Kada je tastatura povezana i opcija Teams uključena, MX Pocket proverava vidljive kontrole poziva u aplikaciji Teams. Pritiskom na srednji taster tastature možete da uključite ili isključite mikrofon na sastanku ako je njegova kontrola označena. MX Pocket ne čita poruke, ne pridružuje se sastancima, ne odgovara na pozive i ne prekida ih.</string>
     <string name="navigation_access">MX Pocket: navigacija</string>

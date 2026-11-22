@@ -17,18 +17,35 @@ and **Settings** contains USB preferences. Open **Settings → Diagnostics** to
 see device details and the session log. On Android, Back returns to Settings.
 On Windows, Diagnostics opens in a separate window you can close independently.
 
-**Profiles** switches and edits profiles. Swipe the endless profile carousel
-(or tap a card) to put that profile on the keypad; the cards beside the
-centered one are slightly blurred. The profile picker below it always shows
-the same profile: choosing one there also puts it on the keypad. Choosing a
-page only opens it for editing. **Swap keys** opens the keypad with the same
-key faces as the LCDs (live for the page on the keypad): drag a key onto
-another to exchange them, or tap a key to edit its label, icon, color or
-action. Nothing there runs an action; screen readers offer **Swap with key N**
-actions instead of dragging. In a narrow window, Back returns from the key
-editor; a wider window keeps the key details beside the picker.
+Home starts on a nine-key profile launcher. Pick a profile to open its first
+page; **More profiles** shows the next group if there are more than nine.
+**Previous** and **Next** browse Home and the available profile roots. To
+open a submenu such as Teams Call tools, use its assigned key instead.
+Press both page controls together to play Tic Tac Toe (**Page Up** and
+**Page Down** in the Windows simulator). Release both, then press either
+one to exit. The game is not in the regular launcher or editor.
 
-To give a key a second action, open it from **Profiles > Swap keys**, choose **Hold** under
+Turning off a plugin hides its own profile and pages from Home, Profiles and
+the action pickers. Its saved layout returns when you re-enable it in
+**Plugins**. Custom profiles remain visible, including any keys that will
+work again when their plugin is enabled.
+
+On Android, **Profiles** lists saved profiles by name and page count. Tap a
+profile, choose a page by name, then tap a key on the keypad drawing to edit
+its label, icon, color or actions. **Save key** returns to the same page.
+Back retraces the path to the page list and then to Profiles. You can also
+drag one key onto another to swap them, or use the **Swap with key N** screen
+reader actions. This edits saved bindings, not the live screen: it works
+disconnected, runs no keys and does not switch profiles. To switch explicitly,
+open the profile’s **Profile settings and rules > Use on keypad**.
+
+In a wide desktop window, **Home > Switch layout** selects a layout without leaving
+the keypad. The **Profiles** workshop shows a profile library instead of the
+swipe strip. **Plugins** lists controls supported by the current host first;
+unavailable plugins remain visible with the reason they cannot run. The key
+action picker also explains unavailable bindings without changing saved keys.
+
+To give a key a second action, open the key on its page, choose **Hold** under
 **Key actions**, pick an action, and save the key. **Tap** and **Hold** are
 independent; choose **Unassigned** for Hold and save to remove it. Existing
 layouts and factory keys have no Hold. Layout backups include assigned Holds.
@@ -40,10 +57,40 @@ recognized physical two-key chord consumes both keys. Hold does not grant
 permission to launch an app in the background or operate the camera shutter.
 Keys without Hold keep their usual response time.
 
-The Windows simulator uses the same workspace and starts with the virtual
-keypad connected. It can save its own layouts, but has no USB connection,
-image upload, or Android permission and foreground-app detection controls.
-The walkthrough below uses the Android host.
+## Windows companion
+
+MX Pocket starts disconnected. **Connect USB keypad** on Home or in Settings
+scans for one wired Logitech MX Creative Keypad (`046D:C354`), opens its
+vendor HID collections and initializes the page and LCD controls. No driver
+installation, elevation or Options+ changes are needed. If discovery finds
+no keypad, check the cable. If the device is busy, reconnect or retry later;
+the app will not force ownership. Disconnect before switching input modes.
+
+| Profile | Physical keypad | Explicit virtual keypad |
+| --- | --- | --- |
+| Focus | Local start/pause, reset, duration adjustments and 15/25/50-minute presets. No completion tone. | Same local timer |
+| Audio | Volume down/up, mute **toggle**, previous, play/pause and next. Transport depends on a compatible media app. “Sent” means Windows accepted the key events, not that playback changed. | In-memory volume, mute, track and playback. No Windows input. |
+| Tic Tac Toe | One- or two-player local game | Same game |
+
+Home is a read-only mirror in USB mode. LCD writes use the same nine rendered
+key faces as the mirror. Diagnostics distinguish initialization and image
+acknowledgments from visible output. The two physical page keys navigate
+available layouts. Ordinary presses act once; a slot with a Hold binding
+selects Tap or Hold **on release** (500 ms threshold on Windows). Disconnecting
+or changing the layout discards stale input. The two page buttons together open the game; either alone exits it.
+
+Choose **Settings → Connect virtual keypad** for clickable Home keys with no
+USB I/O. Phone, Launcher, Studio, Navigation, Teams and OneNote require Android; they
+stay listed with reasons. Windows does not read volume levels, track metadata
+or seek positions, issue absolute mute/unmute commands, run workflows, apply
+foreground rules, or upload user background images. Layouts and workflows can
+be edited and backed-up layouts imported without enabling Android actions.
+Windows desktop data stays local and is not synchronized with the phone.
+
+Build the [x64 Windows JAR](../CONTRIBUTING.md#tooling-and-local-checks)
+with a matching x64 JDK 17/21 (also on ARM64 Windows). Run `java -jar` on the
+generated JAR. Running it does not need the Android SDK. The remainder of this
+walkthrough uses the Android host.
 
 ## Install the Android app
 
@@ -94,11 +141,10 @@ call doesn't require changing Android permissions. See
 
 1. Open Home with no keypad attached. The status is **Not connected**. You can
    browse layouts and see their key faces, but touching a face won't execute it.
-2. In Profiles use **Manage profile > New profile** and create *Desk*. Under
-   **Manage page** create *Tools*. On Desk's root page edit a key, choose
+2. In Profiles use **New profile** and create *Desk*. Open it and use **New page** to create *Tools*. On Desk's root page edit a key, choose
    *Open page: Tools*, and set its label, icon and color. Put *Back* or *Return
    to root* on Tools. Inspect both pages in Profiles. To exercise the bindings,
-   connect the wired keypad and press its keys.
+   choose **Profile settings and rules > Use on keypad**, connect the wired keypad and press its keys.
 3. In Flows duplicate **Keypad check**. Give the copy a name, change a delay
    or add a step, then **Test run** and **Save workflow**. A test executes real
    steps. In Profiles assign the saved workflow to a Tools key. Press that key
@@ -168,7 +214,7 @@ to pause switching. Teams has a built-in app match: once step 2 below is set
 up, opening Teams selects **Teams / Work** without a custom rule. This does
 not join a call or press a key.
 
-1. In **Profiles**, pick **Studio** in the **Profile** picker. Under **Context rules > Choose app**, tap **Camera** (Samsung Camera on a Galaxy). Pick **Audio** and repeat for **YouTube Music**. You can choose a custom profile the same way. Saving a mapping does not enable detection, change key bindings or launch anything.
+1. In **Profiles**, open **Studio > Profile settings and rules**. Under **Context rules > Choose app**, tap **Camera** (Samsung Camera on a Galaxy). Open **Audio** and repeat for **YouTube Music**. You can choose a custom profile the same way. Saving a mapping does not enable detection, change key bindings or launch anything.
 2. Enable **Automatic profile switching** and **Detect foreground apps**. Tap **Open usage access settings**, select **MX Pocket**, and allow Usage Access. No notification, accessibility or overlay access is needed for detection. Turn detection off here or revoke the Android grant at any time.
 3. With the physical keypad connected and the phone unlocked, open one app, then the other. After a stable match the keypad shows that profile’s last page. Opening Camera does **not** take a picture, and opening YouTube Music does **not** start playback. Studio’s optional physical shutter and recording controls require separate setup for the default camera; mapping Camera does not enable them.
 

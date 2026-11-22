@@ -21,6 +21,19 @@ import org.junit.Test
 class KeypadGridTest {
     @get:Rule val rule = createComposeRule()
 
+    @Test fun svgPageCapsRouteSimulatorNavigationWithoutDispatchingAnLcdKey() {
+        val pages = mutableListOf<Int>()
+        rule.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(1f)) {
+                KeypadGrid(List(9) { KeypadTile("Tile", color = Color.Blue) }, { _, _ -> error("LCD key") },
+                    Modifier.width(312.dp).testTag("panel"), onPage = { pages.add(it) })
+            }
+        }
+        val panel = rule.onNodeWithTag("panel")
+        panel.performTouchInput { click(Offset(75f, 307f)); click(Offset(156f, 307f)) }
+        rule.runOnIdle { assertEquals(listOf(-1, 1), pages) }
+    }
+
     @Test fun narrowRtlBoardMasksFacesAndRoutesEachWindowToItsOwnKey() {
         val key = ImageBitmap(118, 118)
         val canvas = Canvas(key)

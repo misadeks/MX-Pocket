@@ -10,6 +10,7 @@ import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -56,7 +57,7 @@ fun WorkflowScreen(
     backHandler(view != Section.Library, ::close)
     val running = status?.phase in setOf(WorkflowPhase.RUNNING, WorkflowPhase.CONFIRMATION)
     key(view) {
-        WorkspaceColumn {
+        WorkspaceColumn(wide = view == Section.Library) {
             if (view != Section.Library) TextButton(onClick = ::close, enabled = !saving) { Text(WorkflowCopy.Back.text()) }
             WorkspaceTitle(view.title.text())
             state.error?.let { ErrorLine(it.text()) }
@@ -119,40 +120,22 @@ fun WorkflowScreen(
                         Text(if (callbacks.test != null) WorkflowCopy.BuildAndTest.text() else WorkflowCopy.BuildAndEdit.text())
                         ActionRow {
                             PocketButton(WorkflowCopy.New.text(), { open(WorkflowDefinition(name = WorkflowCopy.Untitled.text())) }, icon = ShellIcon.PLUS, tone = PocketTone.SUCCESS, compact = true)
-                            PocketButton(WorkflowCopy.History.text(), { section = Section.History; message = null }, icon = ShellIcon.HISTORY, compact = true)
-                            PocketButton(WorkflowCopy.Endpoints.text(), { section = Section.Endpoints; message = null }, icon = ShellIcon.LIST, compact = true)
+                            PocketButton(WorkflowCopy.History.text(), { section = Section.History; message = null }, icon = ShellIcon.HISTORY, compact = true, enabled = callbacks.run != null || callbacks.test != null || state.history.isNotEmpty())
+                            PocketButton(WorkflowCopy.Endpoints.text(), { section = Section.Endpoints; message = null }, icon = ShellIcon.LIST, compact = true, enabled = callbacks.endpoints != null || state.endpoints.isNotEmpty())
                         }
                         PocketLabel(WorkflowCopy.Configured.text(saved.size))
                         if (saved.isEmpty()) Text(WorkflowCopy.EmptyLibrary.text())
-                        for (workflow in saved) {
-                            PocketCard {
-                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                PocketDot(if (running && status?.workflowId == workflow.id) PocketColors.accent else PocketColors.faint)
-                                Column(Modifier.weight(1f).clickable { open(workflow) }.padding(vertical = 8.dp)) {
-                                    Text(workflow.name, style = MaterialTheme.typography.titleMedium)
-                                    Text("${WorkflowCopy.Steps.text(workflow.steps.size)} · ${workflow.trigger.kind.label}",
-                                        style = MaterialTheme.typography.bodySmall)
+                    else BoxWithConstraints(Modifier.fillMaxWidth()) {
+                        val columns = if (maxWidth >= 840.dp * LocalDensity.current.fontScale.coerceAtLeast(1f)) 2 else 1
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            for (row in saved.chunked(columns)) Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                for (workflow in row) Box(Modifier.weight(1f)) {
+                                    WorkflowCard(workflow, state, running, callbacks, ::open, { remove = workflow }, { message = it })
                                 }
-                            }
-                            if (workflow.steps.isNotEmpty()) PocketInner {
-                                workflow.steps.take(4).forEachIndexed { i, step ->
-                                    val label = if (step.kind == StepKind.ACTION) state.actions.firstOrNull { it.id == step.target }?.displayLabel else null
-                                    Text("${i + 1}. ${label ?: step.kind.label}", style = MaterialTheme.typography.bodyMedium)
-                                }
-                                if (workflow.steps.size > 4) Text(WorkflowCopy.More.text(workflow.steps.size - 4), style = MaterialTheme.typography.bodySmall)
-                            }
-                            ActionRow {
-                                PocketButton(WorkflowCopy.Run.text(), { message = callbacks.run?.invoke(workflow) }, icon = ShellIcon.PLAY,
-                                    tone = PocketTone.SUCCESS, enabled = !running && callbacks.run != null, compact = true)
-                                PocketButton(WorkflowCopy.Edit.text(), { open(workflow) }, icon = ShellIcon.EDIT, tone = PocketTone.ACCENT, compact = true)
-                                PocketButton(WorkflowCopy.Duplicate.text(), { open(workflow.duplicate()) }, icon = ShellIcon.COPY, compact = true)
-                                PocketButton(WorkflowCopy.Delete.text(), { remove = workflow }, icon = ShellIcon.DELETE, tone = PocketTone.DANGER,
-                                    enabled = callbacks.delete != null, compact = true)
-                            }
-                            if (!running && status?.workflowId == workflow.id) Text(status.displayMessage(),
-                                Modifier.semantics { liveRegion = LiveRegionMode.Polite }, style = MaterialTheme.typography.labelLarge)
+                                if (row.size < columns) Spacer(Modifier.weight(1f))
                             }
                         }
+                    }
                 }
             }
         }
@@ -166,6 +149,38 @@ fun WorkflowScreen(
             DecisionDialog(WorkflowCopy.WorkflowConfirmation.text(), request.displayText(state.actions), WorkflowCopy.Allow.text(),
                 { respond(request, true) }, { respond(request, false) })
         }
+    }
+}
+
+@Composable
+private fun WorkflowCard(workflow: WorkflowDefinition, state: WorkflowUiState, running: Boolean, callbacks: WorkflowCallbacks,
+    open: (WorkflowDefinition) -> Unit, remove: () -> Unit, setMessage: (String?) -> Unit) {
+    val status = state.status?.takeIf { it.workflowId == workflow.id }
+    PocketCard {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PocketDot(if (running && status != null) PocketColors.accent else PocketColors.faint)
+            Column(Modifier.weight(1f).clickable { open(workflow) }.heightIn(min = 48.dp), verticalArrangement = Arrangement.Center) {
+                Text(workflow.name, style = MaterialTheme.typography.titleMedium)
+                Text("${WorkflowCopy.Steps.text(workflow.steps.size)} · ${workflow.trigger.kind.label}", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        if (workflow.steps.isNotEmpty()) PocketInner {
+            workflow.steps.take(4).forEachIndexed { i, step ->
+                val label = if (step.kind == StepKind.ACTION) state.actions.firstOrNull { it.id == step.target }?.displayLabel else null
+                Text("${i + 1}. ${label ?: step.kind.label}", style = MaterialTheme.typography.bodyMedium)
+            }
+            if (workflow.steps.size > 4) Text(WorkflowCopy.More.text(workflow.steps.size - 4), style = MaterialTheme.typography.bodySmall)
+        }
+        ActionRow {
+            PocketButton(WorkflowCopy.Run.text(), { setMessage(callbacks.run?.invoke(workflow)) }, icon = ShellIcon.PLAY,
+                tone = PocketTone.SUCCESS, enabled = !running && callbacks.run != null, compact = true)
+            PocketButton(WorkflowCopy.Edit.text(), { open(workflow) }, icon = ShellIcon.EDIT, tone = PocketTone.ACCENT, compact = true)
+            PocketButton(WorkflowCopy.Duplicate.text(), { open(workflow.duplicate()) }, icon = ShellIcon.COPY, compact = true)
+            PocketButton(WorkflowCopy.Delete.text(), remove, icon = ShellIcon.DELETE, tone = PocketTone.DANGER,
+                enabled = callbacks.delete != null, compact = true)
+        }
+        if (!running && status != null) Text(status.displayMessage(), Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            style = MaterialTheme.typography.labelLarge)
     }
 }
 

@@ -29,6 +29,7 @@
     <string name="audio">Commandes multimédias</string>
     <string name="media_access">Sessions multimédias de MX Pocket</string>
     <string name="teams_call_access">Appels Teams de MX Pocket</string>
+    <string name="phone_call_access">Appels téléphoniques de MX Pocket</string>
     <string name="teams_toolbar_access">Commandes d’appel Teams de MX Pocket</string>
     <string name="teams_toolbar_description">Lorsque le pavé est connecté et que l’option Teams est activée, MX Pocket repère les commandes d’appel visibles dans Teams. Une pression sur la touche centrale du pavé peut activer ou couper le micro de la réunion si la commande est identifiée. MX Pocket ne lit pas les messages, ne rejoint pas les réunions et ne décroche ni ne raccroche.</string>
     <string name="navigation_access">Navigation de MX Pocket</string>

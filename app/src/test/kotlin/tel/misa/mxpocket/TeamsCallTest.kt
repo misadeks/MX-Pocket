@@ -123,6 +123,7 @@ class TeamsCallTest {
         val audio = app.getSystemService(AudioManager::class.java)
         fun volume() = audio.getStreamVolume(AudioManager.STREAM_MUSIC)
         fun probeEdge(down: Boolean) { app.emit(KeyEvent(1, down)); main.idle() }
+        session.selectProfile("focus")
         session.connect(session.reserve(device)!!, usb, device, {}, { error("Unexpected launch") })
         try {
             // Let the IO dispatcher finish the ordinary package-discovery pass.

@@ -3,6 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 android {
+    sourceSets["main"].java.srcDir("src/jvmShared/kotlin")
     namespace = "tel.misa.mxpocket.driver"
     compileSdk = 35
     defaultConfig {

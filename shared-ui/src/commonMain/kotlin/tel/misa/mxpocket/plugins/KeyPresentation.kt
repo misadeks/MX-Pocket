@@ -6,11 +6,14 @@ import tel.misa.mxpocket.deck.DeckActions
 import tel.misa.mxpocket.decks.DeckCommand
 import tel.misa.mxpocket.decks.navigationCommands
 import tel.misa.mxpocket.i18n.KeypadCopy as K
+import tel.misa.mxpocket.shared.ui.PocketStyle
 
 sealed interface KeyGlyph
 enum class PlayerGlyph : KeyGlyph {
     VOLUME_DOWN, MUTE, UNMUTE, VOLUME_UP, PREVIOUS, PLAY, PAUSE, PLAY_PAUSE, NEXT, BACK_10, TRACK, FORWARD_10
 }
+
+private val KeyGlyph?.isTenSecondSeek get() = this == PlayerGlyph.BACK_10 || this == PlayerGlyph.FORWARD_10
 
 data class VolumeLevel(val current: Int, val maximum: Int, val muted: Boolean) {
     val fraction: Float? get() = if (maximum <= 0) null else if (muted) 0f else current.coerceIn(0, maximum).toFloat() / maximum
@@ -22,7 +25,10 @@ data class KeyTile(val label: String, val footer: String, val background: Int,
     val icon: String = "", val enabled: Boolean = true, val glyph: KeyGlyph? = null,
     val readOnly: Boolean = false, val showLabel: Boolean = true, val showFooter: Boolean = true,
     val primary: Boolean = false, val volumeLevel: VolumeLevel? = null, val quietFace: Boolean = false,
-    val playerFace: Boolean = false, val levelFraction: Float? = null)
+    val playerFace: Boolean = false, val levelFraction: Float? = null, val selection: KeySelection? = null,
+    val detail: String = "") {
+    val backgroundOnly get() = !enabled && glyph.isTenSecondSeek
+}
 
 data class PluginFrame(val keys: List<KeyTile>, val page: Int = 0) {
     init { require(keys.size == 9) { "A plugin frame must contain exactly nine keys" } }
@@ -48,22 +54,20 @@ fun phoneFrame(): PluginFrame {
     val glyphs = listOf(DeckGlyph.CAMERA, DeckGlyph.SETTINGS, DeckGlyph.PHONE, DeckGlyph.WEB, null,
         DeckGlyph.TIMER, DeckGlyph.TIMER, PlayerGlyph.TRACK, DeckGlyph.REFRESH)
     return PluginFrame(listOf(K.Camera, K.Settings, K.Dialer, K.Web, K.Phone, K.Alarm, K.Focus, K.Audio, K.Repaint)
-        .mapIndexed { i, text -> KeyTile(text.text(), K.Phone.text(), 0xff49345f.toInt(), glyph = glyphs[i],
+        .mapIndexed { i, text -> KeyTile(text.text(), K.Phone.text(), PocketStyle.accent(when (i) {
+            6 -> "focus"; 7 -> "audio"; else -> "phone"
+        }).fill, glyph = glyphs[i],
             readOnly = i == 4, showFooter = false) })
 }
 
-fun DeckKey.bindingGlyph(): KeyGlyph? = when (action?.id) {
+private fun DeckKey.launcherIdentity() = when (action?.id) {
+    DeckActions.PROFILE -> PocketStyle.accent(action.params[DeckActions.PROFILE_ID].orEmpty())
+    "phone.open" -> if (action.params["app"] == "ONENOTE") PocketStyle.accent("onenote") else null
+    else -> null
+}
+
+fun DeckKey.bindingGlyph(): KeyGlyph? = launcherIdentity()?.keyGlyph ?: when (action?.id) {
     DeckActions.PAGE -> DeckGlyph.FOLDER
-    DeckActions.PROFILE -> when (action.params[DeckActions.PROFILE_ID]) {
-        "audio" -> PlayerGlyph.TRACK
-        "focus" -> DeckGlyph.TIMER
-        "phone" -> DeckGlyph.PHONE
-        "studio" -> DeckGlyph.CAMERA
-        "navigation" -> DeckGlyph.COMPASS
-        "launcher" -> DeckGlyph.GRID
-        "game.xo" -> DeckGlyph.GAME
-        else -> DeckGlyph.PROFILE
-    }
     DeckActions.BACK -> NavigationGlyph.BACK
     DeckActions.ROOT -> NavigationGlyph.HOME
     "workflow.run" -> DeckGlyph.FLOW
@@ -71,6 +75,7 @@ fun DeckKey.bindingGlyph(): KeyGlyph? = when (action?.id) {
 }
 
 fun DeckCommand.legend(): KeyGlyph? = when (this) {
+    DeckCommand.TEAMS_OPEN -> IntegrationApp.TEAMS
     DeckCommand.STUDIO, DeckCommand.SHUTTER, DeckCommand.PHOTO -> DeckGlyph.CAMERA
     DeckCommand.VIDEO, DeckCommand.START_VIDEO -> DeckGlyph.VIDEO
     DeckCommand.STOP_VIDEO -> DeckGlyph.STOP
@@ -129,7 +134,11 @@ fun DeckKey.bindingPreview(): KeyTile? {
     if (command.deck == "navigation") return command.navigationFace(null).copy(enabled = true, readOnly = false,
         footer = "", showFooter = false)
     val transport = command.legend() is PlayerGlyph
-    return KeyTile(command.displayLabel, "", if (transport) 0xff303438.toInt() else color, glyph = command.legend(),
+    return KeyTile(command.displayLabel, "", when {
+        command == DeckCommand.TEAMS_OPEN -> PocketStyle.accent(command.deck).fill
+        transport -> 0xff303438.toInt()
+        else -> color
+    }, glyph = command.legend(),
         playerFace = transport, showLabel = !transport, showFooter = false)
 }
 
@@ -142,11 +151,23 @@ val studioSlots = listOf(DeckCommand.SHUTTER, DeckCommand.START_VIDEO, DeckComma
 /** Identical override order for the LCD, phone mirror and offline desktop host. */
 fun DeckKey.present(native: KeyTile?, fallbackLabel: String, footer: String, available: Boolean): KeyTile {
     val title = label.ifBlank { native?.label ?: fallbackLabel }
+    // Some hosts supply only a label for an unsupported legacy Audio slot.
+    val glyph = native?.glyph ?: bindingGlyph() ?: if (!available && action?.params?.get("pluginId") == "audio")
+        bindingPreview()?.glyph?.takeIf { it.isTenSecondSeek } else null
+    val unavailableNote = !available && action?.id == "plugin.key" && action.params["pluginId"] == "onenote" &&
+        (native?.quietFace != true || label.isNotBlank())
     return (native ?: KeyTile(title, footer, color)).copy(label = title, footer = footer,
-        glyph = native?.glyph ?: bindingGlyph(), quietFace = native?.quietFace == true || action == null && label.isBlank(),
+        glyph = if (unavailableNote) OneNoteLegend(OneNoteMark.UNAVAILABLE) else glyph,
+        selection = native?.selection?.takeIf { available }, detail = native?.detail.orEmpty().takeIf { available }.orEmpty(),
+        quietFace = native?.quietFace == true || action == null && label.isBlank(),
         showLabel = label.isNotBlank() || (action != null || native != null) && native?.showLabel != false,
         // Hide repeated deck names, not an explicit status update for this physical key.
-        showFooter = native?.showFooter != false || !native.playerFace && footer.isNotBlank() && footer != native.footer,
-        background = if (!available) 0xff494c51.toInt() else if (color == DeckKey().color) native?.background ?: color else color,
+        showFooter = !(native?.quietFace == true && action?.params?.get("pluginId") == "onenote" && label.isBlank()) &&
+            (native?.showFooter != false || !native.playerFace && footer.isNotBlank() && footer != native.footer),
+        background = when {
+            !available && !glyph.isTenSecondSeek -> 0xff494c51.toInt()
+            color != DeckKey().color -> color
+            else -> launcherIdentity()?.fill ?: native?.background ?: color
+        },
         icon = icon.ifBlank { native?.icon.orEmpty() }, enabled = available)
 }

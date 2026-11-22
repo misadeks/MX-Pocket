@@ -5,6 +5,7 @@ plugins {
 }
 
 kotlin {
+    sourceSets["main"].kotlin.srcDir(rootProject.file("mx-driver/src/jvmShared/kotlin"))
     compilerOptions.jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
 }
 java {
@@ -12,9 +13,17 @@ java {
     targetCompatibility = JavaVersion.VERSION_17
 }
 
+tasks.processResources {
+    from(rootProject.file("mx-driver/src/main/assets/mx-pocket-provenance.txt"))
+}
+
 dependencies {
     implementation(project(":shared-ui"))
-    implementation(compose.desktop.currentOs)
+    // Ship the native Skiko renderer for the supported Windows JVM, even on ARM64 hosts.
+    if (System.getProperty("os.name").startsWith("Windows")) implementation(compose.desktop.windows_x64)
+    else implementation(compose.desktop.currentOs)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+    implementation("net.java.dev.jna:jna-platform:5.17.0")
     testImplementation(kotlin("test-junit"))
 }
 

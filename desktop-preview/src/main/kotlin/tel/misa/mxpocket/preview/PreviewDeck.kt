@@ -1,5 +1,7 @@
 package tel.misa.mxpocket.preview
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import tel.misa.mxpocket.FocusTimer
 import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.*
@@ -16,9 +18,9 @@ import tel.misa.mxpocket.shared.ui.PocketScreenEvent
 import tel.misa.mxpocket.shared.ui.VirtualGrid
 import tel.misa.mxpocket.shared.ui.virtualGrid
 
-/** Uses the same saved deck and folder histories as the editor. Device effects never leave this host. */
-class PreviewDeck(val repository: DeckRepository) {
-    private val deck get() = repository.state.value
+/** Owns the local plugins; only a physical-input dispatch may call the Windows adapter. */
+class PreviewDeck(val repository: DeckRepository, private val sendMedia: (MediaKey) -> String = ::sendWindowsMedia) {
+    private val deck get() = repository.operatingState.value
     private val focus = FocusTimer()
     private val xo = TicTacToeGame()
     private var volume = 6
@@ -29,23 +31,41 @@ class PreviewDeck(val repository: DeckRepository) {
     private val knownPlugins = defaultDeck().profiles.map { it.id }.toSet()
     private var lastSnapshot: DeckState? = null
     private var generation = 0L
-    fun resetInput() { generation++ }
+    val pageButtons = PageButtons()
+    fun resetInput() { generation++; pageButtons.reset() }
+    private var simulation by androidx.compose.runtime.mutableStateOf(false)
+    var simulator: Boolean
+        get() = simulation
+        set(value) { if (simulation != value) { simulation = value; resetInput() } }
 
     val profileName get() = deck.activeProfile.displayName()
-    val profileIndex get() = deck.profiles.indexOf(deck.activeProfile)
-    val profileCount get() = deck.profiles.size
+    val profileIndex get() = deck.visibleProfiles.indexOf(deck.activeProfile)
+    val profileCount get() = deck.visibleProfiles.size
     val profileId get() = deck.activeProfileId
-    val profiles get() = deck.profiles.map { it.id to it.displayName() }
+    val profiles get() = deck.visibleProfiles.map { it.id to it.displayName() }
+
+    fun setPluginEnabled(id: String, enabled: Boolean) {
+        require(id in knownPlugins)
+        repository.setDisabledPlugins(if (enabled) deck.disabledPluginIds - id else deck.disabledPluginIds + id)
+    }
 
     fun select(id: String) {
-        repository.selectProfile(id).getOrThrow()
+        profileReason(id)?.let { throw IllegalArgumentException(it) }
+        if (id == PROFILE_HOME) repository.showHome() else repository.openProfileRoot(id).getOrThrow()
     }
 
     fun cycle(delta: Int) {
-        repository.changePage(delta).getOrThrow()
+        if (profileId == GAME_PROFILE) {
+            repository.changePage(delta).getOrThrow()
+            return
+        }
+        val ids = listOf(PROFILE_HOME) + deck.visibleProfiles.filter { profileReason(it.id) == null }.map { it.id }
+        val current = ids.indexOf(profileId)
+        select(ids[Math.floorMod(current.toLong() + delta, ids.size.toLong()).toInt()])
     }
 
     fun tick(now: Long) = focus.tick(now)
+    val timerRunning get() = focus.running
 
     private data class Binding(val plugin: String, val index: Int, val command: DeckCommand? = null)
 
@@ -82,7 +102,15 @@ class PreviewDeck(val repository: DeckRepository) {
             "phone" -> phoneFrame().keys[action.index].let { tile ->
                 if (action.index in 6..7 || tile.readOnly) tile else tile.copy(enabled = false, footer = K.AndroidOnly.text())
             }
-            "audio" -> {
+            "audio" -> if (!simulator) {
+                val control = MediaKey.forSlot(action.index)
+                val glyph = listOf(PlayerGlyph.VOLUME_DOWN, PlayerGlyph.MUTE, PlayerGlyph.VOLUME_UP,
+                    PlayerGlyph.PREVIOUS, PlayerGlyph.PLAY_PAUSE, PlayerGlyph.NEXT).getOrNull(action.index)
+                KeyTile(action.command?.displayLabel ?: control?.label ?: when (action.index) {
+                    6 -> K.SeekBack.text(); 8 -> K.SeekForward.text(); else -> K.NowPlaying.text()
+                }, tel.misa.mxpocket.i18n.DesktopCopy.WindowsMedia.text(), 0xff303438.toInt(), glyph = glyph, playerFace = glyph != null,
+                    showLabel = glyph == null, showFooter = false, enabled = control != null)
+            } else {
                 val i = action.index
                 val level = VolumeLevel(if (muted) 0 else volume, 15, muted)
                 val glyph = listOf(PlayerGlyph.VOLUME_DOWN, when (action.command) {
@@ -128,12 +156,16 @@ class PreviewDeck(val repository: DeckRepository) {
             }
             else -> null
         }
-        val navigation = assigned?.id in setOf(DeckActions.PAGE, DeckActions.PROFILE, DeckActions.BACK, DeckActions.ROOT)
+        val navigation = assigned?.id in setOf(DeckActions.PAGE, DeckActions.PROFILE, DeckActions.BACK, DeckActions.ROOT, MORE_PROFILES)
         val owner = assigned?.slotOwner()
         val ownerAvailable = owner == null || owner == selectedPlugin
-        val available = key.enabled && ownerAvailable && (navigation || native?.enabled == true)
+        val unavailableReason = profileReason(deck.activeProfileId) ?: assigned?.let { bindingReason(it, simulator) }
+        val disabled = action?.plugin in deck.disabledPluginIds || assigned?.targetProfileId() in deck.disabledPluginIds ||
+            assigned?.targetProfileId() == GAME_PROFILE
+        val available = key.enabled && !disabled && unavailableReason == null && ownerAvailable && (navigation || native?.enabled == true && native.label != "-")
         return key.present(native, name ?: "-", when {
-            !key.enabled -> K.Disabled.text()
+            !key.enabled || disabled -> K.Disabled.text()
+            unavailableReason != null -> unavailableReason
             !ownerAvailable -> K.Unavailable.text()
             native != null -> native.footer
             !available && assigned != null -> K.Unavailable.text()
@@ -163,11 +195,12 @@ class PreviewDeck(val repository: DeckRepository) {
     /** A stale Home callback is never reinterpreted as input to the currently displayed slot. */
     fun press(event: PocketScreenEvent.VirtualKey, now: Long): String? = synchronized(repository) {
         val current = board(now)
-        if (event.grid != current.grid) null else press(event.index, now, event.hold, current)
+        if (!simulator || event.grid != current.grid) null else press(event.index, now, event.hold, current)
     }
 
-    fun press(slot: Int, now: Long, hold: Boolean = false): String = synchronized(repository) {
-        press(slot, now, hold, board(now))
+    internal fun physical(slot: Int, grid: VirtualGrid, now: Long, hold: Boolean): String? = synchronized(repository) {
+        val current = board(now)
+        if (simulator || grid != current.grid) null else press(slot, now, hold, current)
     }
 
     private fun press(slot: Int, now: Long, hold: Boolean, current: Board): String {
@@ -188,7 +221,9 @@ class PreviewDeck(val repository: DeckRepository) {
             DeckActions.BACK -> repository.back()
             DeckActions.ROOT -> repository.root()
             DeckActions.PAGE -> repository.openPage(call.params.getValue(DeckActions.PAGE_ID))
-            DeckActions.PROFILE -> repository.selectProfile(call.params.getValue(DeckActions.PROFILE_ID))
+            DeckActions.PROFILE -> if (deck.activeProfileId == PROFILE_HOME) repository.openProfileRoot(call.params.getValue(DeckActions.PROFILE_ID))
+                else repository.selectProfile(call.params.getValue(DeckActions.PROFILE_ID))
+            MORE_PROFILES -> repository.moreProfiles()
             else -> null
         }
         if (navigation != null) return navigation.fold({ K.OnPage.text(profileName, deck.activeProfile.displayPageName(deck.activePage)) },
@@ -210,7 +245,10 @@ class PreviewDeck(val repository: DeckRepository) {
                 6, 7, 8 -> focus.select(listOf(15, 25, 50)[index - 6])
                 else -> return K.FocusRemaining.text(focus.label(now))
             }
-            "audio" -> when (index) {
+            "audio" -> if (!simulator) {
+                val control = MediaKey.forSlot(index) ?: return K.SystemUnavailable.text(label)
+                return sendMedia(control)
+            } else when (index) {
                 -1 -> return (if (command == DeckCommand.VOLUME_LEVEL) K.VolumeDisplayOnly else K.MediaAndroid).text()
                 0, 2 -> {
                     volume = (volume + if (index == 2) 1 else -1).coerceIn(0, 15)
@@ -226,17 +264,7 @@ class PreviewDeck(val repository: DeckRepository) {
                 6, 8 -> return K.NoPreviewSeek.text()
                 7 -> return K.TrackPlaying.text(tracks[track].text())
             }
-            "navigation" -> return when (index) {
-                2 -> K.RecentsNeedsAndroid.text()
-                7 -> K.PreviewAccess.text()
-                else -> K.SimulatedSystem.text(label)
-            }
-            "phone" -> if (index == 6 || index == 7) {
-                val target = if (index == 6) "focus" else "audio"
-                repository.selectProfile(target).getOrElse { return it.message ?: K.ProfileUnavailable.text() }
-                return K.OpenedFromPhone.text(profileName)
-            } else return K.SimulatedPhone.text(label)
-            else -> return K.SimulatedSystem.text(label)
+            else -> return K.SystemUnavailable.text(label)
         }
         return if (plugin == "focus") K.FocusRemaining.text(focus.label(now)) else K.PreviewOnly.text(label)
     }

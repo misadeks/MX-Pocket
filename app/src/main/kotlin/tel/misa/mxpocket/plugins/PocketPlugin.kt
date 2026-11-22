@@ -36,7 +36,7 @@ enum class MediaCommand { PLAY_PAUSE, PREVIOUS, NEXT }
 enum class PhoneApp { CAMERA, SETTINGS, DIALER, WEB, ALARMS, ONENOTE }
 
 data class OneNoteSettings(val colors: List<String>, val selectedColor: String?, val thickness: Float, val min: Float, val max: Float, val textColor: Boolean = false, val colorIds: List<String> = colors,
-    val colorValues: List<Int> = emptyList(), val selectedIndex: Int = -1)
+    val colorValues: List<Int?> = emptyList(), val selectedIndex: Int = -1)
 
 sealed interface PluginAction {
     data class Deck(val command: DeckCommand, val component: String? = null) : PluginAction

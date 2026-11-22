@@ -24,7 +24,7 @@ data class ForegroundControls(val enabled: Boolean, val granted: Boolean,
 @Composable
 internal fun RuleSection(profile: DeckProfile, profiles: List<DeckProfile>, signals: Map<String, String>, writable: Boolean,
                          foreground: ForegroundControls?, addApp: (String, () -> Unit) -> Unit,
-                         edit: (Int) -> Unit, remove: (Int) -> Unit) {
+                         edit: (Int) -> Unit, remove: (Int) -> Unit, disabledIds: Set<String>) {
     var showSignals by rememberSaveable { mutableStateOf(false) }
     var choosing by rememberSaveable { mutableStateOf(false) }
     var advanced by rememberSaveable { mutableStateOf(false) }
@@ -52,9 +52,17 @@ internal fun RuleSection(profile: DeckProfile, profiles: List<DeckProfile>, sign
                 results.isEmpty() -> EditorNote(LayoutCopy.NoApps.text())
                 else -> LazyColumn(Modifier.heightIn(max = 320.dp)) { items(results, key = { it.packageId }) { app ->
                     val mapped = profiles.filter { p -> p.rules.any { it.signal == FOREGROUND_APP && it.value == app.packageId } }
+                    val visible = mapped.filterNot { it.id in disabledIds || it.id == GAME_PROFILE }
                     TextButton(onClick = { addApp(app.packageId) { choosing = false } },
                         enabled = writable && mapped.isEmpty() && app.packageId.length <= DeckLimits.RULE_VALUE) {
-                        Column { Text(app.label); Text(if (mapped.isEmpty()) app.packageId else LayoutCopy.MappedTo.text(mapped.joinToString { it.displayName() })) }
+                        Column {
+                            Text(app.label)
+                            Text(when {
+                                mapped.isEmpty() -> app.packageId
+                                visible.isEmpty() -> LayoutCopy.MappedUnavailable.text()
+                                else -> LayoutCopy.MappedTo.text(visible.joinToString { it.displayName() })
+                            })
+                        }
                     }
                 } }
             }

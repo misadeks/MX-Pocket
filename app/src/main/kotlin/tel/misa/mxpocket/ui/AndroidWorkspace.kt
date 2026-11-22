@@ -32,20 +32,20 @@ internal fun AndroidWorkspace(
     val plugins = session.plugins.descriptors.map { plugin ->
         PluginItem(plugin.id, plugin.displayTitle(), plugin.id !in disabled,
             plugin.capabilities.joinToString { it.displayName() }, session.pluginDetails(plugin.id),
-            deck.profiles.any { it.id == plugin.id }, deck.defaultProfileId == plugin.id, session.pluginSettings(plugin.id)?.first)
+            deck.visibleProfiles.any { it.id == plugin.id }, deck.defaultProfileId == plugin.id, session.pluginSettings(plugin.id)?.first)
     }
-    PocketWorkspace(tab, select, state, plugins, event, editor = {
+    PocketWorkspace(tab, select, state, plugins, event, profiles = {
         val options = buildList {
             add(BindingOption(LayoutCopy.Back.text(), ActionCall(DeckActions.BACK)))
             add(BindingOption(LayoutCopy.Root.text(), ActionCall(DeckActions.ROOT)))
-            deck.profiles.forEach { add(BindingOption(LayoutCopy.BindProfile.text(it.displayName()), ActionCall(DeckActions.PROFILE, mapOf("profileId" to it.id)))) }
+            deck.visibleProfiles.forEach { add(BindingOption(LayoutCopy.BindProfile.text(it.displayName()), ActionCall(DeckActions.PROFILE, mapOf("profileId" to it.id)))) }
             flows.forEach { add(BindingOption(LayoutCopy.BindWorkflow.text(it.name), ActionCall("workflow.run", mapOf("workflowId" to it.id)))) }
             add(BindingOption(LayoutCopy.PlaySound.text(), ActionCall("sound.play")))
-            addAll(factoryKeyBindings)
+            addAll(availableFactoryKeyBindings(disabled))
             session.platformBindings().forEach { (label, call) -> add(BindingOption(label, call)) }
         }
-        LayoutEditor(remember(session.deck) { session.deck.asEditorStore() }, options, signals, onExport, onImport,
-            live = state, foreground = ForegroundControls(detection, usageGranted, session::setDetectForegroundApps, onUsageSettings) {
+        SavedProfilesEditor(remember(session.deck) { session.deck.asEditorStore() }, disabled, options, signals, onExport, onImport,
+            foreground = ForegroundControls(detection, usageGranted, session::setDetectForegroundApps, onUsageSettings) {
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     try {
                         session.favoriteApps.discover().mapNotNull { app ->

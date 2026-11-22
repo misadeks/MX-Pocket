@@ -13,6 +13,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import org.junit.Rule
 import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import org.junit.Test
@@ -37,6 +38,49 @@ import kotlin.math.abs
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class PlayerRenderTest {
     @get:Rule val ui = createAndroidComposeRule<ComponentActivity>()
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test fun unavailableSeekShowsOnlyItsBackgroundUntilThePlayerSupportsThatDirection() = runTest {
+        val state = MutableStateFlow(DeckState(media = MediaDeckState(access = true)))
+        val engine = PluginEngine(BuiltInPlugins.create("Focus", "Audio", "Phone"), this, { 0 }, { AudioSnapshot(6, 15) },
+            { _, _ -> error("Render requested input") }, {}, { _, e -> throw e }, state)
+        val images = KeyImages { null }
+        val cover = Bitmap.createBitmap(480, 480, Bitmap.Config.ARGB_8888).apply {
+            Canvas(this).drawPaint(Paint().apply { shader = LinearGradient(0f, 480f, 480f, 0f,
+                Color.BLUE, Color.YELLOW, Shader.TileMode.CLAMP) })
+        }
+        engine.select("audio"); engine.setEnabled(true)
+        try {
+            for (art in listOf(null, cover)) {
+                images.useArtwork(art)
+                for (supported in listOf(DeckCommand.BACK_10, DeckCommand.FORWARD_10, DeckCommand.BACK_10)) {
+                    state.value = DeckState(media = MediaDeckState(access = true, supported = setOf(supported)))
+                    runCurrent()
+                    val keys = engine.render().keys
+                    for ((index, command) in listOf(6 to DeckCommand.BACK_10, 8 to DeckCommand.FORWARD_10)) {
+                        val available = command == supported
+                        assertEquals(available, keys[index].enabled)
+                        val custom = DeckKey(label = "Jump", icon = "J", color = Color.MAGENTA, action = ActionCall(command.id))
+                        val native = state.value.tile(command)
+                        for ((face, color) in listOf(keys[index] to AUDIO_BACKGROUND.toInt(),
+                            custom.present(native, command.label, "Status", native.enabled) to custom.color)) {
+                            val r = KeypadProtocol.keyRegion(index)
+                            val blank = if (art == null) Bitmap.createBitmap(r.width, r.height, Bitmap.Config.ARGB_8888)
+                                .apply { eraseColor(color) } else Bitmap.createBitmap(art, r.x, r.y, r.width, r.height)
+                            assertEquals("Key $index, $supported, cover=${art != null}", !available,
+                                blank.sameAs(images.image(index, face)))
+                        }
+                    }
+                    for (index in listOf(3, 5)) {
+                        val track = keys[index]
+                        assertFalse(track.enabled)
+                        val noGlyph = track.copy(glyph = null, quietFace = true)
+                        assertFalse(images.image(index, track).sameAs(images.image(index, noGlyph)))
+                    }
+                }
+            }
+        } finally { engine.close() }
+    }
+
     @Test fun lcdSymbolsAndWrappedTitleSurviveJpegAndPhoneMirrorsTheSameKeys() = runTest {
         val board = ComposeMirror(ui)
         val app = RuntimeEnvironment.getApplication()
@@ -176,7 +220,7 @@ class PlayerRenderTest {
         assertEquals(menu.size, menu.map { it.glyph }.distinct().size)
         val game = TicTacToeGame()
         val picker = game.frame()
-        game.press(2); game.press(0); game.press(4)
+        game.press(8); game.press(0); game.press(4)
         for ((name, frame) in mapOf("folder-menu" to menu, "focus" to FocusTimer().present(0).keys,
             "tic-tac-toe" to picker.keys, "tic-tac-toe-board" to game.frame().keys)) {
             val keys = frame.mapIndexed { index, tile ->

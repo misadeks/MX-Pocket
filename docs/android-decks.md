@@ -1,13 +1,13 @@
 # Android keypad decks
 
-Choose a profile in **Profiles**, then use the connection button at the top of **Home**
-to connect an authorized USB keypad. Press the keys on the device. The phone's mirror
-and profile editor do not run key actions.
+Connect an authorized USB keypad at the top of **Home**. To change the active profile,
+choose **Profiles > [profile name] > Profile settings and rules > Use on keypad**.
+Browsing a saved profile does not switch it, and touching a face on the phone never runs it.
 
 | Deck | How to use it | If access is missing |
 | --- | --- | --- |
 | App Launcher | Choose **Edit favorites**, check apps, then **Done**. Up to seven alphabetical favorites, an edit key and a page key fit on each keypad page. **Next apps** wraps. Real launcher icons appear on both the phone and LCD keys. | No permission prompt. Only exported, currently available `MAIN`/`LAUNCHER` activities in this Android profile are eligible. Removed/deselected targets do not launch. |
-| Media Deck (`audio`) | Top: volume down, mute/unmute, volume up. Middle: previous, play/pause, next. Bottom: back 10 seconds, Now playing, forward 10 seconds. The title is a readout, not a shortcut. Open **Plugins → Audio → Media access** on the phone for optional session access. | Without access, the center transport shows a combined play/pause symbol and sends a standard media key. Volume and mute follow Android's local music stream, not a cast device. Unsupported controls are dimmed. |
+| Media Deck (`audio`) | Top: volume down, mute/unmute, volume up. Middle: previous, play/pause, next. Bottom: back 10 seconds, Now playing, forward 10 seconds. The title is a readout, not a shortcut. Open **Plugins → Audio → Media access** on the phone for optional session access. | Without access, the center transport shows a combined play/pause symbol and sends a standard media key. Volume and mute follow Android's local music stream, not a cast device. An unavailable 10-second seek key shows only the background or cover art. Other unsupported controls stay visible but dimmed. |
 | Pocket Studio | **Open Camera** requests the default photo viewfinder; **Open Video** requests video mode. Neither captures. For keypad input choose **Plugins > Studio > Camera controls** on the phone, enable keypad camera controls and enable **MX Pocket navigation** in Android Accessibility. | With the unlocked camera visible, press **Shutter**, **Record** or **Stop** on the physical Studio deck. Unsupported modes, labels or layouts do nothing. Use the camera's own controls instead. MX Pocket never confirms a saved photo or a recording state. |
 | Android Navigation | Use the keys beside **Select** to focus the previous or next item; use the keys above and below to scroll. **Back** goes back, not to the previous focus target. **Access info** opens the navigation disclosure on the phone; it does not grant or toggle access. | With **System nav off**, Back, focus, select and scroll operate in the visible MX Pocket screen; Home opens the launcher. **Recents** shows **Needs access** and is disabled. With the optional service connected, supported cross-app actions become available. Screens without a suitable focus or scroll target can still reject a press. Password elements, Android settings and system permission surfaces remain excluded from element actions. |
 | Tic Tac Toe | Select **1 Player** (play X against the computer) or **2 Players** (take turns on the same keypad). The nine LCD keys become board squares; empty squares show their key numbers. After a win or draw, tap any key to choose a mode again. | No phone touchscreen, game-specific permission or network access is needed during play. An active keypad session is required. |
@@ -50,8 +50,8 @@ on notifications. Spotify and other players use the same Android interface:
 there is no Spotify sign-in, SDK, playlist browser or downloaded artwork.
 While unlocked on **Audio**, the local cover spans the layout preview on Home
 and all nine LCD regions on a connected keypad, paused or playing. With hardware
-connected, Home mirrors the live keys as a display only; **Profiles > Swap keys** shows
-the active key faces without running their actions. A three-pixel black margin around the whole
+connected, Home mirrors the live keys as a display only; opening a page under **Profiles**
+shows its saved bindings rather than the live playback state. A three-pixel black margin around the whole
 cover provides bezel clearance. Each label uses black or white against its own part of the picture.
 Other profiles keep their normal keys even during playback. Without usable
 art, the keys keep a neutral background (or the user's selected backdrop).
@@ -89,6 +89,43 @@ wake the phone or start a player to compensate.
 The navigation service does not subscribe to screen events,
 read element text, inject gestures, or record keys. Both grants are optional
 and revocable in Android settings.
+
+## Carrier calls on the keypad
+
+In **Settings → Phone calls**, turn on **Show calls on the keypad** and grant
+the optional Android Phone permission (`READ_PHONE_STATE`). On Android 12+
+this reads ringing, off-hook or idle for active mobile subscriptions. It does
+not read the call log, contacts, microphone or phone number. With the Phone
+plugin enabled, an authorized USB keypad, the phone unlocked, automatic
+switching on and no manual pin, a call temporarily replaces the current
+layout. “Dialing or active” does **not** mean the other person answered.
+
+Either page key leaves immediately, without accepting or declining. You can
+also choose a layout in the app. Updates for that call won't pull you back;
+only an observed idle state rearms the next switch. If you stay on the call
+view, the previous eligible layout returns when the call ends. No call view
+is saved. There is no phone popup or Android overlay.
+
+On Android 14+, **Show caller and call controls** is a second, independent
+opt-in. Grant notification access to **MX Pocket phone calls**, not the Teams
+or media listener. Android's grant can expose notifications from other apps.
+MX Pocket checks the publisher and Android user before reading the default
+Phone app's [CallStyle](https://developer.android.com/reference/android/app/Notification.CallStyle)
+fields. It uses the display label (name or number) and an embedded bitmap
+if supplied; it doesn't resolve caller URIs, download a photo, look up a
+contact, or store caller data. Home and the desktop simulator do not display
+the caller's identity or photo.
+
+**Key 7 Accept** and **key 9 Decline** appear only while ringing, for a single
+matching Phone notification with two distinct Phone-owned actions. A press
+must match the acknowledged LCD face and a fresh check of the notification
+and carrier state. There is no Hang up key. Use the system Phone app if the
+notification is absent, ambiguous, filtered, unsupported or lacks controls.
+Without usable caller details the keypad says **Private / unknown**. Android
+12–13 supports the state-only view; Android 9–11 needs the system Phone app.
+Lock, disconnect, or loss of Phone permission withdraws the view; loss of
+notification access removes caller details and actions. Both options default
+off. No dialer-role change is required.
 
 ## Teams on this phone
 

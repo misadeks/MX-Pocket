@@ -142,14 +142,23 @@ class BuiltInPluginsTest {
         runCurrent()
         val tiles = engine.render().keys
         assertEquals(listOf("Green pen", "Red pen", "Light Green pen", "Dark Blue pen",
-            "Yellow highl", "Aqua highl", "Stroke Eraser", "Shape select", "Lasso select"),
+            "Yellow highlighter", "Aqua highlighter", "Stroke Eraser", "Shape select", "Lasso select"),
             tiles.map { it.label })
         assertTrue(tiles.all { it.enabled })
-        assertEquals(0xffa56eff.toInt(), tiles[6].background)
-        assertEquals(0xff7719aa.toInt(), tiles[0].background)
+        assertEquals(KeySelection.ON, tiles[6].selection)
+        assertEquals(KeySelection.OFF, tiles[0].selection)
+        assertEquals(OneNoteLegend(OneNoteMark.HIGHLIGHTER, 0xffffff00.toInt(), 20f), tiles[4].glyph)
         (0..8).forEach(::tap)
         assertEquals(descriptions.map { PluginAction.AccessibilityClick(it) }, actions)
 
+        toolbar = toolbar.reversed()
+        testScheduler.advanceTimeBy(251); runCurrent()
+        assertEquals(tiles.reversed(), engine.render().keys)
+        tap(4)
+        assertEquals(PluginAction.AccessibilityClick(descriptions[4]), actions.last())
+        tap(8)
+        assertEquals(PluginAction.AccessibilityClick(descriptions[0]), actions.last())
+        assertEquals(KeySelection.OFF, engine.render().keys[8].selection)
         toolbar = emptyList()
         testScheduler.advanceTimeBy(250)
         runCurrent()
@@ -160,6 +169,24 @@ class BuiltInPluginsTest {
         assertTrue(actions.isEmpty())
         engine.close()
     }
+    @Test fun partialToolDescriptionsAndAmbiguousSelectionsNeverInventInkOrState() {
+        val faces = OneNoteFaces(null)
+        val violet = "Unmapped violet color, thickness 200 percent, highlighter options"
+        val pen = "thickness 2,5 percent, pen options"
+        val unfamiliar = "Werkzeug options"
+        val keys = faces.draw(listOf(violet, pen, unfamiliar, pen).map { it to it }, pen).keys
+        assertEquals(OneNoteLegend(OneNoteMark.HIGHLIGHTER), keys[0].glyph)
+        assertEquals(OneNoteLegend(OneNoteMark.PEN, widthPercent = 2.5f), keys[1].glyph)
+        assertEquals(OneNoteLegend(OneNoteMark.TOOL), keys[2].glyph)
+        assertTrue(keys.take(4).all { it.enabled && it.selection == KeySelection.UNKNOWN })
+        assertTrue(keys.drop(4).all { !it.enabled && it.selection == null && it.glyph == null })
+        val palette = faces.palette(OneNoteSettings(listOf("Blue", "Blue", "Alien"), "Blue", 0f, 0f, 1f,
+            colorValues = listOf(0xff0000ff.toInt(), 0xff000080.toInt(), null)), 0)
+        assertNull((palette.keys[2].glyph as OneNoteLegend).ink)
+        assertNull((palette.keys[7].glyph as OneNoteLegend).ink)
+        assertTrue(palette.keys.none { it.selection == KeySelection.ON })
+    }
+
     @Test fun oneNoteSettingsNavigateColorsAndAdjustThickness() = runTest {
         val actions = mutableListOf<PluginAction>()
         val colors = listOf("Yellow", "Orange", "Pink", "Red", "Indigo", "Purple", "Plum")
@@ -183,7 +210,7 @@ class BuiltInPluginsTest {
         tap(4)
         assertEquals("Yellow", engine.render().keys[0].label)
         assertEquals("1 / 2", engine.render().keys[7].label)
-        assertEquals(0xff008c3a.toInt(), engine.render().keys[7].background)
+        assertEquals(0xff008000.toInt(), (engine.render().keys[7].glyph as OneNoteLegend).ink)
         tap(8)
         assertEquals("Plum", engine.render().keys[0].label)
         assertEquals("2 / 2", engine.render().keys[7].label)
@@ -207,14 +234,14 @@ class BuiltInPluginsTest {
         fun tap(index: Int) { engine.key(PluginKeyEvent(index, true)); engine.key(PluginKeyEvent(index, false)) }
         engine.select("onenote"); engine.setEnabled(true); runCurrent()
         assertEquals(labels.take(8) + "Next", engine.render().keys.map { it.label })
-        assertEquals(0xffa56eff.toInt(), engine.render().keys[1].background)
+        assertEquals(KeySelection.ON, engine.render().keys[1].selection)
         tap(0); assertEquals(PluginAction.AccessibilityClick("text:tool0"), actions.last())
         tap(8); assertEquals(labels.drop(8) + listOf("Draw", "Previous"), engine.render().keys.map { it.label })
         tap(7); assertEquals(PluginAction.AccessibilityClick("text:draw"), actions.last())
         settings = OneNoteSettings(listOf("Red", "Blue"), "Red", 0f, 0f, 1f, textColor = true)
         testScheduler.advanceTimeBy(251); runCurrent()
         assertEquals("Red", engine.render().keys[0].label)
-        assertEquals(0xffe71225.toInt(), engine.render().keys[7].background)
+        assertEquals(0xffff0000.toInt(), (engine.render().keys[7].glyph as OneNoteLegend).ink)
         tap(0); assertEquals(PluginAction.OneNoteSetting(color = "Red"), actions.last())
         tap(7); assertEquals(PluginAction.OneNoteSetting(close = true), actions.last())
         settings = null
@@ -262,9 +289,10 @@ class BuiltInPluginsTest {
             colorValues = listOf(0xff0000ff.toInt(), 0xff000080.toInt()), selectedIndex = 1)
         testScheduler.advanceTimeBy(251); runCurrent()
         val keys = engine.render().keys
-        assertEquals(0xff0000ff.toInt(), keys[0].background)
-        assertEquals(0xff000080.toInt(), keys[1].background)
-        assertEquals(keys[1].background, keys[7].background)
+        assertEquals(0xff0000ff.toInt(), (keys[0].glyph as OneNoteLegend).ink)
+        assertEquals(0xff000080.toInt(), (keys[1].glyph as OneNoteLegend).ink)
+        assertEquals(keys[1].glyph, keys[7].glyph)
+        assertEquals(listOf(KeySelection.OFF, KeySelection.ON), keys.take(2).map { it.selection })
         tap(1); assertEquals(PluginAction.OneNoteSetting(color = "color:1:Blue"), actions.last())
         engine.close()
     }

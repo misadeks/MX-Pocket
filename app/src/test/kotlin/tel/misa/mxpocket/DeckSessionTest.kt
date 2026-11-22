@@ -59,6 +59,8 @@ class DeckSessionTest {
         repo.save().getOrThrow()
         val reloaded = app.createSession()
         reloaded.attach(screen)
+        assertEquals(PROFILE_HOME, reloaded.deck.operatingState.value.activeProfileId)
+        reloaded.openProfile("studio")
         verifyLoaded(reloaded, 2)
         // Explicit v2 actions are not positional plugin bindings.
         reloaded.deck.setKey("studio","root",0,DeckKey(action = ActionCall("media.volume-down"))).getOrThrow()
@@ -146,6 +148,7 @@ class DeckSessionTest {
                 override suspend fun setKeyImage(index: Int, bitmap: Bitmap) {}
             }
         }
+        session.selectProfile("focus")
         app.connectKeypad(session)
         emit(KeyEvent(1,true))
         main.idle()

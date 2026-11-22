@@ -1,5 +1,6 @@
 package tel.misa.mxpocket
 
+import tel.misa.mxpocket.i18n.CallCopy
 import tel.misa.mxpocket.ui.DeviceCopy as D
 import tel.misa.mxpocket.i18n.WorkspaceCopy as W
 import tel.misa.mxpocket.i18n.displayName
@@ -24,10 +25,13 @@ import android.provider.Settings
 import android.view.KeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -102,6 +106,11 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
         if (target != null) {
             if (granted) advance() else cancelAttempt(D.AllowNotifications.text())
         }
+    }
+    private val callStatePermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (!granted) session.message(CallCopy.PhonePermissionDenied.text())
+        session.refreshPhoneCall()
+        render()
     }
     private val imagePicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) lifecycleScope.launch {
@@ -194,10 +203,13 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             PocketTheme(ThemePreference.current(this)) {
                 presentation?.let { state ->
                     BackHandler(tab != WorkspaceTab.HOME) { showTab(WorkspaceTab.HOME) }
-                    AndroidWorkspace(tab, ::showTab, session, state, ::handleScreenEvent,
-                        usageGranted = usageGranted, onUsageSettings = ::openUsageSettings,
-                        onExport = { layoutSaver.launch("mx-pocket-layouts.json") },
-                        onImport = { layoutPicker.launch(arrayOf("application/json","text/*","application/octet-stream")) })
+                    val icons by session.integrationIcons.collectAsState()
+                    CompositionLocalProvider(LocalIntegrationIcons provides remember(icons) { icons.mapValues { it.value.asImageBitmap() } }) {
+                        AndroidWorkspace(tab, ::showTab, session, state, ::handleScreenEvent,
+                            usageGranted = usageGranted, onUsageSettings = ::openUsageSettings,
+                            onExport = { layoutSaver.launch("mx-pocket-layouts.json") },
+                            onImport = { layoutPicker.launch(arrayOf("application/json","text/*","application/octet-stream")) })
+                    }
                 }
                 if (shortcutDisclosure) DirectShortcutConsentDialog(Settings.canDrawOverlays(this),
                     onConfirm = ::confirmDirectShortcuts, onDismiss = { shortcutDisclosure = false })
@@ -395,7 +407,7 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
                 session.message(D.RevokeOverlay.text())
             } else shortcutDisclosure = true
             is PocketScreenEvent.DesktopInput -> return
-            is PocketScreenEvent.SelectPlugin -> session.selectProfile(event.id)
+            is PocketScreenEvent.SelectPlugin -> session.openProfile(event.id)
             is PocketScreenEvent.ChangePage -> session.changePage(event.delta)
             PocketScreenEvent.Repaint -> session.repaint()
             PocketScreenEvent.ChooseImage -> imagePicker.launch(arrayOf("image/*"))
@@ -411,27 +423,49 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
                 session.languageChanged()
                 if (Build.VERSION.SDK_INT < 33) recreate()
             }
+            is PocketScreenEvent.SetPhoneCalls -> {
+                session.phoneAccess.enabled = event.enabled && session.phoneAccess.supported
+                session.refreshPhoneCall()
+            }
+            is PocketScreenEvent.SetCallerDetails -> {
+                session.phoneAccess.details = event.enabled && Build.VERSION.SDK_INT >= 34
+                session.refreshPhoneCall()
+            }
+            PocketScreenEvent.AllowPhoneState -> if (resumed && session.phoneAccess.enabled && isUnlockedAndInteractive())
+                callStatePermission.launch(Manifest.permission.READ_PHONE_STATE)
+            PocketScreenEvent.CallerNotificationAccess -> if (Build.VERSION.SDK_INT >= 34 && resumed &&
+                session.phoneAccess.enabled && session.phoneAccess.details && isUnlockedAndInteractive()) try {
+                startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS).putExtra(
+                    Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, session.phoneAccess.listener.flattenToString()))
+            } catch (_: ActivityNotFoundException) {
+                session.message(CallCopy.OpenAccessSettings.text())
+            } catch (_: SecurityException) {
+                session.message(CallCopy.RestrictedAccess.text())
+            }
         }
         render()
     }
 
     override fun render() {
-        val deck = session.deck.state.value
-        val frame = session.frame()
+        val deck = session.deck.operatingState.value
+        val carrierCall = deck.activeProfileId == tel.misa.mxpocket.deck.PHONE_CALL_VIEW
         val profile = deck.activeProfile.displayName()
         val page = deck.activeProfile.displayPageName(deck.activePage)
         val state = PocketScreenState(
             status = session.status,
-            pluginTitle = if (page == profile) profile else "$profile / $page",
-            tiles = frame.keys.mapIndexed { i, key -> key.toGridTile(session.ready, session.keyImage(i, key).asImageBitmap()) },
-            profiles = deck.profiles.map { ProfileChoice(it.id, it.displayName()) },
-            activeId = deck.activeProfileId, reason = displaySelectionReason(session.deck.reason.value),
+            pluginTitle = if (carrierCall) CallCopy.ViewTitle.text() else if (page == profile) profile else "$profile / $page",
+            tiles = session.homeTiles(),
+            profiles = deck.visibleProfiles.map { ProfileChoice(it.id, it.displayName()) },
+            activeId = deck.activeProfileId, reason = if (carrierCall) CallCopy.ViewReason.text() else displaySelectionReason(deck.selectionReason),
             connectionLabel = session.connectionLabel,
             connectionActive = target != null || session.request != null,
             usbReady = session.ready, activePageId = deck.activePage.id,
             diagnostics = diagnostics, log = session.logText(60), automatic = access.automatic, directShortcuts = direct.enabled,
             themeMode = ThemePreference.current(this),
             language = LanguagePreference.choice(this),
+            phoneCalls = session.phoneAccess.let {
+                PhoneCallSettings(it.supported, it.enabled, it.phoneGranted, Build.VERSION.SDK_INT >= 34, it.details, it.notificationGranted)
+            },
         )
         presentation = state
     }

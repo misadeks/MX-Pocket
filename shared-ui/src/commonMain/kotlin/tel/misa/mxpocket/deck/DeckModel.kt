@@ -14,6 +14,12 @@ object DeckActions {
     const val LEGACY_SLOT_OWNER = "slot"
 }
 
+// Not a legal saved profile ID. The launcher is an operating view, not part of a layout backup.
+const val PROFILE_HOME = "@home"
+const val PHONE_CALL_VIEW = "@phone-call"
+const val GAME_PROFILE = "game.xo"
+const val MORE_PROFILES = "home.more"
+
 // A migrated Audio slot still participates in the original page's single-plugin selection.
 // An explicitly bound media command has no such constraint.
 fun ActionCall.slotOwner(): String? = when {
@@ -24,6 +30,18 @@ fun ActionCall.slotOwner(): String? = when {
 
 fun ActionCall.commandBinding() =
     if (id.startsWith("media.") && slotOwner() == "audio") copy(params = params - DeckActions.LEGACY_SLOT_OWNER) else this
+
+fun phoneShortcutProfile(slot: Int?) = when (slot) {
+    6 -> "focus"
+    7 -> "audio"
+    else -> null
+}
+
+fun ActionCall.targetProfileId(): String? = when {
+    id == DeckActions.PROFILE -> params[DeckActions.PROFILE_ID]
+    id == "plugin.key" && params["pluginId"] == "phone" -> phoneShortcutProfile(params["index"]?.toIntOrNull())
+    else -> null
+}
 
 enum class SelectionSource { USER, AUTOMATIC }
 
@@ -74,7 +92,11 @@ data class DeckState(
     val selectionReason: String = "Default profile",
     val xoProfileRemoved: Boolean = false,
     val teamsProfileRemoved: Boolean = false,
+    /** Local host preference, never part of a layout backup. Factory profiles use their plugin ID. */
+    val disabledPluginIds: Set<String> = emptySet(),
 ) {
+    val visibleProfiles get() = profiles.filterNot { it.id in disabledPluginIds || it.id in setOf(GAME_PROFILE, PROFILE_HOME, PHONE_CALL_VIEW) }
+    val availableDefaultId get() = visibleProfiles.firstOrNull { it.id == defaultProfileId }?.id ?: visibleProfiles.first().id
     val activeProfile: DeckProfile get() = profiles.first { it.id == activeProfileId }
     val activePage: DeckPage get() = activeProfile.pages.first { it.id == histories.getValue(activeProfileId).last() }
 }
