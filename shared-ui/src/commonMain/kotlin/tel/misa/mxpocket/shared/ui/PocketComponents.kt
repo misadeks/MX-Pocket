@@ -214,7 +214,7 @@ internal enum class PocketTone {
         contentPadding = PaddingValues(horizontal = if (compact) 6.dp else 14.dp, vertical = 8.dp)) {
         icon?.let { PocketIcon(it, LocalContentColor.current, if (compact) 14.dp else 16.dp)
             Spacer(Modifier.width(if (compact) 4.dp else 8.dp)) }
-        Text(text, textAlign = androidx.compose.ui.text.style.TextAlign.Center, style = MaterialTheme.typography.labelLarge)
+        Text(text, style = MaterialTheme.typography.labelLarge)
         trailingIcon?.let { Spacer(Modifier.width(6.dp)); PocketIcon(it, LocalContentColor.current, 16.dp) }
     }
 }

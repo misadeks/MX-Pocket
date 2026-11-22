@@ -29,6 +29,11 @@ data class TeamsSetupState(val enabled: Boolean, val notifications: Boolean, val
     val supported: Boolean, val singleProfile: Boolean = true, val message: String = "")
 enum class TeamsSetupAction { TOGGLE, NOTIFICATIONS, TOOLBAR, DONE }
 
+val MediaListenerHint get() = AccessCopy.MediaListenerHint.text(AccessCopy.ListenerPickerHint.text())
+val TeamsListenerHint get() = AccessCopy.TeamsListenerHint.text(AccessCopy.ListenerPickerHint.text())
+val TeamsListenerDisclosure get() = AccessCopy.TeamsDisclosure.text()
+val TeamsToolbarDisclosure get() = AccessCopy.TeamsToolbarInstructions.text()
+
 @Composable
 fun TeamsSetupScreen(state: TeamsSetupState, status: CallStatus, onAction: (TeamsSetupAction) -> Unit) {
     SubsidiaryPage(AccessCopy.TeamsControls.text(), { onAction(TeamsSetupAction.DONE) }) {
@@ -44,6 +49,7 @@ fun TeamsSetupScreen(state: TeamsSetupState, status: CallStatus, onAction: (Team
             }
             Text(AccessCopy.TeamsNotificationInstructions.text())
             if (state.notifications && status == CallStatus.NO_SIGNAL) Text(AccessCopy.TeamsFilterInstructions.text())
+            Text(TeamsListenerHint)
             OutlinedButton({ onAction(TeamsSetupAction.NOTIFICATIONS) }) {
                 Text(if (state.notifications) AccessCopy.NotificationAccessOn.text() else AccessCopy.NotificationAccessOff.text())
             }
@@ -85,11 +91,16 @@ internal fun SubsidiaryStatus(message: String) {
 
 /** Pass null for settings on a platform without this Android access mechanism. */
 @Composable
-fun DeckAccessScreen(access: DeckAccess, message: String, onOpenSettings: (() -> Unit)?, onDone: () -> Unit) {
+fun DeckAccessScreen(access: DeckAccess, message: String, onOpenSettings: (() -> Unit)?, onDone: () -> Unit,
+    mediaGranted: Boolean? = null) {
     SubsidiaryPage(access.title, onDone) {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (onOpenSettings != null) {
                 Text(access.disclosure)
+                if (access == DeckAccess.Media) {
+                    Text(MediaListenerHint)
+                    mediaGranted?.let { Text(if (it) AccessCopy.MediaAllowed.text() else AccessCopy.MediaNotAllowed.text()) }
+                }
                 Text(AccessCopy.OptionalAccess.text(),
                     style = MaterialTheme.typography.bodyMedium)
                 OutlinedButton(onClick = onOpenSettings) { Text(AccessCopy.OpenAndroidSettings.text()) }

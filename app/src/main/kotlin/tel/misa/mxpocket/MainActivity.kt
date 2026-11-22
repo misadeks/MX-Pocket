@@ -215,8 +215,11 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             usbToken = savedInstanceState.getString("usbToken")
             waitingForNotifications = savedInstanceState.getBoolean("notificationPrompt")
         }
-        if (savedInstanceState == null && target == null && session.request == null &&
-            SetupChoices(this).takeLauncherWelcome(intent)) openSetup(firstRun = true)
+        if (savedInstanceState == null) welcomeLauncher(intent)
+    }
+
+    private fun welcomeLauncher(intent: Intent) {
+        if (target == null && SetupChoices(this).takeLauncherWelcome(intent)) openSetup(firstRun = true)
     }
 
     private fun openSetup(firstRun: Boolean) {
@@ -251,6 +254,7 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
         super.onNewIntent(intent)
         readAttach(intent)
         advance()
+        welcomeLauncher(intent)
     }
 
     private fun readAttach(intent: Intent) {

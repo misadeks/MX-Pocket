@@ -17,6 +17,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
+import java.io.IOException
 import java.util.UUID
 import tel.misa.mxpocket.i18n.AccessCopy
 import tel.misa.mxpocket.i18n.AppLocale
@@ -39,12 +40,14 @@ class SetupActivity : ComponentActivity() {
 
     private enum class Notice(val copy: Copy) {
         PERMISSION(AccessCopy.PermissionDenied), USB(AccessCopy.UsbDenied), SETTINGS(AccessCopy.SetupSettingsUnavailable),
-        RESTRICTED(AccessCopy.SetupRestricted), UNAVAILABLE(AccessCopy.SetupOptionUnavailable)
+        RESTRICTED(AccessCopy.SetupRestricted), UNAVAILABLE(AccessCopy.SetupOptionUnavailable),
+        LAYOUT(AccessCopy.SettingChangeFailed), STORAGE(AccessCopy.SettingSaveFailed)
     }
 
     private val choices by lazy { SetupChoices(this) }
     private val access by lazy { SetupAccess(this, choices) }
     private var selected by mutableStateOf(emptySet<Feature>())
+    private val options get() = access.options()
     private var reviewing by mutableStateOf(false)
     private var steps by mutableStateOf(emptyList<SetupStep>())
     private var notice by mutableStateOf<Notice?>(null)
@@ -69,6 +72,9 @@ class SetupActivity : ComponentActivity() {
                 notice = if (device != null && access.usb.hasPermission(device)) null else Notice.USB
                 usbToken = null
                 usbName = null
+            } else if (usbName != null && access.usb.keypad(usbName) == null) {
+                usbName = null
+                usbToken = null
             }
             refresh()
         }
@@ -76,8 +82,10 @@ class SetupActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        selected = savedInstanceState?.getStringArrayList("selected")?.let(SetupChoices::decode)
-            ?: choices.load(access::existingFeatures)
+        val firstRun = intent.getBooleanExtra("firstRun", false)
+        selected = (savedInstanceState?.getStringArrayList("selected")?.let(SetupChoices::decode)
+            ?: if (firstRun) emptySet() else choices.load(access::existingFeatures))
+            .intersect(options.filter { it.unavailableReason == null }.map { it.feature }.toSet())
         reviewing = savedInstanceState?.getBoolean("review") == true
         notice = savedInstanceState?.getString("notice")?.let { id -> Notice.entries.find { it.name == id } }
         usbName = savedInstanceState?.getString("usbName")
@@ -93,7 +101,7 @@ class SetupActivity : ComponentActivity() {
                     refresh()
                 }
                 BackHandler(enabled = reviewing) { handle(SetupEvent.Edit) }
-                SetupScreen(SetupScreenState(selected, reviewing, steps, notice?.copy?.text().orEmpty(), intent.getBooleanExtra("firstRun", false)), ::handle)
+                SetupScreen(SetupScreenState(selected, reviewing, steps, notice?.copy?.text().orEmpty(), firstRun, options), ::handle)
             }
         }
     }
@@ -103,10 +111,8 @@ class SetupActivity : ComponentActivity() {
             is SetupEvent.Select -> selected = if (event.feature in selected) selected - event.feature else selected + event.feature
             SetupEvent.Review -> {
                 choices.save(selected)
-                if (selected.isEmpty()) finish() else {
-                    reviewing = true
-                    refresh()
-                }
+                reviewing = true
+                refresh()
             }
             SetupEvent.Edit -> { reviewing = false; notice = null }
             is SetupEvent.Act -> perform(event.action)
@@ -134,7 +140,7 @@ class SetupActivity : ComponentActivity() {
     }
 
     private fun refresh() {
-        if (reviewing) steps = access.steps(selected)
+        if (reviewing) steps = access.steps(selected, usbName)
     }
 
     private fun perform(action: SetupAction) {
@@ -143,17 +149,16 @@ class SetupActivity : ComponentActivity() {
         notice = null
         try {
             when (action) {
-                SetupAction.AUTO -> access.attach.automatic = true
-                SetupAction.DIRECT -> access.shortcuts.enabled = true
                 SetupAction.POST -> notices.launch(Manifest.permission.POST_NOTIFICATIONS)
                 SetupAction.USB -> {
                     val device = access.keypads().singleOrNull() ?: return refresh()
                     val token = UUID.randomUUID().toString()
+                    if (access.usb.hasPermission(device)) return refresh()
+                    access.usb.requestKeypadAccess(this, device, usbReply, token)
                     usbName = device.deviceName
                     usbToken = token
-                    access.usb.requestKeypadAccess(this, device, usbReply, token)
                 }
-                else -> startActivity(access.settings(action))
+                else -> access.perform(action)
             }
         } catch (_: ActivityNotFoundException) {
             notice = Notice.SETTINGS
@@ -161,6 +166,10 @@ class SetupActivity : ComponentActivity() {
             notice = Notice.RESTRICTED
         } catch (_: IllegalArgumentException) {
             notice = Notice.UNAVAILABLE
+        } catch (_: IllegalStateException) {
+            notice = Notice.LAYOUT
+        } catch (_: IOException) {
+            notice = Notice.STORAGE
         }
         refresh()
     }

@@ -15,6 +15,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+
 import tel.misa.mxpocket.i18n.AccessCopy
 import tel.misa.mxpocket.i18n.Copy
 
@@ -24,7 +25,10 @@ enum class SetupFeature(private val titleCopy: Copy, private val summaryCopy: Co
     MUSIC(AccessCopy.Music, AccessCopy.MusicSummary),
     STUDIO(AccessCopy.Studio, AccessCopy.StudioSummary),
     DIRECT(AccessCopy.Direct, AccessCopy.DirectSummary),
-    NAVIGATION(AccessCopy.Navigation, AccessCopy.NavigationSummary);
+    NAVIGATION(AccessCopy.Navigation, AccessCopy.NavigationSummary),
+    PROFILES(AccessCopy.FeatureProfiles, AccessCopy.FeatureProfilesSummary),
+    TEAMS(AccessCopy.FeatureTeams, AccessCopy.FeatureTeamsSummary),
+    TEAMS_CONTROLS(AccessCopy.FeatureMic, AccessCopy.FeatureMicSummary);
 
     val title get() = titleCopy.text()
     val summary get() = summaryCopy.text()
@@ -33,14 +37,17 @@ enum class SetupFeature(private val titleCopy: Copy, private val summaryCopy: Co
 enum class SetupAction(private val copy: Copy) {
     USB(AccessCopy.AllowKeypad), POST(AccessCopy.AllowNotices), APP_NOTICES(AccessCopy.OpenNoticeSettings),
     CHANNEL(AccessCopy.OpenChannel), AUTO(AccessCopy.EnableAuto), MEDIA(AccessCopy.OpenNotificationAccess),
-    CAMERA(AccessCopy.ManageCamera), OVERLAY(AccessCopy.OpenSpecialAccess),
-    DIRECT(AccessCopy.EnableDirect), NAVIGATION(AccessCopy.OpenAccessibility);
+    CAMERA(AccessCopy.EnableCamera), OVERLAY(AccessCopy.OpenSpecialAccess),
+    DIRECT(AccessCopy.EnableDirect), NAVIGATION(AccessCopy.OpenAccessibility),
+    USAGE(AccessCopy.OpenUsage), DETECTION(AccessCopy.EnableDetection), SWITCHING(AccessCopy.EnableSwitching),
+    TEAMS(AccessCopy.EnableTeams), TEAMS_NOTICES(AccessCopy.OpenTeamsNotices), TOOLBAR(AccessCopy.OpenTeamsToolbar),
+    AUDIO_PLUGIN(AccessCopy.EnableAudio), STUDIO_PLUGIN(AccessCopy.EnableStudio), NAV_PLUGIN(AccessCopy.EnableNavigation), TEAMS_PLUGIN(AccessCopy.EnableTeamsPlugin);
 
     val label get() = copy.text()
 }
 
-data class SetupStep(val title: String, val detail: String, val status: String,
-    val ready: Boolean = false, val action: SetupAction? = null)
+data class SetupStep(val feature: SetupFeature, val title: String, val detail: String, val status: String,
+    val ready: Boolean, val action: SetupAction? = null, val applicable: Boolean = true)
 
 data class SetupOption(val feature: SetupFeature, val title: String = feature.title,
     val detail: String = feature.summary, val unavailableReason: String? = null)
@@ -51,7 +58,7 @@ data class SetupScreenState(
     val options: List<SetupOption> = SetupFeature.entries.map { SetupOption(it) },
     val introduction: String = AccessCopy.Introduction.text(),
     val reviewHint: String = AccessCopy.ReviewHint.text(),
-    val connectHint: String? = if (selected.any { it in setOf(SetupFeature.USB, SetupFeature.AUTO, SetupFeature.DIRECT) })
+    val connectHint: String? = if (steps.any { it.feature == SetupFeature.USB })
         AccessCopy.ConnectHint.text() else null
 )
 
@@ -82,6 +89,8 @@ private fun SetupContent(state: SetupScreenState, onEvent: (SetupEvent) -> Unit)
                 if (!reviewing) {
                     Text(state.introduction)
                     Spacer(Modifier.height(8.dp))
+                    if (state.options.any { it.unavailableReason == null })
+                        Text(AccessCopy.OptionalFeatures.text(), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium)
                     state.options.forEach { option ->
                         val feature = option.feature
                         val enabled = option.unavailableReason == null
@@ -100,17 +109,23 @@ private fun SetupContent(state: SetupScreenState, onEvent: (SetupEvent) -> Unit)
                     Text(AccessCopy.ChoicesHint.text(),
                         style = MaterialTheme.typography.bodySmall)
                 } else {
-                    Text(AccessCopy.StepsReady.text(steps.size, steps.count { it.ready }), style = MaterialTheme.typography.titleMedium,
+                    if (steps.isNotEmpty()) Text(AccessCopy.StepsReady.text(steps.count { it.applicable }, steps.count { it.ready }), style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.primary)
                     Text(state.reviewHint)
-                    steps.forEach { step ->
-                        Spacer(Modifier.height(20.dp))
-                        Text(step.title, Modifier.semantics { heading() }, style = MaterialTheme.typography.titleLarge)
-                        Text(step.detail, Modifier.padding(vertical = 6.dp), style = MaterialTheme.typography.bodyMedium)
-                        Text(step.status, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-                        step.action?.let { action ->
-                            OutlinedButton(onClick = { onEvent(SetupEvent.Act(action)) }) { Text(action.label) }
+                    steps.groupBy { it.feature }.forEach { (feature, group) ->
+                        Spacer(Modifier.height(24.dp))
+                        Text(feature.title, Modifier.semantics { heading() }, style = MaterialTheme.typography.titleLarge)
+                        group.forEach { step ->
+                            Spacer(Modifier.height(12.dp))
+                            Text(step.title, style = MaterialTheme.typography.titleMedium)
+                            if (step.detail.isNotEmpty()) Text(step.detail, Modifier.padding(vertical = 4.dp), style = MaterialTheme.typography.bodyMedium)
+                            Text(step.status, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                            step.action?.let { action ->
+                                OutlinedButton(onClick = { onEvent(SetupEvent.Act(action)) }) { Text(action.label) }
+                            }
                         }
+                        Spacer(Modifier.height(12.dp))
+                        HorizontalDivider()
                     }
                     state.connectHint?.let { hint ->
                         Spacer(Modifier.height(12.dp))
@@ -124,7 +139,7 @@ private fun SetupContent(state: SetupScreenState, onEvent: (SetupEvent) -> Unit)
             if (message.isNotEmpty()) Text(message, Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                 style = MaterialTheme.typography.bodyMedium)
             Button(onClick = { onEvent(if (reviewing) SetupEvent.Finish else SetupEvent.Review) }, modifier = Modifier.fillMaxWidth()) {
-                Text(when { reviewing -> AccessCopy.FinishSetup; selected.isEmpty() -> AccessCopy.WithoutExtras; else -> AccessCopy.ReviewSteps }.text())
+                Text(if (reviewing) AccessCopy.FinishSetup.text() else AccessCopy.ReviewSteps.text())
             }
             if (reviewing) TextButton(onClick = { onEvent(SetupEvent.Edit) }, modifier = Modifier.fillMaxWidth()) { Text(AccessCopy.EditChoices.text()) }
             else TextButton(onClick = { onEvent(SetupEvent.Cancel) }, modifier = Modifier.fillMaxWidth()) {

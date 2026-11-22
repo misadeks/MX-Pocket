@@ -42,28 +42,19 @@ object AccessCopy {
     val OpenSpecialAccess = Copy("Open special access", "Ouvrir les autorisations spéciales", "Otvori poseban pristup")
     val EnableDirect = Copy("Enable one-press shortcuts", "Activer les raccourcis en une pression", "Uključi prečice na jedan pritisak")
     val OpenAccessibility = Copy("Open accessibility settings", "Ouvrir les paramètres d’accessibilité", "Otvori podešavanja pristupačnosti")
-    val ChooseFeatures = Copy("How will you use your keypad?", "Comment utiliserez-vous votre pavé ?", "Kako ćete koristiti tastaturu?")
-    val ReviewFeatures = Copy("Set up your features", "Configurez vos fonctionnalités", "Podesite svoje funkcije")
-    val Introduction = Copy(
-        "Choose the features you want to set up. You can change these choices later in Settings.",
-        "Choisissez les fonctionnalités à configurer. Vous pourrez modifier vos choix dans les réglages.",
-        "Izaberite funkcije koje želite da podesite. Izbor kasnije možete promeniti u postavkama.")
-    val ReviewHint = Copy(
-        "Tap a step to change it. If Android restricts an option, leave it off. You can finish at any time.",
-        "Touchez une étape pour la modifier. Si Android limite une option, laissez-la désactivée. Vous pouvez terminer à tout moment.",
-        "Dodirnite korak da biste ga promenili. Ako Android ograničava neku opciju, ostavite je isključenu. Podešavanje možete završiti u svakom trenutku.")
-    val ConnectHint = Copy(
-        "When ready, tap the connection button at the top of Home to start the session.",
-        "Pour démarrer la session, touchez le bouton de connexion en haut de l’écran d’accueil.",
-        "Kada budete spremni, dodirnite dugme za povezivanje na vrhu početnog ekrana da biste pokrenuli sesiju.")
+    val ChooseFeatures = Copy("Set up your keypad", "Configurer votre pavé", "Podesite tastaturu")
+    val ReviewFeatures = Copy("Your setup checklist", "Vos étapes de configuration", "Vaši koraci podešavanja")
+    val Introduction = Copy("First, review USB access and the keypad session notification. Choose any extras below. Nothing turns on until you take its setup action.", "Vérifiez d’abord l’accès USB et la notification de session du pavé. Choisissez ensuite les fonctions qui vous intéressent. Rien ne s’active tant que vous n’effectuez pas l’action correspondante.", "Prvo proverite USB pristup i obaveštenje o sesiji tastature. Ispod izaberite dodatne funkcije. Ništa se ne uključuje dok ne izvršite odgovarajući korak.")
+    val ReviewHint = Copy("Allow only what you want to use. You can finish with steps left off.", "Autorisez uniquement ce que vous souhaitez utiliser. Vous pouvez terminer sans tout activer.", "Dozvolite samo ono što želite da koristite. Podešavanje možete završiti i ako preskočite neke korake.")
+    val ConnectHint = Copy("Setup does not connect the keypad. To start a session, tap Connect on Home.", "La configuration ne connecte pas le pavé. Pour démarrer une session, touchez le bouton de connexion sur l’écran d’accueil.", "Podešavanjem se ne uspostavlja veza sa tastaturom. Za pokretanje sesije dodirnite dugme za povezivanje na početnom ekranu.")
     val ChoicesHint = Copy(
         "Changing this list does not revoke access or turn off features. Reopen it in Settings > Feature setup.",
         "Modifier cette liste ne retire aucune autorisation et ne désactive aucune fonctionnalité. Retrouvez-la dans Réglages > Configurer les fonctions.",
         "Promenom ovog spiska ne ukidate pristup i ne isključujete funkcije. Spisak možete ponovo otvoriti u odeljku Postavke > Podešavanje funkcija.")
     val StepsReady = PluralCopy(
-        one = Copy("{1} of {0} step ready", "Étape prête : {1} sur {0}", "Broj spremnih koraka: {1} od {0}"),
-        few = Copy("{1} of {0} steps ready", "Étapes prêtes : {1} sur {0}", "Broj spremnih koraka: {1} od {0}"),
-        other = Copy("{1} of {0} steps ready", "Étapes prêtes : {1} sur {0}", "Broj spremnih koraka: {1} od {0}"))
+        one = Copy("{1} of {0} setting ready", "Réglage prêt : {1} sur {0}", "Broj spremnih podešavanja: {1} od {0}"),
+        few = Copy("{1} of {0} settings ready", "Réglages prêts : {1} sur {0}", "Broj spremnih podešavanja: {1} od {0}"),
+        other = Copy("{1} of {0} settings ready", "Réglages prêts : {1} sur {0}", "Broj spremnih podešavanja: {1} od {0}"))
     val FinishSetup = Copy("Finish setup", "Terminer la configuration", "Završi podešavanje")
     val WithoutExtras = Copy("Continue without extras", "Continuer sans fonctionnalités supplémentaires", "Nastavi bez dodatnih funkcija")
     val ReviewSteps = Copy("Review setup steps", "Voir les étapes de configuration", "Pregledaj korake podešavanja")
@@ -73,27 +64,18 @@ object AccessCopy {
     val Done = Copy("Done", "Terminé", "Gotovo")
 
     val PhysicalKeypad = Copy("Physical keypad", "Pavé physique", "Fizička tastatura")
-    val UsbInstructions = Copy(
-        "Connect one MX Creative Keypad with a data cable. USB access applies to this attachment, not all USB devices.",
-        "Branchez un seul MX Creative Keypad avec un câble de données. L’autorisation USB ne vaut que pour ce branchement, pas pour tous les appareils USB.",
-        "Povežite jednu tastaturu MX Creative Keypad kablom za prenos podataka. USB dozvola važi samo za ovo priključivanje, ne za sve USB uređaje.")
+    val UsbInstructions = Copy("Use a USB data cable. Approval applies only to this attachment.", "Utilisez un câble USB de données. L’autorisation ne vaut que pour ce branchement.", "Koristite USB kabl za prenos podataka. Dozvola važi samo za ovo priključivanje.")
     val NoKeypad = Copy("No supported keypad attached", "Aucun pavé compatible branché", "Nije priključena podržana tastatura")
-    val MultipleKeypads = Copy("More than one keypad attached", "Plusieurs pavés sont branchés", "Priključeno je više tastatura")
+    val MultipleKeypads = Copy("Attach only one keypad to check access", "Branchez un seul pavé pour vérifier l’accès", "Priključite samo jednu tastaturu da biste proverili pristup")
     val KeypadAuthorized = Copy("This keypad is authorized", "Ce pavé est autorisé", "Pristup ovoj tastaturi je dozvoljen")
     val KeypadNeedsApproval = Copy("This keypad needs approval", "Ce pavé nécessite une autorisation", "Potrebna je dozvola za ovu tastaturu")
     val SessionNotice = Copy("Session notification", "Notification de session", "Obaveštenje o sesiji")
-    val SessionNoticeDetail = Copy(
-        "MX Pocket requires a visible notification so you can disconnect a background USB session.",
-        "MX Pocket a besoin d’une notification visible pour vous permettre de fermer une session USB en arrière-plan.",
-        "Za MX Pocket je potrebno vidljivo obaveštenje kako biste mogli da prekinete USB vezu koja radi u pozadini.")
+    val SessionNoticeDetail = Copy("Show a notification with a Disconnect button while the keypad is connected. This does not allow reading notifications.", "Afficher une notification avec un bouton de déconnexion tant que le pavé est connecté. Cela ne permet pas de lire les notifications.", "Prikažite obaveštenje sa dugmetom za prekid veze dok je tastatura povezana. Time ne dozvoljavate čitanje obaveštenja.")
     val NoticesAllowed = Copy("Notifications allowed", "Notifications autorisées", "Obaveštenja su dozvoljena")
     val ChannelOff = Copy("Keypad session channel is off", "Canal de notification de la session du pavé désactivé", "Kanal za obaveštenja o sesiji tastature je isključen")
     val NoticePermissionOff = Copy("Notification permission is off", "Autorisation de notification désactivée", "Dozvola za obaveštenja nije odobrena")
     val AppNoticesOff = Copy("App notifications are off", "Notifications de l’application désactivées", "Obaveštenja aplikacije su isključena")
-    val AutoDetail = Copy(
-        "Enabling this option makes MX Pocket a USB handler. Replug the keypad and choose MX Pocket if Android asks. Android controls the default; you can always connect manually.",
-        "Cette option permet à MX Pocket de gérer le branchement USB. Rebranchez le pavé et choisissez MX Pocket si Android vous le demande. Android gère le choix par défaut ; la connexion manuelle reste possible.",
-        "Kada uključite ovu opciju, MX Pocket može da preuzme USB vezu. Ponovo priključite tastaturu i izaberite MX Pocket ako Android to zatraži. Android određuje podrazumevanu aplikaciju, a uvek se možete povezati i ručno.")
+    val AutoDetail = Copy("Let Android offer MX Pocket when the keypad is plugged in. Replug to choose a handler, or connect manually from Home.", "Android peut proposer MX Pocket lorsque vous branchez le pavé. Rebranchez-le pour choisir une application, ou connectez-le manuellement depuis l’accueil.", "Android može da ponudi MX Pocket kada priključite tastaturu. Ponovo je priključite da biste odabrali aplikaciju ili se povežite ručno sa početnog ekrana.")
     val AutoOn = Copy("App option on; Android chooses the handler", "Option activée ; Android choisit l’application", "Opcija je uključena; Android bira aplikaciju")
     val AppOptionOff = Copy("App option off", "Option désactivée dans l’application", "Opcija u aplikaciji je isključena")
     val PlayerControls = Copy("Player controls and artwork", "Commandes du lecteur et pochette", "Komande plejera i omot albuma")
@@ -241,4 +223,55 @@ object AccessCopy {
     val ShortcutRestricted = Copy("Android restricted this shortcut.", "Android limite l’accès à ce raccourci.", "Android je ograničio ovu prečicu.")
     val NoPhoneHandler = Copy("No app can handle {0}.", "Aucune application ne peut ouvrir ce raccourci : {0}.", "Nijedna aplikacija ne može da otvori ovu prečicu: {0}.")
     val PhoneRestricted = Copy("Android did not allow {0} to open.", "Android a bloqué l’ouverture de ce raccourci : {0}.", "Android nije dozvolio otvaranje prečice: {0}.")
+    val FeatureProfiles = Copy("Switch profiles when an app opens", "Changer de profil à l’ouverture d’une application", "Promena profila pri otvaranju aplikacije")
+    val FeatureProfilesSummary = Copy("Show a matching keypad layout while the phone is unlocked.", "Afficher la disposition associée sur le pavé lorsque le téléphone est déverrouillé.", "Prikažite odgovarajući raspored tastera dok je telefon otključan.")
+    val FeatureTeams = Copy("Show Teams call notices", "Afficher les notifications d’appel Teams", "Prikaz obaveštenja o Teams pozivima")
+    val FeatureTeamsSummary = Copy("Show read-only call status on the keypad. No microphone control is needed.", "Afficher l’état de l’appel sur le pavé, sans agir sur le micro.", "Prikažite stanje poziva na tastaturi bez upravljanja mikrofonom.")
+    val FeatureMic = Copy("Use the Teams mic key", "Utiliser la touche micro de Teams", "Korišćenje tastera za mikrofon u aplikaciji Teams")
+    val FeatureMicSummary = Copy("Recognize the joined call toolbar and operate a visible mic button from the keypad.", "Reconnaître la barre d’outils de l’appel en cours et actionner le bouton du micro depuis le pavé lorsqu’il est visible.", "Prepoznajte traku sa alatkama tokom poziva i tasterom na tastaturi pritisnite vidljivo dugme mikrofona.")
+    val OpenUsage = Copy("Open usage access settings", "Ouvrir l’accès aux données d’utilisation", "Otvori podešavanja pristupa podacima o korišćenju")
+    val EnableDetection = Copy("Enable foreground detection", "Activer la détection de l’application au premier plan", "Uključi prepoznavanje aktivne aplikacije")
+    val EnableSwitching = Copy("Enable profile switching", "Activer le changement de profil", "Uključi promenu profila")
+    val OpenTeamsNotices = Copy("Open Teams notification access", "Ouvrir l’accès aux notifications pour Teams", "Otvori pristup obaveštenjima za Teams")
+    val OpenTeamsToolbar = Copy("Open Teams accessibility settings", "Ouvrir les paramètres d’accessibilité pour Teams", "Otvori podešavanja pristupačnosti za Teams")
+    val EnableAudio = Copy("Enable Audio", "Activer Audio", "Uključi Audio")
+    val EnableStudio = Copy("Enable Studio", "Activer Studio", "Uključi Studio")
+    val EnableNavigation = Copy("Enable Navigation", "Activer Navigation", "Uključi navigaciju")
+    val EnableTeamsPlugin = Copy("Enable Teams", "Activer Teams", "Uključi Teams")
+    val OptionalFeatures = Copy("Optional features", "Fonctionnalités facultatives", "Opcione funkcije")
+    val ListenerPickerHint = Copy("If Android lists two entries named only MX Pocket, go back without choosing either. You do not need to enable both.", "Si Android affiche deux entrées qui s’appellent simplement « MX Pocket », revenez en arrière sans en choisir aucune. Il n’est pas nécessaire d’activer les deux.", "Ako Android prikaže dve stavke koje se zovu samo „MX Pocket“, vratite se nazad i ne birajte nijednu. Nije potrebno uključiti obe.")
+    val MediaListenerHint = Copy("For Audio, choose MX Pocket media sessions, not MX Pocket Teams calls. {0}", "Pour Audio, choisissez « Sessions multimédias de MX Pocket », et non « Appels Teams de MX Pocket ». {0}", "Za Audio izaberite „MX Pocket: multimedijalne sesije“, a ne „MX Pocket: Teams pozivi“. {0}")
+    val TeamsListenerHint = Copy("For Teams, choose MX Pocket Teams calls, not MX Pocket media sessions. {0}", "Pour Teams, choisissez « Appels Teams de MX Pocket », et non « Sessions multimédias de MX Pocket ». {0}", "Za Teams izaberite „MX Pocket: Teams pozivi“, a ne „MX Pocket: multimedijalne sesije“. {0}")
+    val MediaNotAllowed = Copy("Media session access not granted", "Accès aux sessions multimédias non accordé", "Pristup multimedijalnim sesijama nije odobren")
+    val UnsupportedCallStatus = Copy("Call status needs Android 14 or later. You can still open Call tools manually.", "L’état des appels nécessite Android 14 ou une version ultérieure. Vous pouvez toujours ouvrir les outils d’appel manuellement.", "Za prikaz stanja poziva potreban je Android 14 ili noviji. Alatke za pozive i dalje možete otvoriti ručno.")
+    val MultiProfileNotices = Copy("With multiple Android profiles, only read-only Teams call notices are available.", "Avec plusieurs profils Android, seules les notifications d’appel Teams en lecture seule sont disponibles.", "Ako koristite više Android profila, obaveštenja o Teams pozivima možete samo da pregledate.")
+    val OnInApp = Copy("On in MX Pocket", "Activé dans MX Pocket", "Uključeno u aplikaciji MX Pocket")
+    val OffInApp = Copy("Off in MX Pocket", "Désactivé dans MX Pocket", "Isključeno u aplikaciji MX Pocket")
+    val PluginName = Copy("{0} plugin", "Extension {0}", "Dodatak {0}")
+    val WaitingUsb = Copy("Waiting for USB approval", "En attente de l’autorisation USB", "Čeka se USB dozvola")
+    val SessionChannel = Copy("Keypad session channel", "Canal de notification de la session du pavé", "Kanal za obaveštenja o sesiji tastature")
+    val SessionChannelDetail = Copy("Android can turn off this notification channel separately.", "Android peut désactiver ce canal de notification séparément.", "Android može zasebno da isključi ovaj kanal obaveštenja.")
+    val ChannelOn = Copy("Channel on", "Canal activé", "Kanal je uključen")
+    val UsbHandling = Copy("USB plug-in handling", "Connexion au branchement USB", "Povezivanje pri priključivanju preko USB-a")
+    val CameraKeys = Copy("Keypad camera controls", "Commandes photo du pavé", "Komande kamere na tastaturi")
+    val NavigationPermission = Copy("Navigation accessibility access", "Accès aux fonctions d’accessibilité pour la navigation", "Pristup funkcijama pristupačnosti za navigaciju")
+    val AndroidAllowed = Copy("Allowed in Android", "Autorisé dans Android", "Dozvoljeno u Androidu")
+    val AndroidNotAllowed = Copy("Not allowed in Android", "Non autorisé dans Android", "Nije dozvoljeno u Androidu")
+    val Overlay = Copy("Display over other apps", "Afficher par-dessus d’autres applications", "Prikaz preko drugih aplikacija")
+    val OnePress = Copy("One-press shortcuts", "Raccourcis en une pression", "Prečice na jedan pritisak")
+    val OnePressDetail = Copy("Without this option, tap a notification to open the shortcut.", "Sans cette option, touchez une notification pour ouvrir le raccourci.", "Bez ove opcije prečicu otvarate dodirom na obaveštenje.")
+    val OnePressOn = Copy("One-press shortcuts on", "Raccourcis en une pression activés", "Prečice na jedan pritisak su uključene")
+    val AllowOverlay = Copy("Allow display over other apps before enabling shortcuts", "Autorisez l’affichage par-dessus d’autres applications avant d’activer les raccourcis", "Dozvolite prikaz preko drugih aplikacija pre nego što uključite prečice")
+    val UsageAccess = Copy("Usage access", "Accès aux données d’utilisation", "Pristup podacima o korišćenju")
+    val UsageDetail = Copy("Let MX Pocket check for mapped apps while the phone is unlocked. No usage history is saved or sent.", "Autorisez MX Pocket à repérer les applications associées à un profil lorsque le téléphone est déverrouillé. Aucun historique d’utilisation n’est conservé ni transmis.", "Dozvolite aplikaciji MX Pocket da prepozna aplikacije povezane sa profilima dok je telefon otključan. Istorija korišćenja se ne čuva niti šalje.")
+    val DetectApps = Copy("Detect foreground apps", "Détecter l’application au premier plan", "Prepoznavanje aktivne aplikacije")
+    val DetectAppsDetail = Copy("Use the app on screen to find a matching profile.", "Trouver le profil associé à l’application affichée.", "Pronađite profil koji odgovara aplikaciji na ekranu.")
+    val AutomaticSwitching = Copy("Automatic profile switching", "Changement automatique de profil", "Automatska promena profila")
+    val SwitchingDetail = Copy("Allow matching rules to select a layout. Manage app mappings, pins and individual profiles in Profiles.", "Laissez les règles sélectionner une disposition. Gérez les associations d’applications, les profils épinglés et les profils individuels dans Profils.", "Prepustite izbor rasporeda pravilima. Aplikacije, zakačene profile i pojedinačne profile možete podesiti u odeljku Profili.")
+    val TeamsStatus = Copy("Teams call status", "État des appels Teams", "Stanje Teams poziva")
+    val TeamsStatusDetail = Copy("Show call notices from Teams in this Android profile while a wired keypad is connected.", "Afficher les notifications d’appel de Teams dans ce profil Android lorsqu’un pavé est connecté par câble.", "Prikažite obaveštenja o Teams pozivima sa ovog Android profila dok je tastatura povezana kablom.")
+    val TeamsNoticesAccess = Copy("Teams notification access", "Accès aux notifications pour Teams", "Pristup obaveštenjima za Teams")
+    val TeamsToolbarAccess = Copy("Teams toolbar access", "Accès à la barre d’outils Teams", "Pristup traci sa alatkama aplikacije Teams")
+    val SettingChangeFailed = Copy("This setting could not be changed. Check your layout in Profiles.", "Impossible de modifier ce réglage. Vérifiez votre disposition dans Profils.", "Podešavanje nije promenjeno. Proverite raspored u odeljku Profili.")
+    val SettingSaveFailed = Copy("MX Pocket could not save the setting. Check available storage and try again.", "MX Pocket n’a pas pu enregistrer le réglage. Vérifiez l’espace disponible et réessayez.", "MX Pocket nije uspeo da sačuva podešavanje. Proverite slobodan prostor i pokušajte ponovo.")
 }

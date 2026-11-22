@@ -1,11 +1,8 @@
 package tel.misa.mxpocket.decks
 
 import android.content.ActivityNotFoundException
-import android.content.ComponentName
-import android.content.Intent
 import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,11 +40,8 @@ class TeamsAccessActivity : DeckActivity() {
             }
             TeamsSetupAction.NOTIFICATIONS, TeamsSetupAction.TOOLBAR -> try {
                 val notifications = action == TeamsSetupAction.NOTIFICATIONS
-                if (notifications && Build.VERSION.SDK_INT >= 30) {
-                    val detail = Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS).putExtra(
-                        Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, ComponentName(this, TeamsCallListener::class.java).flattenToString())
-                    try { startActivity(detail) } catch (_: ActivityNotFoundException) { startActivity(DeckAccessActivity.settings(true)) }
-                } else startActivity(DeckAccessActivity.settings(notifications))
+                if (notifications) ListenerAccess.TEAMS.open(this)
+                else startActivity(DeckAccessActivity.accessibilitySettings())
                 problem = null
             } catch (_: ActivityNotFoundException) { problem = AccessCopy.TeamsSettingsUnavailable }
             catch (_: SecurityException) { problem = AccessCopy.RestrictedSettings }

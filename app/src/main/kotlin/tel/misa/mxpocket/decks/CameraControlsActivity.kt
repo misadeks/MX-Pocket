@@ -75,7 +75,7 @@ class CameraControlsActivity : DeckActivity() {
             }
             CameraControlsEvent.OpenSettings -> {
                 notice = try {
-                    startActivity(DeckAccessActivity.settings(false))
+                    startActivity(DeckAccessActivity.accessibilitySettings())
                     null
                 } catch (_: ActivityNotFoundException) { Notice.SETTINGS_UNAVAILABLE }
                 catch (_: SecurityException) { Notice.SETTINGS_RESTRICTED }
