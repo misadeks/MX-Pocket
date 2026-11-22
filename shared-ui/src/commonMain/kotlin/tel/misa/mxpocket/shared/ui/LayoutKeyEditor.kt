@@ -108,6 +108,8 @@ internal class KeyDraft(val original: DeckKey) {
         label.length > DeckLimits.LABEL -> LayoutCopy.LabelLength.text(DeckLimits.LABEL)
         icon.length > DeckLimits.ICON -> LayoutCopy.IconLength.text(DeckLimits.ICON)
         parseTileColor(color) == null -> LayoutCopy.InvalidHex.text()
+        holdCall != null && listOfNotNull(call, holdCall).any { DeckCommand.fromId(it.id)?.accessibilityKey == true } ->
+            AccessCopy.TapWithoutHold.text()
         else -> null
     }
 
@@ -177,6 +179,10 @@ internal fun KeyFields(index: Int, draft: KeyDraft, options: List<BindingOption>
         }
         options.find { it.call == binding(target)?.commandBinding() }?.unavailableReason?.let { EditorNote(it) }
     }
+    when (call?.id) {
+        DeckCommand.TALKBACK_SETTINGS.id -> EditorNote(AccessCopy.TalkBackHint.text())
+        DeckCommand.ACCESSIBILITY_SHORTCUT.id -> EditorNote(AccessCopy.ShortcutHint.text())
+    }
     EditorSwitch(LayoutCopy.EnabledOnDeck.text(), enabled, writable) { enabled = it }
     if (attempted) error?.let { EditorError(it) }
     EditorActions {
@@ -222,8 +228,10 @@ internal fun BindingChoices(options: List<BindingOption>, draft: KeyDraft, listM
             }
             if (filtered.isEmpty()) item { EditorNote(LayoutCopy.NoMatchingActions.text()) }
             items(filtered) { option ->
-                if (option.unavailableReason != null) {
-                    UnavailableRow(option.label, option.unavailableReason)
+                val reason = option.unavailableReason ?: if (target == BindingTarget.HOLD &&
+                    DeckCommand.fromId(option.call.id)?.accessibilityKey == true) AccessCopy.TapWithoutHold.text() else null
+                if (reason != null) {
+                    UnavailableRow(option.label, reason)
                 } else {
                     DropdownMenuItem(text = { Text(if (selected == option.call.commandBinding()) "✓ ${option.label}" else option.label) },
                         onClick = { choose(option.call) })

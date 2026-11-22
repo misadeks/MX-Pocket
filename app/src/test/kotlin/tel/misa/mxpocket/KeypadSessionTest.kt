@@ -871,6 +871,94 @@ class KeypadSessionTest {
         service.destroy()
     }
 
+    @Suppress("DEPRECATION")
+    @Test fun accessibilityPanelsUseSystemSettingsAndAlwaysRequireATapFromAnotherApp() {
+        val session = app.session
+        val profile = session.deck.createProfile("Reading").getOrThrow()
+        val controls = listOf(DeckCommand.TALKBACK_SETTINGS, DeckCommand.CAPTION_SETTINGS, DeckCommand.NIGHT_LIGHT_SETTINGS)
+        controls.forEachIndexed { i, c -> session.deck.setKey(profile, "root", i, DeckKey(action = ActionCall(c.id))).getOrThrow() }
+        session.selectProfile(profile)
+        val settings = android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS
+        val pm = shadowOf(app.packageManager)
+        fun register(route: String, name: String, system: Boolean) {
+            pm.addResolveInfoForIntent(Intent(route), handler(ComponentName(name, "$name.Panel")).apply {
+                if (system) activityInfo.applicationInfo.flags = ApplicationInfo.FLAG_SYSTEM
+            })
+        }
+        register(settings, "example.settings", true)
+        register(android.provider.Settings.ACTION_CAPTIONING_SETTINGS, "example.thirdparty", false)
+        register(android.provider.Settings.ACTION_NIGHT_DISPLAY_SETTINGS, "example.display", true)
+
+        val keypad = device("test-keypad")
+        shadowOf(usb).addOrUpdateUsbDevice(keypad, true)
+        val service = Robolectric.buildService(KeypadService::class.java).create()
+        service.get().onStartCommand(KeypadService.command(app, session.reserve(keypad)!!), 0, 1)
+        ShadowSettings.setCanDrawOverlays(true)
+        DirectShortcuts(app).enabled = true
+        val manager = shadowOf(app.getSystemService(NotificationManager::class.java))
+        try {
+            Robolectric.buildActivity(MainActivity::class.java).setup().use { host ->
+                main.idle()
+                assertTrue(controls.all { (session.platformBindings().map { it.second }).contains(ActionCall(it.id)) })
+                assertTrue(controls.none { c -> session.platformWorkflowActions().any { it.id == c.id } })
+                app.press(2) // No system captioning activity: use Accessibility, never the third-party handler.
+                val fallback = shadowOf(host.get()).nextStartedActivity
+                assertEquals(settings, fallback?.action)
+                assertEquals("example.settings", fallback.component?.packageName)
+                app.press(3)
+                assertEquals(android.provider.Settings.ACTION_NIGHT_DISPLAY_SETTINGS, shadowOf(host.get()).nextStartedActivity?.action)
+                host.pause().stop()
+                app.press(1)
+                assertNull(shadowOf(app).nextStartedActivity)
+                val note = manager.getNotification(PHONE_NOTICE)
+                assertTrue(note.extras.getString(Notification.EXTRA_TITLE).orEmpty().contains("TalkBack"))
+                val tap = shadowOf(note.contentIntent).savedIntent
+                fun open() = Robolectric.buildActivity(PhoneActionActivity::class.java, tap).setup().use {
+                    shadowOf(it.get()).nextStartedActivity
+                }
+                assertEquals(settings, open()?.action)
+                assertNull(open()) // One-shot request, including after a successful first tap.
+            }
+        } finally { session.disconnect(); service.destroy() }
+    }
+
+    @Test fun configuredShortcutNeedsAnAdvertisedSystemActionAndItsOwnFreshKey() {
+        val session = app.session
+        val profile = session.deck.createProfile("Reading").getOrThrow()
+        val command = DeckCommand.ACCESSIBILITY_SHORTCUT
+        session.deck.setKey(profile, "root", 0, DeckKey(action = ActionCall(command.id))).getOrThrow()
+        session.selectProfile(profile)
+        val service = Robolectric.buildService(NavigationService::class.java).create()
+        val nav = service.get()
+        try {
+            ReflectionHelpers.callInstanceMethod<Unit>(nav, "onServiceConnected")
+            app.connectKeypad()
+            assertFalse(session.frame().keys[0].enabled)
+            app.press(1)
+            val actions = shadowOf(nav)
+            assertTrue(actions.globalActionsPerformed.isEmpty())
+            if (Build.VERSION.SDK_INT >= 31) {
+                val id = android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_ACCESSIBILITY_SHORTCUT
+                actions.setSystemActions(listOf(android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction(id, "Shortcut")))
+                nav.onSystemActionsChanged()
+                main.idleFor(java.time.Duration.ofSeconds(1))
+                assertTrue(session.frame().keys[0].enabled)
+                assertFalse(session.runDeckAction(command.id, fromPhysicalKey = true).success)
+                app.emit(KeyEvent(1, true, synthetic = true)); app.emit(KeyEvent(1, false, synthetic = true)); main.idle()
+                assertTrue(actions.globalActionsPerformed.isEmpty())
+                app.press(1)
+                assertEquals(listOf(id), actions.globalActionsPerformed)
+                shadowOf(app.getSystemService(KeyguardManager::class.java)).setKeyguardLocked(true)
+                app.press(1)
+                assertEquals(listOf(id), actions.globalActionsPerformed)
+                shadowOf(app.getSystemService(KeyguardManager::class.java)).setKeyguardLocked(false)
+                actions.setSystemActions(emptyList()) // Stale rendered availability must not dispatch.
+                app.press(1)
+                assertEquals(listOf(id), actions.globalActionsPerformed)
+            }
+        } finally { session.disconnect(); service.destroy() }
+    }
+
     private fun handler(name: ComponentName) = ResolveInfo().apply {
         isDefault = true
         activityInfo = ActivityInfo().apply {

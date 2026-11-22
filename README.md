@@ -16,8 +16,9 @@ actions. When the call ends, the keypad returns to your previous layout unless
 you've selected another.
 
 On the **Music** layout, press the center key to pause the track.
-Switch to **Navigation**: that same key now says **Select**, and the key below
-it says **Scroll down**. With [Android navigation access](docs/android-decks.md)
+Switch to **Navigation and Accessibility**: that same key now says **Select**, and the key below
+it says **Scroll down**. The bottom-right key opens **Accessibility**; press it again
+to return to navigation. With [Android navigation access](docs/android-decks.md)
 enabled, you can keep reading in a supported app without swiping the screen.
 
 ![Two illustrated nine-key keypads. On Music, the center key shows Pause and the key below reads “Druga Strana”. On Navigation, those keys become Select and Scroll down.](docs/images/audio-and-navigation.png)
