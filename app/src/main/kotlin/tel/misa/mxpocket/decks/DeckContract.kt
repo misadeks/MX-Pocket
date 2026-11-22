@@ -45,8 +45,7 @@ data class DeckState(
     }.text()
     /** Same logical tile for built-in and custom profile keys; no reads from Android during paint. */
     fun tile(command: DeckCommand, component: String? = null): KeyTile {
-        if (command.deck == "navigation") return command.navigationFace(navigationEnabled, shortcutAvailable,
-            allAppsSupported = android.os.Build.VERSION.SDK_INT >= 31)
+        if (command.deck == "navigation") return command.navigationFace(navigationEnabled, shortcutAvailable)
         if (command.deck == TEAMS) return teams.tile(command)
         val favorite = if (command == DeckCommand.OPEN) favorites.find { it.component == component } else null
         val label = when (command) {

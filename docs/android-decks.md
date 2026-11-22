@@ -24,6 +24,8 @@ Press **More** to open the keypad page below. Press **Back to Navigation** in th
 same bottom-right position to return without sending Android Back. **Access info** (key 8)
 still opens the navigation disclosure from MX Pocket. Edited roots and independent copies
 keep their saved bindings; no permission or direct-launch opt-in changes on upgrade.
+An untouched layout saved by the original TalkBack build also keeps this physical order
+when reopened or imported; you do not have to restore defaults.
 
 ### A TalkBack key and other accessibility shortcuts
 

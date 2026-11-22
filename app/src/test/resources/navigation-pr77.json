@@ -1,0 +1,31 @@
+{
+  "version": 5, "activeProfileId": "navigation", "defaultProfileId": "navigation",
+  "pinnedProfileId": null, "automatic": true, "histories": {"navigation":["root"]}, "selectionReason": "Manually selected",
+  "profiles": [{
+    "id":"navigation","name":"Navigation","rootPageId":"root","automatic":true,"rules":[],
+    "pages":[
+      {"id":"root","name":"Navigation","keys":[
+        {"icon":"","label":"","color":-14138284,"action":{"id":"plugin.key","params":{"pluginId":"navigation","index":"0"}},"enabled":true},
+        {"icon":"","label":"","color":-14138284,"action":{"id":"plugin.key","params":{"pluginId":"navigation","index":"1"}},"enabled":true},
+        {"icon":"","label":"","color":-14138284,"action":{"id":"plugin.key","params":{"pluginId":"navigation","index":"2"}},"enabled":true},
+        {"icon":"","label":"","color":-14138284,"action":{"id":"plugin.key","params":{"pluginId":"navigation","index":"3"}},"enabled":true},
+        {"icon":"","label":"","color":-14138284,"action":{"id":"plugin.key","params":{"pluginId":"navigation","index":"4"}},"enabled":true},
+        {"icon":"","label":"","color":-14138284,"action":{"id":"plugin.key","params":{"pluginId":"navigation","index":"5"}},"enabled":true},
+        {"icon":"","label":"","color":-14138284,"action":{"id":"plugin.key","params":{"pluginId":"navigation","index":"6"}},"enabled":true},
+        {"icon":"","label":"","color":-14138284,"action":{"id":"plugin.key","params":{"pluginId":"navigation","index":"7"}},"enabled":true},
+        {"icon":"","label":"More","color":-14138284,"action":{"id":"page.open","params":{"pageId":"accessibility"}},"enabled":true}
+      ]},
+      {"id":"accessibility","name":"Accessibility","keys":[
+        {"icon":"","label":"","color":-14138284,"action":{"id":"navigation.notifications","params":{}},"enabled":true},
+        {"icon":"","label":"","color":-14138284,"action":{"id":"navigation.all-apps","params":{}},"enabled":true},
+        {"icon":"","label":"","color":-14138284,"action":{"id":"navigation.long-press","params":{}},"enabled":true},
+        {"icon":"","label":"TalkBack menu","color":-14138284,"action":null,"enabled":false},
+        {"icon":"","label":"Previous reading control","color":-14138284,"action":null,"enabled":false},
+        {"icon":"","label":"Next reading control","color":-14138284,"action":null,"enabled":false},
+        {"icon":"","label":"","color":-14138284,"action":{"id":"navigation.talkback-settings","params":{}},"enabled":true},
+        {"icon":"","label":"","color":-14138284,"action":{"id":"navigation.access","params":{}},"enabled":true},
+        {"icon":"","label":"Back to Navigation","color":-14138284,"action":{"id":"page.root","params":{}},"enabled":true}
+      ]}
+    ]
+  }]
+}
