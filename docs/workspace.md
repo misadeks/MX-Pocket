@@ -18,23 +18,23 @@ see device details and the session log. On Android, Back returns to Settings.
 On Windows, Diagnostics opens in a separate window you can close independently.
 
 On Android and Windows, open **Home → Switch layout** and select a profile to
-open its first page, even when disconnected. To get back to the nine-key
-launcher, choose **Switch layout → Profile launcher**. The **Home** tab shows
-the current keypad; switching tabs does not change its layout. Android system
-Back dismisses the open menu, returns from other top-level tabs to Home, or
+open its first page, even when disconnected. Use the page arrows to cycle back
+to the **Home** grid. The **Home** tab shows the current keypad; switching
+tabs does not change its layout. Android system Back dismisses the open menu,
+returns from other top-level tabs to Home, or
 leaves the Activity from Home. It does not select a keypad profile.
 
-On the physical launcher, press a profile key to open it. **More profiles**
+On the keypad’s **Home** grid, press a profile key to open it. **More profiles**
 shows the next group if there are more than nine. **Previous** and **Next**
-cycle through the launcher and available profile roots. A submenu opens with
+cycle through Home and available profile roots. A submenu opens with
 its assigned key; a **Back** binding retraces pages within the current profile,
-and **Return to root** opens that profile's first page, not the launcher.
+and **Return to root** opens that profile's first page, not Home.
 
-Press **Previous** and **Next** together and release to return to the keypad’s
-profile launcher. Keep both held instead to open Tic Tac Toe, if enabled.
+Press **Previous** and **Next** together and release to return to Home.
+Keep both held instead to open Tic Tac Toe, if enabled.
 The hold starts when the second button goes down and uses Android’s **Touch &
 hold delay** on Android. Release both, then press either one alone to exit the
-game. The game is not in the regular launcher or editor. In the Windows
+game. The game is not on the Home grid or in the editor. In the Windows
 simulator, use **Page Up** and **Page Down** on the Home tab for the same gestures.
 
 Turning off a plugin hides its own profile and pages from Home, Profiles and

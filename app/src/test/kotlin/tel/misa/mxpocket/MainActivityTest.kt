@@ -1,6 +1,7 @@
 package tel.misa.mxpocket
 
 import androidx.compose.ui.test.*
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import android.content.Intent
 import android.os.Bundle
@@ -57,8 +58,13 @@ class MainActivityTest {
             ui.onNodeWithContentDescription("Next page").performScrollTo().performClick()
             ui.onNodeWithContentDescription("Key 1, Camera", substring = true).assertHasNoClickAction()
             ui.onNodeWithText("Switch layout").performScrollTo().performClick()
-            ui.onNodeWithText("Profile launcher").performClick()
+            ui.onNodeWithText("Profile launcher").assertDoesNotExist()
+            ui.onNodeWithText("Launcher").assertHasClickAction()
+            ui.onNodeWithText("Focus").performClick()
+            ui.onNodeWithContentDescription("Previous page").performScrollTo().performClick()
             assertEquals(tel.misa.mxpocket.deck.PROFILE_HOME, app.session.deck.operatingState.value.activeProfileId)
+            ui.onNode(hasText("Home") and SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)).assertExists()
+            ui.onNodeWithContentDescription("Key 1, Focus", substring = true).assertHasNoClickAction()
             assertFalse(app.session.ready)
         }
     }
@@ -92,6 +98,7 @@ class MainActivityTest {
                 ui.onNodeWithText("Français").performClick()
                 scene.recreate()
                 ui.onNodeWithText("Accueil").performClick()
+                ui.onNode(hasText("Accueil") and SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)).assertExists()
                 ui.onNodeWithContentDescription("Connecter l’appareil").performClick()
                 ui.onNodeWithText("Vérifiez le câble", substring = true).assertExists()
                 assertEquals(AppLanguage.FRENCH, LanguagePreference.choice(app))

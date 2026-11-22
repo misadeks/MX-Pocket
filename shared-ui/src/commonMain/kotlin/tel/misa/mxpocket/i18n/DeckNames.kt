@@ -34,10 +34,9 @@ private fun Copy?.ifFactoryValue(raw: String) = if (this != null && raw == en) t
 fun DeckProfile.displayName(): String = deckNames[id].ifFactoryValue(name)
 
 fun DeckProfile.displayPageName(page: DeckPage): String = when {
-    id == PROFILE_HOME -> LauncherCopy.Launcher
     id == TEAMS && page.id == "root" -> K.Work
     id == TEAMS && page.id == IN_CALL -> K.InCall
-    page.id == "root" -> deckNames[id]
+    id == PROFILE_HOME || page.id == "root" -> deckNames[id]
     else -> null
 }.ifFactoryValue(page.name)
 
