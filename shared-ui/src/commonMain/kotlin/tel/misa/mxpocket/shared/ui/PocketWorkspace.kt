@@ -19,6 +19,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import kotlinx.coroutines.launch
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -108,9 +109,18 @@ fun PocketWorkspace(
     tab: WorkspaceTab, select: (WorkspaceTab) -> Unit, state: PocketScreenState,
     plugins: List<PluginItem>, event: (PocketScreenEvent) -> Unit,
     editor: @Composable () -> Unit, workflows: @Composable () -> Unit,
+    openDiagnosticsWindow: (() -> Unit)? = null,
+    backHandler: @Composable (Boolean, () -> Unit) -> Unit = { _, _ -> },
 ) {
     val holder = rememberSaveableStateHolder()
+    var diagnosticsOpen by rememberSaveable(tab) { mutableStateOf(false) }
+    val closeDiagnostics = { diagnosticsOpen = false }
+    backHandler(diagnosticsOpen, closeDiagnostics)
     BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
+        if (diagnosticsOpen) {
+            DiagnosticsScreen(state, closeDiagnostics, event)
+            return@BoxWithConstraints
+        }
         val rail = maxWidth >= 840.dp
         Column {
             Row(Modifier.weight(1f)) {
@@ -129,7 +139,7 @@ fun PocketWorkspace(
                             WorkspaceTab.PROFILES -> ProfilesScreen(state, event, editor)
                             WorkspaceTab.PLUGINS -> PluginsScreen(plugins, event)
                             WorkspaceTab.WORKFLOWS -> workflows()
-                            WorkspaceTab.SETTINGS -> SettingsScreen(state, event)
+                            WorkspaceTab.SETTINGS -> SettingsScreen(state, event, openDiagnosticsWindow ?: { diagnosticsOpen = true })
                         }
                     }
                 }
@@ -148,7 +158,7 @@ fun PocketWorkspace(
 
 /**
  * Home mirrors the physical keypad: the nine tiles are the same LCD images, updated as they change.
- * Profile switching lives on the Profiles tab; display maintenance lives in Settings.
+ * Profile switching lives on the Profiles tab.
  */
 @Composable
 fun HomeScreen(state: PocketScreenState, event: (PocketScreenEvent) -> Unit) {
@@ -390,7 +400,7 @@ private fun PluginsScreen(plugins: List<PluginItem>, event: (PocketScreenEvent) 
 }
 
 @Composable
-private fun SettingsScreen(state: PocketScreenState, event: (PocketScreenEvent) -> Unit) {
+private fun SettingsScreen(state: PocketScreenState, event: (PocketScreenEvent) -> Unit, openDiagnostics: () -> Unit) {
     Section("Settings") {
         PocketButton("Feature setup", { event(PocketScreenEvent.FeatureSetup) }, Modifier.fillMaxWidth(), ShellIcon.SETTINGS, PocketTone.ACCENT)
         PocketCard("Appearance", if (PocketColors.dark) ShellIcon.MOON else ShellIcon.SUN, caps = true) {
@@ -426,22 +436,32 @@ private fun SettingsScreen(state: PocketScreenState, event: (PocketScreenEvent) 
                 Note(state.simulator.limitations)
             }
         }
-        PocketCard("Diagnostics", ShellIcon.DOCUMENT, caps = true) {
-            PocketDivider()
-            PocketInner {
-                Text(listOf(state.pluginTitle, state.connectionLabel).filter { it.isNotBlank() }.joinToString("  |  "))
-                if (state.reason.isNotBlank()) Note(state.reason)
-            }
-            PocketInner { Text("Display profile: 480 x 480 panel; nine 118 x 118 visible regions. An upload acknowledgement does not verify LCD visibility.") }
-            if (state.simulator == null) PocketButton("Refresh USB diagnostics", { event(PocketScreenEvent.RefreshDiagnostics) },
-                Modifier.fillMaxWidth(), ShellIcon.REFRESH, PocketTone.ACCENT)
-            PocketLabel("Device descriptor details")
-            PocketInner { SelectableReadout(state.diagnostics) }
-            if (state.simulator == null) PocketButton("Export session log", { event(PocketScreenEvent.SaveLog) },
-                Modifier.fillMaxWidth(), ShellIcon.DOWNLOAD)
-            PocketLabel("Session log")
-            PocketInner { SelectableReadout(state.log.ifEmpty { "No events yet." }) }
+        PocketListRow(ShellIcon.DOCUMENT, "Diagnostics", "Device details and session log", openDiagnostics)
+    }
+}
+
+@Composable
+fun DiagnosticsScreen(state: PocketScreenState, onClose: () -> Unit, event: (PocketScreenEvent) -> Unit) {
+    WorkspaceColumn {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            WorkspaceTitle("Diagnostics")
+            if (state.simulator == null) PocketTextLink("Back to Settings", onClose, ShellIcon.CHEVRON_LEFT)
+            else PocketTextLink("Close", onClose)
         }
+        PocketInner {
+            Text(listOf(state.pluginTitle, state.connectionLabel).filter { it.isNotBlank() }.joinToString("  |  "))
+            if (state.status.isNotBlank()) Text(state.status, Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+            if (state.reason.isNotBlank()) Note(state.reason)
+        }
+        Note("Display profile: 480 x 480 panel; nine 118 x 118 visible regions. An upload acknowledgement does not verify LCD visibility.")
+        if (state.simulator == null) PocketButton("Refresh USB diagnostics", { event(PocketScreenEvent.RefreshDiagnostics) },
+            Modifier.fillMaxWidth(), ShellIcon.REFRESH, PocketTone.ACCENT)
+        PocketLabel("Device descriptor details")
+        PocketInner { SelectableReadout(state.diagnostics) }
+        if (state.simulator == null) PocketButton("Export session log", { event(PocketScreenEvent.SaveLog) },
+            Modifier.fillMaxWidth(), ShellIcon.DOWNLOAD)
+        PocketLabel("Session log")
+        PocketInner { SelectableReadout(state.log.ifEmpty { "No events yet." }) }
     }
 }
 

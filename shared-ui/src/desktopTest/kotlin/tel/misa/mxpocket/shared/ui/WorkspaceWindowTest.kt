@@ -22,6 +22,28 @@ class WorkspaceWindowTest {
     @get:Rule val ui = createComposeRule()
     @get:Rule val temp = TemporaryFolder()
 
+    @Test fun simulatorOpensDiagnosticsWithoutReplacingSettingsOrOfferingAndroidActions() {
+        var open by mutableStateOf(false)
+        val state = PocketScreenState("Virtual keypad connected", "Focus", emptyList(), emptyList(), "focus",
+            simulator = DesktopSimulator("Windows simulator"), diagnostics = "No USB adapter", log = "Connected")
+        ui.setContent {
+            PocketTheme {
+                PocketWorkspace(WorkspaceTab.SETTINGS, {}, state, emptyList(), {}, {}, {}, openDiagnosticsWindow = { open = true })
+                if (open) DiagnosticsScreen(state, { open = false }) {}
+            }
+        }
+        val details = ui.onNodeWithText(state.diagnostics)
+        details.assertDoesNotExist()
+        ui.onNodeWithText("Diagnostics").performScrollTo().performClick()
+        details.assertExists()
+        ui.onNodeWithText(state.log).assertExists()
+        ui.onNodeWithText("Refresh USB diagnostics").assertDoesNotExist()
+        ui.onNodeWithText("Export session log").assertDoesNotExist()
+        ui.onNodeWithText("Close").performScrollTo().performClick()
+        details.assertDoesNotExist()
+        ui.onNodeWithText("Diagnostics").assertHasClickAction()
+    }
+
     @Test fun onlyAConnectedDesktopSimulatorOffersKeyInput() {
         val frame = FocusTimer().present(0)
         val grid = virtualGrid(1, defaultDeck(), frame, null)

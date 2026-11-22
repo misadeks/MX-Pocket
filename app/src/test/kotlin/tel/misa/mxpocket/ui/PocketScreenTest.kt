@@ -2,6 +2,8 @@ package tel.misa.mxpocket.ui
 
 import android.content.Intent
 import android.media.AudioManager
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -33,15 +35,27 @@ class PocketScreenTest {
         val state = mutableStateOf(scenes.state("disconnected"))
         val tab = mutableStateOf(WorkspaceTab.HOME)
         val events = mutableListOf<PocketScreenEvent>()
-        ui.setContent { PocketTheme { PocketWorkspace(tab.value, { tab.value = it }, state.value,
-            emptyList(), events::add, editor = {}, workflows = {}) } }
+        lateinit var back: () -> Unit
+        ui.setContent {
+            back = checkNotNull(LocalOnBackPressedDispatcherOwner.current).onBackPressedDispatcher::onBackPressed
+            PocketTheme { PocketWorkspace(tab.value, { tab.value = it }, state.value,
+                emptyList(), events::add, editor = {}, workflows = {}, backHandler = { enabled, action -> BackHandler(enabled, action) }) }
+        }
         ui.onNodeWithText(state.value.status).assert(SemanticsMatcher.expectValue(SemanticsProperties.LiveRegion, LiveRegionMode.Polite))
         ui.onNodeWithText("Settings").performClick()
         val readout = ui.onNodeWithText(state.value.diagnostics)
+        readout.assertDoesNotExist()
+        ui.onNodeWithText("Diagnostics").performScrollTo().performClick()
         readout.performScrollTo().performSemanticsAction(SemanticsActions.SetSelection) { it(2, 5, false) }
         ui.runOnIdle { state.value = scenes.state("audio").copy(connectionActive = true) }
         readout.assert(SemanticsMatcher.expectValue(SemanticsProperties.TextSelectionRange, TextRange(2, 5)))
-        ui.runOnIdle { assertTrue(events.isEmpty()) }
+        ui.onNodeWithText(state.value.log).assertExists()
+        ui.onNodeWithText("Refresh USB diagnostics").performScrollTo().performClick()
+        ui.onNodeWithText("Export session log").performScrollTo().performClick()
+        ui.runOnIdle { back() }
+        readout.assertDoesNotExist()
+        ui.onNodeWithText("Disconnect keypad").assertExists()
+        ui.runOnIdle { assertEquals(listOf(PocketScreenEvent.RefreshDiagnostics, PocketScreenEvent.SaveLog), events) }
     }
 
     @Test fun disconnectedMirrorHasNoKeyActionsAfterRedraw() {

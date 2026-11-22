@@ -8,7 +8,9 @@ LCD keys live when connected. Press keys on the device, not on the phone.
 Choose **System**, **Light** or **Dark** in **Settings > Appearance**. The
 choice is remembered; System follows your device's current theme.
 **Plugins** turns features on or off, **Flows** lets you build and run workflows,
-and **Settings** contains USB preferences and diagnostics.
+and **Settings** contains USB preferences. Open **Settings → Diagnostics** to
+see device details and the session log. On Android, Back returns to Settings.
+On Windows, Diagnostics opens in a separate window you can close independently.
 
 **Profiles** switches and edits profiles. Swipe the endless profile carousel
 (or tap a card) to put that profile on the keypad; the cards beside the
@@ -115,7 +117,8 @@ versions of the app cannot import format 3 exports.
 ## Connect a wired keypad
 
 1. Plug **one wired MX Creative Keypad** into an Android phone with USB Host
-   support. In **Settings → Refresh USB diagnostics**, look for `046D:C354`.
+   support. Open **Settings → Diagnostics**, tap **Refresh USB diagnostics**
+   and look for `046D:C354`.
    If it's missing, try a data-capable cable or OTG adapter and, if the phone
    cannot supply enough power, a powered hub.
 2. Tap **Connect to device** at the top of Home and approve the attached device when Android prompts.
