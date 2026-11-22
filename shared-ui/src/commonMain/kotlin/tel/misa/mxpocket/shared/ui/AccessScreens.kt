@@ -15,9 +15,36 @@ import androidx.compose.ui.unit.dp
 
 enum class DeckAccess(val title: String, val disclosure: String) {
     Media("Media session access",
-        "Android grants broad notification access. MX Pocket only queries active media sessions; it does not read, store or act on notifications. With Audio selected, the connected, authorized keypad shows track titles and local cover art even when the phone is locked. Switch profiles or revoke access to stop showing them. Basic media keys and volume work without access."),
+        "Android grants broad notification access. The Audio service only queries active media sessions; it does not read, store or act on notifications. With Audio selected, the connected, authorized keypad shows track titles and local cover art even when the phone is locked. Switch profiles or revoke access to stop showing them. Basic media keys and volume work without access."),
     Navigation("Navigation access",
         "The MX Pocket navigation accessibility service can inspect the current window and act across apps. On a key press it can go Back or Home, open Recents, scroll, move focus or activate an item. With a separate Studio opt-in it can press a labeled camera button. It does not read or store screen text, record keys or automate gestures. Without access, navigation stays inside MX Pocket.")
+}
+
+data class TeamsSetupState(val enabled: Boolean, val notifications: Boolean, val toolbar: Boolean,
+    val supported: Boolean, val message: String = "")
+enum class TeamsSetupAction { TOGGLE, NOTIFICATIONS, TOOLBAR, DONE }
+
+@Composable
+fun TeamsSetupScreen(state: TeamsSetupState, onAction: (TeamsSetupAction) -> Unit) {
+    SubsidiaryPage("Teams call controls", { onAction(TeamsSetupAction.DONE) }) {
+        Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Show In call when you join on this phone. Leaving returns to your previous page unless you chose another. Opening a page never operates a call control.")
+            Text("Android grants broad notification and accessibility access. MX Pocket checks the Teams call notification type and visible Mic and Hang up buttons. Only a center key press on the physical keypad can operate the meeting mic. No chat text, names or call details are saved.")
+            if (!state.supported) Text("Automatic switching needs Android 14 or later and a single Android profile. You can still use Work and open Call tools manually.")
+            OutlinedButton({ onAction(TeamsSetupAction.TOGGLE) }, enabled = state.supported || state.enabled) {
+                Text(if (state.enabled) "Turn off Teams call switching" else "Enable Teams call switching")
+            }
+            Text("In Notification access, select MX Pocket Teams calls. Audio access is separate.")
+            OutlinedButton({ onAction(TeamsSetupAction.NOTIFICATIONS) }) {
+                Text("Notification access: ${if (state.notifications) "on" else "off"}")
+            }
+            Text("In Accessibility, select MX Pocket Teams call controls. Both grants are optional. Revoke either here or turn off switching above.")
+            OutlinedButton({ onAction(TeamsSetupAction.TOOLBAR) }) {
+                Text("Accessibility service: ${if (state.toolbar) "connected" else "off"}")
+            }
+            SubsidiaryStatus(state.message)
+        }
+    }
 }
 
 const val CameraControlsDisclosure = "Open Camera and Open Video only open your phone's viewfinder; MX Pocket needs no camera permission. " +

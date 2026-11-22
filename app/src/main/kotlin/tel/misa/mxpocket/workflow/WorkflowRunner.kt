@@ -41,7 +41,8 @@ internal class WorkflowRunner(
         workflow: WorkflowDefinition, origin: WorkflowOrigin,
         definitions: List<WorkflowDefinition>, endpoints: List<WorkflowEndpoint>,
     ): Job? {
-        if (busy || scope.coroutineContext[Job]?.isActive == false) return null
+        // Virtual origins are readable in old run history, not a source of new Android runs.
+        if (origin == WorkflowOrigin.VIRTUAL || busy || scope.coroutineContext[Job]?.isActive == false) return null
         val initial = WorkflowStatus(workflow.id, workflow.name, origin, WorkflowPhase.RUNNING, "Starting")
         val job = scope.launch(start = CoroutineStart.LAZY) {
             var stepNumber = 0

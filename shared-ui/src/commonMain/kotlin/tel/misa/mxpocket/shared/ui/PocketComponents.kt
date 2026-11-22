@@ -10,6 +10,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,34 +28,71 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/** Dark-first palette from the Stitch redesign; used by both workspace hosts. */
+/** One workspace palette. Dark uses graphite greys with an orange accent; light uses white and pale grey with blue. */
+@Immutable
+internal data class PocketPalette(
+    val dark: Boolean,
+    val background: Color, val card: Color, val cardStroke: Color, val inner: Color, val innerStroke: Color,
+    val chip: Color, val control: Color, val buttonStroke: Color, val nav: Color, val navIndicator: Color,
+    val title: Color, val text: Color, val muted: Color, val faint: Color,
+    val accent: Color, val onAccent: Color, val accentContainer: Color, val accentSoft: Color, val accentStroke: Color,
+    val mono: Color, val success: Color, val successContainer: Color, val successStroke: Color,
+    val warning: Color, val danger: Color, val dangerContainer: Color, val dangerStroke: Color,
+)
+
+internal val DarkPalette = PocketPalette(dark = true,
+    background = Color(0xff111214), card = Color(0xff1a1b1f), cardStroke = Color(0xff2a2c31),
+    inner = Color(0xff141518), innerStroke = Color(0xff26282d), chip = Color(0xff1d1f23), control = Color(0xff222429),
+    buttonStroke = Color(0xff33363c), nav = Color(0xff141518), navIndicator = Color(0xff3a2414),
+    title = Color(0xffffffff), text = Color(0xffe5e7eb), muted = Color(0xff9ca3af), faint = Color(0xff6b7280),
+    accent = Color(0xfff97316), onAccent = Color(0xff1a0c02), accentContainer = Color(0xff7c2d12),
+    accentSoft = Color(0xff2a1a10), accentStroke = Color(0xff6b3416), mono = Color(0xfffdba74),
+    success = Color(0xff4ade80), successContainer = Color(0xff13301f), successStroke = Color(0xff1f5d36),
+    warning = Color(0xfffbbf24), danger = Color(0xfffca5a5), dangerContainer = Color(0xff35191c), dangerStroke = Color(0xff522428))
+
+internal val LightPalette = PocketPalette(dark = false,
+    background = Color(0xfff3f4f6), card = Color(0xffffffff), cardStroke = Color(0xffe5e7eb),
+    inner = Color(0xfff8fafc), innerStroke = Color(0xffe5e7eb), chip = Color(0xfff3f4f6), control = Color(0xffffffff),
+    buttonStroke = Color(0xffd1d5db), nav = Color(0xffffffff), navIndicator = Color(0xffdbeafe),
+    title = Color(0xff0b1220), text = Color(0xff111827), muted = Color(0xff6b7280), faint = Color(0xff9ca3af),
+    accent = Color(0xff2563eb), onAccent = Color(0xffffffff), accentContainer = Color(0xff1d4ed8),
+    accentSoft = Color(0xffeff6ff), accentStroke = Color(0xffbfdbfe), mono = Color(0xff1d4ed8),
+    success = Color(0xff15803d), successContainer = Color(0xffdcfce7), successStroke = Color(0xff86efac),
+    warning = Color(0xffb45309), danger = Color(0xffdc2626), dangerContainer = Color(0xfffef2f2), dangerStroke = Color(0xfffecaca))
+
+internal val LocalPocketPalette = staticCompositionLocalOf { DarkPalette }
+
+/** Theme-aware colors for the workspace; read inside composition only. */
 internal object PocketColors {
-    val background = Color(0xff111215)
-    val card = Color(0xff18191d)
-    val cardStroke = Color(0xff272930)
-    val inner = Color(0xff121316)
-    val innerStroke = Color(0xff24252b)
-    val chip = Color(0xff1b1c20)
-    val control = Color(0xff1e2027)
-    val buttonStroke = Color(0xff30323d)
-    val nav = Color(0xff131418)
-    val navIndicator = Color(0xff1e3a5f)
-    val text = Color(0xffe5e5e5)
-    val muted = Color(0xffa3a3a3)
-    val faint = Color(0xff8a8a8a)
-    val accent = Color(0xff60a5fa)
-    val onAccent = Color(0xff0b1d3a)
-    val accentContainer = Color(0xff194375)
-    val accentSoft = Color(0xff121c2b)
-    val accentStroke = Color(0xff1f3b5c)
-    val mono = Color(0xff7dd3fc)
-    val success = Color(0xff4ade80)
-    val successContainer = Color(0xff13301f)
-    val successStroke = Color(0xff1f5d36)
-    val warning = Color(0xfffbbf24)
-    val danger = Color(0xfffca5a5)
-    val dangerContainer = Color(0xff35191c)
-    val dangerStroke = Color(0xff522428)
+    private val p: PocketPalette @Composable @ReadOnlyComposable get() = LocalPocketPalette.current
+    val dark: Boolean @Composable @ReadOnlyComposable get() = p.dark
+    val background: Color @Composable @ReadOnlyComposable get() = p.background
+    val card: Color @Composable @ReadOnlyComposable get() = p.card
+    val cardStroke: Color @Composable @ReadOnlyComposable get() = p.cardStroke
+    val inner: Color @Composable @ReadOnlyComposable get() = p.inner
+    val innerStroke: Color @Composable @ReadOnlyComposable get() = p.innerStroke
+    val chip: Color @Composable @ReadOnlyComposable get() = p.chip
+    val control: Color @Composable @ReadOnlyComposable get() = p.control
+    val buttonStroke: Color @Composable @ReadOnlyComposable get() = p.buttonStroke
+    val nav: Color @Composable @ReadOnlyComposable get() = p.nav
+    val navIndicator: Color @Composable @ReadOnlyComposable get() = p.navIndicator
+    val title: Color @Composable @ReadOnlyComposable get() = p.title
+    val text: Color @Composable @ReadOnlyComposable get() = p.text
+    val muted: Color @Composable @ReadOnlyComposable get() = p.muted
+    val faint: Color @Composable @ReadOnlyComposable get() = p.faint
+    val accent: Color @Composable @ReadOnlyComposable get() = p.accent
+    val onAccent: Color @Composable @ReadOnlyComposable get() = p.onAccent
+    val accentContainer: Color @Composable @ReadOnlyComposable get() = p.accentContainer
+    val accentSoft: Color @Composable @ReadOnlyComposable get() = p.accentSoft
+    val accentStroke: Color @Composable @ReadOnlyComposable get() = p.accentStroke
+    val mono: Color @Composable @ReadOnlyComposable get() = p.mono
+    val success: Color @Composable @ReadOnlyComposable get() = p.success
+    val successContainer: Color @Composable @ReadOnlyComposable get() = p.successContainer
+    val successStroke: Color @Composable @ReadOnlyComposable get() = p.successStroke
+    val warning: Color @Composable @ReadOnlyComposable get() = p.warning
+    val danger: Color @Composable @ReadOnlyComposable get() = p.danger
+    val dangerContainer: Color @Composable @ReadOnlyComposable get() = p.dangerContainer
+    val dangerStroke: Color @Composable @ReadOnlyComposable get() = p.dangerStroke
 }
 
 /** Compact type scale used by the Stitch screens; touch targets stay at least 48dp. */
@@ -79,7 +119,8 @@ internal val PocketMono = TextStyle(fontFamily = FontFamily.Monospace, fontSize 
 
 /** Rounded square holding a plugin/profile icon in its accent color. */
 @Composable internal fun PocketIconTile(accent: PocketAccent, size: Dp = 44.dp) {
-    Box(Modifier.size(size).clip(RoundedCornerShape(12.dp)).background(Color(accent.tile))
+    val tile = if (PocketColors.dark) Color(accent.tile) else Color(accent.tint).copy(alpha = .12f)
+    Box(Modifier.size(size).clip(RoundedCornerShape(12.dp)).background(tile)
         .border(1.dp, Color(accent.tint).copy(alpha = .25f), RoundedCornerShape(12.dp)),
         contentAlignment = Alignment.Center) {
         PocketIcon(accent.icon, Color(accent.tint), size * .5f)
@@ -110,7 +151,7 @@ internal val PocketMono = TextStyle(fontFamily = FontFamily.Monospace, fontSize 
                     val heading = Modifier.weight(1f).semantics { heading() }
                     if (caps) Text(title.uppercase(), heading, color = PocketColors.muted,
                         style = MaterialTheme.typography.titleSmall, letterSpacing = 1.sp)
-                    else Text(title, heading, color = Color.White, style = MaterialTheme.typography.titleMedium)
+                    else Text(title, heading, color = PocketColors.title, style = MaterialTheme.typography.titleMedium)
                 } else Spacer(Modifier.weight(1f))
                 trailing?.invoke()
             }
@@ -129,12 +170,30 @@ internal val PocketMono = TextStyle(fontFamily = FontFamily.Monospace, fontSize 
 
 @Composable internal fun PocketDivider() = HorizontalDivider(color = PocketColors.cardStroke)
 
-internal enum class PocketTone(val fill: Color, val stroke: Color, val text: Color) {
-    NEUTRAL(PocketColors.control, PocketColors.buttonStroke, PocketColors.text),
-    ACCENT(PocketColors.accentSoft, PocketColors.accentStroke, PocketColors.accent),
-    PRIMARY(PocketColors.accent, PocketColors.accent, PocketColors.onAccent),
-    SUCCESS(PocketColors.successContainer, PocketColors.successStroke, PocketColors.success),
-    DANGER(PocketColors.dangerContainer, PocketColors.dangerStroke, PocketColors.danger),
+internal enum class PocketTone {
+    NEUTRAL, ACCENT, PRIMARY, SUCCESS, DANGER;
+
+    val fill: Color @Composable @ReadOnlyComposable get() = when (this) {
+        NEUTRAL -> PocketColors.control
+        ACCENT -> PocketColors.accentSoft
+        PRIMARY -> PocketColors.accent
+        SUCCESS -> PocketColors.successContainer
+        DANGER -> PocketColors.dangerContainer
+    }
+    val stroke: Color @Composable @ReadOnlyComposable get() = when (this) {
+        NEUTRAL -> PocketColors.buttonStroke
+        ACCENT -> PocketColors.accentStroke
+        PRIMARY -> PocketColors.accent
+        SUCCESS -> PocketColors.successStroke
+        DANGER -> PocketColors.dangerStroke
+    }
+    val text: Color @Composable @ReadOnlyComposable get() = when (this) {
+        NEUTRAL -> PocketColors.text
+        ACCENT -> PocketColors.accent
+        PRIMARY -> PocketColors.onAccent
+        SUCCESS -> PocketColors.success
+        DANGER -> PocketColors.danger
+    }
 }
 
 /** Compact rounded button with an optional leading icon; the touch target remains 48dp. */
@@ -171,7 +230,7 @@ internal enum class PocketTone(val fill: Color, val stroke: Color, val text: Col
             subtitle?.let { Text(it, color = PocketColors.muted, style = MaterialTheme.typography.bodySmall) }
         }
         Switch(checked = checked, enabled = enabled, onCheckedChange = null,
-            colors = SwitchDefaults.colors(checkedTrackColor = Color(0xff2563eb), checkedThumbColor = Color.White,
+            colors = SwitchDefaults.colors(checkedTrackColor = PocketColors.accent, checkedThumbColor = PocketColors.onAccent,
                 uncheckedTrackColor = PocketColors.control, uncheckedThumbColor = PocketColors.muted,
                 uncheckedBorderColor = PocketColors.buttonStroke))
     }

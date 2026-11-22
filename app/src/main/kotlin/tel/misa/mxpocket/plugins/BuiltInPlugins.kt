@@ -11,7 +11,8 @@ object BuiltInPlugins {
             DeckPlugin("launcher", "App Launcher", PluginCapability.OPEN_APPS),
             DeckPlugin("studio", "Pocket Studio", PluginCapability.STUDIO),
             DeckPlugin("navigation", "Android Navigation", PluginCapability.SYSTEM_NAVIGATION),
-            TicTacToePlugin(xoTitle), OneNotePlugin(oneNoteTitle))
+            TicTacToePlugin(xoTitle), DeckPlugin("teams", "Teams", PluginCapability.TEAMS),
+            OneNotePlugin(oneNoteTitle))
 }
 
 class FocusPlugin(title: String) : PocketPlugin {

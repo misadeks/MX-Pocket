@@ -17,12 +17,15 @@ import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.deck.*
 import tel.misa.mxpocket.shared.ui.LayoutEditor
 import tel.misa.mxpocket.shared.ui.PocketTheme
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w1000dp-h900dp")
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 class AdaptiveLayoutEditorTest {
     @get:Rule val ui = createComposeRule()
     @get:Rule val folder = TemporaryFolder()
@@ -43,17 +46,25 @@ class AdaptiveLayoutEditorTest {
         }
     }
 
+    private fun openKey(description: String) {
+        ui.onNodeWithText("Swap keys").performScrollTo().performClick()
+        ui.onNodeWithContentDescription(description, substring = true).performClick()
+    }
+
     @Test fun keyAndBindingDraftFollowTheSelectedPageAcrossBreakpointsWithoutNavigatingTheDeck() {
         val pageId = repo.createPage("audio", "Mixer").getOrThrow()
         repo.setKey("audio", pageId, 2, DeckKey(label = "Muted", enabled = false)).getOrThrow()
-        val before = repo.state.value
         open()
+        // The picker and the Profiles carousel agree: choosing a profile puts it on the keypad.
         ui.onNodeWithText("Focus / Focus ▾").performClick()
         ui.onNodeWithText("Audio").performClick()
+        ui.waitUntil(5000) { repo.state.value.activeProfileId == "audio" }
+        val before = repo.state.value
+        // Choosing a page and editing its keys never navigates the keypad.
         ui.onNodeWithText("Audio / Audio ▾").performClick()
         ui.onNodeWithText("Mixer").performClick()
-        ui.onNodeWithContentDescription("Key 3, Muted", substring = true).performClick()
-        ui.onNodeWithText("Key positions").assertDoesNotExist()
+        openKey("Key 3, Muted")
+        ui.onNodeWithTag("swap-grid").assertDoesNotExist()
         ui.onNodeWithTag("key-label").performTextReplacement("Mix down")
         ui.onNodeWithTag("choose-binding").performScrollTo().performClick()
         ui.onNodeWithText("Search actions").performTextInput("Mixer")
@@ -61,9 +72,8 @@ class AdaptiveLayoutEditorTest {
         ui.onNodeWithText("Open page: Mixer").performClick()
         ui.onNodeWithTag("wide-editor").assertExists()
         ui.onNodeWithText("Manage profile").assertExists()
-        ui.onNodeWithText("Key positions").assertExists()
+        ui.onNodeWithText("Swap keys").assertExists()
         ui.onNodeWithText("Edit key 3").assertExists()
-        ui.onNodeWithContentDescription("Key 3, Mix down, Off", substring = true).assertExists()
         ui.runOnIdle {
             assertSame(before, repo.state.value)
             width.value = 380.dp
@@ -72,12 +82,53 @@ class AdaptiveLayoutEditorTest {
         ui.onNodeWithText("Save key").performScrollTo().performClick()
         ui.waitUntil(5000) { repo.state.value != before }
         val saved = DeckRepository(file).state.value
-        assertEquals("focus", saved.activeProfileId)
+        assertEquals("audio", saved.activeProfileId)
+        assertEquals("root", saved.activePage.id)
         val key = saved.profiles.single { it.id == "audio" }.pages.single { it.id == pageId }.keys[2]
         assertEquals("Mix down", key.label)
         assertFalse(key.enabled)
         assertEquals(DeckActions.PAGE, key.action?.id)
         assertEquals(pageId, key.action?.params?.get(DeckActions.PAGE_ID))
+    }
+
+    @Test fun holdPickerSetsChangesAndClearsOnlyHoldAndPreviewOnlySelectsTheKey() {
+        fun page(name: String) = ActionCall(DeckActions.PAGE,
+            mapOf(DeckActions.PAGE_ID to repo.createPage("focus", name).getOrThrow()))
+        val tap = page("Mixer")
+        val hold = page("Levels")
+        val original = DeckKey(label = "Controls", action = tap)
+        repo.setKey("focus", "root", 0, original).getOrThrow()
+        fun previewKey(): SemanticsNodeInteraction {
+            ui.onNodeWithText("Swap keys").performScrollTo().performClick()
+            return ui.onNodeWithContentDescription("Key 1, Controls", substring = true)
+        }
+        fun choose(target: String, option: String) {
+            ui.onNodeWithTag(target).performScrollTo().performClick()
+            ui.onNodeWithText(option).performClick()
+        }
+        fun save(expected: DeckKey) {
+            ui.onNodeWithText("Save key").performScrollTo().performClick()
+            ui.waitUntil(5000) { repo.state.value.activePage.keys[0] == expected }
+            assertEquals("root", DeckRepository(file).state.value.activePage.id)
+        }
+        open()
+        previewKey().performClick()
+        choose("choose-hold-binding", "Open page: Mixer")
+        choose("choose-hold-binding", "Open page: Levels")
+        val both = original.copy(holdAction = hold)
+        assertEquals(original, repo.state.value.activePage.keys[0])
+        save(both)
+
+        // A long preview press on a key with two real navigation bindings still just selects it.
+        previewKey().performTouchInput { longClick() }
+        ui.onNodeWithTag("choose-binding").assertTextContains("Tap: Open page: Mixer")
+        ui.onNodeWithTag("choose-hold-binding").assertTextContains("Hold: Open page: Levels")
+        choose("choose-binding", "Unassigned")
+        save(both.copy(action = null))
+        previewKey().performClick()
+        choose("choose-hold-binding", "Unassigned")
+        save(original.copy(action = null))
+        assertEquals(listOf("root"), repo.state.value.histories["focus"])
     }
 
     @Test fun ruleDraftSurvivesResizeAndBackUnwindsOnlyTheCurrentEditorLayer() {
@@ -94,13 +145,13 @@ class AdaptiveLayoutEditorTest {
         ui.waitUntil(5000) { repo.state.value.activeProfile.rules == listOf(DeckRule("dock", "studio")) }
         ui.onNodeWithText("Add context rule").assertDoesNotExist()
         ui.runOnIdle { requireNotNull(back).invoke() }
-        ui.onNodeWithText("Key positions").assertExists()
-        ui.onNodeWithContentDescription("Key 1,", substring = true).performClick()
+        ui.onNodeWithText("Swap keys").assertExists()
+        openKey("Key 1,")
         ui.onNodeWithTag("choose-binding").performScrollTo().performClick()
         ui.runOnIdle { requireNotNull(back).invoke() }
         ui.onNodeWithText("Edit key 1").assertExists()
         ui.runOnIdle { requireNotNull(back).invoke() }
-        ui.onNodeWithText("Key positions").assertExists()
+        ui.onNodeWithText("Swap keys").assertExists()
         ui.runOnIdle { assertNull(back) }
     }
 }

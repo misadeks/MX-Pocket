@@ -11,6 +11,7 @@ internal fun C.capability() = when (deck) {
     "audio" -> PluginCapability.AUDIO
     "studio" -> PluginCapability.STUDIO
     "navigation" -> PluginCapability.SYSTEM_NAVIGATION
+    "teams" -> PluginCapability.TEAMS
     else -> error("Unmapped deck")
 }
 
@@ -71,6 +72,7 @@ internal class DeckPlugin(id: String, title: String, capability: PluginCapabilit
         }
         // These are persisted plugin.key indices, not the physical positions of the factory keys.
         "navigation" -> navigationCommands.map { slot(it) }
+        "teams" -> tel.misa.mxpocket.decks.teamsSlots.map { slot(it) }
         else -> error("Unknown page")
     }
     override fun render(nowMillis: Long) = PluginFrame(slots().map { it.tile }, current)

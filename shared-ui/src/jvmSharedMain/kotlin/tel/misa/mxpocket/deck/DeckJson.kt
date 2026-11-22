@@ -22,6 +22,7 @@ object DeckJson {
             root
         }
         val xoProfileRemoved = if (obj.has("xoProfileRemoved")) obj.remove("xoProfileRemoved") as Boolean else false
+        val teamsRemoved = if (obj.has("teamsProfileRemoved")) obj.remove("teamsProfileRemoved") as Boolean else false
         obj.fields("version", "profiles", "activeProfileId", "defaultProfileId", "pinnedProfileId", "automatic", "histories", "selectionReason")
         val state = DeckState(
             version = obj.get("version") as Int,
@@ -38,6 +39,7 @@ object DeckJson {
             },
             selectionReason = obj.string("selectionReason"),
             xoProfileRemoved = xoProfileRemoved,
+            teamsProfileRemoved = teamsRemoved,
         )
         if (state.version == 1 || state.version == 2) {
             val validated = state.copy(version = DeckLimits.VERSION)
@@ -91,14 +93,21 @@ object DeckJson {
     }
 
     private fun key(obj: JSONObject): DeckKey {
+        val holdAction = action(obj.remove("holdAction"))
         obj.fields("icon", "label", "color", "action", "enabled")
-        val action = if (obj.isNull("action")) null else (obj.get("action") as JSONObject).let {
-            it.fields("id", "params")
-            val p = it.get("params") as JSONObject
-            ActionCall(it.string("id"), p.keys().asSequence().associateWith { name -> p.string(name) })
-        }
-        return DeckKey(obj.string("icon"), obj.string("label"), obj.get("color") as Int, action, obj.get("enabled") as Boolean)
+        return DeckKey(obj.string("icon"), obj.string("label"), obj.get("color") as Int,
+            action(obj.get("action")), obj.get("enabled") as Boolean, holdAction)
     }
+
+    private fun action(value: Any?): ActionCall? {
+        if (value == null || value === JSONObject.NULL) return null
+        val obj = value as JSONObject
+        obj.fields("id", "params")
+        val p = obj.get("params") as JSONObject
+        return ActionCall(obj.string("id"), p.keys().asSequence().associateWith { name -> p.string(name) })
+    }
+
+    private fun ActionCall.json() = JSONObject().put("id", id).put("params", JSONObject(params))
 
     fun encode(deck: DeckState) = serialize(deck).also(::checkSize)
     fun fits(deck: DeckState) = fits(serialize(deck))
@@ -109,11 +118,10 @@ object DeckJson {
             fun title(name: String) = if (profile.id == "game.xo" && name == TIC_TAC_TOE_TITLE) "X-O" else name
             val pages = profile.pages.map { page ->
                 val keys = page.keys.map { key ->
-                    val call = key.action?.let {
-                        JSONObject().put("id", it.id).put("params", JSONObject(it.params))
-                    }
                     JSONObject().put("icon", key.icon).put("label", key.label).put("color", key.color)
-                        .put("action", call ?: JSONObject.NULL).put("enabled", key.enabled)
+                        .put("action", key.action?.json() ?: JSONObject.NULL).put("enabled", key.enabled)
+                        // Omit an unassigned Hold so even a limit-sized legacy layout still fits.
+                        .apply { key.holdAction?.let { put("holdAction", it.json()) } }
                 }
                 JSONObject().put("id", page.id).put("name", if (page.id == profile.rootPageId) title(page.name) else page.name)
                     .put("keys", JSONArray(keys))
@@ -130,7 +138,10 @@ object DeckJson {
             .put("activeProfileId", deck.activeProfileId).put("defaultProfileId", deck.defaultProfileId)
             .put("pinnedProfileId", deck.pinnedProfileId ?: JSONObject.NULL).put("automatic", deck.automatic)
             .put("histories", histories).put("selectionReason", deck.selectionReason)
-            .apply { if (deck.xoProfileRemoved) put("xoProfileRemoved", true) }.toString()
+            .apply {
+                if (deck.xoProfileRemoved) put("xoProfileRemoved", true)
+                if (deck.teamsProfileRemoved) put("teamsProfileRemoved", true)
+            }.toString()
     }
 
     private fun JSONObject.string(name: String) = get(name) as String

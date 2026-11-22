@@ -3,7 +3,6 @@ package tel.misa.mxpocket.ui
 import android.content.Intent
 import android.media.AudioManager
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -45,8 +44,7 @@ class PocketScreenTest {
         ui.runOnIdle { assertTrue(events.isEmpty()) }
     }
 
-    @OptIn(ExperimentalTestApi::class)
-    @Test fun redrawDoesNotExecuteAndEachInputModalityEmitsExactlyOneTap() {
+    @Test fun disconnectedMirrorHasNoKeyActionsAfterRedraw() {
         val scenes = UiPreviewScenes(app)
         val state = mutableStateOf(scenes.state("focus"))
         val events = mutableListOf<PocketScreenEvent>()
@@ -54,25 +52,23 @@ class PocketScreenTest {
         ui.runOnIdle { state.value = scenes.state("audio") }
         val key = ui.onNodeWithContentDescription("Volume -")
         key.performScrollTo()
-        key.performTouchInput { down(center); cancel() }
-        ui.runOnIdle { assertTrue(events.isEmpty()) }
+        key.assertHasNoClickAction()
         key.performTouchInput { click() }
-        key.performClick()
-        key.performSemanticsAction(SemanticsActions.RequestFocus)
-        key.performKeyInput { pressKey(Key.Enter) }
-        ui.runOnIdle { assertEquals(List(3) { PocketScreenEvent.TapKey(0) }, events) }
+        key.performTouchInput { longClick() }
+        ui.runOnIdle { assertTrue(events.isEmpty()) }
     }
 
     @Test fun debugPreviewChangesSceneWithoutRunningPlatformActions() {
         ActivityScenario.launch<UiPreviewActivity>(Intent(app, UiPreviewActivity::class.java).putExtra("scene", "audio")).use { scene ->
             val volume = app.getSystemService(AudioManager::class.java)
             val before = volume.getStreamVolume(AudioManager.STREAM_MUSIC)
-            ui.onNodeWithContentDescription("Volume -").performClick()
+            ui.onNodeWithContentDescription("Volume -").assertHasNoClickAction()
             assertEquals(before, volume.getStreamVolume(AudioManager.STREAM_MUSIC))
-            ui.onNodeWithText("Phone").performClick()
-            ui.onNodeWithContentDescription("Key 1, Camera", substring = true).performClick()
+            // Profiles are switched on the Profiles tab; Home's page buttons move to the next fixture.
+            ui.onNodeWithContentDescription("Next page").performClick()
+            ui.onNodeWithContentDescription("Key 1, Camera", substring = true).assertHasNoClickAction()
             scene.onActivity { assertNull(shadowOf(it).nextStartedActivity) }
-            ui.onNodeWithText("No action executed.", substring = true).assertExists()
+            ui.onNodeWithText("UI-only preview.", substring = true).assertExists()
             scene.recreate()
             ui.onNodeWithContentDescription("Key 1, Camera", substring = true).assertExists()
         }
@@ -89,7 +85,7 @@ class PocketScreenTest {
     }
 
     @GraphicsMode(GraphicsMode.Mode.NATIVE)
-    @Test fun liveMirrorRestoresActionsAfterReadOnlyAudioWithOrWithoutArtwork() {
+    @Test fun liveMirrorStaysReadOnlyAcrossProfilesWithOrWithoutKeyImages() {
         val scenes = UiPreviewScenes(app)
         val events = mutableListOf<PocketScreenEvent>()
         val image = androidx.compose.ui.graphics.ImageBitmap(118, 118)
@@ -99,23 +95,19 @@ class PocketScreenTest {
             val frame = scenes.state(scene)
             ui.runOnIdle {
                 events.clear()
-                state.value = frame.copy(tiles = frame.tiles.map { it.copy(image = image) }, panelArt = art)
+                state.value = frame.copy(usbReady = true, connectionActive = true,
+                    tiles = frame.tiles.map { it.copy(image = art) })
             }
             frame.tiles.forEachIndexed { i, tile ->
                 val node = ui.onNodeWithContentDescription(tile.accessibleName ?:
                     listOf("Key ${i + 1}", tile.label, tile.footer).filter(String::isNotBlank).joinToString(", "))
-                when {
-                    tile.readOnly -> node.assertHasNoClickAction()
-                    !tile.enabled -> node.assertIsNotEnabled()
-                    else -> node.performClick()
-                }
+                node.assertHasNoClickAction()
             }
             if (scene == "audio") {
                 ui.onNodeWithContentDescription("Mute, Sound on, 6 / 15").assertExists()
                 ui.onNodeWithContentDescription("Now playing, Night train, Paused").assertHasNoClickAction()
             }
-            val actionable = if (scene == "audio") (0..5).toList() else listOf(0, 2, 3, 5, 6, 7, 8)
-            assertEquals(actionable.map { PocketScreenEvent.TapKey(it) }, events)
+            assertTrue(events.isEmpty())
         }
     }
 }

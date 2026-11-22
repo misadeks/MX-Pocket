@@ -99,8 +99,8 @@ class WorkflowController(context: Context, private val scope: CoroutineScope, pr
     fun run(id: String, origin: WorkflowOrigin): Boolean {
         val definition = saved.value.find { it.id == id } ?: return false
         val trigger = definition.trigger.kind
-        if (origin == WorkflowOrigin.PHYSICAL && trigger == TriggerKind.VIRTUAL ||
-            origin == WorkflowOrigin.VIRTUAL && trigger == TriggerKind.PHYSICAL) return false
+        // Old libraries may contain virtual-only bindings; do not turn them into physical triggers.
+        if (origin == WorkflowOrigin.PHYSICAL && trigger == TriggerKind.MANUAL_ONLY) return false
         return start(definition, origin) != null
     }
     internal fun test(draft: WorkflowDefinition) = start(draft, WorkflowOrigin.TEST) != null

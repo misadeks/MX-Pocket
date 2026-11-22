@@ -33,9 +33,19 @@ data class DeckKey(
     val color: Int = 0xff284454.toInt(),
     val action: ActionCall? = null,
     val enabled: Boolean = true,
+    val holdAction: ActionCall? = null,
 )
 
+internal fun DeckKey.mapActions(transform: (ActionCall) -> ActionCall?) =
+    copy(action = action?.let(transform), holdAction = holdAction?.let(transform))
+
 data class DeckPage(val id: String, val name: String, val keys: List<DeckKey> = List(9) { DeckKey() })
+
+/** A Hold slot cannot displace an existing Tap slot's plugin on the page. */
+fun DeckPage.selectedSlotOwner(registered: (String) -> Boolean): String? =
+    keys.firstNotNullOfOrNull { it.action?.slotOwner()?.takeIf(registered) }
+        ?: keys.firstNotNullOfOrNull { it.holdAction?.slotOwner()?.takeIf(registered) }
+
 data class DeckRule(val signal: String, val value: String, val weight: Int = 1)
 data class DeckDecision(
     val reason: String,
@@ -63,6 +73,7 @@ data class DeckState(
     val histories: Map<String, List<String>>,
     val selectionReason: String = "Default profile",
     val xoProfileRemoved: Boolean = false,
+    val teamsProfileRemoved: Boolean = false,
 ) {
     val activeProfile: DeckProfile get() = profiles.first { it.id == activeProfileId }
     val activePage: DeckPage get() = activeProfile.pages.first { it.id == histories.getValue(activeProfileId).last() }
@@ -115,6 +126,7 @@ fun defaultDeck(): DeckState {
         plugin("studio", "Studio"),
         plugin("navigation", "Navigation", slots = navigationFactorySlots),
         plugin("game.xo", tel.misa.mxpocket.plugins.TIC_TAC_TOE_TITLE),
+        tel.misa.mxpocket.decks.teamsProfile(),
         plugin("onenote", "OneNote"),
     )
     return DeckState(

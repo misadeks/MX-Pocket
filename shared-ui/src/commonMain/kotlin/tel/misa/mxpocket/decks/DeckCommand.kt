@@ -23,7 +23,12 @@ enum class DeckCommand(val id: String, val label: String, val deck: String) {
     DOWN("navigation.scroll-down", "Scroll down", "navigation"),
     FORWARD("navigation.focus-next", "Next focus", "navigation"),
     REVERSE("navigation.focus-previous", "Previous focus", "navigation"),
-    ACTIVATE("navigation.activate", "Select", "navigation"), NAV_ACCESS("navigation.access", "Navigation access", "navigation");
+    ACTIVATE("navigation.activate", "Select", "navigation"), NAV_ACCESS("navigation.access", "Navigation access", "navigation"),
+    TEAMS_OPEN("teams.open", "Open Teams", "teams"), TEAMS_ACCESS("teams.access", "Teams setup", "teams"),
+    TEAMS_MIC("teams.mic", "Meeting mic", "teams"), TEAMS_HAND("teams.hand", "Raise hand", "teams"),
+    TEAMS_CAPTIONS("teams.captions", "Captions", "teams"), TEAMS_CHAT("teams.chat", "Meeting chat", "teams"),
+    TEAMS_QUIETER("teams.volume-down", "Call volume -", "teams"), TEAMS_LOUDER("teams.volume-up", "Call volume +", "teams"),
+    TEAMS_STATUS("teams.status", "Call status", "teams");
 
     val nativeControl get() = this == SHUTTER || this == START_VIDEO || this == STOP_VIDEO
     val legacyCapture get() = deck == "studio" && !nativeControl && this != STUDIO && this != VIDEO && this != CAMERA_ACCESS

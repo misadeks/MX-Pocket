@@ -21,6 +21,7 @@ data class MediaDeckState(
 data class DeckState(
     val favorites: List<Favorite> = emptyList(), val media: MediaDeckState = MediaDeckState(),
     val cameraControls: Boolean = false, val navigationEnabled: Boolean = false,
+    val teams: TeamsState = TeamsState(),
 ) {
     val cameraStatus get() = when {
         !cameraControls -> "Controls off"
@@ -30,6 +31,7 @@ data class DeckState(
     /** Same logical tile for built-in and custom profile keys; no reads from Android during paint. */
     fun tile(command: DeckCommand, component: String? = null): KeyTile {
         if (command.deck == "navigation") return command.navigationFace(navigationEnabled)
+        if (command.deck == TEAMS) return teams.tile(command)
         val favorite = if (command == DeckCommand.OPEN) favorites.find { it.component == component } else null
         val label = when (command) {
             DeckCommand.OPEN -> favorite?.label ?: "Missing app"

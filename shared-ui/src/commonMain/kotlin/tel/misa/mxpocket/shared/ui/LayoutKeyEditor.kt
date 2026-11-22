@@ -20,6 +20,7 @@ data class BindingOption(val label: String, val call: ActionCall)
 val factoryKeyBindings = defaultDeck().profiles.flatMap { profile ->
     profile.pages.single { it.id == profile.rootPageId }.keys.mapIndexedNotNull { physical, key ->
         val call = key.action ?: return@mapIndexedNotNull null
+        if (call.id != "plugin.key") return@mapIndexedNotNull null
         val suffix = if (profile.id == "navigation") ": ${navigationCommands[call.params.getValue("index").toInt()].label}" else ""
         BindingOption("${profile.name} key ${physical + 1}$suffix", call)
     }
@@ -61,6 +62,8 @@ private fun List<String>.call(): ActionCall? = firstOrNull()?.let { id ->
     ActionCall(id, drop(1).chunked(2).associate { (k, v) -> k to v })
 }
 
+internal enum class BindingTarget(val label: String) { TAP("Tap"), HOLD("Hold") }
+
 /** Owned by the editor, not by either layout branch or by the action picker. */
 internal class KeyDraft(val original: DeckKey) {
     var label by mutableStateOf(original.label)
@@ -68,7 +71,8 @@ internal class KeyDraft(val original: DeckKey) {
     var color by mutableStateOf(displayColor(original.color))
     var enabled by mutableStateOf(original.enabled)
     var call by mutableStateOf(original.action)
-    var picking by mutableStateOf(false)
+    var holdCall by mutableStateOf(original.holdAction)
+    var picking by mutableStateOf<BindingTarget?>(null)
     var query by mutableStateOf("")
     var attempted by mutableStateOf(false)
 
@@ -79,20 +83,35 @@ internal class KeyDraft(val original: DeckKey) {
         else -> null
     }
 
-    fun preview() = DeckKey(icon, label, parseTileColor(color) ?: original.color, call, enabled)
+    fun binding(target: BindingTarget) = when (target) {
+        BindingTarget.TAP -> call
+        BindingTarget.HOLD -> holdCall
+    }
+
+    fun preview() = original.copy(icon = icon, label = label, color = parseTileColor(color) ?: original.color,
+        action = call, enabled = enabled, holdAction = holdCall)
 
     companion object {
         // A flat list of strings is saveable by both hosts, including before the color is valid.
         val saver = listSaver<KeyDraft, String>(save = {
-            val savedCall = it.original.action.parts()
             listOf(it.original.icon, it.original.label, it.original.color.toString(), it.original.enabled.toString(),
-                it.label, it.icon, it.color, it.enabled.toString(), it.picking.toString(), it.query, it.attempted.toString(),
-                savedCall.size.toString()) + savedCall + it.call.parts()
+                it.label, it.icon, it.color, it.enabled.toString(), it.picking?.name.orEmpty(), it.query, it.attempted.toString()) +
+                listOf(it.original.action, it.original.holdAction, it.call, it.holdCall).flatMap { call ->
+                    val parts = call.parts()
+                    listOf(parts.size.toString()) + parts
+                }
         }, restore = { p ->
-            val end = 12 + p[11].toInt()
-            KeyDraft(DeckKey(p[0], p[1], p[2].toInt(), p.subList(12, end).call(), p[3].toBoolean())).apply {
+            val parts = p.listIterator(11)
+            fun nextCall() = List(parts.next().toInt()) { parts.next() }.call()
+            // The old saver used a boolean for the Tap picker and stored only the two Tap calls.
+            val legacy = p[8] == "true" || p[8] == "false"
+            val original = DeckKey(p[0], p[1], p[2].toInt(), nextCall(), p[3].toBoolean(), if (legacy) null else nextCall())
+            KeyDraft(original).apply {
                 label = p[4]; icon = p[5]; color = p[6]; enabled = p[7].toBoolean()
-                picking = p[8].toBoolean(); query = p[9]; attempted = p[10].toBoolean(); call = p.drop(end).call()
+                picking = if (p[8] == "true") BindingTarget.TAP else BindingTarget.entries.find { it.name == p[8] }
+                query = p[9]; attempted = p[10].toBoolean()
+                call = if (legacy) parts.asSequence().toList().call() else nextCall()
+                holdCall = if (legacy) null else nextCall()
             }
         })
     }
@@ -122,9 +141,13 @@ internal fun KeyFields(index: Int, draft: KeyDraft, options: List<BindingOption>
             }
         }
     }
-    Text("Assigned action", style = MaterialTheme.typography.titleSmall)
-    OutlinedButton(onClick = { query = ""; picking = true }, enabled = writable,
-        modifier = Modifier.fillMaxWidth().testTag("choose-binding")) { Text(bindingName(call, options)) }
+    Text("Key actions", style = MaterialTheme.typography.titleSmall)
+    for (target in BindingTarget.entries) {
+        OutlinedButton(onClick = { query = ""; picking = target }, enabled = writable,
+            modifier = Modifier.fillMaxWidth().testTag(if (target == BindingTarget.TAP) "choose-binding" else "choose-hold-binding")) {
+            Text("${target.label}: ${bindingName(binding(target), options)}")
+        }
+    }
     EditorSwitch("Enabled on deck", enabled, writable) { enabled = it }
     if (attempted) error?.let { EditorError(it) }
     EditorActions {
@@ -141,13 +164,20 @@ private val palette = listOf(
 @Composable
 internal fun BindingDialog(options: List<BindingOption>, draft: KeyDraft) {
     val query = draft.query
-    val selected = draft.call
-    fun close() { draft.picking = false }
-    fun choose(call: ActionCall?) { draft.call = call; close() }
+    val target = draft.picking ?: return
+    val selected = draft.binding(target)?.commandBinding()
+    fun close() { draft.picking = null }
+    fun choose(call: ActionCall?) {
+        when (target) {
+            BindingTarget.TAP -> draft.call = call
+            BindingTarget.HOLD -> draft.holdCall = call
+        }
+        close()
+    }
     val filtered = remember(options, query) {
         options.filter { it.label.contains(query.trim(), ignoreCase = true) || it.call.id.contains(query.trim(), ignoreCase = true) }
     }
-    AlertDialog(onDismissRequest = ::close, title = { Text("Choose an action") }, text = {
+    AlertDialog(onDismissRequest = ::close, title = { Text("Choose a ${target.label.lowercase()} action") }, text = {
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             OutlinedTextField(query, { draft.query = it }, Modifier.fillMaxWidth(), label = { Text("Search actions") }, singleLine = true)
             LazyColumn(Modifier.fillMaxWidth().heightIn(max = 380.dp)) {

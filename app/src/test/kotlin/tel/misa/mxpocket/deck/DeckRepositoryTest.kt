@@ -21,6 +21,36 @@ class DeckRepositoryTest {
     private val file: File get() = File(folder.root, "deck.json")
     private val repo by lazy { DeckRepository(file) }
 
+    @Test fun callProjectionRestoresExactPageAndNeverOverwritesAnExplicitChoice() {
+        val child = repo.createPage("phone", "Tools").getOrThrow()
+        repo.selectProfile("phone").getOrThrow()
+        repo.openPage(child).getOrThrow()
+        val before = repo.exportJson()
+        repo.showTeamsCall(true)
+        assertEquals("in-call", repo.state.value.activePage.id)
+        assertEquals(before, repo.exportJson())
+        repo.renamePage("phone", child, "My tools").getOrThrow()
+        repo.showTeamsCall(false)
+        assertEquals(child, repo.state.value.activePage.id)
+        assertEquals("My tools", repo.state.value.activePage.name)
+        repo.showTeamsCall(true)
+        repo.openPage("root").getOrThrow()
+        repo.showTeamsCall(true)
+        repo.showTeamsCall(false)
+        assertEquals("Work", repo.state.value.activePage.name)
+        repo.setPinned("audio").getOrThrow()
+        repo.showTeamsCall(true)
+        assertEquals("audio", repo.state.value.activeProfileId)
+        repo.showTeamsCall(false)
+        repo.setPinned(null).getOrThrow()
+        repo.deletePage("teams", "in-call").getOrThrow()
+        repo.showTeamsCall(true)
+        assertEquals("audio", repo.state.value.activeProfileId)
+        assertEquals(1, DeckRepository(file).state.value.profiles.single { it.id == "teams" }.pages.size)
+        repo.deleteProfile("teams").getOrThrow()
+        assertFalse(DeckRepository(file).state.value.profiles.any { it.id == "teams" })
+    }
+
     @Test fun editorCannotSaveOverAChangedKeyRulesOrActiveHistory() = runBlocking {
         val editor = repo.asEditorStore()
         val original = repo.state.value.activePage.keys[0]
@@ -58,6 +88,20 @@ class DeckRepositoryTest {
     private fun pluginKey(id: String, index: Int) =
         DeckKey(action = ActionCall("plugin.key", mapOf("pluginId" to id, "index" to index.toString())))
 
+    @Test fun selectedSlotOwnerPrefersRegisteredTapAcrossTheWholePageBeforeHold() {
+        fun slot(id: String) = pluginKey(id, 0).action
+        val page = DeckPage("root", "Controls", listOf(
+            DeckKey(action = slot("missing"), holdAction = slot("focus")),
+            DeckKey(holdAction = slot("phone")),
+            DeckKey(action = ActionCall("media.next", mapOf(DeckActions.LEGACY_SLOT_OWNER to "audio"))),
+            DeckKey(action = slot("navigation")),
+        ) + List(5) { DeckKey() })
+        assertEquals("audio", page.selectedSlotOwner(setOf("focus", "audio", "navigation")::contains))
+        assertEquals("focus", page.selectedSlotOwner(setOf("focus", "phone")::contains))
+        assertEquals("phone", page.selectedSlotOwner { it == "phone" })
+        assertNull(page.selectedSlotOwner { false })
+    }
+
     @Test fun existingGameDisplaysNewNameWithoutRenamingCustomProfilesPagesOrKeys() {
         val factory = defaultDeck()
         val old = factory.profiles.single { it.id == "game.xo" }
@@ -81,6 +125,11 @@ class DeckRepositoryTest {
     @Test fun freshAndRestoredNavigationDefaultsUsePhysicalOrderWithoutChangingOtherDecks() {
         fun checkDefaults() {
             for (profile in repo.state.value.profiles) {
+                if (profile.id == "teams") {
+                    assertEquals(listOf("Work", "In call"), profile.pages.map { it.name })
+                    assertEquals(pluginKey("teams", 4), profile.pages.last().keys[4])
+                    continue
+                }
                 val slots = if (profile.id == "navigation") listOf(0, 3, 1, 6, 4, 8, 2, 5, 7) else (0..8).toList()
                 assertEquals(profile.id, slots.map { pluginKey(profile.id, it) }, profile.pages.single().keys)
             }
@@ -100,6 +149,18 @@ class DeckRepositoryTest {
             "pinnedProfileId":null,"automatic":false,"histories":{"navigation":["root"]},"selectionReason":"Default profile",
             "profiles":[{"id":"navigation","name":"Navigation","rootPageId":"root","automatic":true,"rules":[],
             "pages":[{"id":"root","name":"Navigation","keys":[$keys]}]}]}""")
+    }
+
+    @Test fun existingLayoutWithoutHoldOrWithExplicitNullKeepsTapAndExportsWithoutHoldFields() {
+        val old = historicalNavigation().put("version", 3)
+        val expected = (0..8).map { pluginKey("navigation", it) }
+        file.writeText(old.toString())
+        val current = DeckRepository(file)
+        assertEquals(expected, current.state.value.activePage.keys)
+        current.importJson(old.put("selectionReason", "Imported").apply { keyAt(0).put("holdAction", JSONObject.NULL) }
+            .toString()).getOrThrow()
+        assertEquals(expected, current.state.value.activePage.keys)
+        assertFalse(current.exportJson().contains("\"holdAction\""))
     }
 
     @Test fun loadingHistoricalStockUpgradesOnlyTheOriginalRootAndCanBeRetried() {
@@ -282,9 +343,12 @@ class DeckRepositoryTest {
         val id = repo.createProfile("Travail 🐈").getOrThrow()
         val page = repo.createPage(id, "🌿").getOrThrow()
         val params = mutableMapOf("message" to "旅\n🌎")
-        val key = DeckKey("☕", "休憩", 0xffc91f8a.toInt(), ActionCall("example.message", params), false)
+        val holdParams = mutableMapOf("message" to "Later 🌙")
+        val key = DeckKey("☕", "休憩", 0xffc91f8a.toInt(), ActionCall("example.message", params), false,
+            holdAction = ActionCall("example.message", holdParams))
         repo.setKey(id, page, 7, key).getOrThrow()
         params.clear()
+        holdParams.clear()
         repo.swapKeys(id, page, 7, 2).getOrThrow()
         repo.setPinned(id).getOrThrow()
         repo.setDefault(id).getOrThrow()
@@ -296,12 +360,14 @@ class DeckRepositoryTest {
         val state = reloaded.state.value
         assertEquals(repo.state.value, state)
         assertEquals("旅\n🌎", state.activePage.keys[2].action!!.params["message"])
+        assertEquals("Later 🌙", state.activePage.keys[2].holdAction!!.params["message"])
         assertFalse(state.activePage.keys[2].enabled)
         assertEquals(id, state.pinnedProfileId)
         assertTrue(reloaded.reason.value.contains("pinned"))
         assertThrows(UnsupportedOperationException::class.java) { (state.activePage.keys as MutableList).clear() }
         assertThrows(UnsupportedOperationException::class.java) { (state.histories as MutableMap).clear() }
         assertThrows(UnsupportedOperationException::class.java) { (state.activePage.keys[2].action!!.params as MutableMap).clear() }
+        assertThrows(UnsupportedOperationException::class.java) { (state.activePage.keys[2].holdAction!!.params as MutableMap).clear() }
 
         val exported = repo.exportJson()
         repo.restoreDefaults().getOrThrow()
@@ -324,6 +390,11 @@ class DeckRepositoryTest {
             edit { it.getJSONObject("histories").getJSONArray("focus").put("missing") },
             edit { it.getJSONArray("profiles").getJSONObject(0).getJSONArray("pages").getJSONObject(0).getJSONArray("keys").remove(0) },
             edit { it.keyAt(0).put("action", JSONObject().put("id", "page.open").put("params", JSONObject().put("pageId", "missing"))) },
+            edit { it.keyAt(0).put("holdAction", "page.open") },
+            edit { it.keyAt(0).put("holdAction", JSONObject().put("id", "page.back")) },
+            edit { it.keyAt(0).put("action", JSONObject.NULL).put("holdAction",
+                JSONObject("""{"id":"page.open","params":{"pageId":"missing"}}""")) },
+            edit { it.keyAt(0).put("holdAction", JSONObject("""{"id":"plugin.key","params":{"pluginId":"focus","index":"9"}}""")) },
             edit { it.keyAt(0).put("color", 1.5) }, edit { it.keyAt(0).put("icon", "a".repeat(33)) },
             edit { it.keyAt(0).getJSONObject("action").getJSONObject("params").put("index", "9") },
             original.replace("My studio", "invalid\\escape"),
@@ -449,6 +520,32 @@ class DeckRepositoryTest {
         assertNull(repo.state.value.pinnedProfileId)
         assertNull(repo.state.value.activePage.keys[0].action)
         assertEquals(repo.state.value, DeckRepository(file).state.value)
+    }
+
+    @Test fun copyingRenamingAndRemovingTargetsPreservesIndependentTapAndHoldLinks() {
+        fun page(id: String) = ActionCall(DeckActions.PAGE, mapOf(DeckActions.PAGE_ID to id))
+        fun profile(id: String) = ActionCall(DeckActions.PROFILE, mapOf(DeckActions.PROFILE_ID to id))
+        val child = repo.createPage("focus", "Scene").getOrThrow()
+        repo.setKey("focus", "root", 0, DeckKey(holdAction = page(child))).getOrThrow()
+        val key = DeckKey(action = profile("focus"), holdAction = page(child))
+        repo.setKey("focus", child, 0, key).getOrThrow()
+        repo.setKey("focus", child, 1, DeckKey(action = page(child), holdAction = profile("focus"))).getOrThrow()
+        val copiedPage = repo.duplicatePage("focus", child, "Copied scene").getOrThrow()
+        val copiedProfile = repo.duplicateProfile("focus", "Copied profile").getOrThrow()
+        repo.renamePage(copiedProfile, child, "Renamed").getOrThrow()
+        repo.renameProfile(copiedProfile, "Renamed profile").getOrThrow()
+        repo.selectProfile(copiedProfile).getOrThrow()
+        repo.openPage(copiedPage).getOrThrow()
+        assertEquals(DeckKey(action = profile(copiedProfile), holdAction = page(copiedPage)), repo.state.value.activePage.keys[0])
+        assertEquals(DeckKey(action = page(copiedPage), holdAction = profile(copiedProfile)), repo.state.value.activePage.keys[1])
+        repo.deletePage("focus", child).getOrThrow()
+        repo.root().getOrThrow()
+        assertEquals(DeckKey(holdAction = page(child)), repo.state.value.activePage.keys[0])
+        repo.setKey("focus", "root", 1, DeckKey(action = page("root"), holdAction = profile(copiedProfile))).getOrThrow()
+        repo.deleteProfile(copiedProfile).getOrThrow()
+        val reloaded = DeckRepository(file).state.value
+        assertEquals(DeckKey(), reloaded.activePage.keys[0])
+        assertEquals(DeckKey(action = page("root")), reloaded.activePage.keys[1])
     }
 
     @Test fun scoringNeedsContinuousObservedMatchesAndAWinningMargin() {

@@ -1,28 +1,64 @@
 # Workspace walkthrough
 
-After [installing the Android app](../README.md#run-it-on-android), open
-**Home** to connect a keypad and choose a profile. With a wired keypad,
-**Keypad shows:** lists the nine labels; press the keys on the device.
-With the virtual keypad connected, tap the nine-key board on Home instead.
+After [installing the Android app](#install-the-android-app), open
+**Home**. The connection button in the top-right corner connects or disconnects
+a USB keypad. The adjacent status and message show whether the session is ready
+or why it failed. Home previews the selected layout offline and mirrors all nine
+LCD keys live when connected. Press keys on the device, not on the phone.
+Choose **System**, **Light** or **Dark** in **Settings > Appearance**. The
+choice is remembered; System follows your device's current theme.
 **Plugins** turns features on or off, **Flows** lets you build and run workflows,
-and **Settings** contains USB preferences, background images and diagnostics.
+and **Settings** contains USB preferences, background images, repaint and diagnostics.
 
-**Keypad** edits the board. Its active-page preview uses the same key faces as
-the LCDs, including Audio transport symbols, the volume indicator and cover
-art when available. Selecting a key there edits its label, icon, color or
-action; it never runs the action. Other pages can be edited without activating
-their plugins. In a narrow window, Back returns from the key editor; a wider
-window keeps the board and key details side by side.
+**Profiles** switches and edits profiles. Swipe the endless profile carousel
+(or tap a card) to put that profile on the keypad; the cards beside the
+centered one are slightly blurred. The profile picker below it always shows
+the same profile: choosing one there also puts it on the keypad. Choosing a
+page only opens it for editing. **Swap keys** opens the keypad with the same
+key faces as the LCDs (live for the page on the keypad): drag a key onto
+another to exchange them, or tap a key to edit its label, icon, color or
+action. Nothing there runs an action; screen readers offer **Swap with key N**
+actions instead of dragging. In a narrow window, Back returns from the key
+editor; a wider window keeps the key details beside the picker.
+
+To give a key a second action, open it from **Profiles > Swap keys**, choose **Hold** under
+**Key actions**, pick an action, and save the key. **Tap** and **Hold** are
+independent; choose **Unassigned** for Hold and save to remove it. Existing
+layouts and factory keys have no Hold. Layout backups include assigned Holds.
+
+On an operational key with Hold assigned, releasing early runs Tap. Keeping
+the key down until Android's **Touch & hold delay** runs Hold once instead;
+releasing it does not also tap. The clock starts at the original press. A
+recognized physical two-key chord consumes both keys. Hold does not grant
+permission to launch an app in the background or operate the camera shutter.
+Keys without Hold keep their usual response time.
 
 The Windows simulator uses the same workspace and starts with the virtual
 keypad connected. It can save its own layouts, but has no USB connection,
 image upload, or Android permission and foreground-app detection controls.
 The walkthrough below uses the Android host.
 
+## Install the Android app
+
+Set `JAVA_HOME` to JDK 17 or 21. In Android SDK Manager install SDK Platform
+35, Build Tools 35.0.0 and Platform-Tools. Set `ANDROID_HOME` to the SDK
+location or open the project in Android Studio to configure it.
+
+On an Android 9 (API 28) or newer phone, enable USB debugging, connect it to
+the computer and accept the debugging prompt. From the repository root run:
+
+```powershell
+.\gradlew.bat :app:installDebug
+```
+
+On Linux or macOS use `./gradlew :app:installDebug`. Open **MX Pocket** on
+the phone. Disconnect the computer, choose **Use a USB keypad** in
+first-run setup, finish setup and [connect the wired keypad](#connect-a-wired-keypad).
+
 ## Choose features on first launch
 
-Choose the features you want help setting up, or tap **Skip and try virtual
-keypad** to use the on-screen keys without hardware or permissions. Reopen
+Choose the features you want help setting up, or tap **Not now** to dismiss
+the guide without starting a session or requesting access. Reopen
 **Settings > Feature setup** at any time. Reviewing a choice does not enable
 it, and removing a choice from the guide does not revoke access. Each step
 checks Android's current state; you can finish with steps still pending.
@@ -33,34 +69,32 @@ it. Physical Studio camera controls, one-press app opening and cross-app
 navigation each have their own steps. If Android restricts access, leave that
 option off; see [deck behavior without special access](android-decks.md).
 
-## Run without hardware
+## Edit layouts without hardware
 
-1. On Home choose **Connect virtual keypad** if it isn't already connected
-   (first-run **Skip and try virtual keypad** connects it). Press **Start** on Focus.
-   The first tile changes to **Pause** and the countdown advances. No USB
-   permission or foreground service is needed. Disconnecting the virtual
-   keypad disables input; reconnecting restores the selected page.
-2. In Keypad use **Manage profile > New profile** and create *Desk*. Under
+1. Open Home with no keypad attached. The status is **Not connected**. You can
+   browse layouts and see their key faces, but touching a face won't execute it.
+2. In Profiles use **Manage profile > New profile** and create *Desk*. Under
    **Manage page** create *Tools*. On Desk's root page edit a key, choose
    *Open page: Tools*, and set its label, icon and color. Put *Back* or *Return
-   to root* on Tools. Choose **Use this profile**, then navigate on Home.
+   to root* on Tools. Inspect both pages in Profiles. To exercise the bindings,
+   connect the wired keypad and press its keys.
 3. In Flows duplicate **Keypad check**. Give the copy a name, change a delay
    or add a step, then **Test run** and **Save workflow**. A test executes real
-   steps. In Keypad assign the saved workflow to a Tools key. Press that key
-   on Home to see the steps run. **Run history** shows origin,
+   steps. In Profiles assign the saved workflow to a Tools key. Press that key
+   on the connected keypad to see the steps run. **Run history** shows origin,
    result and progress. For confirmation steps open Flows and approve or
    decline on the phone. Cancelling does not undo completed actions.
 4. In Plugins enable Audio; optional media access is explained before opening
-   Android settings. Start playback in a player. In Keypad enable automatic
+   Android settings. Start playback in a player. In Profiles enable automatic
    switching and inspect the Audio rule `mediaActive = true`. While the app
    is visible or hosting a real session, a stable match selects Audio after
    a short delay. Supported players expose Play/Pause and title with consent;
    without it the app sends ordinary media keys and does not invent a title
    or playback state. With artwork available on Audio, the unlocked phone's
-   virtual board shows one cover across the nine keys; a wired keypad shows
+   layout preview shows one cover across the nine keys; a wired keypad shows
    it on the LCDs. The cover stays on Audio, even during playback;
    a pinned non-music profile keeps its own background.
-5. Inspect the selection reason, matched rules and observed values in Keypad.
+5. Inspect the selection reason, matched rules and observed values in Profiles.
    Create or change weighted rules for an observed app-owned activity, device,
    local hour/range, media, plugin or workflow state. Pin Desk, change playback
    and verify it stays on Desk. Unpin to resume automatic selection. Disabling
@@ -84,11 +118,11 @@ versions of the app cannot import format 3 exports.
    support. In **Settings → Refresh USB diagnostics**, look for `046D:C354`.
    If it's missing, try a data-capable cable or OTG adapter and, if the phone
    cannot supply enough power, a powered hub.
-2. Tap **Connect keypad** and approve the attached device when Android prompts.
+2. Tap **Connect to device** at the top of Home and approve the attached device when Android prompts.
    MX Pocket requires a visible session notification so **Disconnect** stays
    available while another app is open. On Android 13+ allow notification
    posting. If you denied it or blocked the session channel, enable it in the
-   app's Android notification settings and tap **Connect keypad** again.
+   app's Android notification settings and tap **Connect to device** again.
 3. On the factory Focus page, press **Start**, then use a page button to switch
    profiles. The notification's **Disconnect** ends the session. To connect
    on future attachments, enable **Settings → Connect automatically on USB
@@ -105,7 +139,7 @@ No root, firmware update or kernel change is part of setup.
 
 ## Show a profile when an app opens
 
-1. In **Keypad**, pick **Studio** in the **Profile** picker. Under **Context rules > Choose app**, tap **Camera** (Samsung Camera on a Galaxy). Pick **Audio** and repeat for **YouTube Music**. You can choose a custom profile the same way. Saving a mapping does not enable detection, change key bindings or launch anything.
+1. In **Profiles**, pick **Studio** in the **Profile** picker. Under **Context rules > Choose app**, tap **Camera** (Samsung Camera on a Galaxy). Pick **Audio** and repeat for **YouTube Music**. You can choose a custom profile the same way. Saving a mapping does not enable detection, change key bindings or launch anything.
 2. Enable **Automatic profile switching** and **Detect foreground apps**. Tap **Open usage access settings**, select **MX Pocket**, and allow Usage Access. No notification, accessibility or overlay access is needed for detection. Turn detection off here or revoke the Android grant at any time.
 3. With the physical keypad connected and the phone unlocked, open one app, then the other. After a stable match the keypad shows that profile’s last page. Opening Camera does **not** take a picture, and opening YouTube Music does **not** start playback. Studio’s optional physical shutter and recording controls require separate setup for the default camera; mapping Camera does not enable them.
 
@@ -127,7 +161,7 @@ press can request a Phone shortcut, a saved launcher favorite or the camera
 viewfinder, not a capture. If Android suppresses the launch, tap the retry
 notification. Turn off the option or revoke the grant to return to notifications.
 
-Virtual presses and [workflow steps](workflows.md) do not inherit this
+[Workflow steps](workflows.md) do not inherit this
 authority. App/favorite launches and Android Home in workflows wait for approval
 on the visible, unlocked phone. For media, camera, navigation and game controls,
 see [Android keypad decks](android-decks.md).

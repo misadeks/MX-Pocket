@@ -117,6 +117,7 @@ class KeypadService : Service() {
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         val tap = PendingIntent.getActivity(this, 0, open, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_ONE_SHOT)
         val label = when (val target = action.target) {
+            PocketSession.Target.Teams -> "Teams"
             is PocketSession.Target.Phone -> target.app.name.lowercase().replaceFirstChar(Char::uppercaseChar)
             is PocketSession.Target.FavoriteApp -> "favorite app"
             is PocketSession.Target.Studio -> if (target.mode == tel.misa.mxpocket.decks.CameraMode.PHOTO) "Camera" else "Video camera"
@@ -146,6 +147,7 @@ class KeypadService : Service() {
 
     private fun requestDirectLaunch(target: PocketSession.Target): DeckResult? {
         val eligible = when (target) {
+            PocketSession.Target.Teams -> false // Existing direct-launch consent does not include Teams.
             is PocketSession.Target.Phone -> target.app == PhoneApp.CAMERA || session.isPhoneShortcutPage
             is PocketSession.Target.FavoriteApp, is PocketSession.Target.Studio -> true
             is PocketSession.Target.Uri, is PocketSession.Target.Share -> false

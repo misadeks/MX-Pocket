@@ -110,6 +110,7 @@ fun DeckKey.bindingPreview(): KeyTile? {
             }
         }
         "navigation" -> navigationCommands.getOrNull(slot)
+        "teams" -> tel.misa.mxpocket.decks.teamsSlots.getOrNull(slot)
         "audio" -> {
             if (slot == 7) return KeyTile("Track", "", 0xff303438.toInt(), glyph = PlayerGlyph.TRACK,
                 readOnly = true, playerFace = true, showFooter = false)

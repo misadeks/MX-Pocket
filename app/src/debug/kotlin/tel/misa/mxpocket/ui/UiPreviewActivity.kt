@@ -27,7 +27,6 @@ class UiPreviewActivity : AppCompatActivity() {
                 val index = scenes.ids.indexOf(scene)
                 scene = scenes.ids[Math.floorMod(index + event.delta, scenes.ids.size)]
             }
-            PocketScreenEvent.EnterPreview -> scene = "disconnected"
             else -> {
                 state = scenes.state(scene).copy(status = "UI-only event: $event. No action executed.")
                 return

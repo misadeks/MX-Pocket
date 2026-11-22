@@ -23,9 +23,10 @@ A `KeyTile` contains a label, footer and ARGB background color. Ordinary keys
 keep their key number unless an icon is supplied. The built-in Audio page uses
 monochrome player symbols instead. Labels remain available to accessibility
 even on icon-only controls. Read-only tiles display state without dispatching input.
-The virtual keypad and the active-page editor preview use the same key faces
-as the LCDs, including user backgrounds. With a physical keypad, Home shows
-the nine labels rather than a second set of tappable keys. The independent
+Home and the **Swap keys** editor use the same key faces
+as the LCDs, including user backgrounds. With a physical keypad, Home mirrors
+the live LCD images as a display only, rather than a second set of tappable
+keys. The independent
 driver scales, JPEG-encodes and uploads images. Plugins must not
 allocate/recycle host images or import `MxKeypad`/raw USB.
 
@@ -51,8 +52,8 @@ Import `tel.misa.mxpocket.plugins.examples.CounterPlugin` and append
 `CounterPlugin()` to the list returned by `BuiltInPlugins.create()`.
 
 To exercise it, include a layout whose nine actions are `plugin.key` with
-`pluginId=example.counter` and `index=0` through `8`. Select that profile and **Connect
-virtual keypad** on Home. No USB protocol or Activity change is needed. The
+`pluginId=example.counter` and `index=0` through `8`. Select that profile, connect a wired
+keypad on Home and press a key. No USB protocol or Activity change is needed. The
 example is compiled for tests but **not enabled in the default registry**.
 
 ### Bind physical LCD keys 1 + 9
@@ -77,9 +78,10 @@ phone still increments individual counters; phone input never joins a USB pair.
 There is no factory shortcut or change to the layout JSON.
 
 - Only an enabled, acknowledged slot with an available, enabled, acknowledged
-  partner waits. Other singles remain immediate. The window is **150 ms** from
+  partner waits for a chord. Singles without a Hold binding otherwise remain
+  immediate. The window is **150 ms** from
   arrival of the first down; both downs must be processed before it expires.
-- An early release delivers the ordinary down then up. Timeout commits the
+- Without a Hold binding, an early release delivers the ordinary down then up. Timeout commits the
   single down and its eventual release goes to the same slot. A nonmatching
   eligible down commits the older single first, then starts its own decision.
 - Pairs only: the first matching second down wins, even when pairs overlap.
@@ -95,6 +97,14 @@ There is no factory shortcut or change to the layout JSON.
   A chord or buffered single can update plugin state and use ordinary host
   capabilities, but does **not** convey direct-launch, capture or workflow
   authority. Keep actions requiring a fresh physical press on unchorded slots.
+
+Layout authors can assign one optional **Hold** independently of the Tap
+binding. Chords match the original Tap slots, never the Hold slots. If no
+chord wins, Android's system long-press timeout is measured from the original
+USB down, not from the end of the chord window. A selected `plugin.key` gets
+one down on selection and the matching up on release (immediately for a tap).
+Neither deferred choice is a fresh physical-down grant for launches or capture.
+The Android Home mirror and editor selection have no keypad input authority.
 
 To author another plugin, copy the example into a named feature package, change
 its ID/title and implement its state, frame and input. Add a registry instance
@@ -152,7 +162,7 @@ inside that scope, then publish state/invalidate back on the owner dispatcher.
 Do not use `GlobalScope`, unowned threads, an application-wide static scope or a
 background service in a plugin.
 
-Selection change, disconnect, leaving the foreground with the virtual keypad, or engine close:
+Selection change, disconnect, or engine close:
 
 1. Invalidates the old activation generation and disables its host effects.
 2. Cancels its child scope.
@@ -198,7 +208,7 @@ ACK acceptance is distinct from physical LCD visibility.
 Synchronous callback/render failures and asynchronous scoped-task failures are
 attributed to the plugin ID, surfaced in the app's log/status, and stop its
 activation. The UI explicitly renders `Plugin error`, not a fabricated success
-frame. Reselect/reconnect/preview activation can retry. Cancellation is not
+frame. Reselecting or reconnecting can retry. Cancellation is not
 silently converted into successful work.
 
 Tests:

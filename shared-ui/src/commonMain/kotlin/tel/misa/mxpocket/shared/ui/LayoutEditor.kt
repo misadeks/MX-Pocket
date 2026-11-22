@@ -55,8 +55,8 @@ private class Writer(private val scope: CoroutineScope, private val repo: DeckEd
 
 /**
  * [backHandler] installs the host's Back/Escape callback. When disabled the host should handle
- * navigation normally. Preview presses and browsing affect only editor selection; live navigation
- * requires an explicit “on deck” command.
+ * navigation normally. Choosing a profile selects it on the keypad (matching the Profiles carousel);
+ * choosing a page, editing and swapping never navigate the keypad or run an action.
  */
 @Composable
 fun LayoutEditor(
@@ -74,9 +74,23 @@ fun LayoutEditor(
     val decision by repo.decision.collectAsState()
     val scope = rememberCoroutineScope()
     val writer = remember(repo, scope) { Writer(scope, repo) }
-    var selectedProfile by rememberSaveable { mutableStateOf(deck.activeProfileId) }
-    val profile = deck.profiles.find { it.id == selectedProfile } ?: deck.activeProfile
+    // The editor always edits the profile on the keypad, so the Profiles carousel and this picker agree.
+    val profile = deck.activeProfile
+    // A profile created or copied here goes on the keypad once its write has finished.
+    var pendingSelect by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(pendingSelect, writer.busy) {
+        val id = pendingSelect
+        if (id != null && !writer.busy) {
+            pendingSelect = null
+            if (id != repo.state.value.activeProfileId) writer.edit(DeckEdit.Select(id))
+        }
+    }
     var selectedPage by rememberSaveable(profile.id) { mutableStateOf(deck.histories.getValue(profile.id).last()) }
+    // A page change on the keypad brings the editor along; picking a page here never changes the keypad.
+    var seenPage by rememberSaveable(profile.id) { mutableStateOf(deck.activePage.id) }
+    LaunchedEffect(profile.id, deck.activePage.id) {
+        if (seenPage != deck.activePage.id) { seenPage = deck.activePage.id; selectedPage = deck.activePage.id }
+    }
     val page = profile.pages.find { it.id == selectedPage } ?: profile.pages.first { it.id == profile.rootPageId }
     val bindings = remember(profile.pages, actions) { localBindings(actions, profile.pages) }
     key(profile.id, page.id) {
@@ -84,41 +98,50 @@ fun LayoutEditor(
         var index by rememberSaveable { mutableStateOf<Int?>(null) }
         val draft = index?.let { i -> key(i) { rememberSaveable(saver = KeyDraft.saver) { KeyDraft(page.keys[i]) } } }
         var swapping by rememberSaveable { mutableStateOf(false) }
-        var swapFrom by rememberSaveable { mutableStateOf<Int?>(null) }
         var command by rememberSaveable { mutableStateOf<Command?>(null) }
         var rule by rememberSaveable { mutableStateOf<Int?>(null) }
         var removingRule by rememberSaveable { mutableStateOf(false) }
         val writable = !writer.busy && repo.loadError == null
-        fun finishSwap() { swapping = false; swapFrom = null }
+        fun finishSwap() { swapping = false }
         fun show(p: Pane) { index = null; finishSwap(); pane = p }
         fun selectProfile(id: String) {
-            selectedProfile = id
-            if (id == profile.id) show(Pane.PREVIEW)
+            if (id != deck.activeProfileId) writer.edit(DeckEdit.Select(id))
+            show(Pane.PREVIEW)
         }
         fun selectPage(id: String) { selectedPage = id; show(Pane.PREVIEW) }
-        fun navigate(change: DeckEdit) = writer.edit(change) { selectedPage = repo.state.value.activePage.id }
-        fun pickKey(i: Int) {
-            if (!swapping) { index = i; pane = Pane.KEY; return }
-            val first = swapFrom
-            when {
-                first == null -> swapFrom = i
-                first == i -> swapFrom = null
-                else -> writer.edit(DeckEdit.Swap(profile.id, page.id, first, i), ::finishSwap)
+        fun pickKey(i: Int) { finishSwap(); index = i; pane = Pane.KEY }
+        val active = live?.takeIf { it.activeId == profile.id && it.activePageId == page.id }
+        /** The same faces as the physical LCDs; the active page shows the live images. */
+        fun gridTiles(): List<KeypadTile> = page.keys.mapIndexed { i, saved ->
+            val tile = if (index == i && draft != null) draft.preview() else saved
+            val label = tile.label.ifBlank { bindingName(tile.action, bindings) }
+            val hint = if (!tile.enabled) "Off" else ""
+            val current = active?.tiles?.get(i)
+            val visual = if (tile == saved && current != null) current else {
+                val base = current?.face?.takeIf {
+                    saved.action == tile.action && saved.icon == tile.icon &&
+                        !(saved.label.isNotBlank() && tile.label.isBlank()) && saved.color == tile.color
+                } ?: tile.bindingPreview()
+                tile.present(base, label, if (!tile.enabled) "Disabled" else base?.footer.orEmpty(),
+                    tile.enabled && tile.action != null).toGridTile(true)
             }
+            // Editing or swapping a readout or unavailable slot must select it, never execute it.
+            visual.copy(enabled = !writer.busy, readOnly = false, selected = false,
+                accessibleName = listOf("Key ${i + 1}", tile.icon, visual.label, hint).filter(String::isNotBlank).joinToString(", "))
         }
 
         BoxWithConstraints(modifier.fillMaxSize()) {
             val wide = maxWidth >= 720.dp
             val libraryWidth = (maxWidth * .22f).coerceIn(150.dp, 256.dp)
             val bounded = constraints.hasBoundedHeight
-            val canBack = writer.error != null || command != null || rule != null || draft?.picking == true ||
+            val canBack = writer.error != null || command != null || rule != null || draft?.picking != null ||
                 swapping || index != null || (!wide && pane != Pane.PREVIEW)
             backHandler(canBack) {
                 if (!writer.busy) when {
                     writer.error != null -> writer.error = null
                     command != null -> command = null
                     rule != null -> rule = null
-                    draft?.picking == true -> draft.picking = false
+                    draft?.picking != null -> draft.picking = null
                     swapping -> finishSwap()
                     else -> show(Pane.PREVIEW)
                 }
@@ -126,7 +149,7 @@ fun LayoutEditor(
 
             val library: @Composable () -> Unit = {
                 WorkspaceTitle("Layouts")
-                EditorNote("On deck: ${deck.activeProfile.name} / ${deck.activePage.name}")
+                EditorNote("Choosing a profile puts it on the keypad. Choosing a page only opens it here for editing.")
                 LibraryGroup("Profile", deck.profiles.map { it.id to it.name }, profile.id, !writer.busy, ::selectProfile,
                     listOf(Command.CREATE_PROFILE, Command.COPY_PROFILE, Command.RENAME_PROFILE, Command.DELETE_PROFILE),
                     allowed = { cmd -> writable && when (cmd) {
@@ -150,55 +173,8 @@ fun LayoutEditor(
                     if (!wide) PocketButton("${profile.name} / ${page.name} ▾", { show(Pane.LIBRARY) },
                         Modifier.fillMaxWidth(), PocketStyle.accent(profile.id).icon, enabled = !writer.busy)
                     else Text("${profile.name} / ${page.name}", style = MaterialTheme.typography.titleMedium)
-                }
-                PocketCard("Key positions", trailing = { PocketTag("3 × 3") }) {
-                EditorNote(when {
-                    !swapping -> "Choose a key to edit. Preview taps never run actions."
-                    swapFrom == null -> "Choose the first key to swap."
-                    else -> "Choose a second key to swap with key ${swapFrom!! + 1}."
-                })
-                val active = live?.takeIf { it.activeId == profile.id && it.activePageId == page.id }
-                val tiles = page.keys.mapIndexed { i, saved ->
-                    val tile = if (index == i && draft != null) draft.preview() else saved
-                    val label = tile.label.ifBlank { bindingName(tile.action, bindings) }
-                    val hint = listOfNotNull(if (!tile.enabled) "Off" else null, when (i) {
-                        swapFrom -> "First for swap"
-                        index -> "Editing"
-                        else -> null
-                    }).joinToString(" · ")
-                    val current = active?.tiles?.get(i)
-                    val visual = if (tile == saved && current != null) current else {
-                        val base = current?.face?.takeIf {
-                            saved.action == tile.action && saved.icon == tile.icon &&
-                                !(saved.label.isNotBlank() && tile.label.isBlank()) && saved.color == tile.color
-                        } ?: tile.bindingPreview()
-                        tile.present(base, label, if (!tile.enabled) "Disabled" else base?.footer.orEmpty(),
-                            tile.enabled && tile.action != null).toGridTile(true)
-                    }
-                    // Editing a readout or unavailable slot must select it, never execute it.
-                    visual.copy(enabled = !writer.busy, readOnly = false, selected = index == i || swapFrom == i,
-                        accessibleName = listOf("Key ${i + 1}", tile.icon, visual.label, hint).filter(String::isNotBlank).joinToString(", "))
-                }
-                KeypadGrid(tiles, { i, down -> if (!down && !writer.busy) pickKey(i) }, panelArt = active?.panelArt)
-                EditorActions {
-                    TextButton(onClick = {
-                        if (swapping) finishSwap() else { show(Pane.PREVIEW); swapping = true }
-                    }, enabled = writable) { Text(if (swapping) "Cancel swap" else "Swap keys") }
-                    if (profile.id != deck.activeProfileId) {
-                        TextButton(onClick = { writer.edit(DeckEdit.Select(profile.id)) }, enabled = writable) {
-                            Text(if (deck.pinnedProfileId == null) "Use this profile" else "Switch pinned profile")
-                        }
-                    } else {
-                        TextButton(onClick = { navigate(DeckEdit.Open(profile.id, page.id)) },
-                            enabled = writable && page.id != deck.activePage.id) {
-                            Text(if (page.id == deck.activePage.id) "Page on deck" else "Open page on deck")
-                        }
-                        if (deck.activePage.id != profile.rootPageId) {
-                            TextButton(onClick = { navigate(DeckEdit.Back(profile.id)) }, enabled = writable) { Text("Back on deck") }
-                            TextButton(onClick = { navigate(DeckEdit.Root(profile.id)) }, enabled = writable) { Text("Home on deck") }
-                        }
-                    }
-                }
+                    PocketButton("Swap keys", { show(Pane.PREVIEW); swapping = true }, Modifier.fillMaxWidth(),
+                        ShellIcon.SWAP, PocketTone.ACCENT, enabled = writable)
                 }
                 if (!wide || index != null) PocketButton("Profile settings and rules", { show(Pane.SETTINGS) },
                     Modifier.fillMaxWidth(), ShellIcon.SETTINGS, enabled = !writer.busy)
@@ -248,7 +224,19 @@ fun LayoutEditor(
                 })
             }
         }
-        if (draft?.picking == true) BindingDialog(bindings, draft)
+        if (draft?.picking != null) BindingDialog(bindings, draft)
+        if (swapping) AlertDialog(onDismissRequest = { if (!writer.busy) finishSwap() },
+            title = { Text("Swap keys") },
+            text = {
+                Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    EditorNote("Drag a key onto another to swap them. Tap a key to edit it. Nothing here runs an action.")
+                    // Taps and drags only edit the layout; key execution stays on Home and the keypad.
+                    KeypadGrid(gridTiles(), { i, down -> if (!down && !writer.busy) pickKey(i) },
+                        Modifier.widthIn(max = 360.dp).testTag("swap-grid"),
+                        onSwap = { from, to -> if (writable) writer.edit(DeckEdit.Swap(profile.id, page.id, from, to)) })
+                }
+            },
+            confirmButton = { TextButton(onClick = ::finishSwap, enabled = !writer.busy) { Text("Done") } })
         rule?.let { i ->
             // Keep the baseline captured on opening. Never apply an old array index to a new ruleset.
             val baseline = rememberSaveable(saver = rulesSaver) { profile.rules }
@@ -265,7 +253,7 @@ fun LayoutEditor(
         }
         command?.let { cmd ->
             CommandDialog(cmd, profile, page, writer, writable, close = { command = null }, onImport,
-                selectProfile = { selectedProfile = it; show(Pane.PREVIEW) }, selectPage = ::selectPage,
+                selectProfile = { pendingSelect = it; show(Pane.PREVIEW) }, selectPage = ::selectPage,
                 activeProfile = { repo.state.value.activeProfileId })
         }
     }

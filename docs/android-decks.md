@@ -1,7 +1,8 @@
 # Android keypad decks
 
-Select **Connect virtual keypad** or connect an authorized keypad, then select a
-profile. Virtual keys run real phone actions. The debug-only UI fixture does not.
+Choose a profile in **Profiles**, then use the connection button at the top of **Home**
+to connect an authorized USB keypad. Press the keys on the device. The phone's mirror
+and profile editor do not run key actions.
 
 | Deck | How to use it | If access is missing |
 | --- | --- | --- |
@@ -23,7 +24,7 @@ in-app camera remain accessible under **Camera controls > Open previous Studio
 captures** with a single-file read grant. Saved `studio.open` keys open the
 native camera; old explicit capture/timer/zoom/focus/torch/marker bindings stay
 unavailable, not silently remapped. Only the built-in Studio root page can send
-camera clicks, never virtual keys, imported capture actions or workflows.
+camera clicks, never imported capture actions or workflows.
 
 The camera-control service reads the active window only on demand. It requires
 the resolved camera package and a unique visible, enabled button with an exact
@@ -43,14 +44,14 @@ only the exact selected, still-exported `MAIN`/`LAUNCHER` component.
 After a direct request the notification is a quiet retry, not proof of launch.
 
 Android requires a notification-listener grant to inspect active media
-sessions. It is broad at the OS level. This app uses the component solely as
+sessions. It is broad at the OS level. The Audio service uses its component solely as
 authorization for `MediaSessionManager`; it does not retrieve, log, or act
 on notifications. Spotify and other players use the same Android interface:
 there is no Spotify sign-in, SDK, playlist browser or downloaded artwork.
-While unlocked on **Audio**, the local cover spans the virtual board on Home
-or all nine LCD regions on a wired keypad, paused or playing. With hardware
-connected, Home lists the labels; **Keypad** previews the active key faces
-without running their actions. A three-pixel black margin around the whole
+While unlocked on **Audio**, the local cover spans the layout preview on Home
+and all nine LCD regions on a connected keypad, paused or playing. With hardware
+connected, Home mirrors the live keys as a display only; **Profiles > Swap keys** shows
+the active key faces without running their actions. A three-pixel black margin around the whole
 cover provides bezel clearance. Each label uses black or white against its own part of the picture.
 Other profiles keep their normal keys even during playback. Without usable
 art, the keys keep a neutral background (or the user's selected backdrop).
@@ -81,13 +82,62 @@ The app doesn't wake the handset or draw over its lock screen. Without that
 keypad, lock hides playback details. Leaving Audio, losing the session or
 revoking access clears them. One fresh press on the authorized keypad can change music
 volume, mute, play/pause or skip without unlocking. Seeking stays disabled.
-Phone/simulator taps, workflow steps, settings and app launches do not get
+Workflow steps, settings and app launches do not get
 this exception. Player sessions can end or drop an action; MX Pocket does not
 wake the phone or start a player to compensate.
 
 The navigation service does not subscribe to screen events,
 read element text, inject gestures, or record keys. Both grants are optional
 and revocable in Android settings.
+
+## Teams on this phone
+
+Select **Teams / Work**. **Open Teams** opens the launchable Teams app in this
+Android profile; it does not follow a meeting link or join a call. In the
+background, press the physical key, then tap the shortcut notification.
+Previous focus, Select and Next focus use the existing Navigation controls.
+**Focus timer** changes profiles; **Call tools** opens the call page without
+claiming a call is active. My chat and Meeting link are unassigned. Existing
+layouts are preserved: editing or deleting a Teams page isn't undone on upgrade.
+
+For automatic switching, open **Plugins → Teams → Teams setup** on the phone.
+Enable **Teams call switching**, then grant notification access to **MX Pocket
+Teams calls** and accessibility access to **MX Pocket Teams call controls**.
+These are broad Android permissions; neither the Audio listener, the Navigation
+service nor grant of a system permission alone opts you in. You can turn the
+feature off without affecting either Audio or Navigation.
+
+With an authorized wired keypad and an unlocked phone, the adapter requires
+**both** one Android 14+ [typed ongoing CallStyle](https://developer.android.com/develop/ui/compose/notifications/call-style)
+from `com.microsoft.teams` in the same Android user, and the visible joined
+meeting controls. A notification alone cannot distinguish every client's
+pre-join or ringing behavior. The foreground check looks for the English
+**Mic** and **Hang up** buttons together in the same control group, as named in
+[Microsoft's Android TalkBack guide](https://support.microsoft.com/en-us/accessibility/teams/use-a-screen-reader-to-join-a-meeting-in-microsoft-teams).
+Hang up is never pressed. Once confirmed, the same notification can maintain
+the page with Teams in the background; hidden controls cannot be pressed.
+No presence, media activity, chat content or caller identity is used. No
+call data or automatic page selection is written to a backup.
+
+Keep the factory center mic key as a Tap with no Hold binding. It shows
+**Mute mic** or **Unmute mic** only when the visible Mic button explicitly
+reports an unmuted or muted state. A fresh physical press
+requests one click and waits for Teams to report the result. Otherwise it
+says **Mic unavailable**. Use Teams directly for captions, hand, chat and
+call volume; MX Pocket does not substitute media volume or system mute.
+Leaving the call restores the previous page unless you navigated elsewhere.
+Pinning a profile prevents automatic entry. Locking the phone, losing either
+service or revoking access drops live controls. Windows is a layout simulator,
+not a Teams remote.
+
+**Compatibility:** Work and manual page selection need no special access.
+Automatic detection and mic dispatch are tested with synthetic Android
+notifications, accessibility buttons and keypad input, **not a live Teams
+client**. There is no verified client/version combination yet. Missing or
+ambiguous controls, another language, Android below 14, multiple Android
+profiles (including a work profile), or an administrator restriction can
+leave the feature unavailable. A real, user-controlled call and a physical
+LCD/TalkBack check are still required before claiming support for a client.
 
 ## Profile and workflow bindings
 

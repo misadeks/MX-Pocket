@@ -44,7 +44,7 @@ class WorkflowLibraryTest {
         } finally { scope.cancel() }
     }
 
-    @Test fun physicalAndVirtualBindingsAndContextEdgesUseTheSameRunner() {
+    @Test fun physicalBindingsAndContextEdgesUseTheSameRunner() {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
         try {
             val controller = WorkflowController(app, scope, host)
@@ -62,6 +62,21 @@ class WorkflowLibraryTest {
             assertEquals(listOf(WorkflowOrigin.CONTEXT, WorkflowOrigin.MANUAL, WorkflowOrigin.PHYSICAL),
                 controller.history.value.map { it.origin })
             assertEquals(WorkflowTrigger(), controller.duplicate(edge).trigger)
+        } finally { scope.cancel() }
+    }
+
+    @Test fun oldVirtualOnlyTriggerRemainsReadableButCannotRunFromAKey() {
+        File(app.filesDir, "workflow-library.json").writeText("""
+            {"version":1,"definitions":[{"id":"legacy","name":"Legacy","trigger":{"kind":"VIRTUAL"},
+            "steps":[{"kind":"SET","target":"flag","value":"on"}]}]}
+        """.trimIndent())
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        try {
+            val controller = WorkflowController(app, scope, host)
+            assertEquals(TriggerKind.MANUAL_ONLY, controller.definitions.value.single().trigger.kind)
+            assertFalse(controller.run("legacy", WorkflowOrigin.PHYSICAL))
+            assertFalse(controller.run("legacy", WorkflowOrigin.VIRTUAL))
+            assertTrue(controller.run("legacy", WorkflowOrigin.MANUAL))
         } finally { scope.cancel() }
     }
 }
