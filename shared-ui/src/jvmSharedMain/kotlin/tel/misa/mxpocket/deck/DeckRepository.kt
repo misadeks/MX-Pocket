@@ -141,11 +141,9 @@ class DeckRepository(private val file: File, disabledPluginIds: Set<String> = em
 
     @Synchronized fun enterGame(): Result<Unit> = runCatching {
         check(GAME_PROFILE !in saved.disabledPluginIds) { LauncherCopy.EnableGame.text() }
-        if (showingPhone) {
-            showingPhone = false
-            publish()
-        }
-        if (!game) gameReturnId = operating.value.activeProfileId
+        // Dismiss the phone overlay without publishing its underlying layout on the way to the game.
+        if (!game) gameReturnId = if (home && !showingCall) PROFILE_HOME else state.value.activeProfileId
+        showingPhone = false
         if (teamsInForeground) teamsWorkOverridden = true
         game = true
         clearObservation()

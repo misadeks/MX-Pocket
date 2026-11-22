@@ -175,11 +175,26 @@ class PhoneCallViewTest {
             assertFalse(session.frame().keys.any { !it.readOnly })
             app.press(0x01a2); session.refreshPhoneCall(); main.idle()
             assertEquals(previous, session.deck.operatingState.value.activeProfileId)
+            // Neither page chord borrows the Answer or Decline key, even with both actions live.
+            session.openProfile("focus")
+            for (hold in listOf(false, true)) {
+                state(TelephonyManager.CALL_STATE_IDLE); main.idle(); SystemClock.sleep(5)
+                state(TelephonyManager.CALL_STATE_RINGING); post(note()); main.idle()
+                assertFalse(session.frame().keys[CALL_ACCEPT].readOnly)
+                app.emit(KeyEvent(0x01a1, true)); app.emit(KeyEvent(0x01a2, true)); main.idle()
+                assertEquals(PHONE_CALL_VIEW, session.deck.operatingState.value.activeProfileId)
+                if (hold) main.idleFor(java.time.Duration.ofMillis(android.view.ViewConfiguration.getLongPressTimeout().toLong()))
+                app.emit(KeyEvent(0x01a1, false)); app.emit(KeyEvent(0x01a2, false)); main.idle()
+                session.refreshPhoneCall()
+                assertEquals(if (hold) "game.xo" else PROFILE_HOME, session.deck.operatingState.value.activeProfileId)
+                assertEquals(0, count(1)); assertEquals(0, count(2))
+                session.openProfile("focus")
+            }
             state(TelephonyManager.CALL_STATE_IDLE); state(TelephonyManager.CALL_STATE_OFFHOOK); main.idle()
             assertEquals(PHONE_CALL_VIEW, session.deck.operatingState.value.activeProfileId)
             shadowOf(app).denyPermissions(Manifest.permission.READ_PHONE_STATE)
             session.refreshPhoneCall(); main.idle()
-            assertEquals(previous, session.deck.operatingState.value.activeProfileId)
+            assertEquals("focus", session.deck.operatingState.value.activeProfileId)
             assertFalse(session.logText().contains("Fixture caller"))
             assertFalse(session.deck.exportJson().contains("Fixture caller"))
         } finally { session.disconnect(); controller.destroy() }

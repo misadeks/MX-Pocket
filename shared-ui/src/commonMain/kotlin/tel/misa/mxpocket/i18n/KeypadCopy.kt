@@ -189,7 +189,10 @@ object KeypadCopy {
     val NavEnabled = Copy("System navigation enabled.", "Navigation système activée.", "Sistemska navigacija je uključena.")
     val NavBasic = Copy("Basic in-app navigation; system access off.", "Navigation dans l’appli uniquement ; accès système désactivé.", "Osnovna navigacija u aplikaciji; pristup sistemu je isključen.")
     val TeamsDetails = Copy("Work opens Teams on this phone. Call tools keep the meeting mic on the center key. Automatic switching is optional.", "Travail ouvre Teams sur ce téléphone. Dans les outils d’appel, la touche centrale commande le micro. Le changement automatique est facultatif.", "Strana Posao otvara Teams na ovom telefonu. U alatkama za poziv srednji taster kontroliše mikrofon sastanka. Automatsko prebacivanje je opciono.")
-    val GameDetails = Copy("Press Previous and Next together on the keypad to play. Press either one again to exit.", "Appuyez simultanément sur Précédent et Suivant sur le pavé pour jouer. Appuyez ensuite sur l’une de ces touches pour quitter.", "Istovremeno pritisni Prethodno i Sledeće na tastaturi za igru. Za izlaz ponovo pritisni bilo koji od ta dva tastera.")
+    val GameDetails = Copy(
+        "Press Previous and Next together. Release for keypad Home, or keep holding to play Tic Tac Toe. Press either button alone to exit the game.",
+        "Appuyez sur Précédent et Suivant ensemble. Relâchez pour revenir à l’accueil du pavé ou maintenez les deux touches pour jouer au morpion. Pour quitter le jeu, appuyez sur une seule touche de page.",
+        "Pritisni Prethodno i Sledeće zajedno. Otpusti ih za početni ekran tastature ili ih zadrži za igru iks-oks. Za izlaz iz igre pritisni samo jedan od ta dva tastera.")
     val FocusDetails = Copy("Timer, pause, reset, and duration presets. No permission required.", "Minuteur avec pause, remise à zéro et durées prédéfinies. Aucune autorisation requise.", "Tajmer sa pauzom, resetovanjem i unapred zadatim trajanjem. Dozvola nije potrebna.")
     val PhoneDetails = Copy("Camera, settings, dialer, browser and alarms. Direct shortcuts are optional.", "Caméra, réglages, clavier d’appel, navigateur et alarmes. Les raccourcis directs sont facultatifs.", "Kamera, podešavanja, biranje broja, pregledač i alarmi. Direktne prečice su opcione.")
 

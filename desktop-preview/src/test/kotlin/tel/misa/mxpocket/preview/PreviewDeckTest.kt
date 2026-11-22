@@ -1,6 +1,10 @@
 package tel.misa.mxpocket.preview
 
 import kotlin.test.Test
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.rules.TemporaryFolder
 import tel.misa.mxpocket.deck.DeckRepository
@@ -373,14 +377,14 @@ class PreviewDeckTest {
         assertEquals(6, sent.size)
     }
 
-    @Test fun physicalReleaseDoesNotRetargetAHeldKeyOrExecuteOnDisconnect() {
+    @Test fun physicalReleaseDoesNotRetargetAHeldKeyOrExecuteOnDisconnect() = runTest {
         val repo = DeckRepository(File(folder.root, "deck.json"))
         val sent = mutableListOf<MediaKey>()
         val deck = PreviewDeck(repo) { sent += it; it.label }
         deck.select("audio")
         repo.setKey("audio", "root", 0, DeckKey(action = ActionCall(DeckCommand.LOUDER.id),
             holdAction = ActionCall(DeckCommand.QUIETER.id))).getOrThrow()
-        val input = PhysicalKeys(deck)
+        val input = PhysicalKeys(deck, deck.pageButtons(this, 500, {}))
         fun edge(down: Boolean, at: Long, synth: Boolean = false) =
             input.accept(tel.misa.mxpocket.driver.KeyEvent(1, down, synth), deck.board(at).grid, at)
         edge(true, 0); edge(true, 10); edge(false, 100); edge(false, 110)
@@ -390,17 +394,26 @@ class PreviewDeckTest {
         assertEquals(listOf(MediaKey.LOUDER, MediaKey.QUIETER), sent)
     }
 
-    @Test fun bothPhysicalPageButtonsEnterTheGameWithoutCyclingOrSendingMedia() {
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test fun physicalPageChordWaitsForReleaseOrHoldAndRequiresItsOriginalGrid() = runTest {
         val repo = DeckRepository(File(folder.root, "deck.json"))
         val deck = PreviewDeck(repo) { error("Game buttons must not send Windows media") }
         deck.select("audio")
-        val input = PhysicalKeys(deck)
-        fun page(id: Int, pressed: Boolean) {
-            input.accept(tel.misa.mxpocket.driver.KeyEvent(id, pressed), deck.board(0).grid, 0)
+        val now = { testScheduler.currentTime }
+        val input = PhysicalKeys(deck, deck.pageButtons(this, 800, {}, now))
+        fun page(id: Int, pressed: Boolean, synthetic: Boolean = false) {
+            input.accept(tel.misa.mxpocket.driver.KeyEvent(id, pressed, synthetic), deck.board(now()).grid, now())
         }
+        page(0x01a1, true); page(0x01a2, true)
+        advanceTimeBy(799); assertEquals("audio", deck.profileId)
+        page(0x01a2, false); assertEquals("@home", deck.profileId)
+        page(0x01a1, false); advanceTimeBy(800); assertEquals("@home", deck.profileId)
+        deck.select("audio")
         page(0x01a1, true)
         assertEquals("audio", deck.profileId)
         page(0x01a2, true)
+        advanceTimeBy(800); runCurrent()
+        assertEquals("game.xo", deck.profileId)
         page(0x01a2, false)
         page(0x01a1, false)
         assertEquals("game.xo", deck.profileId)
@@ -408,5 +421,28 @@ class PreviewDeckTest {
         page(0x01a1, true)
         page(0x01a1, false)
         assertEquals("audio", deck.profileId)
+        page(0x01a2, true); page(0x01a1, true); page(0x01a2, false, synthetic = true)
+        advanceTimeBy(800); runCurrent(); page(0x01a1, false)
+        assertEquals("audio", deck.profileId)
+        page(0x01a1, true); page(0x01a2, true)
+        deck.resetInput()
+        advanceTimeBy(800); runCurrent(); page(0x01a1, false); page(0x01a2, false)
+        assertEquals("audio", deck.profileId)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test fun simulatorPageKeyRepeatDoesNotRestartHoldAndResetDropsTheChord() = runTest {
+        val deck = PreviewDeck(DeckRepository(File(folder.root, "deck.json"))).apply { simulator = true; select("audio") }
+        val keys = deck.pageButtons(this, 650, {}) { testScheduler.currentTime }
+        keys.input(-1, true); keys.input(1, true)
+        advanceTimeBy(640); keys.input(1, true); keys.input(-1, true)
+        advanceTimeBy(10); runCurrent(); assertEquals("game.xo", deck.profileId)
+        keys.input(-1, false); keys.input(1, false)
+        keys.input(1, true); keys.input(1, false); assertEquals("audio", deck.profileId)
+        keys.input(1, true); keys.input(-1, true); keys.reset()
+        advanceTimeBy(650); runCurrent(); keys.input(1, false); keys.input(-1, false)
+        assertEquals("audio", deck.profileId)
+        keys.input(1, true); keys.input(-1, true); keys.input(-1, false); keys.input(1, false)
+        assertEquals("@home", deck.profileId)
     }
 }
