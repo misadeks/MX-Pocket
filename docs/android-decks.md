@@ -234,8 +234,8 @@ parameter: `component` is the exact flattened component of a current favorite.
 Unknown actions, unexpected parameters and stale favorites fail closed.
 Use `DeckCommand.workflowSafe` to restrict workflow steps to volume/transport.
 Navigation, captures, permission setup and launching need an immediate user
-press; dispatch must not carry that authority into asynchronous work. The Flows
-screen separately supports opening a current favorite or Android Home after
+press; dispatch must not carry that authority into asynchronous work. In
+[workflow-enabled builds](workflows.md), the Flows screen separately supports opening a current favorite or Android Home after
 foreground confirmation; it does not use the keypad's launch authority.
 `PocketSession.runDeckAction(id, params)` returns `DeckResult(success, message)`.
 An accepted transport or capture request is not proof playback or capture
