@@ -96,6 +96,25 @@ class PreviewDeckTest {
         assertEquals("@home", deck.profileId)
     }
 
+    @Test fun androidAccessibilityBindingsRemainNamedButInertOnWindows() {
+        val repo = DeckRepository(File(folder.root, "deck.json"))
+        val host = PreviewDeck(repo)
+        host.select("focus")
+        val commands = DeckCommand.entries.filter { it.accessibilityKey }
+        commands.forEachIndexed { i, c ->
+            repo.setKey("focus", "root", i, DeckKey(action = ActionCall(c.id))).getOrThrow()
+        }
+        for (virtual in listOf(false, true)) {
+            host.simulator = virtual
+            val board = host.board(0)
+            commands.forEachIndexed { i, c ->
+                assertEquals(c.id, board.faces[i].inputToken)
+                check(!board.grid.taps[i].actionable)
+                check(board.faces[i].footer.contains("Windows"))
+            }
+        }
+    }
+
     @Test fun holdUsesItsOwnActionAndAvailabilityWithoutFallingBackToTap() {
         val repo = DeckRepository(File(folder.root, "deck.json"))
         val deck = PreviewDeck(repo).apply { simulator = true }
@@ -209,14 +228,17 @@ class PreviewDeckTest {
     @Test fun navigationUsesFactoryBindingsAndNeverClaimsAndroidAccess() {
         val deck = PreviewDeck(DeckRepository(File(folder.root, "deck.json"))).apply { simulator = true }
         deck.repository.selectProfile("navigation").getOrThrow()
-        val up = factoryKeyBindings.single { it.label == "Navigation key 2: Scroll up" }
+        val up = factoryKeyBindings.single { it.label == "Navigation and Accessibility key 2: Scroll up" }
         assertEquals(deck.repository.state.value.activePage.keys[1].action, up.call)
         val tiles = deck.tiles(0)
         check(tiles.map { it.label } == listOf("Back", "Scroll up", "Home", "Prev focus", "Select",
-            "Next focus", "Recents", "Scroll down", "Access info"))
+            "Next focus", "Recents", "Scroll down", "Accessibility"))
         check(tiles.none { it.enabled && !it.readOnly })
         check(tiles[6].let { !it.enabled && it.label == "Recents" && it.footer.contains("Android") })
-        tiles.forEachIndexed { index, tile -> check(deck.press(index, 0).startsWith(tile.label)) }
+        tiles.take(8).forEachIndexed { index, tile -> check(deck.press(index, 0).startsWith(tile.label)) }
+        check(deck.repository.state.value.activePage.id == "root")
+        deck.press(8, 0)
+        check(deck.repository.state.value.activePage.id == "root")
     }
 
     @Test fun factoryNavigationTimerAndSimulatedAudio() {

@@ -18,6 +18,7 @@ import androidx.activity.compose.setContent
 import tel.misa.mxpocket.shared.ui.PhoneActionResultScreen
 import tel.misa.mxpocket.shared.ui.PocketTheme
 import tel.misa.mxpocket.decks.FavoriteApps
+import tel.misa.mxpocket.decks.AccessibilityPanel
 import tel.misa.mxpocket.i18n.AccessCopy
 import tel.misa.mxpocket.plugins.PhoneApp
 import tel.misa.mxpocket.plugins.displayName
@@ -26,7 +27,7 @@ import tel.misa.mxpocket.decks.teamsLauncher
 import tel.misa.mxpocket.ui.LanguagePreference
 
 private enum class ShortcutFailure {
-    STALE, LOCKED, TEAMS_MISSING, ONENOTE_MISSING, FAVORITE_UNAVAILABLE, NO_VIEWFINDER, APP_MISSING, RESTRICTED, NO_PHONE_HANDLER, PHONE_RESTRICTED;
+    STALE, LOCKED, TEAMS_MISSING, ONENOTE_MISSING, FAVORITE_UNAVAILABLE, NO_VIEWFINDER, APP_MISSING, RESTRICTED, NO_PHONE_HANDLER, PHONE_RESTRICTED, NO_SETTINGS, SETTINGS_RESTRICTED;
 
     fun text(context: Context, app: PhoneApp?) = when (this) {
         STALE -> LanguagePreference.resourcesFor(context).getString(R.string.phone_action_stale)
@@ -39,6 +40,8 @@ private enum class ShortcutFailure {
         RESTRICTED -> AccessCopy.ShortcutRestricted.text()
         NO_PHONE_HANDLER -> AccessCopy.NoPhoneHandler.text(requireNotNull(app).displayName().uppercase())
         PHONE_RESTRICTED -> AccessCopy.PhoneRestricted.text(requireNotNull(app).displayName().uppercase())
+        NO_SETTINGS -> AccessCopy.SettingsUnavailable.text()
+        SETTINGS_RESTRICTED -> AccessCopy.RestrictedSettings.text()
     }
 }
 
@@ -118,6 +121,11 @@ internal fun Context.launchShortcut(target: PocketSession.Target): String? =
 
 private fun Context.tryShortcut(target: PocketSession.Target): ShortcutFailure? {
     val intent = when (target) {
+        is PocketSession.Target.SettingsPanel -> return when (target.panel.open(this)) {
+            AccessibilityPanel.Result.OPENED -> null
+            AccessibilityPanel.Result.UNAVAILABLE -> ShortcutFailure.NO_SETTINGS
+            AccessibilityPanel.Result.RESTRICTED -> ShortcutFailure.SETTINGS_RESTRICTED
+        }
         PocketSession.Target.Teams -> teamsLauncher() ?: return ShortcutFailure.TEAMS_MISSING
         is PocketSession.Target.Phone -> return tryPhoneApp(target.app)
         is PocketSession.Target.FavoriteApp -> intentForFavoriteShortcut(target.component,

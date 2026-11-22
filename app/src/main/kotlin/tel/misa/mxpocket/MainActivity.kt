@@ -489,6 +489,10 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
 
     override fun deckAction(command: DeckCommand, component: String?): DeckResult {
         if (!resumed || !isUnlockedAndInteractive()) return unavailable(D.OpenUnlocked.text())
+        AccessibilityPanel.forCommand(command)?.let { panel ->
+            return launchShortcut(PocketSession.Target.SettingsPanel(panel))?.let(::unavailable)
+                ?: ok(tel.misa.mxpocket.i18n.AccessCopy.SettingsOpened.text())
+        }
         val intent = when (command) {
             DeckCommand.TEAMS_OPEN -> teamsLauncher() ?: return unavailable(D.NoTeams.text())
             DeckCommand.TEAMS_ACCESS -> Intent(this, TeamsAccessActivity::class.java)

@@ -103,6 +103,10 @@ fun DeckAccessScreen(access: DeckAccess, message: String, onOpenSettings: (() ->
                 Text(AccessCopy.OptionalAccess.text(),
                     style = MaterialTheme.typography.bodyMedium)
                 OutlinedButton(onClick = onOpenSettings) { Text(AccessCopy.OpenAndroidSettings.text()) }
+                if (access == DeckAccess.Navigation) {
+                    Text(AccessCopy.TalkBackHint.text())
+                    Text(AccessCopy.ShortcutHint.text())
+                }
             } else Text(AccessCopy.NoAndroidSettings.text())
             SubsidiaryStatus(message)
         }

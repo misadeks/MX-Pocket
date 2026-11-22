@@ -55,11 +55,16 @@ object DeckJson {
             xoProfileRemoved = xoProfileRemoved,
             teamsProfileRemoved = teamsRemoved,
         )
-        if (state.version in 1..3) {
+        if (state.version in 1..4) {
             val validated = state.copy(version = DeckLimits.VERSION)
             validateDeck(validated)
             val audio = if (state.version == 1) upgradeAudioSlots(validated) else validated
-            return (if (state.version < 3) audio.upgradeStockNavigationRoot() else audio).withoutStockTeamsTimer()
+            val nav = if (state.version < 3) audio.upgradeStockNavigationRoot() else audio
+            val prior = if (state.version < 4) nav.withoutStockTeamsTimer() else nav
+            // A reordered v1/v2 root was a user edit, not the v3 stock root.
+            if (state.version < 3 && nav === audio) return prior
+            val upgraded = prior.withAccessibilityPage()
+            return if (upgraded === prior || fits(upgraded)) upgraded else prior
         }
 
         validateDeck(state)

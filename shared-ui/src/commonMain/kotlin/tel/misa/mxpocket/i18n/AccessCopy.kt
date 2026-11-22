@@ -175,6 +175,17 @@ object AccessCopy {
     val DirectTitle = Copy("Open apps directly from keypad", "Ouvrir les applications directement depuis le pavé", "Otvaranje aplikacija direktno sa tastature")
     val EnableShortcuts = Copy("Enable shortcuts", "Activer les raccourcis", "Uključi prečice")
     val SettingsUnavailable = Copy("These settings are unavailable on this device.", "Ces paramètres ne sont pas disponibles sur cet appareil.", "Ova podešavanja nisu dostupna na ovom uređaju.")
+    val TalkBackHint = Copy(
+        "In Android Accessibility, choose TalkBack, then Use TalkBack to turn it on or off.",
+        "Dans les paramètres d’accessibilité Android, choisissez TalkBack, puis « Utiliser TalkBack » pour l’activer ou le désactiver.",
+        "U Android podešavanjima pristupačnosti izaberite TalkBack, pa „Koristi TalkBack“ da biste ga uključili ili isključili.")
+    val ShortcutHint = Copy(
+        "For a TalkBack key, choose TalkBack alone for the volume-key shortcut in Android Accessibility → TalkBack → TalkBack shortcut. The keypad runs that shortcut on supported Android 12+ phones with MX Pocket navigation enabled.",
+        "Pour une touche TalkBack, choisissez uniquement TalkBack pour le raccourci des touches de volume dans Accessibilité → TalkBack → Raccourci TalkBack. Le pavé lance ce raccourci sur les téléphones compatibles sous Android 12 ou ultérieur si la navigation MX Pocket est activée.",
+        "Za namenski taster izaberite samo TalkBack za prečicu tasterima za jačinu zvuka u meniju Pristupačnost → TalkBack → TalkBack prečica. Tastatura pokreće tu prečicu na podržanim telefonima sa Androidom 12 ili novijim kada je uključena MX Pocket navigacija.")
+    val TapWithoutHold = Copy("Use Tap and leave Hold unassigned for this action.", "Pour cette action, utilisez l’appui bref et laissez l’appui long sans action.", "Za ovu radnju koristite kratak pritisak i ostavite dugi pritisak nedodeljen.")
+    val ShortcutUnavailable = Copy("Android does not offer the accessibility shortcut. Use TalkBack settings instead.", "Android ne propose pas le raccourci d’accessibilité. Utilisez les paramètres de TalkBack.", "Android ne nudi prečicu za pristupačnost. Koristite podešavanja za TalkBack.")
+    val SettingsOpened = Copy("Opened Android settings.", "Paramètres Android ouverts.", "Otvorena su Android podešavanja.")
     val RestrictedSettings = Copy("Android restricted these settings.", "Android limite l’accès à ces paramètres.", "Android je ograničio pristup ovim podešavanjima.")
 
     val EnableCamera = Copy("Enable keypad camera controls", "Activer les commandes photo du pavé", "Uključi upravljanje kamerom sa tastature")
