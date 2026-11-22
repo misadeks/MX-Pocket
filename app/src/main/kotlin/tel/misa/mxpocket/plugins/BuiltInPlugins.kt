@@ -108,22 +108,29 @@ class OneNotePlugin(title: String, resources: Resources? = null) : PocketPlugin 
 
     // The ink toolbar's tools as (description, description); empty outside the draw view.
     private var tools: List<Pair<String, String>> = emptyList()
+    private var lastTools: List<Pair<String, String>> = emptyList()
     private var active: String? = null
     private var settings: OneNoteSettings? = null
     private var page = 0
     private var colorsOpen = false
     private var opening = false
     private var textPage = 0
+    private var shapePage = 0
+    private var foreground = false
 
     override fun onActivate(host: PluginHost) {
         host.scope.launch {
             while (true) {
+                foreground = host.oneNoteForeground
                 val updated = host.oneNoteSettings
                 if (updated?.textColor == true && settings?.textColor != true) page = 0
                 settings = updated
                 if (settings == null && !opening) {
                     colorsOpen = false
-                    tools = host.toolBar
+                    val updatedTools = host.toolBar
+                    if (updatedTools.any { it.first.startsWith("shape:") } && tools.none { it.first.startsWith("shape:") }) shapePage = 0
+                    tools = updatedTools
+                    if (tools.any { it.first.isNotBlank() }) lastTools = tools.toList()
                     active = host.activeTool
                 }
                 host.invalidate()
@@ -140,22 +147,41 @@ class OneNotePlugin(title: String, resources: Resources? = null) : PocketPlugin 
         if (current != null) {
             return if (colorsOpen || current.textColor) faces.palette(current, palettePage(current)) else faces.settings(current)
         }
-        if (tools.any { it.first.startsWith("style:") || it.first.startsWith("size:") }) {
-            val size = tools.any { it.first.startsWith("size:") }
-            return PluginFrame(List(9) { faces.option(tools.getOrNull(it), size) })
-        }
-        if (tools.any { it.first.startsWith("text:") }) {
-            val displayed = if (textPage == 0) tools.take(8) else tools.drop(8).take(7) + ("text:draw" to N.Draw.text())
-            return PluginFrame(List(9) { index ->
+        val inactive = tools.none { it.first.isNotBlank() }
+        val displayedTools = if (inactive) lastTools else tools
+        val frame = if (displayedTools.any { it.first.startsWith("shape:") }) {
+            val pages = ((displayedTools.size + 5) / 6).coerceAtLeast(1)
+            val currentPage = shapePage.coerceIn(0, pages - 1)
+            PluginFrame(List(9) { index -> when (index) {
+                in 0..5 -> faces.shape(displayedTools.getOrNull(currentPage * 6 + index))
+                6 -> faces.pageKey(false, currentPage > 0)
+                7 -> faces.option("style:cancel" to tel.misa.mxpocket.i18n.AccessCopy.Cancel.text(), false)
+                else -> faces.pageKey(true, currentPage + 1 < pages, "${currentPage + 1} / $pages")
+            } })
+        } else if (displayedTools.any { it.first.startsWith("style:") || it.first.startsWith("size:") }) {
+            val size = displayedTools.any { it.first.startsWith("size:") }
+            PluginFrame(List(9) { faces.option(displayedTools.getOrNull(it), size) })
+        } else if (displayedTools.any { it.first.startsWith("text:") }) {
+            val displayed = if (textPage == 0) displayedTools.take(8) else displayedTools.drop(8).take(7) + ("text:draw" to N.Draw.text())
+            PluginFrame(List(9) { index ->
                 if (index == 8) faces.pageKey(textPage == 0, footer = "${textPage + 1} / 2")
                 else faces.ribbon(displayed.getOrNull(index))
             })
-        }
-        return faces.draw(selectable(), active)
+        } else faces.draw(displayedTools.filter { it.second != "More options" }, if (inactive) null else active)
+        return if (!inactive) frame else frame.copy(keys = frame.keys.mapIndexed { index, tile ->
+            if (index == 4 && !foreground) return@mapIndexed faces.openOneNote()
+            val glyph = tile.glyph
+            tile.copy(enabled = false, selection = null, detail = "",
+                glyph = if (glyph is OneNoteLegend && glyph.ink != null) glyph.copy(ink = 0xff999da0.toInt()) else glyph)
+        })
     }
 
     override fun onKey(event: PluginKeyEvent, host: PluginHost) {
         if (!event.pressed || event.synthetic) return
+        if (settings == null && tools.none { it.first.isNotBlank() }) {
+            if (event.index == 4 && !host.oneNoteForeground) host.dispatch(PluginAction.OpenApp(PhoneApp.ONENOTE))
+            return
+        }
         val current = settings
         if (current != null) {
             if (colorsOpen || current.textColor) {
@@ -178,9 +204,31 @@ class OneNotePlugin(title: String, resources: Resources? = null) : PocketPlugin 
             host.invalidate()
             return
         }
+        if (tools.any { it.first.startsWith("shape:") }) {
+            val pages = ((tools.size + 5) / 6).coerceAtLeast(1)
+            shapePage = shapePage.coerceIn(0, pages - 1)
+            when (event.index) {
+                in 0..5 -> tools.getOrNull(shapePage * 6 + event.index)?.let { host.dispatch(PluginAction.AccessibilityClick(it.first)) }
+                6 -> shapePage = (shapePage - 1).coerceAtLeast(0)
+                7 -> host.dispatch(PluginAction.AccessibilityClick("shape:cancel"))
+                8 -> shapePage = (shapePage + 1).coerceAtMost(pages - 1)
+            }
+            host.invalidate()
+            return
+        }
         if (tools.any { it.first.startsWith("style:") || it.first.startsWith("size:") }) {
-            val item = tools.getOrNull(event.index)
-            if (!item?.first.isNullOrEmpty()) host.dispatch(PluginAction.AccessibilityClick(item!!.first))
+            if (opening) return
+            val id = tools.getOrNull(event.index)?.first.orEmpty()
+            if (id.isBlank() || id == "size:current") return
+            if (id.startsWith("size:down:") || id.startsWith("size:up:")) {
+                opening = true
+                host.dispatch(PluginAction.AccessibilityClick(id))
+                host.scope.launch {
+                    delay(1200)
+                    opening = false
+                    host.invalidate()
+                }
+            } else host.dispatch(PluginAction.AccessibilityClick(id))
             return
         }
         if (tools.any { it.first.startsWith("text:") }) {
@@ -206,6 +254,6 @@ class OneNotePlugin(title: String, resources: Resources? = null) : PocketPlugin 
     private fun palettePage(current: OneNoteSettings) = page.coerceIn(0, (current.colors.size - 1).coerceAtLeast(0) / 6)
 
     override fun onDeactivate() {
-        tools = emptyList(); active = null; settings = null; colorsOpen = false; opening = false; textPage = 0; page = 0
+        tools = emptyList(); active = null; settings = null; colorsOpen = false; opening = false; textPage = 0; page = 0; shapePage = 0
     }
 }

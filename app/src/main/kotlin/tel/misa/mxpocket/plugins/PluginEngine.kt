@@ -26,6 +26,7 @@ class PluginEngine(
     private val readToolBar: () -> List<Pair<String, String>> = { emptyList() },
     private val readOneNoteSettings: () -> OneNoteSettings? = { null },
     private val navigate: ((String) -> Unit)? = null,
+    private val readOneNoteForeground: () -> Boolean = { false },
 ) : Closeable {
     private val entries = plugins.toList()
     val descriptors: List<PluginDescriptor> = entries.map { it.descriptor }
@@ -188,6 +189,11 @@ class PluginEngine(
             check(current()) { "Plugin activation expired" }
             require(PluginCapability.ACCESSIBILITY in descriptor.capabilities)
             return readOneNoteSettings()
+        }
+        override val oneNoteForeground: Boolean get() {
+            check(current()) { "Plugin activation expired" }
+            require(PluginCapability.ACCESSIBILITY in descriptor.capabilities)
+            return readOneNoteForeground()
         }
         override fun invalidate() { if (current()) invalidateUi() }
         override fun audioSnapshot(): AudioSnapshot {

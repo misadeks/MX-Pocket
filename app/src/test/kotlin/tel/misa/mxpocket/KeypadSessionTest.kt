@@ -125,6 +125,27 @@ class KeypadSessionTest {
         Robolectric.buildActivity(MainActivity::class.java, intent).setup().use { /* no button press */ }
     }
 
+    @Test fun inactiveOneNoteKeysAreGrayAndDisabledWithoutUnavailableMarkers() {
+        val session = app.session
+        app.connectKeypad()
+        try {
+            session.selectProfile("onenote")
+            main.idle()
+            val action = ActionCall("plugin.key", mapOf("pluginId" to "onenote", "index" to "0"))
+            session.deck.setKey("onenote", "root", 0, DeckKey(label = "My pen", action = action)).getOrThrow()
+            main.idle()
+            val keys = session.frame().keys
+            assertTrue(keys.filterIndexed { index, _ -> index != 4 }.all { !it.enabled && it.background == 0xff494c51.toInt() })
+            assertTrue(keys[4].enabled)
+            assertTrue(keys.all { it.footer.isEmpty() })
+            assertEquals("My pen", keys[0].label)
+            assertNull(keys[0].glyph)
+            val status = session.status
+            app.press(1)
+            assertEquals(status, session.status)
+        } finally { session.disconnect() }
+    }
+
     @Test fun authorizedAudioDisplaysAndControlsThePlayerWithScreenOffOrKeyguardLocked() {
         val media = MediaSession(app,"external player")
         val player = media.controller

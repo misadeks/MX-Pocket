@@ -24,6 +24,8 @@ class OneNoteAccessService : AccessibilityService() {
             private set
     }
 
+    private var currentFontSize: String? = null
+
     override fun onServiceConnected() { connected = this }
     override fun onAccessibilityEvent(event: AccessibilityEvent?) = Unit
     override fun onInterrupt() = Unit
@@ -36,12 +38,28 @@ class OneNoteAccessService : AccessibilityService() {
         super.onDestroy()
     }
 
+    internal fun isOneNoteForeground() = withRoot { true } ?: false
+
     /**
      * Click the toolbar tool with this resource-id suffix. If it is already active, long-press it
      * instead: that is how OneNote opens the tool's settings in the app. In home view the ink
      * toolbar is hidden, so open the Draw tab first when the tool is not found.
      */
     internal fun selectToolById(id: String): Boolean = withRoot { root ->
+        if (id.startsWith("shape:")) {
+            val picker = shapePicker(root)
+                ?: return@withRoot false
+            val result = if (id == "shape:cancel") performGlobalAction(GLOBAL_ACTION_BACK) else {
+                val candidates = findNodes(picker) { it.isClickable && it.isEnabled &&
+                    it.contentDescription?.toString() == id.removePrefix("shape:") }
+                val selected = candidates.singleOrNull()
+                val clicked = selected?.performAction(Node.ACTION_CLICK) == true
+                candidates.forEach { it.recycle() }
+                clicked
+            }
+            picker.recycle()
+            return@withRoot result
+        }
         if (id.startsWith("style:") || id.startsWith("size:")) {
             val prefix = id.substringBefore(':')
             val listId = if (prefix == "style") "stylesList" else "fontSizeList"
@@ -53,7 +71,7 @@ class OneNoteAccessService : AccessibilityService() {
                 "$prefix:cancel" -> performGlobalAction(GLOBAL_ACTION_BACK)
                 else -> {
                     val item = findNode(list) { it.viewIdResourceName?.endsWith(":id/textView") == true &&
-                        it.text?.toString() == id.removePrefix("$prefix:") }
+                        it.text?.toString() == id.removePrefix("$prefix:").removePrefix("down:").removePrefix("up:") }
                     item?.let { clickNode(it, Node.ACTION_CLICK) } ?: false
                 }
             }
@@ -66,6 +84,7 @@ class OneNoteAccessService : AccessibilityService() {
                 ?: return@withRoot false
             val control = findNode(ribbon) { it.viewIdResourceName == id.removePrefix("text:").removePrefix("selected:") && it.isEnabled }
             ribbon.recycle()
+            if (id.endsWith(":id/button_fontsize")) currentFontSize = control?.contentDescription?.toString()?.let(::fontSizeInDescription)
             return@withRoot control?.let { clickNode(it, Node.ACTION_CLICK) } ?: false
         }
         var target = findNode(root) { it.contentDescription?.toString() == id }
@@ -76,16 +95,30 @@ class OneNoteAccessService : AccessibilityService() {
         val active = findNode(root, ::isActiveTool)
         val isActive = active?.contentDescription?.toString() == id
         active?.recycle()
-        clickNode(target, if (isActive) Node.ACTION_LONG_CLICK else Node.ACTION_CLICK)
+        clickNode(target, if (isActive || id == "Shape select") Node.ACTION_LONG_CLICK else Node.ACTION_CLICK)
     } ?: false
 
     /** The ink toolbar's tools as (description, description); the description is the stable identity. */
     internal fun toolBar(): List<Pair<String, String>> = withRoot { root ->
+        val picker = shapePicker(root)
+        if (picker != null) {
+            val nodes = findNodes(picker) { it.isClickable && it.isEnabled && !it.contentDescription.isNullOrBlank() }
+            val items = nodes.map { "shape:${it.contentDescription}" to it.contentDescription.toString() }
+            nodes.forEach { it.recycle() }
+            picker.recycle()
+            return@withRoot items
+        }
         val styles = findNode(root) { it.viewIdResourceName?.endsWith(":id/stylesList") == true ||
             it.viewIdResourceName?.endsWith(":id/fontSizeList") == true }
         if (styles != null) {
             val prefix = if (styles.viewIdResourceName?.endsWith(":id/fontSizeList") == true) "size" else "style"
             val entries = findNodes(styles) { it.viewIdResourceName?.endsWith(":id/textView") == true }
+            if (prefix == "size") {
+                val values = entries.mapNotNull { it.text?.toString()?.takeIf(String::isNotBlank) }
+                entries.forEach { it.recycle() }
+                styles.recycle()
+                return@withRoot fontSizeOptions(values, currentFontSize)
+            }
             val items = entries.mapNotNull { it.text?.toString()?.takeIf(String::isNotBlank) }.take(6)
                 .map { "$prefix:$it" to it }.toMutableList()
             entries.forEach { it.recycle() }
@@ -105,6 +138,8 @@ class OneNoteAccessService : AccessibilityService() {
             val labels = listOf(N.FontSize, N.Bold, N.Italic, N.Underline, N.Strikethrough, N.FontColor, N.Highlight,
                 N.Bullets, N.Numbering, N.IndentLess, N.IndentMore, N.AlignLeft, N.AlignCenter, N.AlignRight, N.Styles)
             val nodes = findNodes(ribbon) { node -> ids.any { node.viewIdResourceName?.endsWith(":id/$it") == true } }
+            currentFontSize = nodes.firstOrNull { it.viewIdResourceName?.endsWith(":id/button_fontsize") == true && it.isEnabled }
+                ?.contentDescription?.toString()?.let(::fontSizeInDescription)
             val result = ids.mapIndexed { index, id ->
                 val node = nodes.firstOrNull { it.viewIdResourceName?.endsWith(":id/$id") == true && it.isEnabled }
                 if (node == null) "" to "" else "text:${if (node.isSelected || node.isChecked) "selected:" else ""}${node.viewIdResourceName}" to labels[index].text()
@@ -229,6 +264,13 @@ class OneNoteAccessService : AccessibilityService() {
         return clickNode(found, Node.ACTION_CLICK)
     }
 
+    private fun shapePicker(root: Node): Node? {
+        val matches = root.findAccessibilityNodeInfosByViewId("$ONENOTE_PACKAGE:id/shape_picker")
+        val picker = matches.firstOrNull { it.isVisibleToUser }
+        matches.filter { it !== picker }.forEach { it.recycle() }
+        return picker
+    }
+
     private fun clickNode(node: Node, action: Int): Boolean {
         var current: Node? = node
         while (current != null && !current.isClickable) {
@@ -279,4 +321,23 @@ class OneNoteAccessService : AccessibilityService() {
         }
         return visit(root, 0)
     }
+}
+
+private fun fontSizeInDescription(description: String): String? =
+    Regex("""\d+(?:[.,]\d+)?""").find(description)?.value
+
+internal fun fontSizeOptions(visible: List<String>, current: String?): List<Pair<String, String>> {
+    fun number(text: String?) = text?.replace(',', '.')?.toDoubleOrNull()
+    val selected = number(current)
+    val values = visible.mapNotNull { text -> number(text)?.let { it to text } }.sortedBy { it.first }
+    val index = values.indexOfFirst { it.first == selected }
+    val previous = if (index > 0) values[index - 1].second else null
+    val next = if (index >= 0) values.getOrNull(index + 1)?.second else null
+    return List(9) { i -> when (i) {
+        0 -> previous?.let { "size:down:$it" to "${N.FontSize.text()} −" } ?: ("" to "")
+        1 -> "size:current" to (current ?: N.FontSize.text())
+        2 -> next?.let { "size:up:$it" to "${N.FontSize.text()} +" } ?: ("" to "")
+        7 -> "size:cancel" to AccessCopy.Cancel.text()
+        else -> "" to ""
+    } }
 }

@@ -70,6 +70,7 @@ interface PluginHost {
     val toolBar: List<Pair<String, String>>
         get() = error("No accessibility state installed")
     val oneNoteSettings: OneNoteSettings? get() = null
+    val oneNoteForeground: Boolean get() = false
     fun dispatch(action: PluginAction)
 }
 

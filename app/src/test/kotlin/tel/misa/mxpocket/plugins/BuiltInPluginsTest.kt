@@ -128,11 +128,12 @@ class BuiltInPluginsTest {
             "Stroke Eraser", "Shape select", "Lasso select",
         )
         var toolbar = (listOf("More options") + descriptions).map { it to it }
+        var foreground = true
         val engine = PluginEngine(BuiltInPlugins.create("Focus", "Audio", "Phone"), this,
             { testScheduler.currentTime }, { AudioSnapshot(0, 15) },
             { action, _ -> actions += action }, {}, { _, error -> throw AssertionError(error) },
             MutableStateFlow(DeckState()),
-            readActiveTool = { descriptions[6] }, readToolBar = { toolbar })
+            readActiveTool = { descriptions[6] }, readToolBar = { toolbar }, readOneNoteForeground = { foreground })
         fun tap(index: Int) {
             engine.key(PluginKeyEvent(index, true))
             engine.key(PluginKeyEvent(index, false))
@@ -162,11 +163,23 @@ class BuiltInPluginsTest {
         toolbar = emptyList()
         testScheduler.advanceTimeBy(250)
         runCurrent()
-        assertEquals(9, engine.render().keys.size)
         assertTrue(engine.render().keys.none { it.enabled })
+        tap(4)
+        assertEquals(11, actions.size)
+        foreground = false
+        testScheduler.advanceTimeBy(250); runCurrent()
+        val inactive = engine.render().keys
+        assertEquals(tiles.reversed().mapIndexed { i, tile -> if (i == 4) "Open OneNote" else tile.label }, inactive.map { it.label })
+        assertTrue(inactive[4].enabled)
+        assertTrue(inactive.filterIndexed { i, _ -> i != 4 }.none { it.enabled })
+        assertTrue(inactive.all { it.selection == null })
+        assertEquals(0xff999da0.toInt(), (inactive[5].glyph as OneNoteLegend).ink)
         actions.clear()
         (0..8).forEach(::tap)
-        assertTrue(actions.isEmpty())
+        assertEquals(listOf(PluginAction.OpenApp(PhoneApp.ONENOTE)), actions)
+        toolbar = descriptions.map { it to it }
+        testScheduler.advanceTimeBy(251); runCurrent()
+        assertEquals(tiles, engine.render().keys)
         engine.close()
     }
     @Test fun partialToolDescriptionsAndAmbiguousSelectionsNeverInventInkOrState() {
@@ -294,6 +307,42 @@ class BuiltInPluginsTest {
         assertEquals(keys[1].glyph, keys[7].glyph)
         assertEquals(listOf(KeySelection.OFF, KeySelection.ON), keys.take(2).map { it.selection })
         tap(1); assertEquals(PluginAction.OneNoteSetting(color = "color:1:Blue"), actions.last())
+        engine.close()
+    }
+
+    @Test fun oneNoteShapePickerPaginatesAndSelectsVisibleShape() = runTest {
+        val actions = mutableListOf<PluginAction>()
+        val shapes = (1..14).map { "shape:Shape $it" to "Shape $it" }
+        val engine = PluginEngine(BuiltInPlugins.create("Focus", "Audio", "Phone"), this,
+            { testScheduler.currentTime }, { AudioSnapshot(0, 15) },
+            { action, _ -> actions += action }, {}, { _, error -> throw AssertionError(error) },
+            MutableStateFlow(DeckState()), readToolBar = { shapes })
+        fun tap(i: Int) { engine.key(PluginKeyEvent(i, true)); engine.key(PluginKeyEvent(i, false)) }
+        engine.select("onenote"); engine.setEnabled(true); runCurrent()
+        assertEquals("Shape 1", engine.render().keys[0].label)
+        assertFalse(engine.render().keys[6].enabled)
+        tap(8); assertEquals("Shape 7", engine.render().keys[0].label)
+        tap(8); assertEquals("Shape 13", engine.render().keys[0].label)
+        assertFalse(engine.render().keys[8].enabled)
+        tap(1); assertEquals(PluginAction.AccessibilityClick("shape:Shape 14"), actions.last())
+        tap(7); assertEquals(PluginAction.AccessibilityClick("shape:cancel"), actions.last())
+        engine.close()
+    }
+
+    @Test fun oneNoteFontAdjustmentDoesNotDispatchASecondPhysicalAction() = runTest {
+        val actions = mutableListOf<PluginAction>()
+        val sizeToolbar = tel.misa.mxpocket.decks.fontSizeOptions(listOf("10", "11", "12", "14"), "11")
+        val toolbar = sizeToolbar
+        val engine = PluginEngine(BuiltInPlugins.create("Focus", "Audio", "Phone"), this,
+            { testScheduler.currentTime }, { AudioSnapshot(0, 15) },
+            { action, _ -> actions += action }, {}, { _, error -> throw AssertionError(error) }, MutableStateFlow(DeckState()), readToolBar = { toolbar })
+        fun tap(i: Int) { engine.key(PluginKeyEvent(i, true)); engine.key(PluginKeyEvent(i, false)) }
+        engine.select("onenote"); engine.setEnabled(true); runCurrent()
+        assertEquals("11", engine.render().keys[1].label)
+        assertTrue(engine.render().keys[1].readOnly)
+        tap(2); tap(2)
+        testScheduler.advanceTimeBy(1201); runCurrent()
+        assertEquals(listOf(PluginAction.AccessibilityClick("size:up:12")), actions)
         engine.close()
     }
 

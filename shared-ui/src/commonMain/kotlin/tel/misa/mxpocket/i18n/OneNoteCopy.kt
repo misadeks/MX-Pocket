@@ -7,6 +7,7 @@ object OneNoteCopy {
     val AccessSettings = Copy("Open OneNote accessibility settings", "Ouvrir les paramètres d’accessibilité pour OneNote", "Otvori podešavanja pristupačnosti za OneNote")
     val AccessTitle = Copy("OneNote accessibility access", "Accès aux fonctions d’accessibilité pour OneNote", "Pristup funkcijama pristupačnosti za OneNote")
     val Brand = Copy("OneNote", "OneNote", "OneNote")
+    val Open = Copy("Open OneNote", "Ouvrir OneNote", "Otvori OneNote")
     val Accessibility = Copy("accessibility", "accessibilité", "pristupačnost")
     val NotInstalled = Copy("OneNote is not installed.", "OneNote n’est pas installé.", "OneNote nije instaliran.")
     val EnableAccess = Copy("Enable MX Pocket OneNote tools in Android Accessibility settings.", "Dans les paramètres d’accessibilité Android, activez « Outils OneNote de MX Pocket ».", "U podešavanjima pristupačnosti za Android uključite „MX Pocket: alatke za OneNote“.")
