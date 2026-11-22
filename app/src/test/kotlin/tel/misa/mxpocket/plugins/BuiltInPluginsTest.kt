@@ -90,7 +90,7 @@ class BuiltInPluginsTest {
         engine.close()
     }
 
-    @Test fun oneNotePageMapsToolbarToolsAndShowsActiveToolSettingsOnKeypad() = runTest {
+    @Test fun oneNotePageMapsToolbarToolsWithoutActiveToolOrMoreOptions() = runTest {
         val actions = mutableListOf<PluginAction>()
         val toolbar = listOf(
             "Red color, thickness 10.00 percent, pen options" to "Red color, thickness 10.00 percent, pen options",
@@ -110,26 +110,17 @@ class BuiltInPluginsTest {
         engine.setEnabled(true)
         engine.select("onenote")
         runCurrent()
-        assertEquals(9, engine.render().keys.size)
         val tiles = engine.render().keys
-        assertEquals("Red pen", tiles[0].label)
-        assertEquals(0xffa56eff.toInt(), tiles[0].background) // active tool is highlighted
-        assertEquals(0xff7719aa.toInt(), tiles[1].background)
-        assertEquals("Repaint", tiles[8].label) // fewer than nine tools: last key repaints
-        tap(1)
+        assertEquals(9, tiles.size)
+        assertEquals("Yellow highl", tiles[0].label) // active pen and More options are not keys
+        assertEquals("Stroke Eraser", tiles[1].label)
+        assertEquals("", tiles[2].label)
+        assertFalse(tiles[2].enabled)
+        tap(0)
         assertEquals(listOf(PluginAction.AccessibilityClick(toolbar[1].first)), actions)
         actions.clear()
-        tap(0) // re-press the active tool: settings on the keypad, no app click
+        tap(2) // blank key does nothing
         assertTrue(actions.isEmpty())
-        val settings = engine.render().keys
-        assertEquals("Back", settings[0].label)
-        assertEquals("Red", settings[3].label)
-        assertEquals("10.0%", settings[5].label)
-        assertEquals("In app", settings[8].label)
-        tap(0) // back to the toolbar
-        assertEquals("Red pen", engine.render().keys[0].label)
-        tap(8)
-        assertEquals(listOf(PluginAction.Repaint), actions)
         engine.close()
     }
 }
