@@ -1,5 +1,7 @@
 package tel.misa.mxpocket.plugins
 
+import tel.misa.mxpocket.i18n.KeypadCopy as K
+
 const val TIC_TAC_TOE_TITLE = "Tic Tac Toe"
 
 /** A keypad-only tic-tac-toe game. The player is X; the built-in opponent is O. */
@@ -23,9 +25,9 @@ class TicTacToeGame {
     fun cells(): List<Cell> {
         if (mode == null) return List(9) { index ->
             when (index) {
-                0 -> Cell("1 Player", "vs computer", 0xff194375.toInt())
-                2 -> Cell("2 Players", "Local 1v1", 0xff49345f.toInt())
-                4 -> Cell(TIC_TAC_TOE_TITLE, "Choose a mode", 0xff303d48.toInt())
+                0 -> Cell(K.OnePlayer.text(), K.VsComputer.text(), 0xff194375.toInt())
+                2 -> Cell(K.TwoPlayers.text(), K.LocalDuel.text(), 0xff49345f.toInt())
+                4 -> Cell(K.TicTacToe.text(), K.ChooseMode.text(), 0xff303d48.toInt())
                 else -> Cell("", "", 0xff303d48.toInt())
             }
         }
@@ -43,7 +45,7 @@ class TicTacToeGame {
         val picking = mode == null
         val inert = if (picking) index != 0 && index != 2 else result == Result.PLAYING && board[index] != EMPTY
         val restart = result != Result.PLAYING && index == 7
-        KeyTile(cell.label, if (restart) "Tap for modes" else cell.footer, cell.background, readOnly = inert, quietFace = true,
+        KeyTile(cell.label, if (restart) K.TapForModes.text() else cell.footer, cell.background, readOnly = inert, quietFace = true,
             showFooter = index == 4 || picking && !inert || restart, showLabel = cell.label.isNotBlank())
     }, interactionPage)
 
@@ -78,10 +80,10 @@ class TicTacToeGame {
     }
 
     private fun footer() = when (result) {
-        Result.PLAYING -> if (mode == Mode.SINGLE_PLAYER) "Your turn" else "$turn to play"
-        Result.X_WON -> if (mode == Mode.SINGLE_PLAYER) "You win" else "X wins"
-        Result.O_WON -> if (mode == Mode.SINGLE_PLAYER) "CPU wins" else "O wins"
-        Result.DRAW -> "Draw"
+        Result.PLAYING -> if (mode == Mode.SINGLE_PLAYER) K.YourTurn.text() else K.MarkToPlay.text(turn)
+        Result.X_WON -> if (mode == Mode.SINGLE_PLAYER) K.YouWin.text() else K.MarkWins.text(PLAYER)
+        Result.O_WON -> if (mode == Mode.SINGLE_PLAYER) K.CpuWins.text() else K.MarkWins.text(COMPUTER)
+        Result.DRAW -> K.Draw.text()
     }
 
     private fun resetBoard() {

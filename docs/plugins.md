@@ -30,6 +30,12 @@ keys. The independent
 driver scales, JPEG-encodes and uploads images. Plugins must not
 allocate/recycle host images or import `MxKeypad`/raw USB.
 
+Resolve built-in face text from `KeypadCopy` when rendering, not when registering
+the plugin. For a deck command, `displayLabel` is presentation text; dispatch
+the command by its ID. Never use translated text as a glyph selector, input
+token, or saved binding. Keep app names, track titles and user-authored labels
+as supplied, even if they happen to match a built-in English label.
+
 For a plugin with internal navigation, set `PluginFrame.page` to the current
 page index (default `0`). A change of page requests a whole-grid redraw even
 if the new page happens to reuse most or all of the same tiles.

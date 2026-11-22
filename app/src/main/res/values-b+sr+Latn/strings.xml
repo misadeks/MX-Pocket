@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MX Pocket</string>
+    <string name="subtitle">Radno okruženje za MX Creative Keypad preko USB veze</string>
+    <string name="connect">Povežite tastaturu</string>
+    <string name="disconnect">Prekinite vezu</string>
+    <string name="auto_connect">Automatski uspostavi vezu kada priključim ovu tastaturu</string>
+    <string name="session_title">MX Pocket: veza sa tastaturom</string>
+    <string name="session_note">Tasteri i njihovi ekrani ostaju aktivni. Dodirnite za povratak u MX Pocket.</string>
+    <string name="phone_action_title">Prečice za aplikacije na tastaturi</string>
+    <string name="phone_action_open">Otvori %1$s</string>
+    <string name="phone_action_note">Dodirnite da biste otvorili aplikaciju izabranu na tastaturi.</string>
+    <string name="phone_action_retry">Ako se aplikacija nije otvorila, dodirnite da biste pokušali ponovo.</string>
+    <string name="phone_action_failed">Direktno otvaranje prečice nije uspelo. Dodirnite da biste pokušali ponovo.</string>
+    <string name="direct_shortcuts">Otvaranje aplikacija direktno sa tastature</string>
+    <string name="direct_shortcuts_rationale">Kada je telefon otključan, pritiskom na taster možete da otvorite sačuvanu omiljenu aplikaciju, prečicu iz profila Telefon ili tražilo kamere bez dodirivanja obaveštenja. Otvaranje tražila ne pravi fotografiju niti pokreće snimanje. Android zahteva dozvolu „Prikaz preko drugih aplikacija“, koja omogućava i iscrtavanje sadržaja preko drugih aplikacija. MX Pocket ne prikazuje ništa preko njih. Ostavite ovu opciju isključenu ako želite da koristite obaveštenja. Dozvolu možete da opozovete u podešavanjima Androida u bilo kom trenutku.</string>
+    <string name="open_settings">Otvorite podešavanja Androida</string>
+    <string name="enable_shortcuts">Uključite prečice</string>
+    <string name="phone_action_locked">Otključajte telefon i ponovo pritisnite taster sa prečicom na tastaturi.</string>
+    <string name="phone_action_stale">Prečica više nije dostupna. Ponovo pritisnite taster na povezanoj tastaturi.</string>
+    <string name="refresh">Osvežite USB dijagnostiku</string>
+    <string name="import_image">Izaberite sliku za svih devet tastera</string>
+    <string name="export_log">Sačuvajte dijagnostički dnevnik</string>
+    <string name="diagnostics">USB dijagnostika</string>
+    <string name="log">Dnevnik sesije</string>
+    <string name="not_connected">Tastatura nije povezana. Potrebni su dozvola za USB pristup i kompatibilan HID deskriptor.</string>
+    <string name="profile_note">Prema dostupnim opisima protokola, tastatura ima jedan ekran od 480 × 480 piksela sa devet vidljivih polja od po 118 × 118 piksela. Rad tastature nije proveren na ovom telefonu.</string>
+    <string name="focus">Fokus</string>
+    <string name="audio">Multimedijalne kontrole</string>
+    <string name="media_access">MX Pocket: multimedijalne sesije</string>
+    <string name="teams_call_access">MX Pocket: Teams pozivi</string>
+    <string name="teams_toolbar_access">MX Pocket: kontrole za Teams pozive</string>
+    <string name="teams_toolbar_description">Kada je tastatura povezana i opcija Teams uključena, MX Pocket proverava vidljive kontrole poziva u aplikaciji Teams. Pritiskom na srednji taster tastature možete da uključite ili isključite mikrofon na sastanku ako je njegova kontrola označena. MX Pocket ne čita poruke, ne pridružuje se sastancima, ne odgovara na pozive i ne prekida ih.</string>
+    <string name="navigation_access">MX Pocket: navigacija</string>
+    <string name="navigation_description">Tasterima za navigaciju možete da pomerate sadržaj, premeštate fokus i aktivirate izabranu stavku. Ako zasebno uključite kontrole kamere za Studio, taster na tastaturi u tom profilu može da pritisne označeno dugme za fotografisanje, pokretanje ili zaustavljanje snimanja u podrazumevanoj aplikaciji kamere. MX Pocket ne beleži sadržaj ekrana, pritiske na tastere ni obaveštenja.</string>
+    <string name="phone">Telefon</string>
+    <string name="xo">Iks-oks</string>
+    <string name="previous">Prethodna stranica</string>
+    <string name="next">Sledeća stranica</string>
+    <string name="repaint">Osvežite svih devet ekrana</string>
+    <string name="onenote">OneNote</string>
+    <string name="onenote_access">MX Pocket: alatke za OneNote</string>
+    <string name="onenote_access_description">Dok je OneNote na ekranu, tasterima na tastaturi možete da izaberete alatke za crtanje, poput olovke i gumice. MX Pocket nikada ne čita vaše beleške.</string>
+</resources>

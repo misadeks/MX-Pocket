@@ -2,6 +2,7 @@ package tel.misa.mxpocket.deck
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import tel.misa.mxpocket.i18n.LayoutCopy
 
 /** Both hosts edit their real repository. Successful writes publish only after atomic file replacement. */
 fun DeckRepository.asEditorStore(): DeckEditorStore = RepositoryEditorStore(this)
@@ -32,13 +33,13 @@ private class RepositoryEditorStore(private val repo: DeckRepository) : DeckEdit
                 is DeckEdit.UpdateKey -> {
                     val actual = state.value.profiles.find { it.id == change.profileId }
                         ?.pages?.find { it.id == change.pageId }?.keys?.getOrNull(change.index)
-                    if (actual != change.previous) conflict("The key changed. Reopen it before saving.")
+                    if (actual != change.previous) conflict(LayoutCopy.KeyConflict.text())
                     else repo.setKey(change.profileId, change.pageId, change.index, change.key)
                 }
                 is DeckEdit.Swap -> repo.swapKeys(change.profileId, change.pageId, change.first, change.second)
                 is DeckEdit.Rules -> {
                     if (state.value.profiles.find { it.id == change.profileId }?.rules != change.previous)
-                        conflict("The rules changed. Reopen this rule before saving.")
+                        conflict(LayoutCopy.RuleConflict.text())
                     else repo.setRules(change.profileId, change.rules)
                 }
                 is DeckEdit.Select -> repo.selectProfile(change.id)
@@ -57,6 +58,6 @@ private class RepositoryEditorStore(private val repo: DeckRepository) : DeckEdit
 
     private fun conflict(message: String) = Result.failure<Unit>(IllegalStateException(message))
     private fun navigate(expected: String, action: () -> Result<Unit>) =
-        if (state.value.activeProfileId != expected) conflict("The active profile changed. Select it again before navigating.")
+        if (state.value.activeProfileId != expected) conflict(LayoutCopy.ProfileConflict.text())
         else action()
 }

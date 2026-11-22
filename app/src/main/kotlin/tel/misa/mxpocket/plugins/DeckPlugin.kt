@@ -5,6 +5,7 @@ import kotlinx.coroutines.launch
 import tel.misa.mxpocket.decks.DeckCommand as C
 import tel.misa.mxpocket.decks.DeckState
 import tel.misa.mxpocket.decks.navigationCommands
+import tel.misa.mxpocket.i18n.KeypadCopy as K
 
 internal fun C.capability() = when (deck) {
     "launcher" -> PluginCapability.OPEN_APPS
@@ -47,7 +48,7 @@ internal class DeckPlugin(id: String, title: String, capability: PluginCapabilit
             control(C.LOUDER, PlayerGlyph.VOLUME_UP),
             control(C.PREVIOUS, PlayerGlyph.PREVIOUS), control(C.PLAY, transport), control(C.NEXT, PlayerGlyph.NEXT),
             control(C.BACK_10, PlayerGlyph.BACK_10),
-            Slot(KeyTile(media.title.ifBlank { media.status }, media.status, tel.misa.mxpocket.decks.AUDIO_BACKGROUND.toInt(),
+            Slot(KeyTile(media.title.ifBlank { media.displayStatus }, media.displayStatus, tel.misa.mxpocket.decks.AUDIO_BACKGROUND.toInt(),
                 glyph = PlayerGlyph.TRACK, readOnly = true, playerFace = true, showFooter = false)),
             control(C.FORWARD_10, PlayerGlyph.FORWARD_10))
     }
@@ -56,17 +57,16 @@ internal class DeckPlugin(id: String, title: String, capability: PluginCapabilit
     private fun launcher(): List<Slot> {
         return List(7) { index ->
             state.favorites.getOrNull(current * 7 + index)?.let { slot(C.OPEN, it.component) }
-                ?: Slot(KeyTile(if (index == 0) "No favorites" else "-", "Favorites", 0xff384674.toInt(),
+                ?: Slot(KeyTile(if (index == 0) K.NoFavorites.text() else "-", K.Favorites.text(), 0xff384674.toInt(),
                     readOnly = true, showLabel = index == 0, showFooter = false))
-        } + listOf(slot(C.EDIT), Slot(KeyTile(if (pages > 1) "Next apps" else "Favorites",
+        } + listOf(slot(C.EDIT), Slot(KeyTile((if (pages > 1) K.NextApps else K.Favorites).text(),
             "${current + 1} / $pages", 0xff384674.toInt(), inputToken = "page:$current/$pages",
             glyph = DeckGlyph.FOLDER, readOnly = pages == 1), next = pages > 1))
     }
     private fun slots(): List<Slot> = when (descriptor.id) {
         "launcher" -> launcher()
         "audio" -> player()
-        "studio" -> listOf(C.SHUTTER, C.START_VIDEO, C.STOP_VIDEO, null, null, null,
-            C.VIDEO, C.STUDIO, C.CAMERA_ACCESS).map { command ->
+        "studio" -> studioSlots.map { command ->
             command?.let { slot(it) } ?: Slot(KeyTile("-", "", 0xff49345f.toInt(), enabled = false,
                 quietFace = true, showLabel = false, showFooter = false))
         }

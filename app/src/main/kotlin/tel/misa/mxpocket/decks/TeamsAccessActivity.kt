@@ -1,15 +1,14 @@
 package tel.misa.mxpocket.decks
 
 import android.content.ActivityNotFoundException
-import android.content.ComponentName
-import android.content.Intent
 import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import tel.misa.mxpocket.i18n.AccessCopy
+import tel.misa.mxpocket.i18n.Copy
 import tel.misa.mxpocket.isUnlockedAndInteractive
 import tel.misa.mxpocket.PocketApplication
 import tel.misa.mxpocket.shared.ui.*
@@ -17,16 +16,17 @@ import tel.misa.mxpocket.shared.ui.*
 class TeamsAccessActivity : DeckActivity() {
     private val access by lazy { TeamsAccess(this) }
     private val session get() = (application as PocketApplication).session
+    private var problem by mutableStateOf<Copy?>(null)
     private var state by mutableStateOf(TeamsSetupState(false, false, false, false))
     private fun refresh() {
         state = TeamsSetupState(access.enabled, access.granted, access.toolbarGranted,
-            Build.VERSION.SDK_INT >= 34, access.singleProfile, state.message)
+            Build.VERSION.SDK_INT >= 34, access.singleProfile)
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        page("Teams call controls") {
+        page({ AccessCopy.TeamsControls.text() }) {
             val deck by session.deckState.collectAsState()
-            TeamsSetupScreen(state, deck.teams.status, ::act)
+            TeamsSetupScreen(state.copy(message = problem?.text().orEmpty()), deck.teams.status, ::act)
         }
     }
     override fun onResume() { super.onResume(); refresh() }
@@ -40,13 +40,11 @@ class TeamsAccessActivity : DeckActivity() {
             }
             TeamsSetupAction.NOTIFICATIONS, TeamsSetupAction.TOOLBAR -> try {
                 val notifications = action == TeamsSetupAction.NOTIFICATIONS
-                if (notifications && Build.VERSION.SDK_INT >= 30) {
-                    val detail = Intent(Settings.ACTION_NOTIFICATION_LISTENER_DETAIL_SETTINGS).putExtra(
-                        Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME, ComponentName(this, TeamsCallListener::class.java).flattenToString())
-                    try { startActivity(detail) } catch (_: ActivityNotFoundException) { startActivity(DeckAccessActivity.settings(true)) }
-                } else startActivity(DeckAccessActivity.settings(notifications))
-            } catch (_: ActivityNotFoundException) { state = state.copy(message = "These settings are unavailable.") }
-            catch (_: SecurityException) { state = state.copy(message = "Android restricted these settings.") }
+                if (notifications) ListenerAccess.TEAMS.open(this)
+                else startActivity(DeckAccessActivity.accessibilitySettings())
+                problem = null
+            } catch (_: ActivityNotFoundException) { problem = AccessCopy.TeamsSettingsUnavailable }
+            catch (_: SecurityException) { problem = AccessCopy.RestrictedSettings }
             TeamsSetupAction.DONE -> Unit
         }
         refresh()

@@ -1,5 +1,7 @@
 package tel.misa.mxpocket.decks
 
+import tel.misa.mxpocket.i18n.KeypadCopy as K
+
 import android.app.NotificationManager
 import android.content.BroadcastReceiver
 import android.content.ComponentName
@@ -263,18 +265,18 @@ internal class MediaDeck(private val app: Context, private val canShowTrack: () 
         }
         return try {
             if (direction != null) {
-                if (audio.isVolumeFixed) return unavailable("This device uses fixed volume.")
+                if (audio.isVolumeFixed) return unavailable(K.FixedVolume.text())
                 audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction, 0)
                 activeWatch?.refresh()
-                return ok("Music volume adjusted.")
+                return ok(K.VolumeAdjusted.text())
             }
             if (access) {
                 val sessions = manager.getActiveSessions(token)
                 val controller = sessions.firstOrNull { it.playbackState?.state == P.STATE_PLAYING }
-                    ?: sessions.firstOrNull() ?: return unavailable("Start a media player first.")
+                    ?: sessions.firstOrNull() ?: return unavailable(K.StartPlayer.text())
                 val state = controller.playbackState
                 if (command !in supported(state, app.isUnlockedAndInteractive()))
-                    return unavailable("The active player does not offer this control.")
+                    return unavailable(K.NoPlayerControl.text())
                 when (command) {
                     DeckCommand.PLAY -> {
                         val pause = playing(state?.state) == true
@@ -285,7 +287,7 @@ internal class MediaDeck(private val app: Context, private val canShowTrack: () 
                             val key = KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
                             val down = controller.dispatchMediaButtonEvent(KeyEvent(KeyEvent.ACTION_DOWN, key))
                             val up = controller.dispatchMediaButtonEvent(KeyEvent(KeyEvent.ACTION_UP, key))
-                            if (!down || !up) return unavailable("The active player declined the media key.")
+                            if (!down || !up) return unavailable(K.PlayerDeclined.text())
                         }
                     }
                     DeckCommand.PREVIOUS -> controller.transportControls.skipToPrevious()
@@ -296,21 +298,21 @@ internal class MediaDeck(private val app: Context, private val canShowTrack: () 
                         controller.transportControls.seekTo(seekTarget(checkNotNull(state), SystemClock.elapsedRealtime(),
                             if (command == DeckCommand.BACK_10) -10_000L else 10_000L, duration))
                     }
-                    else -> return unavailable("Unsupported transport control.")
+                    else -> return unavailable(K.UnsupportedTransport.text())
                 }
-                ok("Requested ${command.label} from the active player.")
+                ok(K.PlayerRequested.text(command.displayLabel))
             } else {
                 val key = when (command) {
                     DeckCommand.PLAY -> KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
                     DeckCommand.PREVIOUS -> KeyEvent.KEYCODE_MEDIA_PREVIOUS
                     DeckCommand.NEXT -> KeyEvent.KEYCODE_MEDIA_NEXT
-                    else -> return unavailable("Unsupported transport control.")
+                    else -> return unavailable(K.UnsupportedTransport.text())
                 }
                 audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, key))
                 audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, key))
-                ok("Media key sent. An active player is required.")
+                ok(K.MediaKeySent.text())
             }
-        } catch (_: SecurityException) { unavailable("Android restricted media access or the volume change.") }
+        } catch (_: SecurityException) { unavailable(K.MediaRestricted.text()) }
     }
     companion object {
         private const val COVER_GRACE_MS = 650L

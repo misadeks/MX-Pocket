@@ -3,22 +3,36 @@ package tel.misa.mxpocket.deck
 import com.google.gson.Strictness
 import com.google.gson.stream.JsonReader
 import com.google.gson.stream.JsonToken
+import java.io.IOException
 import java.io.StringReader
 import org.json.JSONArray
+import org.json.JSONException
 import org.json.JSONObject
 import tel.misa.mxpocket.actions.ActionCall
 import tel.misa.mxpocket.decks.DeckCommand
+import tel.misa.mxpocket.i18n.LayoutCopy
 import tel.misa.mxpocket.plugins.TIC_TAC_TOE_TITLE
 
 /** Strict token types, bounded depth and collections, and duplicate/unknown field rejection. */
 object DeckJson {
-    fun decode(text: String): DeckState {
+    fun decode(text: String): DeckState = try {
+        decodeDocument(text)
+    } catch (e: ClassCastException) {
+        throw IllegalArgumentException(LayoutCopy.InvalidDeckJson.text(), e)
+    } catch (e: JSONException) {
+        throw IllegalArgumentException(LayoutCopy.InvalidDeckJson.text(), e)
+    } catch (e: IOException) {
+        // The reader is backed by a String, so I/O failures here denote malformed input, not storage errors.
+        throw IllegalArgumentException(LayoutCopy.InvalidDeckJson.text(), e)
+    }
+
+    private fun decodeDocument(text: String): DeckState {
         checkSize(text)
         checkLexemes(text)
         val obj = JsonReader(StringReader(text)).use { reader ->
             reader.strictness = Strictness.STRICT
-            val root = read(reader, 0) as? JSONObject ?: error("Expected deck object")
-            require(reader.peek() == JsonToken.END_DOCUMENT) { "Trailing JSON" }
+            val root = read(reader, 0) as? JSONObject ?: error(LayoutCopy.ExpectedObject.text())
+            require(reader.peek() == JsonToken.END_DOCUMENT) { LayoutCopy.TrailingJson.text() }
             root
         }
         val xoProfileRemoved = if (obj.has("xoProfileRemoved")) obj.remove("xoProfileRemoved") as Boolean else false
@@ -159,7 +173,7 @@ object DeckJson {
 
     private fun JSONObject.string(name: String) = get(name) as String
     private fun JSONObject.fields(vararg names: String) =
-        require(length() == names.size && names.all(::has)) { "Unexpected or missing deck field" }
+        require(length() == names.size && names.all(::has)) { LayoutCopy.MissingField.text() }
 
     private fun <T> JSONObject.array(name: String, transform: (JSONObject) -> T): List<T> {
         val a = get(name) as JSONArray
@@ -169,7 +183,7 @@ object DeckJson {
     private fun fits(text: String) =
         text.length <= DeckLimits.MAX_BYTES && text.toByteArray(Charsets.UTF_8).size <= DeckLimits.MAX_BYTES
 
-    private fun checkSize(text: String) = require(fits(text)) { "Deck exceeds ${DeckLimits.MAX_BYTES} bytes" }
+    private fun checkSize(text: String) = require(fits(text)) { LayoutCopy.DeckSize.text(DeckLimits.MAX_BYTES) }
 
     // Android's non-lenient JsonReader still accepts raw newlines, unknown escapes, and
     // case-insensitive literals. Reject these before it normalizes them into ordinary values.
@@ -181,44 +195,44 @@ object DeckJson {
                 '"' -> {
                     while (i < input.length && input[i] != '"') {
                         val ch = input[i++]
-                        require(ch >= ' ') { "Unescaped control in JSON string" }
+                        require(ch >= ' ') { LayoutCopy.JsonControl.text() }
                         if (ch == '\\') {
-                            require(i < input.length) { "Truncated JSON escape" }
+                            require(i < input.length) { LayoutCopy.TruncatedEscape.text() }
                             when (input[i++]) {
                                 '"', '\\', '/', 'b', 'f', 'n', 'r', 't' -> Unit
                                 'u' -> repeat(4) {
-                                    require(i < input.length && input[i++] in "0123456789abcdefABCDEF") { "Invalid Unicode escape" }
+                                    require(i < input.length && input[i++] in "0123456789abcdefABCDEF") { LayoutCopy.UnicodeEscape.text() }
                                 }
-                                else -> error("Invalid JSON escape")
+                                else -> error(LayoutCopy.JsonEscape.text())
                             }
                         }
                     }
-                    require(i < input.length) { "Unterminated JSON string" }
+                    require(i < input.length) { LayoutCopy.JsonString.text() }
                     i++
                 }
                 't', 'f', 'n' -> {
                     val literal = when (c) { 't' -> "true"; 'f' -> "false"; else -> "null" }
-                    require(input.startsWith(literal, i - 1)) { "Invalid JSON literal" }
+                    require(input.startsWith(literal, i - 1)) { LayoutCopy.JsonLiteral.text() }
                     i += literal.length - 1
                 }
                 '-', in '0'..'9' -> {
                     val start = if (c == '-') i else i - 1
-                    require(start < input.length && input[start] in '0'..'9') { "Invalid JSON integer" }
+                    require(start < input.length && input[start] in '0'..'9') { LayoutCopy.JsonInteger.text() }
                     while (i < input.length && input[i] in '0'..'9') i++
-                    require(i - start == 1 || input[start] != '0') { "Invalid JSON integer" }
+                    require(i - start == 1 || input[start] != '0') { LayoutCopy.JsonInteger.text() }
                 }
-                else -> error("Unexpected JSON token")
+                else -> error(LayoutCopy.JsonToken.text())
             }
         }
     }
 
     private fun read(reader: JsonReader, depth: Int): Any {
-        require(depth <= 12) { "Deck nesting limit exceeded" }
+        require(depth <= 12) { LayoutCopy.NestingLimit.text() }
         return when (reader.peek()) {
             JsonToken.BEGIN_ARRAY -> JSONArray().apply {
                 reader.beginArray()
                 while (reader.hasNext()) {
-                    require(length() < 32) { "Deck array limit exceeded" }
+                    require(length() < 32) { LayoutCopy.ArrayLimit.text() }
                     put(read(reader, depth + 1))
                 }
                 reader.endArray()
@@ -227,16 +241,16 @@ object DeckJson {
                 reader.beginObject()
                 while (reader.hasNext()) {
                     val name = reader.nextName()
-                    require(length() < 32 && !has(name)) { "Too many or duplicate fields" }
+                    require(length() < 32 && !has(name)) { LayoutCopy.FieldLimit.text() }
                     put(name, read(reader, depth + 1))
                 }
                 reader.endObject()
             }
             JsonToken.NULL -> { reader.nextNull(); JSONObject.NULL }
             JsonToken.BOOLEAN -> reader.nextBoolean()
-            JsonToken.NUMBER -> reader.nextString().toIntOrNull() ?: error("Expected a 32-bit integer")
+            JsonToken.NUMBER -> reader.nextString().toIntOrNull() ?: error(LayoutCopy.ExpectedInt.text())
             JsonToken.STRING -> reader.nextString()
-            else -> error("Invalid deck JSON")
+            else -> error(LayoutCopy.InvalidDeckJson.text())
         }
     }
 }

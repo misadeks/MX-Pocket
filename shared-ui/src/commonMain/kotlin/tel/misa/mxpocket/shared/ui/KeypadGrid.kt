@@ -24,6 +24,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 import org.jetbrains.compose.resources.painterResource
 import tel.misa.mxpocket.plugins.*
+import tel.misa.mxpocket.i18n.KeypadCopy as K
 import tel.misa.mxpocket.shared.resources.Res
 import tel.misa.mxpocket.shared.resources.mx_keypad_housing
 import kotlin.math.roundToInt
@@ -37,8 +38,8 @@ data class KeypadTile(
 
 fun KeyTile.toGridTile(inputEnabled: Boolean, image: ImageBitmap? = null): KeypadTile {
     val name = when {
-        glyph == PlayerGlyph.TRACK && readOnly -> listOf("Now playing", label, footer)
-        volumeLevel != null -> listOf(label, if (volumeLevel.muted) "Muted" else "Sound on", volumeLevel.description, footer)
+        glyph == PlayerGlyph.TRACK && readOnly -> listOf(K.NowPlaying.text(), label, footer)
+        volumeLevel != null -> listOf(label, (if (volumeLevel.muted) K.Muted else K.SoundOn).text(), volumeLevel.description, footer)
         glyph is NavigationGlyph || glyph is PlayerGlyph && !showLabel -> listOf(label, footer)
         else -> emptyList()
     }
@@ -143,7 +144,7 @@ fun KeypadGrid(tiles: List<KeypadTile>, onKey: (Int, Boolean) -> Unit,
                         Box(Modifier.offset(x - rim, y - rim).size(keySize + rim * 2)
                             .border(2.dp, MaterialTheme.colorScheme.primary, shape))
                     }
-                    val description = tile.accessibleName ?: listOfNotNull("Key ${i + 1}".takeIf { tile.showNumber }, tile.label, tile.footer)
+                    val description = tile.accessibleName ?: listOfNotNull(K.KeyNumber.text(i + 1).takeIf { tile.showNumber }, tile.label, tile.footer)
                         .filter(String::isNotBlank).joinToString(", ")
                     val tap = { onKey(i, true); onKey(i, false) }
                     val hold = onHold[i]
@@ -151,13 +152,13 @@ fun KeypadGrid(tiles: List<KeypadTile>, onKey: (Int, Boolean) -> Unit,
                         tile.readOnly -> Modifier
                         hold == null -> Modifier.clickable(source, indication = null, enabled = tile.enabled, role = Role.Button, onClick = tap)
                         else -> Modifier.combinedClickable(source, indication = null, enabled = tile.enabled, role = Role.Button,
-                            onLongClickLabel = "Hold", onLongClick = hold, onClick = tap)
+                            onLongClickLabel = K.Hold.text(), onLongClick = hold, onClick = tap)
                     }
                     Box(Modifier.offset(x, targetTop).size(keySize, targetHeight).then(click).semantics {
                         contentDescription = description
                         if (tile.selected) selected = true
                         if (onSwap != null) customActions = tiles.indices.filter { it != i }.map { other ->
-                            CustomAccessibilityAction("Swap with key ${other + 1}") { currentSwap?.invoke(i, other); true }
+                            CustomAccessibilityAction(K.SwapWith.text(other + 1)) { currentSwap?.invoke(i, other); true }
                         }
                     })
                 }

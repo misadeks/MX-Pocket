@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MX Pocket</string>
+    <string name="subtitle">Un espace de travail USB natif pour votre MX Creative Keypad</string>
+    <string name="connect">Connecter le pavé</string>
+    <string name="disconnect">Déconnecter</string>
+    <string name="auto_connect">Se connecter automatiquement lorsque ce pavé est branché</string>
+    <string name="session_title">Session du pavé MX Pocket</string>
+    <string name="session_note">Les touches et leurs écrans restent actifs. Appuyez pour revenir à MX Pocket.</string>
+    <string name="phone_action_title">Raccourcis d’applications du pavé</string>
+    <string name="phone_action_open">Ouvrir %1$s</string>
+    <string name="phone_action_note">Appuyez pour ouvrir l’application choisie sur le pavé.</string>
+    <string name="phone_action_retry">Si l’application ne s’est pas ouverte, appuyez pour réessayer.</string>
+    <string name="phone_action_failed">Impossible d’ouvrir le raccourci directement. Appuyez pour réessayer.</string>
+    <string name="direct_shortcuts">Ouvrir les applications directement depuis le pavé</string>
+    <string name="direct_shortcuts_rationale">Lorsque le téléphone est déverrouillé, une pression sur une touche du pavé peut ouvrir un favori, un raccourci du profil Téléphone ou le viseur de l’appareil photo, sans passer par une notification. Ouvrir le viseur ne prend pas de photo et ne lance aucun enregistrement. Android exige l’autorisation « Afficher par-dessus d’autres applications », qui permet aussi d’afficher du contenu en superposition. MX Pocket n’affiche rien par-dessus les autres applications. Laissez cette option désactivée pour utiliser les notifications. Vous pouvez retirer l’autorisation à tout moment dans les paramètres Android.</string>
+    <string name="open_settings">Ouvrir les paramètres Android</string>
+    <string name="enable_shortcuts">Activer les raccourcis</string>
+    <string name="phone_action_locked">Déverrouillez le téléphone et appuyez de nouveau sur la touche de raccourci du pavé.</string>
+    <string name="phone_action_stale">Ce raccourci n’est plus disponible. Appuyez de nouveau sur la touche du pavé connecté.</string>
+    <string name="refresh">Actualiser le diagnostic USB</string>
+    <string name="import_image">Choisir une image pour les neuf touches</string>
+    <string name="export_log">Enregistrer le journal de diagnostic</string>
+    <string name="diagnostics">Diagnostic USB</string>
+    <string name="log">Journal de session</string>
+    <string name="not_connected">Pavé non connecté. Une autorisation USB et un descripteur HID compatible sont nécessaires.</string>
+    <string name="profile_note">D’après les sources du protocole, le pavé possède un écran de 480 × 480 pixels, avec neuf zones visibles de 118 × 118 pixels. Son fonctionnement n’a pas été vérifié sur ce téléphone.</string>
+    <string name="focus">Concentration</string>
+    <string name="audio">Commandes multimédias</string>
+    <string name="media_access">Sessions multimédias de MX Pocket</string>
+    <string name="teams_call_access">Appels Teams de MX Pocket</string>
+    <string name="teams_toolbar_access">Commandes d’appel Teams de MX Pocket</string>
+    <string name="teams_toolbar_description">Lorsque le pavé est connecté et que l’option Teams est activée, MX Pocket repère les commandes d’appel visibles dans Teams. Une pression sur la touche centrale du pavé peut activer ou couper le micro de la réunion si la commande est identifiée. MX Pocket ne lit pas les messages, ne rejoint pas les réunions et ne décroche ni ne raccroche.</string>
+    <string name="navigation_access">Navigation de MX Pocket</string>
+    <string name="navigation_description">Les touches de navigation permettent de faire défiler le contenu, de déplacer le focus et d’activer un élément. Si vous activez séparément les commandes de l’appareil photo dans Studio, une touche du pavé peut actionner un bouton identifié de prise de vue, d’enregistrement ou d’arrêt dans votre application photo par défaut. MX Pocket n’enregistre ni le contenu de l’écran, ni les frappes, ni les notifications.</string>
+    <string name="phone">Téléphone</string>
+    <string name="xo">Morpion</string>
+    <string name="previous">Page précédente</string>
+    <string name="next">Page suivante</string>
+    <string name="repaint">Actualiser les neuf écrans</string>
+    <string name="onenote">OneNote</string>
+    <string name="onenote_access">Outils OneNote de MX Pocket</string>
+    <string name="onenote_access_description">Lorsque OneNote est à l’écran, les touches du pavé permettent de sélectionner des outils de dessin comme le stylet et la gomme. MX Pocket ne lit jamais vos notes.</string>
+</resources>

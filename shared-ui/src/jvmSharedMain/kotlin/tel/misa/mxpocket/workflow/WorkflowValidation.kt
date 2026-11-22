@@ -2,6 +2,7 @@ package tel.misa.mxpocket.workflow
 
 import java.net.URI
 import java.time.LocalTime
+import tel.misa.mxpocket.i18n.WorkflowCopy
 
 fun safeHttps(value: String, endpoint: Boolean): Boolean = runCatching {
     val uri = URI(value)
@@ -20,19 +21,19 @@ fun validateWorkflow(
     actions: List<WorkflowActionSpec>,
 ): String? {
     if (!identifier.matches(workflow.id) || workflow.name.isBlank() || workflow.name.length > 60)
-        return "Give the workflow a name of up to 60 characters."
+        return WorkflowCopy.NameRequired.text()
     val trigger = workflow.trigger
     if (trigger.kind == TriggerKind.DAILY && (trigger.value.length != 5 ||
-            runCatching { LocalTime.parse(trigger.value) }.isFailure)) return "Enter a daily time as HH:mm."
+            runCatching { LocalTime.parse(trigger.value) }.isFailure)) return WorkflowCopy.TimeRequired.text()
     if (trigger.kind == TriggerKind.CONTEXT && (trigger.value.isBlank() || trigger.value.length > 100))
-        return "Enter the context to watch."
-    if (workflow.steps.isEmpty()) return "Add at least one step."
+        return WorkflowCopy.ContextRequired.text()
+    if (workflow.steps.isEmpty()) return WorkflowCopy.StepRequired.text()
     val library = definitions.associateBy { it.id } + (workflow.id to workflow)
     var count = 0
     fun check(steps: List<WorkflowStep>, depth: Int, chain: Set<String>, path: String): String? {
-        if (depth > MAX_DEPTH || chain.size > MAX_DEPTH) return "Use at most four levels of branches and workflow calls."
+        if (depth > MAX_DEPTH || chain.size > MAX_DEPTH) return WorkflowCopy.DepthLimit.text()
         for ((i, step) in steps.withIndex()) {
-            if (++count > MAX_STEPS) return "Use at most $MAX_STEPS steps, including branches and called workflows."
+            if (++count > MAX_STEPS) return WorkflowCopy.StepLimit.text(MAX_STEPS)
             val position = "$path${i+1}"
             val valid = when (step.kind) {
                 StepKind.WAIT -> step.value.toLongOrNull() in 1L..120L
@@ -49,15 +50,15 @@ fun validateWorkflow(
                     }
                 }
                 StepKind.CALL -> {
-                    if (step.target in chain) return "Step $position would call a workflow in a loop."
-                    val callee = library[step.target] ?: return "Choose a saved workflow at step $position."
+                    if (step.target in chain) return WorkflowCopy.LoopAt.text(position)
+                    val callee = library[step.target] ?: return WorkflowCopy.ChooseAt.text(position)
                     check(callee.steps, depth, chain + step.target, "$position / ")?.let { return it }
                     callee.steps.isNotEmpty()
                 }
                 StepKind.IF -> {
                     val t = step.test
-                    check(step.yes, depth + 1, chain, "$position yes / ")?.let { return it }
-                    check(step.no, depth + 1, chain, "$position no / ")?.let { return it }
+                    check(step.yes, depth + 1, chain, WorkflowCopy.YesPath.text(position))?.let { return it }
+                    check(step.no, depth + 1, chain, WorkflowCopy.NoPath.text(position))?.let { return it }
                     (step.yes.isNotEmpty() || step.no.isNotEmpty()) && when (t.kind) {
                         TestKind.PREVIOUS, TestKind.CONNECTED -> t.value in setOf("true", "false")
                         TestKind.BOOLEAN -> t.key in setOf("true", "false") && t.value in setOf("true", "false")
@@ -66,7 +67,7 @@ fun validateWorkflow(
                     }
                 }
             }
-            if (!valid) return "Check step $position: ${step.kind.label}."
+            if (!valid) return WorkflowCopy.CheckStep.text(position, step.kind.label)
         }
         return null
     }

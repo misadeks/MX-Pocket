@@ -13,10 +13,15 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
+import java.io.IOException
 import java.util.UUID
+import tel.misa.mxpocket.i18n.AccessCopy
+import tel.misa.mxpocket.i18n.AppLocale
+import tel.misa.mxpocket.i18n.Copy
 import tel.misa.mxpocket.isUnlockedAndInteractive
 import tel.misa.mxpocket.keypad
 import tel.misa.mxpocket.requestKeypadAccess
@@ -30,12 +35,22 @@ import tel.misa.mxpocket.shared.ui.PocketTheme
 
 /** Consent only: this Activity never attaches a live screen to the session or opens a device. */
 class SetupActivity : ComponentActivity() {
+    override fun attachBaseContext(newBase: Context) =
+        super.attachBaseContext(tel.misa.mxpocket.ui.LanguagePreference.activityContext(newBase))
+
+    private enum class Notice(val copy: Copy) {
+        PERMISSION(AccessCopy.PermissionDenied), USB(AccessCopy.UsbDenied), SETTINGS(AccessCopy.SetupSettingsUnavailable),
+        RESTRICTED(AccessCopy.SetupRestricted), UNAVAILABLE(AccessCopy.SetupOptionUnavailable),
+        LAYOUT(AccessCopy.SettingChangeFailed), STORAGE(AccessCopy.SettingSaveFailed)
+    }
+
     private val choices by lazy { SetupChoices(this) }
     private val access by lazy { SetupAccess(this, choices) }
     private var selected by mutableStateOf(emptySet<Feature>())
+    private val options get() = access.options()
     private var reviewing by mutableStateOf(false)
     private var steps by mutableStateOf(emptyList<SetupStep>())
-    private var message by mutableStateOf("")
+    private var notice by mutableStateOf<Notice?>(null)
     private var usbName: String? = null
     private var usbToken: String? = null
     private val usbReply get() = "$packageName.SETUP_USB_PERMISSION"
@@ -45,7 +60,7 @@ class SetupActivity : ComponentActivity() {
     }
     private fun afterRequest(permission: String, granted: Boolean) {
         choices.markAsked(permission)
-        message = if (!granted) "Permission not granted. You can finish without it." else ""
+        notice = if (!granted) Notice.PERMISSION else null
         refresh()
     }
 
@@ -54,10 +69,12 @@ class SetupActivity : ComponentActivity() {
             if (intent.action == usbReply) {
                 if (usbToken == null || usbToken != intent.getStringExtra("token")) return
                 val device = access.usb.keypad(usbName)
-                message = if (device != null && access.usb.hasPermission(device)) ""
-                    else "USB access was not granted or the keypad was removed. You can try again."
+                notice = if (device != null && access.usb.hasPermission(device)) null else Notice.USB
                 usbToken = null
                 usbName = null
+            } else if (usbName != null && access.usb.keypad(usbName) == null) {
+                usbName = null
+                usbToken = null
             }
             refresh()
         }
@@ -65,11 +82,12 @@ class SetupActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        title = "Feature setup"
-        selected = savedInstanceState?.getStringArrayList("selected")?.let(SetupChoices::decode)
-            ?: choices.load(access::existingFeatures)
+        val firstRun = intent.getBooleanExtra("firstRun", false)
+        selected = (savedInstanceState?.getStringArrayList("selected")?.let(SetupChoices::decode)
+            ?: if (firstRun) emptySet() else choices.load(access::existingFeatures))
+            .intersect(options.filter { it.unavailableReason == null }.map { it.feature }.toSet())
         reviewing = savedInstanceState?.getBoolean("review") == true
-        message = savedInstanceState?.getString("message").orEmpty()
+        notice = savedInstanceState?.getString("notice")?.let { id -> Notice.entries.find { it.name == id } }
         usbName = savedInstanceState?.getString("usbName")
         usbToken = savedInstanceState?.getString("usbToken")
         ContextCompat.registerReceiver(this, changes, IntentFilter(usbReply).apply {
@@ -78,8 +96,12 @@ class SetupActivity : ComponentActivity() {
         }, ContextCompat.RECEIVER_NOT_EXPORTED)
         setContent {
             PocketTheme(tel.misa.mxpocket.ui.ThemePreference.current(this)) {
+                LaunchedEffect(AppLocale.current) {
+                    title = AccessCopy.FeatureSetup.text()
+                    refresh()
+                }
                 BackHandler(enabled = reviewing) { handle(SetupEvent.Edit) }
-                SetupScreen(SetupScreenState(selected, reviewing, steps, message, intent.getBooleanExtra("firstRun", false)), ::handle)
+                SetupScreen(SetupScreenState(selected, reviewing, steps, notice?.copy?.text().orEmpty(), firstRun, options), ::handle)
             }
         }
     }
@@ -89,12 +111,10 @@ class SetupActivity : ComponentActivity() {
             is SetupEvent.Select -> selected = if (event.feature in selected) selected - event.feature else selected + event.feature
             SetupEvent.Review -> {
                 choices.save(selected)
-                if (selected.isEmpty()) finish() else {
-                    reviewing = true
-                    refresh()
-                }
+                reviewing = true
+                refresh()
             }
-            SetupEvent.Edit -> { reviewing = false; message = "" }
+            SetupEvent.Edit -> { reviewing = false; notice = null }
             is SetupEvent.Act -> perform(event.action)
             SetupEvent.Cancel, SetupEvent.Finish -> finish()
         }
@@ -104,7 +124,7 @@ class SetupActivity : ComponentActivity() {
         super.onSaveInstanceState(outState)
         outState.putStringArrayList("selected", ArrayList(selected.map { it.name }))
         outState.putBoolean("review", reviewing)
-        outState.putString("message", message)
+        outState.putString("notice", notice?.name)
         outState.putString("usbName", usbName)
         outState.putString("usbToken", usbToken)
     }
@@ -120,33 +140,36 @@ class SetupActivity : ComponentActivity() {
     }
 
     private fun refresh() {
-        if (reviewing) steps = access.steps(selected)
+        if (reviewing) steps = access.steps(selected, usbName)
     }
 
     private fun perform(action: SetupAction) {
         refresh()
         if (!reviewing || steps.none { it.action == action } || !isUnlockedAndInteractive()) return
-        message = ""
+        notice = null
         try {
             when (action) {
-                SetupAction.AUTO -> access.attach.automatic = true
-                SetupAction.DIRECT -> access.shortcuts.enabled = true
                 SetupAction.POST -> notices.launch(Manifest.permission.POST_NOTIFICATIONS)
                 SetupAction.USB -> {
                     val device = access.keypads().singleOrNull() ?: return refresh()
                     val token = UUID.randomUUID().toString()
+                    if (access.usb.hasPermission(device)) return refresh()
+                    access.usb.requestKeypadAccess(this, device, usbReply, token)
                     usbName = device.deviceName
                     usbToken = token
-                    access.usb.requestKeypadAccess(this, device, usbReply, token)
                 }
-                else -> startActivity(access.settings(action))
+                else -> access.perform(action)
             }
         } catch (_: ActivityNotFoundException) {
-            message = "This Android settings page is unavailable. You can leave this step for later."
+            notice = Notice.SETTINGS
         } catch (_: SecurityException) {
-            message = "Android restricted access. Leave this step off and continue."
+            notice = Notice.RESTRICTED
         } catch (_: IllegalArgumentException) {
-            message = "This option is no longer available. Check the device and try again."
+            notice = Notice.UNAVAILABLE
+        } catch (_: IllegalStateException) {
+            notice = Notice.LAYOUT
+        } catch (_: IOException) {
+            notice = Notice.STORAGE
         }
         refresh()
     }

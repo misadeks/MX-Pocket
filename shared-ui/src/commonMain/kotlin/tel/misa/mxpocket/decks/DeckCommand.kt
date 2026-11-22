@@ -1,34 +1,41 @@
 package tel.misa.mxpocket.decks
 
+import tel.misa.mxpocket.i18n.Copy
+import tel.misa.mxpocket.i18n.KeypadCopy as K
+
 /** Persist IDs, never enum ordinals. A favorite is an Android flattened ComponentName, not an intent URI. */
-enum class DeckCommand(val id: String, val label: String, val deck: String) {
-    OPEN("launcher.open", "Open favorite", "launcher"), EDIT("launcher.edit", "Edit favorites", "launcher"),
-    PLAY("media.play-pause", "Play/Pause", "audio"), PREVIOUS("media.previous", "Previous", "audio"),
-    NEXT("media.next", "Next", "audio"), LOUDER("media.volume-up", "Volume +", "audio"),
-    QUIETER("media.volume-down", "Volume -", "audio"), MUTE("media.mute", "Mute", "audio"),
-    UNMUTE("media.unmute", "Unmute", "audio"), MEDIA_ACCESS("media.access", "Media access", "audio"),
-    BACK_10("media.seek-back-10", "Seek back 10 seconds", "audio"),
-    FORWARD_10("media.seek-forward-10", "Seek forward 10 seconds", "audio"),
-    VOLUME_LEVEL("media.volume-level", "Volume level", "audio"),
-    STUDIO("studio.open", "Open Camera", "studio"), VIDEO("studio.open-video", "Open Video", "studio"),
-    SHUTTER("studio.camera-shutter", "Shutter", "studio"), START_VIDEO("studio.camera-record", "Record", "studio"),
-    STOP_VIDEO("studio.camera-stop", "Stop", "studio"), CAMERA_ACCESS("studio.access", "Camera controls", "studio"),
-    PHOTO("studio.photo", "Shutter", "studio"),
-    RECORD("studio.record", "Record", "studio"), STOP("studio.stop", "Stop", "studio"),
-    TIMER("studio.timer", "Photo timer", "studio"), ZOOM_IN("studio.zoom-in", "Zoom +", "studio"),
-    ZOOM_OUT("studio.zoom-out", "Zoom -", "studio"), FOCUS("studio.focus", "Focus", "studio"),
-    TORCH("studio.torch", "Torch", "studio"), MARKER("studio.marker", "Marker", "studio"),
-    BACK("navigation.back", "Back", "navigation"), HOME("navigation.home", "Home", "navigation"),
-    RECENTS("navigation.recents", "Recents", "navigation"), UP("navigation.scroll-up", "Scroll up", "navigation"),
-    DOWN("navigation.scroll-down", "Scroll down", "navigation"),
-    FORWARD("navigation.focus-next", "Next focus", "navigation"),
-    REVERSE("navigation.focus-previous", "Previous focus", "navigation"),
-    ACTIVATE("navigation.activate", "Select", "navigation"), NAV_ACCESS("navigation.access", "Navigation access", "navigation"),
-    TEAMS_OPEN("teams.open", "Open Teams", "teams"), TEAMS_ACCESS("teams.access", "Teams setup", "teams"),
-    TEAMS_MIC("teams.mic", "Meeting mic", "teams"), TEAMS_HAND("teams.hand", "Raise hand", "teams"),
-    TEAMS_CAPTIONS("teams.captions", "Captions", "teams"), TEAMS_CHAT("teams.chat", "Meeting chat", "teams"),
-    TEAMS_QUIETER("teams.volume-down", "Call volume -", "teams"), TEAMS_LOUDER("teams.volume-up", "Call volume +", "teams"),
-    TEAMS_STATUS("teams.status", "Call status", "teams");
+enum class DeckCommand(val id: String, private val copy: Copy, val deck: String) {
+    OPEN("launcher.open", K.OpenFavorite, "launcher"), EDIT("launcher.edit", K.EditFavorites, "launcher"),
+    PLAY("media.play-pause", K.PlayPause, "audio"), PREVIOUS("media.previous", K.Previous, "audio"),
+    NEXT("media.next", K.Next, "audio"), LOUDER("media.volume-up", K.VolumeUp, "audio"),
+    QUIETER("media.volume-down", K.VolumeDown, "audio"), MUTE("media.mute", K.Mute, "audio"),
+    UNMUTE("media.unmute", K.Unmute, "audio"), MEDIA_ACCESS("media.access", K.MediaAccess, "audio"),
+    BACK_10("media.seek-back-10", K.SeekBack, "audio"),
+    FORWARD_10("media.seek-forward-10", K.SeekForward, "audio"),
+    VOLUME_LEVEL("media.volume-level", K.VolumeLevel, "audio"),
+    STUDIO("studio.open", K.OpenCamera, "studio"), VIDEO("studio.open-video", K.OpenVideo, "studio"),
+    SHUTTER("studio.camera-shutter", K.Shutter, "studio"), START_VIDEO("studio.camera-record", K.Record, "studio"),
+    STOP_VIDEO("studio.camera-stop", K.Stop, "studio"), CAMERA_ACCESS("studio.access", K.CameraControls, "studio"),
+    PHOTO("studio.photo", K.Shutter, "studio"),
+    RECORD("studio.record", K.Record, "studio"), STOP("studio.stop", K.Stop, "studio"),
+    TIMER("studio.timer", K.PhotoTimer, "studio"), ZOOM_IN("studio.zoom-in", K.ZoomIn, "studio"),
+    ZOOM_OUT("studio.zoom-out", K.ZoomOut, "studio"), FOCUS("studio.focus", K.CameraFocus, "studio"),
+    TORCH("studio.torch", K.Torch, "studio"), MARKER("studio.marker", K.Marker, "studio"),
+    BACK("navigation.back", K.Back, "navigation"), HOME("navigation.home", K.Home, "navigation"),
+    RECENTS("navigation.recents", K.Recents, "navigation"), UP("navigation.scroll-up", K.ScrollUp, "navigation"),
+    DOWN("navigation.scroll-down", K.ScrollDown, "navigation"),
+    FORWARD("navigation.focus-next", K.NextFocus, "navigation"),
+    REVERSE("navigation.focus-previous", K.PreviousFocus, "navigation"),
+    ACTIVATE("navigation.activate", K.Select, "navigation"), NAV_ACCESS("navigation.access", K.NavAccess, "navigation"),
+    TEAMS_OPEN("teams.open", K.OpenTeams, "teams"), TEAMS_ACCESS("teams.access", K.TeamsSetup, "teams"),
+    TEAMS_MIC("teams.mic", K.MeetingMic, "teams"), TEAMS_HAND("teams.hand", K.RaiseHand, "teams"),
+    TEAMS_CAPTIONS("teams.captions", K.Captions, "teams"), TEAMS_CHAT("teams.chat", K.MeetingChat, "teams"),
+    TEAMS_QUIETER("teams.volume-down", K.CallDown, "teams"), TEAMS_LOUDER("teams.volume-up", K.CallUp, "teams"),
+    TEAMS_STATUS("teams.status", K.CallStatus, "teams");
+
+    // The original label is also a legacy Studio binding guard. Never localize it in place.
+    val label get() = copy.en
+    val displayLabel get() = copy.text()
 
     val nativeControl get() = this == SHUTTER || this == START_VIDEO || this == STOP_VIDEO
     val legacyCapture get() = deck == "studio" && !nativeControl && this != STUDIO && this != VIDEO && this != CAMERA_ACCESS

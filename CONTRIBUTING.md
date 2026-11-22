@@ -179,6 +179,20 @@ production composables; do not add Swing/AWT widgets, native Android layouts,
 platform-only Compose screens, or wrappers around an alternate toolkit.
 Keep host permissions, camera/document intents, service lifetimes and LCD pixel
 generation outside presentation. Pass typed display data and callbacks.
+
+### Localized copy
+
+Add app-owned text to the nearest `*Copy.kt` catalog in `shared-ui` (or
+`DeviceCopy` for Android-only messages). A `Copy` contains English, French
+and Serbian Latin together; call `.text()` when presenting it, not when
+serializing a layout or registering a command. Use `{0}`, `{1}`, etc. for
+arguments; pass user text as arguments, never as templates. Use `PluralCopy`
+for counts (one/few/other). For system-facing Android strings update
+`res/values`, `res/values-fr` and `res/values-b+sr+Latn` together.
+
+Translate factory names only at display time, using their stable identity.
+Never translate IDs, intent actions, accessibility matchers, external app
+labels, artist or track metadata, or user-authored names and commands.
 Exercise compact and wide constraints, keyboard input and screen-reader actions.
 Run `gradlew.bat checkSharedUi` (`./gradlew checkSharedUi` on Unix); builds also
 run the guard. `testSharedUiBoundary` checks sample violations and permitted

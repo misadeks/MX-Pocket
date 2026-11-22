@@ -7,6 +7,10 @@ import tel.misa.mxpocket.decks.DeckCommand
 import tel.misa.mxpocket.decks.navigationCommands
 import tel.misa.mxpocket.decks.teamsSlots
 import tel.misa.mxpocket.decks.TeamsState
+import tel.misa.mxpocket.i18n.KeypadCopy as K
+import tel.misa.mxpocket.i18n.displayKeyLabel
+import tel.misa.mxpocket.i18n.displayName
+import tel.misa.mxpocket.i18n.displayPageName
 import tel.misa.mxpocket.plugins.*
 import tel.misa.mxpocket.shared.ui.PocketScreenEvent
 import tel.misa.mxpocket.shared.ui.VirtualGrid
@@ -20,18 +24,18 @@ class PreviewDeck(val repository: DeckRepository) {
     private var volume = 6
     private var muted = false
     private var playing = false
-    private val tracks = listOf("Night train", "First light", "Homeward")
+    private val tracks = listOf(K.NightTrain, K.FirstLight, K.Homeward)
     private var track = 0
     private val knownPlugins = defaultDeck().profiles.map { it.id }.toSet()
     private var lastSnapshot: DeckState? = null
     private var generation = 0L
     fun resetInput() { generation++ }
 
-    val profileName get() = deck.activeProfile.name
+    val profileName get() = deck.activeProfile.displayName()
     val profileIndex get() = deck.profiles.indexOf(deck.activeProfile)
     val profileCount get() = deck.profiles.size
     val profileId get() = deck.activeProfileId
-    val profiles get() = deck.profiles.map { it.id to it.name }
+    val profiles get() = deck.profiles.map { it.id to it.displayName() }
 
     fun select(id: String) {
         repository.selectProfile(id).getOrThrow()
@@ -42,18 +46,6 @@ class PreviewDeck(val repository: DeckRepository) {
     }
 
     fun tick(now: Long) = focus.tick(now)
-
-    private fun labels(plugin: String, now: Long): List<String> = when (plugin) {
-        "focus" -> focus.present(now).keys.map { it.label }
-        "audio" -> listOf("Volume -", if (muted) "Unmute" else "Mute", "Volume +", "Previous",
-            if (playing) "Pause" else "Play", "Next", "Seek back 10 seconds", tracks[track], "Seek forward 10 seconds")
-        "phone" -> phoneFrame().keys.map { it.label }
-        "launcher" -> listOf("No favorites", "-", "-", "-", "-", "-", "-", "Edit favorites", "Favorites")
-        "studio" -> listOf("Shutter", "Record", "Stop", "-", "-", "-", "Open Video", "Open Camera", "Camera controls")
-        "navigation" -> listOf("Back", "Home", "Recents", "Scroll up", "Select", "Scroll down",
-            "Prev focus", "Access info", "Next focus")
-        else -> emptyList()
-    }
 
     private data class Binding(val plugin: String, val index: Int, val command: DeckCommand? = null)
 
@@ -75,25 +67,20 @@ class PreviewDeck(val repository: DeckRepository) {
         return Binding(command.deck, index, command)
     }
 
-    private fun face(deck: DeckState, key: DeckKey, selectedPlugin: String?, now: Long): KeyTile {
-        val assigned = key.action
+    private fun face(deck: DeckState, saved: DeckKey, assigned: ActionCall?, selectedPlugin: String?, now: Long): KeyTile {
+        val key = saved.copy(action = assigned, label = deck.activeProfile.displayKeyLabel(deck.activePage, saved))
         val action = binding(assigned)
-        val dynamic = when (action?.command) {
-            DeckCommand.MUTE, DeckCommand.UNMUTE, DeckCommand.MEDIA_ACCESS -> action.command.label
-            DeckCommand.VOLUME_LEVEL -> "${if (muted) 0 else volume} / 15"
-            else -> action?.let { labels(it.plugin, now).getOrNull(it.index) }
-        }
         val name = when (assigned?.id) {
-            DeckActions.PAGE -> deck.activeProfile.pages.find { it.id == assigned.params[DeckActions.PAGE_ID] }?.name
-            DeckActions.PROFILE -> deck.profiles.find { it.id == assigned.params[DeckActions.PROFILE_ID] }?.name
-            DeckActions.ROOT -> "Root"
-            DeckActions.BACK -> "Back"
-            else -> dynamic ?: assigned?.id
+            DeckActions.PAGE -> deck.activeProfile.pages.find { it.id == assigned.params[DeckActions.PAGE_ID] }?.let(deck.activeProfile::displayPageName)
+            DeckActions.PROFILE -> deck.profiles.find { it.id == assigned.params[DeckActions.PROFILE_ID] }?.displayName()
+            DeckActions.ROOT -> K.Root.text()
+            DeckActions.BACK -> K.Back.text()
+            else -> assigned?.let { DeckCommand.fromId(it.id)?.displayLabel ?: it.id }
         }
         val native = when (action?.plugin) {
             "focus" -> focus.present(now).keys[action.index]
             "phone" -> phoneFrame().keys[action.index].let { tile ->
-                if (action.index in 6..7 || tile.readOnly) tile else tile.copy(enabled = false, footer = "Android only")
+                if (action.index in 6..7 || tile.readOnly) tile else tile.copy(enabled = false, footer = K.AndroidOnly.text())
             }
             "audio" -> {
                 val i = action.index
@@ -105,11 +92,18 @@ class PreviewDeck(val repository: DeckRepository) {
                 },
                     PlayerGlyph.VOLUME_UP, PlayerGlyph.PREVIOUS, if (playing) PlayerGlyph.PAUSE else PlayerGlyph.PLAY,
                     PlayerGlyph.NEXT, PlayerGlyph.BACK_10, PlayerGlyph.TRACK, PlayerGlyph.FORWARD_10).getOrNull(i)
-                KeyTile(dynamic.orEmpty(), when (i) {
-                    -1 -> if (action.command == DeckCommand.VOLUME_LEVEL) "Volume" else "Android only"
+                val text = when {
+                    action.command == DeckCommand.VOLUME_LEVEL -> level.description
+                    i == 7 -> tracks[track].text()
+                    i == 4 -> (if (playing) K.Pause else K.Play).text()
+                    i == 1 && action.command == null -> (if (muted) K.Unmute else K.Mute).text()
+                    else -> (action.command ?: audioSlots.getOrNull(i))?.displayLabel.orEmpty()
+                }
+                KeyTile(text, when (i) {
+                    -1 -> if (action.command == DeckCommand.VOLUME_LEVEL) K.Volume.text() else K.AndroidOnly.text()
                     1 -> level.description
-                    6, 8 -> "No seek position"
-                    7 -> if (playing) "Playing" else "Paused"
+                    6, 8 -> K.NoSeek.text()
+                    7 -> (if (playing) K.Playing else K.Paused).text()
                     else -> ""
                 }, 0xff303438.toInt(), glyph = glyph, primary = i == 4, volumeLevel = level.takeIf { i == 1 },
                     showLabel = i == 7 || glyph == null, showFooter = glyph == null, playerFace = glyph != null,
@@ -117,26 +111,32 @@ class PreviewDeck(val repository: DeckRepository) {
                     enabled = (i < 6 || i == 7) && action.command != DeckCommand.MEDIA_ACCESS)
             }
             "game.xo" -> xo.frame().keys[action.index]
-            "studio" -> KeyTile(dynamic.orEmpty(), "Android only", 0xff49345f.toInt(), enabled = false,
-                glyph = listOf(DeckGlyph.CAMERA, DeckGlyph.VIDEO, DeckGlyph.STOP, null, null, null, DeckGlyph.VIDEO,
-                    DeckGlyph.CAMERA, DeckGlyph.SETTINGS)[action.index], showLabel = dynamic != "-", showFooter = dynamic != "-", quietFace = true)
-            "navigation" -> navigationCommands[action.index].navigationFace(systemAccess = null)
-            "teams" -> TeamsState().tile(action.command ?: teamsSlots[action.index]).let {
-                it.copy(label = if (it.readOnly) "Call status" else it.label, enabled = false, footer = "Android only")
+            "studio" -> {
+                val command = studioSlots.getOrNull(action.index)
+                KeyTile(command?.displayLabel ?: "-", K.AndroidOnly.text(), 0xff49345f.toInt(), enabled = false,
+                    glyph = command?.legend(), showLabel = command != null, showFooter = command != null, quietFace = true)
             }
-            "launcher" -> KeyTile(dynamic.orEmpty(), "Android only", 0xff384674.toInt(), enabled = false,
-                showLabel = dynamic != "-", showFooter = dynamic != "-", quietFace = true)
+            "navigation" -> navigationCommands[action.index].navigationFace(systemAccess = null)
+            "teams" -> TeamsState().tile(action.command ?: teamsSlots[action.index]).let { tile ->
+                tile.copy(label = if (tile.readOnly) K.CallStatus.text() else tile.label,
+                    enabled = false, footer = K.AndroidOnly.text())
+            }
+            "launcher" -> {
+                val title = when (action.index) { 0 -> K.NoFavorites; 7 -> K.EditFavorites; 8 -> K.Favorites; else -> null }
+                KeyTile(title?.text() ?: "-", K.AndroidOnly.text(), 0xff384674.toInt(), enabled = false,
+                    showLabel = title != null, showFooter = title != null, quietFace = true)
+            }
             else -> null
         }
         val navigation = assigned?.id in setOf(DeckActions.PAGE, DeckActions.PROFILE, DeckActions.BACK, DeckActions.ROOT)
         val owner = assigned?.slotOwner()
         val ownerAvailable = owner == null || owner == selectedPlugin
-        val available = key.enabled && ownerAvailable && (navigation || native?.enabled == true && dynamic != "-")
+        val available = key.enabled && ownerAvailable && (navigation || native?.enabled == true)
         return key.present(native, name ?: "-", when {
-            !key.enabled -> "Disabled"
-            !ownerAvailable -> "Unavailable"
+            !key.enabled -> K.Disabled.text()
+            !ownerAvailable -> K.Unavailable.text()
             native != null -> native.footer
-            !available && assigned != null -> "Unavailable"
+            !available && assigned != null -> K.Unavailable.text()
             else -> ""
         }, available)
     }
@@ -151,7 +151,7 @@ class PreviewDeck(val repository: DeckRepository) {
         val pluginPage = if (owner == "game.xo") xo.interactionPage else 0
         fun frame(hold: Boolean) = PluginFrame(page.keys.map { key ->
             val call = if (hold) key.holdAction else key.action ?: key.holdAction
-            face(snapshot, key.copy(action = call), owner, now)
+            face(snapshot, key, call, owner, now)
         }, pluginPage)
         val display = frame(false)
         val holds = if (page.keys.any { it.holdAction != null }) frame(true) else null
@@ -171,17 +171,17 @@ class PreviewDeck(val repository: DeckRepository) {
     }
 
     private fun press(slot: Int, now: Long, hold: Boolean, current: Board): String {
-        val key = current.grid.page.keys.getOrNull(slot) ?: return "Unassigned key."
-        val call = (if (hold) key.holdAction else key.action) ?: return "Unassigned key."
+        val key = current.grid.page.keys.getOrNull(slot) ?: return K.Unassigned.text()
+        val call = (if (hold) key.holdAction else key.action) ?: return K.Unassigned.text()
         if (DeckCommand.fromId(call.id)?.deck in setOf("audio", "navigation") && call.commandBinding().params.isNotEmpty())
-            return "Invalid action parameters. No action sent."
+            return K.InvalidParams.text()
         val chosen = if (hold) current.grid.holds?.get(slot) else current.grid.taps[slot]
         if (!current.grid.taps[slot].actionable || chosen?.actionable != true) {
             val owner = current.grid.page.selectedSlotOwner(knownPlugins::contains)
-            val label = if (hold) face(deck, key.copy(action = call), owner, now).label else current.faces[slot].label
+            val label = if (hold) face(deck, key, call, owner, now).label else current.faces[slot].label
             return when (binding(call)?.plugin) {
-                "phone" -> "$label is unavailable. No phone action sent."
-                else -> "$label is unavailable. No system action sent."
+                "phone" -> K.PhoneUnavailable.text(label)
+                else -> K.SystemUnavailable.text(label)
             }
         }
         val navigation = when (call.id) {
@@ -191,15 +191,16 @@ class PreviewDeck(val repository: DeckRepository) {
             DeckActions.PROFILE -> repository.selectProfile(call.params.getValue(DeckActions.PROFILE_ID))
             else -> null
         }
-        if (navigation != null) return navigation.fold({ "On $profileName / ${deck.activePage.name}." },
-            { it.message ?: "Cannot change page." })
+        if (navigation != null) return navigation.fold({ K.OnPage.text(profileName, deck.activeProfile.displayPageName(deck.activePage)) },
+            { it.message ?: K.CannotChangePage.text() })
         val (plugin, index, command) = binding(call)
-            ?: return "${call.id} is not available in the Windows simulator. No action sent."
+            ?: return K.NotInSimulator.text(call.id)
         if (plugin == "game.xo") {
             xo.press(index)
             return xo.cells()[4].footer
         }
-        val label = command?.label ?: labels(plugin, now).getOrNull(index) ?: return "Unsupported binding."
+        val label = command?.displayLabel ?: if (hold) face(deck, key, call,
+            current.grid.page.selectedSlotOwner(knownPlugins::contains), now).label else current.faces[slot].label
         when (plugin) {
             "focus" -> when (index) {
                 0 -> focus.toggle(now)
@@ -207,10 +208,10 @@ class PreviewDeck(val repository: DeckRepository) {
                 3 -> focus.adjust(-5)
                 5 -> focus.adjust(5)
                 6, 7, 8 -> focus.select(listOf(15, 25, 50)[index - 6])
-                else -> return "Focus timer: ${focus.label(now)} remaining."
+                else -> return K.FocusRemaining.text(focus.label(now))
             }
             "audio" -> when (index) {
-                -1 -> return if (command == DeckCommand.VOLUME_LEVEL) "Volume display only." else "Media access requires Android."
+                -1 -> return (if (command == DeckCommand.VOLUME_LEVEL) K.VolumeDisplayOnly else K.MediaAndroid).text()
                 0, 2 -> {
                     volume = (volume + if (index == 2) 1 else -1).coerceIn(0, 15)
                     muted = false
@@ -222,23 +223,22 @@ class PreviewDeck(val repository: DeckRepository) {
                 }
                 3, 5 -> track = Math.floorMod(track + if (index == 5) 1 else -1, tracks.size)
                 4 -> playing = !playing
-                6, 8 -> return "Seeking is unavailable in this preview."
-                7 -> return "Now playing: ${tracks[track]}."
+                6, 8 -> return K.NoPreviewSeek.text()
+                7 -> return K.TrackPlaying.text(tracks[track].text())
             }
             "navigation" -> return when (index) {
-                2 -> "Recents needs Android navigation access. No system action sent."
-                7 -> "Access info: system navigation is off in this desktop preview. No settings opened."
-                else -> "$label is simulated. No system action sent."
+                2 -> K.RecentsNeedsAndroid.text()
+                7 -> K.PreviewAccess.text()
+                else -> K.SimulatedSystem.text(label)
             }
             "phone" -> if (index == 6 || index == 7) {
                 val target = if (index == 6) "focus" else "audio"
-                repository.selectProfile(target).getOrElse { return it.message ?: "Profile unavailable." }
-                return "Opened $profileName from Phone."
-            } else return "$label is simulated. No phone action sent."
-            else -> return "$label is simulated. No system action sent."
+                repository.selectProfile(target).getOrElse { return it.message ?: K.ProfileUnavailable.text() }
+                return K.OpenedFromPhone.text(profileName)
+            } else return K.SimulatedPhone.text(label)
+            else -> return K.SimulatedSystem.text(label)
         }
-        return if (plugin == "focus") "Focus timer: ${focus.label(now)} remaining."
-            else "$label in preview only. Windows media is unchanged."
+        return if (plugin == "focus") K.FocusRemaining.text(focus.label(now)) else K.PreviewOnly.text(label)
     }
 
 }

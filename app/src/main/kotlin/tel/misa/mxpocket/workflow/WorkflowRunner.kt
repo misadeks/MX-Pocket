@@ -13,12 +13,15 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
+import tel.misa.mxpocket.i18n.Copy
+import tel.misa.mxpocket.i18n.WorkflowCopy
 
 internal interface WorkflowEffects {
     suspend fun request(endpoint: WorkflowEndpoint): RequestResult
     suspend fun speak(text: String): Boolean
     fun notify(text: String): Boolean
     suspend fun confirm(prompt: String): Boolean
+    suspend fun confirm(prompt: WorkflowPrompt): Boolean = confirm(prompt.text)
     suspend fun openUrl(url: String): Boolean
 }
 internal enum class RequestResult { SUCCESS, REFUSED, TRANSIENT }
@@ -43,17 +46,18 @@ internal class WorkflowRunner(
     ): Job? {
         // Virtual origins are readable in old run history, not a source of new Android runs.
         if (origin == WorkflowOrigin.VIRTUAL || busy || scope.coroutineContext[Job]?.isActive == false) return null
-        val initial = WorkflowStatus(workflow.id, workflow.name, origin, WorkflowPhase.RUNNING, "Starting")
+        val initial = WorkflowStatus(workflow.id, workflow.name, origin, WorkflowPhase.RUNNING, WorkflowCopy.Starting.text(),
+            liveCopy = WorkflowCopy.Starting)
         val job = scope.launch(start = CoroutineStart.LAZY) {
             var stepNumber = 0
             var handledErrors = 0
-            fun progress(label: String, phase: WorkflowPhase = WorkflowPhase.RUNNING) {
-                current.value = initial.copy(phase = phase, step = stepNumber, message = label)
+            fun progress(copy: Copy, phase: WorkflowPhase = WorkflowPhase.RUNNING) {
+                current.value = initial.withCopy(copy, phase).copy(step = stepNumber)
             }
-            suspend fun confirm(prompt: String) {
-                progress("Waiting for confirmation", WorkflowPhase.CONFIRMATION)
+            suspend fun confirm(prompt: WorkflowPrompt) {
+                progress(WorkflowCopy.WaitingConfirmation, WorkflowPhase.CONFIRMATION)
                 if (!effects.confirm(prompt)) throw StepFailure(FailureKind.DECLINED)
-                progress("Confirmed")
+                progress(WorkflowCopy.Confirmed)
             }
             val variables = mutableMapOf<String, String>()
             var previous = true
@@ -63,7 +67,9 @@ internal class WorkflowRunner(
                 for (step in steps) {
                     currentCoroutineContext().ensureActive()
                     if (++stepNumber > MAX_STEPS) throw StepFailure(FailureKind.LIMIT)
-                    progress(specs[step.target]?.label.takeIf { step.kind == StepKind.ACTION } ?: step.kind.label)
+                    val action = specs[step.target].takeIf { step.kind == StepKind.ACTION }
+                    current.value = initial.copy(step = stepNumber, message = action?.displayLabel ?: step.kind.label,
+                        liveCopy = null, stepKind = step.kind, actionId = action?.id)
                     when (step.kind) {
                         StepKind.IF -> {
                             val yes = step.test.matches(host.snapshot(), variables, previous)
@@ -79,16 +85,16 @@ internal class WorkflowRunner(
                                 when (step.kind) {
                                     StepKind.ACTION -> {
                                         val spec = specs[step.target] ?: throw StepFailure(FailureKind.UNAVAILABLE)
-                                        if (spec.requiresConfirmation) confirm("Allow ${spec.label}?")
+                                        if (spec.requiresConfirmation) confirm(WorkflowPrompt.action(spec))
                                         if (!withTimeout(30_000) { host.execute(step.target, step.params) })
                                             throw StepFailure(FailureKind.UNAVAILABLE)
                                     }
                                     StepKind.WAIT -> delay(step.value.toLong() * 1000)
-                                    StepKind.CONFIRM -> confirm(step.value)
+                                    StepKind.CONFIRM -> confirm(WorkflowPrompt(step.value))
                                     StepKind.SET -> variables[step.target] = step.value
                                     StepKind.REQUEST -> {
                                         val endpoint = endpoints.first { it.id == step.target }
-                                        if (endpoint.method == "POST") confirm("Send POST to ${endpoint.name}?")
+                                        if (endpoint.method == "POST") confirm(WorkflowPrompt.post(endpoint.name))
                                         for (attempt in 0..step.retries) {
                                             when (withTimeout(10_000) { effects.request(endpoint) }) {
                                                 RequestResult.SUCCESS -> break
@@ -101,7 +107,7 @@ internal class WorkflowRunner(
                                         }
                                     }
                                     StepKind.OPEN_URL -> {
-                                        progress("Waiting for browser approval", WorkflowPhase.CONFIRMATION)
+                                        progress(WorkflowCopy.WaitingBrowser, WorkflowPhase.CONFIRMATION)
                                         if (!effects.openUrl(step.value)) throw StepFailure(FailureKind.DECLINED)
                                     }
                                     StepKind.SPEAK -> if (!withTimeout(30_000) { effects.speak(step.value) })
@@ -122,23 +128,21 @@ internal class WorkflowRunner(
                     }
                 }
             }
-            var terminal = initial.copy(phase = WorkflowPhase.CANCELLED, message = "Cancelled")
+            var terminal = initial.withCopy(WorkflowCopy.Cancelled, WorkflowPhase.CANCELLED)
             try {
-                progress("Validating")
+                progress(WorkflowCopy.Validating)
                 specs = host.actions().associateBy { it.id }
                 val error = validateWorkflow(workflow, definitions, endpoints, specs.values.toList())
                 if (error != null) throw StepFailure(FailureKind.INVALID)
                 // An outer deadline is never restartable by a nested call, branch or retry.
                 if (withTimeoutOrNull(180_000) { walk(workflow.steps, setOf(workflow.id)); true } != true)
                     throw StepFailure(FailureKind.TIMEOUT)
-                terminal = if (handledErrors == 0) initial.copy(phase = WorkflowPhase.SUCCESS, message = "Completed")
-                else initial.copy(phase = WorkflowPhase.FAILED, message = "Finished with $handledErrors handled errors",
-                    error = FailureKind.UNAVAILABLE)
+                terminal = initial.completed(handledErrors)
             } catch (e: Exception) {
                 if (e is CancellationException && e !is TimeoutCancellationException) throw e
                 val kind = if (e is TimeoutCancellationException) FailureKind.TIMEOUT
                     else (e as? StepFailure)?.kind ?: FailureKind.UNAVAILABLE
-                terminal = initial.copy(phase = WorkflowPhase.FAILED, message = kind.description, error = kind)
+                terminal = initial.failed(kind)
             } finally {
                 terminal = terminal.copy(step = stepNumber, timestamp = System.currentTimeMillis())
                 current.value = terminal

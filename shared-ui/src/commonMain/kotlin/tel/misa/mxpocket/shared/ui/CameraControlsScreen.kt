@@ -9,6 +9,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import tel.misa.mxpocket.i18n.AccessCopy
 
 data class StudioCaptureOption(val id: String, val label: String)
 
@@ -31,29 +32,29 @@ sealed interface CameraControlsEvent {
 
 @Composable
 fun CameraControlsScreen(state: CameraControlsState, onEvent: (CameraControlsEvent) -> Unit) {
-    SubsidiaryPage("Studio camera controls", { onEvent(CameraControlsEvent.Done) }) {
+    SubsidiaryPage(AccessCopy.StudioControls.text(), { onEvent(CameraControlsEvent.Done) }) {
         Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (state is CameraControlsState.Available) {
                 Text(CameraControlsDisclosure)
                 Text(DeckAccess.Navigation.disclosure, style = MaterialTheme.typography.bodyMedium)
                 OutlinedButton(onClick = { onEvent(CameraControlsEvent.SetEnabled(!state.enabled)) }) {
-                    Text(if (state.enabled) "Turn off keypad camera controls" else "Enable keypad camera controls")
+                    Text(if (state.enabled) AccessCopy.DisableCamera.text() else AccessCopy.EnableCamera.text())
                 }
-                Text("In Accessibility, select MX Pocket navigation. Both switches must be on for camera keys.",
+                Text(AccessCopy.CameraInstructions.text(),
                     style = MaterialTheme.typography.bodyMedium)
                 OutlinedButton(onClick = { onEvent(CameraControlsEvent.OpenSettings) }) {
-                    Text("Open accessibility settings")
+                    Text(AccessCopy.OpenAccessibility.text())
                 }
                 if (state.hasCaptureDirectory) OutlinedButton(onClick = { onEvent(CameraControlsEvent.ListCaptures) }) {
-                    Text("Open previous Studio captures")
+                    Text(AccessCopy.OpenCaptures.text())
                 }
                 SubsidiaryStatus(state.message)
-            } else Text("Physical Studio camera controls require an Android phone and its accessibility service.")
+            } else Text(AccessCopy.CameraNotAvailable.text())
         }
     }
     (state as? CameraControlsState.Available)?.captureChoices?.let { choices ->
         val dismiss = { onEvent(CameraControlsEvent.DismissCaptures) }
-        AlertDialog(onDismissRequest = dismiss, title = { Text("Previous Studio captures") },
+        AlertDialog(onDismissRequest = dismiss, title = { Text(AccessCopy.PreviousCaptures.text()) },
             text = {
                 LazyColumn {
                     items(choices, key = { it.id }) { capture ->
@@ -61,6 +62,6 @@ fun CameraControlsScreen(state: CameraControlsState, onEvent: (CameraControlsEve
                             modifier = Modifier.fillMaxWidth()) { Text(capture.label) }
                     }
                 }
-            }, confirmButton = { TextButton(onClick = dismiss) { Text("Cancel") } })
+            }, confirmButton = { TextButton(onClick = dismiss) { Text(AccessCopy.Cancel.text()) } })
     }
 }

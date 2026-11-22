@@ -26,6 +26,7 @@ import okhttp3.Request
 import okhttp3.RequestBody
 import okhttp3.Response
 import okio.BufferedSink
+import tel.misa.mxpocket.i18n.WorkflowCopy
 
 internal class AndroidWorkflowEffects(private val app: Context) : WorkflowEffects {
     private val client = OkHttpClient.Builder().followRedirects(false).followSslRedirects(false)
@@ -34,8 +35,9 @@ internal class AndroidWorkflowEffects(private val app: Context) : WorkflowEffect
     val prompt = current.asStateFlow()
     private var answer: CompletableDeferred<Boolean>? = null
     override suspend fun confirm(prompt: String) = ask(WorkflowPrompt(prompt))
+    override suspend fun confirm(prompt: WorkflowPrompt) = ask(prompt)
     override suspend fun openUrl(url: String) = safeHttps(url, endpoint = false) &&
-        ask(WorkflowPrompt("Open this HTTPS page in your browser?\n$url", url))
+        ask(WorkflowPrompt.browser(url))
 
     private suspend fun ask(request: WorkflowPrompt): Boolean {
         val pending = CompletableDeferred<Boolean>()
@@ -90,10 +92,10 @@ internal class AndroidWorkflowEffects(private val app: Context) : WorkflowEffect
         if (!NotificationManagerCompat.from(app).areNotificationsEnabled()) return false
         val manager = app.getSystemService(NotificationManager::class.java)
         val id = "workflow-results"
-        manager.createNotificationChannel(NotificationChannel(id, "Workflow messages", NotificationManager.IMPORTANCE_DEFAULT))
+        manager.createNotificationChannel(NotificationChannel(id, WorkflowCopy.NotificationChannel.text(), NotificationManager.IMPORTANCE_DEFAULT))
         if (manager.getNotificationChannel(id).importance == NotificationManager.IMPORTANCE_NONE) return false
         manager.notify(4401, Notification.Builder(app, id).setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("MX Pocket workflow").setContentText(text).setAutoCancel(true).build())
+            .setContentTitle(WorkflowCopy.NotificationTitle.text()).setContentText(text).setAutoCancel(true).build())
         return true
     }
 

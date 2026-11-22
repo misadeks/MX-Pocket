@@ -7,8 +7,15 @@ or why it failed. Home previews the selected layout offline and mirrors all nine
 LCD keys live when connected. Press keys on the device, not on the phone.
 Choose **System**, **Light** or **Dark** in **Settings > Appearance**. The
 choice is remembered; System follows your device's current theme.
+**Settings > Language** follows the system by default. Choose **English**,
+**Français** or **Srpski (latinica)** to override it. Android 13 and newer
+also expose this choice in the system's per-app language settings. The Windows
+simulator remembers its own choice. Changing language does not rename your
+layouts, workflows or key labels, or change exported files.
 **Plugins** turns features on or off, **Flows** lets you build and run workflows,
-and **Settings** contains USB preferences, background images, repaint and diagnostics.
+and **Settings** contains USB preferences. Open **Settings → Diagnostics** to
+see device details and the session log. On Android, Back returns to Settings.
+On Windows, Diagnostics opens in a separate window you can close independently.
 
 **Profiles** switches and edits profiles. Swipe the endless profile carousel
 (or tap a card) to put that profile on the keypad; the cards beside the
@@ -52,22 +59,36 @@ the computer and accept the debugging prompt. From the repository root run:
 ```
 
 On Linux or macOS use `./gradlew :app:installDebug`. Open **MX Pocket** on
-the phone. Disconnect the computer, choose **Use a USB keypad** in
-first-run setup, finish setup and [connect the wired keypad](#connect-a-wired-keypad).
+the phone. Disconnect the computer, review the connection steps in first-run
+setup, then [connect the wired keypad](#connect-a-wired-keypad).
 
 ## Choose features on first launch
 
-Choose the features you want help setting up, or tap **Not now** to dismiss
+The first normal launcher open on a fresh installation offers setup, even
+if Android already allows some or all access. Opening from a USB attachment,
+notification or shortcut does not use that opportunity. Updates do not
+restart onboarding.
+
+Tap **Review setup steps** for the USB and session notification checklist.
+You can add optional features before reviewing, or tap **Not now** to dismiss
 the guide without starting a session or requesting access. Reopen
 **Settings > Feature setup** at any time. Reviewing a choice does not enable
 it, and removing a choice from the guide does not revoke access. Each step
 checks Android's current state; you can finish with steps still pending.
 
-Optional **notification access** is for richer player controls and artwork,
-not for posting the session notification. Basic media keys still work without
-it. Physical Studio camera controls, one-press app opening and cross-app
-navigation each have their own steps. If Android restricts access, leave that
-option off; see [deck behavior without special access](android-decks.md).
+Showing the session notification does not allow reading notifications.
+**MX Pocket media sessions** authorizes richer player controls and artwork;
+**MX Pocket Teams calls** is a separate listener for call notices. Setup and
+the plugin access screens open the selected service's detail page where
+supported. If Android instead shows two indistinguishable **MX Pocket**
+entries, back out rather than guessing or enabling both. Basic media keys
+and manual Teams pages work without these grants.
+
+Studio camera keys, one-press shortcuts and foreground profile switching
+have their own app settings as well as Android grants. Reviewing an already
+allowed grant doesn't switch on the app feature. A missing keypad, player or
+call doesn't require changing Android permissions. See
+[deck behavior without special access](android-decks.md).
 
 ## Edit layouts without hardware
 
@@ -116,7 +137,8 @@ Older app versions cannot import format 4 exports.
 ## Connect a wired keypad
 
 1. Plug **one wired MX Creative Keypad** into an Android phone with USB Host
-   support. In **Settings → Refresh USB diagnostics**, look for `046D:C354`.
+   support. Open **Settings → Diagnostics**, tap **Refresh USB diagnostics**
+   and look for `046D:C354`.
    If it's missing, try a data-capable cable or OTG adapter and, if the phone
    cannot supply enough power, a powered hub.
 2. Tap **Connect to device** at the top of Home and approve the attached device when Android prompts.

@@ -5,6 +5,12 @@ when the editor opens. **Test run** executes the current draft for real without
 saving it. **Save workflow** validates and stores it on this phone. Duplicate
 makes a new editable copy with a separate ID; it does not copy a schedule.
 
+The editor, action labels, validation and run history follow the app language.
+New libraries start with a keypad-check example in that language. Once saved,
+workflow names, prompts, notification text and other step values stay as written
+when the language changes. Action IDs, HTTP methods and trigger bindings do not
+depend on the display language.
+
 ## Try the keypad check
 
 1. In Workflows, edit **Keypad check**. Expand its first step. The two branches

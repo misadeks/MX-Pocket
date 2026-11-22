@@ -1,5 +1,9 @@
 package tel.misa.mxpocket.decks
 
+import tel.misa.mxpocket.i18n.OneNoteCopy as N
+import tel.misa.mxpocket.i18n.AccessCopy
+import tel.misa.mxpocket.i18n.KeypadCopy
+
 import android.accessibilityservice.AccessibilityService
 import android.content.Intent
 import android.os.Bundle
@@ -87,9 +91,9 @@ class OneNoteAccessService : AccessibilityService() {
             entries.forEach { it.recycle() }
             while (items.size < 6) items.add("" to "")
             val actions = styles.actionList.map { it.id }
-            items.add(if (Node.ACTION_SCROLL_BACKWARD in actions) "$prefix:previous" to "Previous" else "" to "")
-            items.add("$prefix:cancel" to "Cancel")
-            items.add(if (Node.ACTION_SCROLL_FORWARD in actions) "$prefix:next" to "Next" else "" to "")
+            items.add(if (Node.ACTION_SCROLL_BACKWARD in actions) "$prefix:previous" to KeypadCopy.Previous.text() else "" to "")
+            items.add("$prefix:cancel" to AccessCopy.Cancel.text())
+            items.add(if (Node.ACTION_SCROLL_FORWARD in actions) "$prefix:next" to KeypadCopy.Next.text() else "" to "")
             styles.recycle()
             return@withRoot items
         }
@@ -98,12 +102,12 @@ class OneNoteAccessService : AccessibilityService() {
             val ids = listOf("button_fontsize", "button_bold", "button_italic", "button_underline", "button_strikethrough",
                 "button_fontcolor", "button_highlight", "button_bulletlist", "button_numberlist", "button_decreaseindent",
                 "button_increaseindent", "button_leftalign", "button_centeralign", "button_rightalign", "button_styles")
-            val labels = listOf("Font size", "Bold", "Italic", "Underline", "Strikethrough", "Font color", "Highlight",
-                "Bullets", "Numbering", "Indent −", "Indent +", "Align left", "Align center", "Align right", "Styles")
+            val labels = listOf(N.FontSize, N.Bold, N.Italic, N.Underline, N.Strikethrough, N.FontColor, N.Highlight,
+                N.Bullets, N.Numbering, N.IndentLess, N.IndentMore, N.AlignLeft, N.AlignCenter, N.AlignRight, N.Styles)
             val nodes = findNodes(ribbon) { node -> ids.any { node.viewIdResourceName?.endsWith(":id/$it") == true } }
             val result = ids.mapIndexed { index, id ->
                 val node = nodes.firstOrNull { it.viewIdResourceName?.endsWith(":id/$id") == true && it.isEnabled }
-                if (node == null) "" to "" else "text:${if (node.isSelected || node.isChecked) "selected:" else ""}${node.viewIdResourceName}" to labels[index]
+                if (node == null) "" to "" else "text:${if (node.isSelected || node.isChecked) "selected:" else ""}${node.viewIdResourceName}" to labels[index].text()
             }
             nodes.forEach { it.recycle() }
             ribbon.recycle()

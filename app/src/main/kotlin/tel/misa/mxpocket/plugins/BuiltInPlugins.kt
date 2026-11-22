@@ -3,6 +3,32 @@ package tel.misa.mxpocket.plugins
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import tel.misa.mxpocket.FocusTimer
+import tel.misa.mxpocket.i18n.builtInPluginTitle
+import tel.misa.mxpocket.i18n.KeypadCopy as K
+import tel.misa.mxpocket.i18n.AccessCopy
+import tel.misa.mxpocket.i18n.OneNoteCopy as N
+
+fun PluginDescriptor.displayTitle() = builtInPluginTitle(id, title)
+
+fun PluginCapability.displayName() = when (this) {
+    PluginCapability.AUDIO -> K.CapAudio
+    PluginCapability.OPEN_APPS -> K.CapApps
+    PluginCapability.NAVIGATION -> K.CapNav
+    PluginCapability.TONE -> K.CapTone
+    PluginCapability.STUDIO -> K.CapStudio
+    PluginCapability.SYSTEM_NAVIGATION -> K.CapSystemNav
+    PluginCapability.TEAMS -> K.CapTeams
+    PluginCapability.ACCESSIBILITY -> N.Accessibility
+}.text()
+
+fun PhoneApp.displayName() = when (this) {
+    PhoneApp.CAMERA -> K.Camera
+    PhoneApp.SETTINGS -> K.Settings
+    PhoneApp.DIALER -> K.Dialer
+    PhoneApp.WEB -> K.Web
+    PhoneApp.ALARMS -> K.Alarms
+    PhoneApp.ONENOTE -> N.Brand
+}.text()
 
 /** Registration order is the page-button order. Add your compiled-in plugin here. */
 object BuiltInPlugins {
@@ -119,14 +145,15 @@ class OneNotePlugin(title: String) : PocketPlugin {
                     val color = current.colors.getOrNull(visiblePage * 6 + i)
                     when {
                         i < 6 -> KeyTile(color.orEmpty(), "", current.colorValues.getOrNull(visiblePage * 6 + i) ?: colorValue(color), enabled = color != null)
-                        i == 6 -> KeyTile("Previous", "", purple, enabled = visiblePage > 0)
-                        i == 7 -> KeyTile("${visiblePage + 1} / $pages", "Cancel", (current.colorValues.getOrNull(current.selectedIndex) ?: colorValue(current.selectedColor)))
-                        else -> KeyTile("Next", "", purple, enabled = visiblePage + 1 < pages)
+                        i == 6 -> KeyTile(K.Previous.text(), "", purple, enabled = visiblePage > 0)
+                        i == 7 -> KeyTile("${visiblePage + 1} / $pages", AccessCopy.Cancel.text(), (current.colorValues.getOrNull(current.selectedIndex) ?: colorValue(current.selectedColor)))
+                        else -> KeyTile(K.Next.text(), "", purple, enabled = visiblePage + 1 < pages)
                     }
                 })
             }
             val fraction = (current.thickness - current.min) / (current.max - current.min)
-            val labels = listOf("Thickness −", "Thickness", "Thickness +", "", "Color", "", "", "Back", "")
+            val thickness = N.Thickness.text()
+            val labels = listOf("$thickness −", thickness, "$thickness +", "", N.Color.text(), "", "", K.Back.text(), "")
             return PluginFrame(labels.mapIndexed { i, label ->
                 KeyTile(label, if (i == 4) current.selectedColor.orEmpty() else "",
                     if (i == 4) colorValue(current.selectedColor) else purple,
@@ -137,13 +164,13 @@ class OneNotePlugin(title: String) : PocketPlugin {
         if (tools.any { it.first.startsWith("style:") || it.first.startsWith("size:") }) {
             return PluginFrame(List(9) { index ->
                 val item = tools.getOrNull(index)
-                KeyTile(item?.second.orEmpty(), if (tools.any { it.first.startsWith("size:") }) "Font size" else "Styles", 0xff7719aa.toInt(), enabled = !item?.first.isNullOrEmpty())
+                KeyTile(item?.second.orEmpty(), if (tools.any { it.first.startsWith("size:") }) N.FontSize.text() else N.Styles.text(), 0xff7719aa.toInt(), enabled = !item?.first.isNullOrEmpty())
             })
         }
         if (tools.any { it.first.startsWith("text:") }) {
-            val displayed = if (textPage == 0) tools.take(8) else tools.drop(8).take(7) + ("text:draw" to "Draw")
+            val displayed = if (textPage == 0) tools.take(8) else tools.drop(8).take(7) + ("text:draw" to N.Draw.text())
             return PluginFrame(List(9) { index ->
-                if (index == 8) KeyTile(if (textPage == 0) "Next" else "Previous", "${textPage + 1} / 2", 0xff7719aa.toInt())
+                if (index == 8) KeyTile(if (textPage == 0) K.Next.text() else K.Previous.text(), "${textPage + 1} / 2", 0xff7719aa.toInt())
                 else {
                     val item = displayed.getOrNull(index)
                     val selected = item?.first?.startsWith("text:selected:") == true
@@ -223,8 +250,8 @@ class OneNotePlugin(title: String) : PocketPlugin {
     }.toInt()
 
     private fun shortLabel(desc: String): String = when {
-        "pen options" in desc -> "${desc.substringBefore(" color")} pen"
-        "highlighter options" in desc -> "${desc.substringBefore(" color")} highl"
+        "pen options" in desc -> N.Pen.text(desc.substringBefore(" color"))
+        "highlighter options" in desc -> N.Highlighter.text(desc.substringBefore(" color"))
         else -> desc
     }
 }

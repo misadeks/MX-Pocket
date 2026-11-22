@@ -15,9 +15,41 @@ import tel.misa.mxpocket.deck.DeckKey
 import tel.misa.mxpocket.decks.DeckCommand
 import tel.misa.mxpocket.shared.ui.factoryKeyBindings
 import tel.misa.mxpocket.shared.ui.PocketScreenEvent
+import tel.misa.mxpocket.i18n.AppLanguage
+import tel.misa.mxpocket.i18n.AppLocale
 
 class PreviewDeckTest {
     @get:Rule val folder = TemporaryFolder()
+    @Test fun switchingLanguageRepaintsWithoutRebindingOrRenamingSavedKeys() {
+        val language = AppLocale.current
+        try {
+            AppLocale.update(AppLanguage.ENGLISH, emptyList())
+            val file = File(folder.root, "deck.json")
+            val repo = DeckRepository(file)
+            val host = PreviewDeck(repo)
+            host.select("teams")
+            // A user's caption identical to a factory caption but in another slot is still theirs.
+            repo.setKey("teams", "root", 0, DeckKey(label = "My chat")).getOrThrow()
+            val saved = file.readText()
+            val en = host.board(0)
+            AppLocale.update(AppLanguage.FRENCH, emptyList())
+            val fr = host.board(0)
+            assertEquals(en.grid, fr.grid)
+            assertEquals("My chat", fr.faces[0].label)
+            assertEquals("Ma conversation", fr.faces[1].label)
+            assertEquals("Outils d’appel", fr.faces[7].label)
+            assertEquals(saved, file.readText())
+            host.press(PocketScreenEvent.VirtualKey(7, en.grid), 0)
+            assertEquals("in-call", repo.state.value.activePage.id)
+            AppLocale.update(AppLanguage.SERBIAN_LATIN, emptyList())
+            assertEquals("Mikrofon nedostupan", host.tiles(0)[4].label)
+            repo.renameProfile("teams", "{1} Focus").getOrThrow()
+            assertEquals("{1} Focus", host.profileName)
+        } finally {
+            AppLocale.update(language, emptyList())
+        }
+    }
+
     @Test fun manualTeamsPageNeverSimulatesALiveMeetingOrMicToggle() {
         val repo = DeckRepository(File(folder.root, "deck.json"))
         val deck = PreviewDeck(repo)
