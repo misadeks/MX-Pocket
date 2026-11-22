@@ -53,6 +53,8 @@ internal class OneNoteFaces(private val resources: Resources?) {
         KeyTile(label, footer, PURPLE, glyph = glyph, enabled = enabled, showFooter = footer.isNotBlank(),
             selection = selected, detail = listOf(detail, stateDescription(selected)).filter(String::isNotBlank).joinToString(", "))
 
+    fun openOneNote() = face(OneNoteCopy.Open.text(), DeckGlyph.FOLDER)
+
     fun draw(entries: List<Pair<String, String>>, active: String?): PluginFrame {
         val unique = active != null && entries.count { it.second == active } == 1
         return PluginFrame(List(9) { i ->
@@ -93,12 +95,23 @@ internal class OneNoteFaces(private val resources: Resources?) {
 
     fun option(item: Pair<String,String>?, size: Boolean): KeyTile {
         val id = item?.first?.takeIf(String::isNotBlank) ?: return blank()
-        val mark = when (id.substringAfter(':')) {
-            "previous" -> OneNoteMark.PREVIOUS; "next" -> OneNoteMark.NEXT; "cancel" -> OneNoteMark.CANCEL
-            else -> if (size) OneNoteMark.SIZE else OneNoteMark.STYLES
+        if (size && id == "size:current") return KeyTile(item.second, OneNoteCopy.FontSize.text(), PURPLE,
+            readOnly = true, showFooter = true)
+        val glyph: KeyGlyph = when {
+            size && id.startsWith("size:down:") -> DeckGlyph.MINUS
+            size && id.startsWith("size:up:") -> DeckGlyph.PLUS
+            id.endsWith(":previous") -> OneNoteLegend(OneNoteMark.PREVIOUS)
+            id.endsWith(":next") -> OneNoteLegend(OneNoteMark.NEXT)
+            id.endsWith(":cancel") -> OneNoteLegend(OneNoteMark.CANCEL)
+            size -> OneNoteLegend(OneNoteMark.SIZE)
+            else -> OneNoteLegend(OneNoteMark.STYLES)
         }
-        return face(item.second, OneNoteLegend(mark), if (size) OneNoteCopy.FontSize.text() else OneNoteCopy.Styles.text())
+        return face(item.second, glyph, if (size) OneNoteCopy.FontSize.text() else OneNoteCopy.Styles.text())
     }
+
+    fun shape(item: Pair<String, String>?): KeyTile = item?.second?.takeIf(String::isNotBlank)?.let {
+        face(it, OneNoteLegend(OneNoteMark.SHAPE))
+    } ?: blank()
 
     fun pageKey(next: Boolean, enabled: Boolean = true, footer: String = "") = face(
         if (next) KeypadCopy.Next.text() else KeypadCopy.Previous.text(),

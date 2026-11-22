@@ -168,6 +168,7 @@ internal class PocketSession(
         readActiveTool = { OneNoteAccessService.connected?.activeTool() },
         readToolBar = { OneNoteAccessService.connected?.toolBar() ?: emptyList() },
         readOneNoteSettings = { OneNoteAccessService.connected?.settings() },
+        readOneNoteForeground = { OneNoteAccessService.connected?.isOneNoteForeground() == true },
     )
     var request: Request? = null
         private set
@@ -373,6 +374,7 @@ internal class PocketSession(
             !key.enabled || ownerOf(call) in disabled.value || call?.targetProfileId() in disabled.value -> K.Disabled.text()
             tile?.inputToken?.startsWith("${DeckCommand.TEAMS_STATUS.id}:") == true && key.label.isNotBlank() -> tile.label
             ownerOf(call) == TEAMS && tile != null -> if (tile.enabled && !available) K.Unavailable.text() else tile.footer
+            ownerOf(call) == "onenote" && tile?.enabled == false -> tile.footer
             tile?.glyph == NavigationGlyph.ACCESS_INFO ||
                 tile?.glyph == NavigationGlyph.RECENTS && !tile.enabled -> tile.footer
             !available && call != null -> K.Unavailable.text()
@@ -1017,11 +1019,32 @@ internal class PocketSession(
             is PluginAction.AccessibilityClick -> {
                 if (!freshAuthorizedPress() || !app.isUnlockedAndInteractive()) return
                 val service = OneNoteAccessService.connected
+                val pressTime = physicalPressAt
+                val ticket = request
+                val currentLayout = layout()
+                val currentOutput = output
+                val clicked = service?.selectToolById(action.text) == true
+                if (clicked && service != null && pressTime != null && ticket != null && currentOutput != null &&
+                    (action.text.startsWith("size:down:") || action.text.startsWith("size:up:"))) {
+                    scope.launch {
+                        repeat(10) {
+                            delay(100)
+                            if (SystemClock.elapsedRealtime() - pressTime !in 0 until 2_000L || request != ticket ||
+                                output !== currentOutput || layout() != currentLayout || !app.hasKeypadAccess(ticket) ||
+                                !app.isUnlockedAndInteractive() || OneNoteAccessService.connected !== service) return@launch
+                            val control = service.toolBar().firstOrNull {
+                                it.first.startsWith("text:") && it.first.endsWith(":id/button_fontsize")
+                            }
+                            if (control != null && service.selectToolById(control.first)) return@launch
+                        }
+                        message(OneNoteCopy.ShowToolbar.text())
+                    }
+                }
                 message(when {
                     service == null -> OneNoteCopy.EnableAccess.text()
-                    service.selectToolById(action.text) -> if ((action.text.startsWith("text:") || action.text.startsWith("style:") || action.text.startsWith("size:"))) OneNoteCopy.FormattingRequested.text()
+                    clicked -> if ((action.text.startsWith("text:") || action.text.startsWith("style:") || action.text.startsWith("size:") || action.text.startsWith("shape:"))) OneNoteCopy.FormattingRequested.text()
                         else OneNoteCopy.ToolRequested.text(action.text)
-                    else -> if ((action.text.startsWith("text:") || action.text.startsWith("style:") || action.text.startsWith("size:"))) OneNoteCopy.ShowToolbar.text()
+                    else -> if ((action.text.startsWith("text:") || action.text.startsWith("style:") || action.text.startsWith("size:") || action.text.startsWith("shape:"))) OneNoteCopy.ShowToolbar.text()
                         else OneNoteCopy.ShowTool.text(action.text)
                 })
             }

@@ -155,7 +155,7 @@ fun DeckKey.present(native: KeyTile?, fallbackLabel: String, footer: String, ava
     val glyph = native?.glyph ?: bindingGlyph() ?: if (!available && action?.params?.get("pluginId") == "audio")
         bindingPreview()?.glyph?.takeIf { it.isTenSecondSeek } else null
     val unavailableNote = !available && action?.id == "plugin.key" && action.params["pluginId"] == "onenote" &&
-        (native?.quietFace != true || label.isNotBlank())
+        native?.enabled != false && (native?.quietFace != true || label.isNotBlank())
     return (native ?: KeyTile(title, footer, color)).copy(label = title, footer = footer,
         glyph = if (unavailableNote) OneNoteLegend(OneNoteMark.UNAVAILABLE) else glyph,
         selection = native?.selection?.takeIf { available }, detail = native?.detail.orEmpty().takeIf { available }.orEmpty(),
