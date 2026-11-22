@@ -77,8 +77,9 @@ Black-and-white stripes mean the ink color is unknown. A corner check marks an
 observed selection, not a successful key press.
 
 For ordinary mobile calls, turn on **Settings → Phone calls → Show calls on the keypad**.
-The authorized **physical keypad** then shows call state while the phone is
-unlocked and its screen is on. Caller details are a separate opt-in. Either
+The authorized **physical keypad** switches when the carrier line rings, even
+with the phone locked or its screen off, if USB stays powered. Caller details and
+controls use the default Phone app and respect lock-screen restrictions. Either
 page key leaves without affecting the call. Camera, Dialer and other shortcuts
 remain available as key bindings. See [carrier call setup and supported controls](docs/android-decks.md#carrier-calls-on-the-keypad).
 

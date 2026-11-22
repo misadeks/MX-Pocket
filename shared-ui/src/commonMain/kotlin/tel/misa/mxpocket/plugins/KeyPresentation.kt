@@ -26,7 +26,7 @@ data class KeyTile(val label: String, val footer: String, val background: Int,
     val readOnly: Boolean = false, val showLabel: Boolean = true, val showFooter: Boolean = true,
     val primary: Boolean = false, val volumeLevel: VolumeLevel? = null, val quietFace: Boolean = false,
     val playerFace: Boolean = false, val levelFraction: Float? = null, val selection: KeySelection? = null,
-    val detail: String = "") {
+    val detail: String = "", val callIdentity: Boolean = false) {
     val backgroundOnly get() = !enabled && glyph.isTenSecondSeek
 }
 

@@ -274,7 +274,6 @@ internal class PocketSession(
     private fun hasPlugin(id: String) = plugins.descriptors.any { it.id == id }
     private fun phoneConnectionBlocker() = when {
         output == null || request?.let(app::hasKeypadAccess) != true -> CallCopy.ConnectKeypad
-        !app.isUnlockedAndInteractive() -> CallCopy.UnlockPhone
         else -> null
     }
 
@@ -760,9 +759,12 @@ internal class PocketSession(
         val ticket = request ?: return
         val key = binding.page.keys[index]
         if (binding.profile == PHONE_CALL_VIEW) {
+            refreshPhoneCall()
             if (!acknowledged(index, epoch)) return
+            val interactive = app.isUnlockedAndInteractive()
             val sent = callBoard.press(index) {
                 phoneAuthorized() && phoneAccess.details && phoneAccess.phoneGranted && phoneAccess.notificationGranted &&
+                    interactive == app.isUnlockedAndInteractive() &&
                     request == ticket && SystemClock.elapsedRealtime() - arrivedAt in 0 until 2_000L &&
                     acknowledged(index, epoch)
             }
@@ -889,6 +891,7 @@ internal class PocketSession(
         val connected = output ?: return
         val scope = hardwareScope ?: return
         if (painting?.isActive == true) return
+        if (callBoard.visible) refreshPhoneCall()
         val frame = frame()
         val layout = layout()
         if (scanLayout != layout) { scanLayout = layout; nextKey = 0 }
@@ -906,6 +909,7 @@ internal class PocketSession(
             painting = scope.launch {
                 try {
                     val result = connected.writeGrid(art, keys.map { it.image }, gridHasArt) {
+                        if (layout.profile == PHONE_CALL_VIEW) refreshPhoneCall()
                         val latest = frame()
                         output === connected && this@PocketSession.layout() == layout &&
                             target(latest) == target && keys.indices.all { keys[it].matches(desiredKey(layout, latest, it)) }
@@ -943,7 +947,10 @@ internal class PocketSession(
             painting = scope.launch {
                 try {
                     val sent = if (connected is RenderedKeypad) {
-                        connected.setKeyImage(index, key.image, coverArt = art != null)
+                        connected.setKeyImage(index, key.image, coverArt = art != null) {
+                            if (layout.profile == PHONE_CALL_VIEW) refreshPhoneCall()
+                            layout.profile != PHONE_CALL_VIEW || (callBoard.visible && target.screen == screenGeneration)
+                        }
                     } else {
                         connected.setKeyImage(index, key.image)
                         true
@@ -1148,7 +1155,7 @@ internal class PocketSession(
                     }
                 }
                 ContextCompat.registerReceiver(app, power, IntentFilter().apply {
-                    addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_USER_PRESENT)
+                    addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_USER_PRESENT)
                 }, ContextCompat.RECEIVER_NOT_EXPORTED)
                 // A phone-state broadcast is only a wakeup. Never read the incoming-number extra.
                 val phone = object : BroadcastReceiver() {

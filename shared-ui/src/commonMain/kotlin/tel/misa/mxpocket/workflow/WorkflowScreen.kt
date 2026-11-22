@@ -57,9 +57,10 @@ fun WorkflowScreen(
     backHandler(view != Section.Library, ::close)
     val running = status?.phase in setOf(WorkflowPhase.RUNNING, WorkflowPhase.CONFIRMATION)
     key(view) {
-        WorkspaceColumn(wide = view == Section.Library) {
+        WorkspaceColumn(wide = view == Section.Library, title = {
             if (view != Section.Library) TextButton(onClick = ::close, enabled = !saving) { Text(WorkflowCopy.Back.text()) }
             WorkspaceTitle(view.title.text())
+        }) {
             state.error?.let { ErrorLine(it.text()) }
             if (callbacks.run == null && callbacks.test == null)
                 Text(WorkflowCopy.NoExecution.text(), style = MaterialTheme.typography.bodySmall)
