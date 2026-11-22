@@ -146,11 +146,7 @@ class PlayerRenderTest {
             val mirror = board.render(tiles, decoded, back)
             decoded.forEachIndexed { i,b ->
                 val r = KeypadProtocol.keyRegion(i)
-                val expected = IntArray(r.width * r.height)
-                val actual = IntArray(expected.size)
-                b.getPixels(expected,0,r.width,0,0,r.width,r.height)
-                mirror.getPixels(actual,0,r.width,r.x,r.y,r.width,r.height)
-                assertArrayEquals("Mirror region $i", expected, actual)
+                assertTrue("Mirror region $i", sameThroughKeyWindow(b, mirror, r.x, r.y))
             }
             if (back != null && back !== cover) continue
             if (back != null) {

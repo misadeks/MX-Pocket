@@ -54,7 +54,7 @@ class PhoneActionActivity : ComponentActivity() {
 
     private fun showFailure(message: String) {
         failure = message
-        setContent { PocketTheme { PhoneActionResultScreen(message, ::finish) } }
+        setContent { PocketTheme(tel.misa.mxpocket.ui.ThemePreference.current(this)) { PhoneActionResultScreen(message, ::finish) } }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

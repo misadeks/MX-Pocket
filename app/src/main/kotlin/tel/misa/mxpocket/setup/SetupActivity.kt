@@ -77,7 +77,7 @@ class SetupActivity : ComponentActivity() {
             addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
         }, ContextCompat.RECEIVER_NOT_EXPORTED)
         setContent {
-            PocketTheme {
+            PocketTheme(tel.misa.mxpocket.ui.ThemePreference.current(this)) {
                 BackHandler(enabled = reviewing) { handle(SetupEvent.Edit) }
                 SetupScreen(SetupScreenState(selected, reviewing, steps, message, intent.getBooleanExtra("firstRun", false)), ::handle)
             }

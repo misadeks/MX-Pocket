@@ -29,8 +29,9 @@ to JDK 17 or 21 (x64 on Windows ARM64), run:
 .\gradlew.bat :desktop-preview:run
 ```
 
-On **Home**, choose the profile with the music-note icon and click the center key to toggle playback.
-Choose **Navigation** to see the same key become **Select**. The simulator
+On **Profiles**, swipe the profile carousel to the music-note profile, then click the center key on **Home** to toggle playback.
+Swipe to **Navigation** to see the same key become **Select**. The round button at the top of Home,
+or **Settings → Appearance**, switches between light and dark. The simulator
 needs no Android SDK, phone or keypad; it doesn't change Windows media,
 navigate other apps or drive USB hardware.
 

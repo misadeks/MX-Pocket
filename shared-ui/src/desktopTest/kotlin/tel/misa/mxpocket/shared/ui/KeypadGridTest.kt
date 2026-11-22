@@ -38,11 +38,13 @@ class KeypadGridTest {
                     { index, down -> events.add(index to down) }, Modifier.width(240.dp).testTag("panel"), art)
             }
         }
-        // A 240px square is centered in 252px: first key x=12..70, y=9..67.
+        // A 240px square is centered in 252px: first key x=12..70, y=9..67, with 6px rounded corners.
         val panel = rule.onNodeWithTag("panel")
         val pixels = panel.captureToImage().toPixelMap()
-        assertEquals(Color.Red.toArgb(), pixels[12, 9].toArgb())
-        assertEquals(Color.Green.toArgb(), pixels[70, 67].toArgb())
+        assertEquals(Color.Black.toArgb(), pixels[12, 9].toArgb())
+        assertEquals(Color.Red.toArgb(), pixels[15, 12].toArgb())
+        assertEquals(Color.Black.toArgb(), pixels[70, 67].toArgb())
+        assertEquals(Color.Green.toArgb(), pixels[67, 64].toArgb())
         assertEquals(Color.Black.toArgb(), pixels[40, 77].toArgb())
         rule.onNodeWithContentDescription("Key 1, Tile").assertHeightIsAtLeast(84.dp)
         panel.performTouchInput { click(Offset(40f, 77f)) }

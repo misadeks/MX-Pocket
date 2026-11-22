@@ -39,6 +39,7 @@ import tel.misa.mxpocket.setup.SetupChoices
 import tel.misa.mxpocket.decks.*
 import tel.misa.mxpocket.shared.ui.*
 import tel.misa.mxpocket.ui.AndroidWorkspace
+import tel.misa.mxpocket.ui.ThemePreference
 import tel.misa.mxpocket.deck.DeckLimits
 import tel.misa.mxpocket.deck.DeckState
 import tel.misa.mxpocket.plugins.PluginFrame
@@ -189,7 +190,7 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
         tab = savedInstanceState?.getString("tab")?.let { name -> WorkspaceTab.entries.find { it.name == name } } ?: WorkspaceTab.HOME
         shortcutDisclosure = savedInstanceState?.getBoolean("shortcutDisclosure") == true
         setContent {
-            PocketTheme {
+            PocketTheme(ThemePreference.current(this)) {
                 presentation?.let { state ->
                     BackHandler(tab != WorkspaceTab.HOME) { showTab(WorkspaceTab.HOME) }
                     AndroidWorkspace(tab, ::showTab, session, state, ::handleScreenEvent,
@@ -407,6 +408,7 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             is PocketScreenEvent.DefaultProfile -> session.deck.setDefault(event.id).onFailure { session.fail("Cannot change default", it) }
             is PocketScreenEvent.EnablePlugin -> session.setPluginEnabled(event.id, event.enabled)
             is PocketScreenEvent.PluginSettings -> session.pluginSettings(event.id)?.second?.invoke()
+            is PocketScreenEvent.SetTheme -> ThemePreference.set(this, event.mode)
         }
         render()
     }
@@ -427,6 +429,7 @@ class MainActivity : AppCompatActivity(), PocketSession.Screen {
             usbReady = session.ready && !session.preview, activePageId = deck.activePage.id, hardwareSummary = !session.preview,
             virtualGrid = homeGrid(deck, frame),
             diagnostics = diagnostics, log = session.logText(60), automatic = access.automatic, directShortcuts = direct.enabled,
+            themeMode = ThemePreference.current(this),
         )
         presentation = state
     }
