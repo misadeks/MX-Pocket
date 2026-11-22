@@ -52,7 +52,7 @@ failed USB/plugin operations to make checks pass.
 
 On Windows ARM64 use an x64 JDK for Robolectric; its native runtime and
 Conscrypt do not support Windows ARM64. Pure Kotlin tests and Android compilation
-can use ARM64 Java. See the [quick start](README.md#quick-start) for installation
+can use ARM64 Java. See [Android installation](docs/workspace.md#install-the-android-app)
 and the [hardware checklist](docs/workspace.md#hardware-acceptance-manual-not-established-by-jvm-tests) for USB checks.
 
 The Android debug APK is `app/build/outputs/apk/debug/app-debug.apk`, signed

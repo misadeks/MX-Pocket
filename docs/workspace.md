@@ -1,6 +1,6 @@
 # Workspace walkthrough
 
-After [installing the Android app](../README.md#run-it-on-android), open
+After [installing the Android app](#install-the-android-app), open
 **Home** to connect a keypad and choose a profile. With a wired keypad,
 **Keypad shows:** lists the nine labels; press the keys on the device.
 With the virtual keypad connected, tap the nine-key board on Home instead.
@@ -18,6 +18,24 @@ The Windows simulator uses the same workspace and starts with the virtual
 keypad connected. It can save its own layouts, but has no USB connection,
 image upload, or Android permission and foreground-app detection controls.
 The walkthrough below uses the Android host.
+
+## Install the Android app
+
+Set `JAVA_HOME` to JDK 17 or 21. In Android SDK Manager install SDK Platform
+35, Build Tools 35.0.0 and Platform-Tools. Set `ANDROID_HOME` to the SDK
+location or open the project in Android Studio to configure it.
+
+On an Android 9 (API 28) or newer phone, enable USB debugging, connect it to
+the computer and accept the debugging prompt. From the repository root run:
+
+```powershell
+.\gradlew.bat :app:installDebug
+```
+
+On Linux or macOS use `./gradlew :app:installDebug`. Open **MX Pocket** on
+the phone. For an on-screen demo choose **Skip and try virtual keypad**.
+For hardware, disconnect the computer, choose **Use a USB keypad** in
+first-run setup, finish setup and [connect the wired keypad](#connect-a-wired-keypad).
 
 ## Choose features on first launch
 
